@@ -72,6 +72,8 @@ defmodule Nostrum.Voice.Session do
       guild_id: voice.guild_id,
       channel_id: voice.channel_id,
       ssrc_map: Map.new(),
+      pending_transitions: Map.new(),
+      connected_clients: MapSet.new(),
       session: voice.session,
       token: voice.token,
       gateway: voice.gateway,
@@ -103,13 +105,12 @@ defmodule Nostrum.Voice.Session do
     GenServer.cast(pid, :voice_ready)
   end
 
-  def handle_info({:gun_ws, _worker, stream, {:text, frame}}, state) do
-    from_handle =
-      frame
-      |> Jason.decode!()
-      |> Event.handle(state)
+  defp handle_gateway_event(payload, state, stream) do
+    case Event.handle(payload, state) do
+      {new_state, <<op_code, _rest::binary>> = reply} when op_code in 25..30 ->
+        :ok = :gun.ws_send(state.conn, stream, {:binary, reply})
+        {:noreply, new_state}
 
-    case from_handle do
       {new_state, reply} ->
         :ok = :gun.ws_send(state.conn, stream, {:text, reply})
         {:noreply, new_state}
@@ -117,6 +118,17 @@ defmodule Nostrum.Voice.Session do
       new_state ->
         {:noreply, new_state}
     end
+  end
+
+  def handle_info({:gun_ws, _worker, stream, {:binary, <<seq::big-16, op::8, d::binary>>}}, state) do
+    payload = %{"seq" => seq, "op" => op, "d" => d}
+    handle_gateway_event(payload, state, stream)
+  end
+
+  def handle_info({:gun_ws, _worker, stream, {:text, frame}}, state) do
+    frame
+    |> Jason.decode!()
+    |> handle_gateway_event(state, stream)
   end
 
   def handle_info({:gun_ws, _conn, _stream, :close}, state) do
@@ -155,13 +167,18 @@ defmodule Nostrum.Voice.Session do
   def handle_info({:udp, _erl_port, _ip, _port, packet}, state) do
     case packet do
       # Skip RTCP packets
-      <<2::2, 0::1, 1::5, 201::8, _rest::binary>> ->
+      <<2::2, 0::1, 1::5, pt::8, _rest::binary>> when pt in 200..204 ->
         :noop
 
       <<header::bytes-size(12), _::binary>> = data ->
-        payload = Crypto.decrypt(state, data)
         <<_::16, seq::integer-16, time::integer-32, ssrc::integer-32>> = header
-        opus = Opus.strip_rtp_ext(payload)
+
+        opus =
+          state
+          |> Crypto.decrypt(data)
+          |> Opus.strip_rtp_ext()
+          |> Crypto.dave_decrypt(state.dave_session, state.ssrc_map[ssrc])
+
         incoming_packet = Payload.voice_incoming_packet({{seq, time, ssrc}, opus})
         Dispatch.handle(incoming_packet, state)
     end
@@ -188,7 +205,7 @@ defmodule Nostrum.Voice.Session do
         :heartbeat
       ])
 
-    :ok = :gun.ws_send(state.conn, state.stream, {:text, Payload.heartbeat_payload(state)})
+    :ok = :gun.ws_send(state.conn, state.stream, {:text, Payload.heartbeat(state)})
 
     {:noreply,
      %{state | heartbeat_ref: ref, heartbeat_ack: false, last_heartbeat_send: DateTime.utc_now()}}
@@ -196,7 +213,7 @@ defmodule Nostrum.Voice.Session do
 
   def handle_cast(:voice_ready, state) do
     voice = Voice.get_voice(state.voice_pid, state.guild_id)
-    voice_ready = Payload.voice_ready_payload(voice)
+    voice_ready = Payload.voice_ready(voice)
 
     Dispatch.handle(voice_ready, state)
 
@@ -205,8 +222,8 @@ defmodule Nostrum.Voice.Session do
 
   def handle_cast({:speaking, speaking, timed_out}, state) do
     voice = Voice.update_voice(state.voice_pid, state.guild_id, speaking: speaking)
-    speaking_update = Payload.speaking_update_payload(voice, timed_out)
-    payload = Payload.speaking_payload(voice)
+    speaking_update = Payload.voice_speaking_update(voice, timed_out)
+    payload = Payload.speaking(voice)
 
     Dispatch.handle(speaking_update, state)
 
