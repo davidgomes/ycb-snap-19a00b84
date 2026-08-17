@@ -1,0 +1,15 @@
+[project]
+name = "badge-forge-worker"
+version = "0.1.0"
+description = "Python worker for BadgeForge - generates conference badges"
+requires-python = ">=3.12"
+dependencies = [
+    "oban>=0.5.0",
+    "weasyprint>=63.0",
+]
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+oban = { path = "../../oban-py", editable = true }
