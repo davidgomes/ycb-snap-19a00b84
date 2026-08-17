@@ -1,0 +1,602 @@
+defmodule Oban.Web.JobsPage do
+  @behaviour Oban.Web.Page
+
+  use Oban.Web, :live_component
+
+  alias Oban.Met
+  alias Oban.Web.{JobQuery, Metrics, Page, QueueQuery, SearchComponent, SortComponent, Telemetry}
+  alias Oban.Web.Jobs.{ChartComponent, DetailComponent, NewComponent}
+  alias Oban.Web.Jobs.{SidebarComponent, TableComponent}
+
+  @known_params ~w(args ids limit meta nodes priorities queues sort_by sort_dir state tags workers)
+  @ordered_states ~w(executing available scheduled suspended retryable cancelled discarded completed)
+
+  @impl Phoenix.LiveComponent
+  def update(assigns, socket) do
+    socket =
+      socket
+      |> assign(assigns)
+      |> assign_new(:show_new_form, fn -> false end)
+
+    {:ok, socket}
+  end
+
+  @impl Phoenix.LiveComponent
+  def render(assigns) do
+    ~H"""
+    <div id="jobs-page" class="flex-1 w-full flex flex-col my-6 md:flex-row">
+      <SidebarComponent.sidebar
+        :if={is_nil(@detailed)}
+        nodes={@nodes}
+        params={without_defaults(@params, @default_params)}
+        queues={@queues}
+        states={@states}
+        width={@sidebar_width}
+        csp_nonces={@csp_nonces}
+      />
+
+      <div class="flex-grow">
+        <.live_component
+          :if={is_nil(@detailed)}
+          id="chart"
+          conf={@conf}
+          init_state={@init_state}
+          module={ChartComponent}
+          os_time={@os_time}
+          params={@params}
+        />
+
+        <div class={[
+          "bg-white dark:bg-gray-900 rounded-md shadow-lg",
+          @detailed && "mx-4"
+        ]}>
+          <%= if @detailed do %>
+            <.live_component
+              id="detail"
+              access={@access}
+              conf={@conf}
+              diagnostics={@diagnostics}
+              diagnostics_at={@diagnostics_at}
+              history={@history}
+              init_state={@init_state}
+              job={@detailed}
+              module={DetailComponent}
+              os_time={@os_time}
+              params={without_defaults(Map.delete(@params, "id"), @default_params)}
+              queues={@queues}
+              resolver={@resolver}
+            />
+          <% else %>
+            <div class="flex items-start pr-3 py-3 border-b border-gray-200 dark:border-gray-700">
+              <div id="jobs-header" class="h-10 pr-12 flex-none flex items-center">
+                <Core.all_checkbox
+                  click="toggle-select-all"
+                  checked={checked_mode(@jobs, @selected)}
+                  myself={@myself}
+                />
+
+                <h2 class="text-base font-semibold dark:text-gray-200">Jobs</h2>
+              </div>
+
+              <div
+                :if={Enum.any?(@selected)}
+                id="bulk-actions"
+                class="pt-1 flex items-center space-x-3"
+              >
+                <Core.action_button
+                  :if={cancelable?(@jobs, @access)}
+                  label="Cancel"
+                  click="cancel-jobs"
+                  target={@myself}
+                >
+                  <:icon><Icons.icon name="icon-x-circle" class="w-5 h-5" /></:icon>
+                  <:title>Cancel Jobs</:title>
+                </Core.action_button>
+
+                <Core.action_button
+                  :if={retryable?(@jobs, @access)}
+                  label="Retry"
+                  click="retry-jobs"
+                  target={@myself}
+                >
+                  <:icon><Icons.icon name="icon-arrow-right-circle" class="w-5 h-5" /></:icon>
+                  <:title>Retry Jobs</:title>
+                </Core.action_button>
+
+                <Core.action_button
+                  :if={runnable?(@jobs, @access)}
+                  label="Run Now"
+                  click="retry-jobs"
+                  target={@myself}
+                >
+                  <:icon><Icons.icon name="icon-arrow-right-circle" class="w-5 h-5" /></:icon>
+                  <:title>Run Jobs Now</:title>
+                </Core.action_button>
+
+                <Core.action_button
+                  :if={deletable?(@jobs, @access)}
+                  label="Delete"
+                  click="delete-jobs"
+                  target={@myself}
+                  danger={true}
+                >
+                  <:icon><Icons.icon name="icon-trash" class="w-5 h-5" /></:icon>
+                  <:title>Delete Jobs</:title>
+                </Core.action_button>
+              </div>
+
+              <.live_component
+                :if={Enum.empty?(@selected)}
+                conf={@conf}
+                id="search"
+                module={SearchComponent}
+                page={:jobs}
+                params={without_defaults(@params, @default_params)}
+                queryable={JobQuery}
+                resolver={@resolver}
+              />
+
+              <div class="pl-3 ml-auto flex items-center">
+                <span :if={Enum.any?(@selected)} class="block py-2 text-sm font-semibold">
+                  {MapSet.size(@selected)} Selected
+                </span>
+
+                <SortComponent.select
+                  :if={Enum.empty?(@selected)}
+                  params={@params}
+                  by={~w(time attempt queue worker)}
+                />
+
+                <.link
+                  :if={Enum.empty?(@selected)}
+                  patch={can?(:insert_jobs, @access) && oban_path([:jobs, :new])}
+                  id="new-job-button"
+                  data-title="Create a new job"
+                  phx-hook="Tippy"
+                  aria-disabled={not can?(:insert_jobs, @access)}
+                  class={[
+                    "ml-3 h-10 flex items-center text-sm bg-white dark:bg-gray-800 px-3 py-2 border rounded-md",
+                    can?(:insert_jobs, @access) &&
+                      "text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500 focus-visible:border-blue-500 hover:text-blue-500 hover:border-blue-600 cursor-pointer",
+                    not can?(:insert_jobs, @access) &&
+                      "text-gray-400 dark:text-gray-500 border-gray-200 dark:border-gray-800 cursor-not-allowed opacity-50"
+                  ]}
+                >
+                  <Icons.icon name="icon-plus-circle" class="mr-1 h-4 w-4" /> New
+                </.link>
+              </div>
+            </div>
+
+            <.live_component
+              id="jobs-table"
+              conf={@conf}
+              jobs={@jobs}
+              module={TableComponent}
+              params={@params}
+              resolver={@resolver}
+              selected={@selected}
+            />
+          <% end %>
+        </div>
+      </div>
+
+      <.live_component
+        :if={@show_new_form}
+        id="new-job-form"
+        access={@access}
+        conf={@conf}
+        module={NewComponent}
+        queues={@queues}
+      />
+    </div>
+    """
+  end
+
+  @keep_on_mount ~w(default_params detailed jobs nodes params queues selected states)a
+
+  @impl Page
+  def handle_mount(socket) do
+    default = fn ->
+      %{limit: 20, sort_by: "time", sort_dir: "asc", state: "executing"}
+    end
+
+    assigns = Map.drop(socket.assigns, @keep_on_mount)
+
+    %{socket | assigns: assigns}
+    |> assign_new(:default_params, default)
+    |> assign_new(:detailed, fn -> nil end)
+    |> assign_new(:diagnostics, fn -> nil end)
+    |> assign_new(:diagnostics_at, fn -> nil end)
+    |> assign_new(:history, fn -> [] end)
+    |> assign_new(:jobs, fn -> [] end)
+    |> assign_new(:nodes, fn -> [] end)
+    |> assign_new(:os_time, fn -> System.os_time(:second) end)
+    |> assign_new(:params, default)
+    |> assign_new(:queues, fn -> [] end)
+    |> assign_new(:selected, &MapSet.new/0)
+    |> assign_new(:states, fn -> [] end)
+  end
+
+  @impl Page
+  def handle_refresh(socket) do
+    %{conf: conf, params: params, resolver: resolver} = socket.assigns
+
+    jobs = JobQuery.all_jobs(params, conf, resolver: resolver)
+
+    selected =
+      if Enum.any?(socket.assigns.selected) do
+        all_job_ids = JobQuery.all_job_ids(params, conf, resolver: resolver)
+
+        all_job_ids
+        |> MapSet.new()
+        |> MapSet.intersection(socket.assigns.selected)
+      else
+        MapSet.new()
+      end
+
+    detailed = JobQuery.refresh_job(conf, socket.assigns.detailed)
+
+    history =
+      if detailed do
+        JobQuery.job_history(detailed, conf)
+      else
+        []
+      end
+
+    # Request fresh diagnostics if executing, but preserve existing data when job stops
+    diagnostics =
+      if detailed && detailed.state == "executing" do
+        Oban.Notifier.notify(conf.name, :diagnostics, %{job_id: detailed.id})
+        socket.assigns.diagnostics
+      else
+        socket.assigns.diagnostics
+      end
+
+    diagnostics_at = socket.assigns.diagnostics_at
+
+    assign(socket,
+      detailed: detailed,
+      diagnostics: diagnostics,
+      diagnostics_at: diagnostics_at,
+      history: history,
+      jobs: jobs,
+      nodes: nodes(conf),
+      os_time: System.os_time(:second),
+      queues: queues(conf, socket.assigns.queues),
+      selected: selected,
+      states: states(conf, socket.assigns.states)
+    )
+  end
+
+  @impl Page
+  def handle_params(%{"id" => "new"} = params, _uri, socket) do
+    params = params_with_defaults(params, socket)
+
+    {:noreply,
+     socket
+     |> assign(detailed: nil, show_new_form: true, page_title: page_title("New Job"))
+     |> assign(params: params)}
+  end
+
+  def handle_params(%{"id" => job_id} = params, _uri, socket) do
+    params = params_with_defaults(params, socket)
+    conf = socket.assigns.conf
+
+    case JobQuery.refresh_job(conf, job_id) do
+      nil ->
+        {:noreply, push_patch(socket, to: oban_path(:jobs), replace: true)}
+
+      job ->
+        Oban.Notifier.listen(conf.name, [:diagnostics_reply])
+
+        history = JobQuery.job_history(job, conf)
+
+        {:noreply,
+         socket
+         |> assign(detailed: job, show_new_form: false, page_title: page_title(job))
+         |> assign(diagnostics: nil, diagnostics_at: nil)
+         |> assign(history: history)
+         |> assign(params: params)}
+    end
+  end
+
+  def handle_params(params, _uri, socket) do
+    %{conf: conf, resolver: resolver} = socket.assigns
+
+    Oban.Notifier.unlisten(conf.name, [:diagnostics_reply])
+
+    params = params_with_defaults(params, socket)
+
+    socket =
+      socket
+      |> assign(detailed: nil, show_new_form: false, page_title: page_title("Jobs"))
+      |> assign(diagnostics: nil, diagnostics_at: nil)
+      |> assign(history: [])
+      |> assign(params: params)
+      |> assign(jobs: JobQuery.all_jobs(params, conf, resolver: resolver))
+      |> assign(nodes: nodes(conf))
+      |> assign(
+        queues: queues(conf, socket.assigns.queues),
+        states: states(conf, socket.assigns.states)
+      )
+
+    {:noreply, socket}
+  end
+
+  @impl Phoenix.LiveComponent
+  def handle_event("toggle-select-all", _params, socket) do
+    send(self(), :toggle_select_all)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("cancel-jobs", _params, socket) do
+    if can?(:cancel_jobs, socket.assigns.access) do
+      send(self(), :cancel_selected)
+    end
+
+    {:noreply, assign(socket, expanded?: false)}
+  end
+
+  def handle_event("retry-jobs", _params, socket) do
+    if can?(:retry_jobs, socket.assigns.access) do
+      send(self(), :retry_selected)
+    end
+
+    {:noreply, assign(socket, expanded?: false)}
+  end
+
+  def handle_event("delete-jobs", _params, socket) do
+    if can?(:delete_jobs, socket.assigns.access) do
+      send(self(), :delete_selected)
+    end
+
+    {:noreply, assign(socket, expanded?: false)}
+  end
+
+  # Queues
+
+  @impl Page
+  def handle_info({ref, _val}, socket) when is_reference(ref) do
+    {:noreply, socket}
+  end
+
+  def handle_info({:DOWN, _ref, :process, _pid, :normal}, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_info({:scale_queue, queue, limit}, socket) do
+    Telemetry.action(:scale_queue, socket, [queue: queue, limit: limit], fn ->
+      Oban.scale_queue(socket.assigns.conf.name, queue: queue, limit: limit)
+    end)
+
+    {:noreply, socket}
+  end
+
+  def handle_info({:flash, mode, message}, socket) do
+    {:noreply, put_flash_with_clear(socket, mode, message)}
+  end
+
+  # Diagnostics
+
+  def handle_info({:notification, :diagnostics_reply, %{"job_id" => job_id} = payload}, socket) do
+    if socket.assigns.detailed && socket.assigns.detailed.id == job_id do
+      {:noreply, assign(socket, diagnostics: payload, diagnostics_at: System.os_time(:second))}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # Filtering
+
+  def handle_info({:params, :limit, inc}, socket) when is_integer(inc) do
+    params =
+      socket.assigns.params
+      |> Map.update!(:limit, &to_string(&1 + inc))
+      |> without_defaults(socket.assigns.default_params)
+
+    {:noreply, push_patch(socket, to: oban_path(:jobs, params), replace: true)}
+  end
+
+  # Single Actions
+
+  def handle_info({:cancel_job, job}, socket) do
+    Telemetry.action(:cancel_jobs, socket, [job_ids: [job.id]], fn ->
+      Oban.cancel_job(socket.assigns.conf.name, job.id)
+    end)
+
+    job = %{job | state: "cancelled", cancelled_at: DateTime.utc_now()}
+
+    {:noreply, assign(socket, detailed: job)}
+  end
+
+  def handle_info({:delete_job, job}, socket) do
+    Telemetry.action(:delete_jobs, socket, [job_ids: [job.id]], fn ->
+      JobQuery.delete_jobs(socket.assigns.conf, [job.id])
+    end)
+
+    {:noreply, push_patch(socket, to: oban_path(:jobs), replace: true)}
+  end
+
+  def handle_info({:retry_job, job}, socket) do
+    Telemetry.action(:retry_jobs, socket, [job_ids: [job.id]], fn ->
+      JobQuery.retry_jobs(socket.assigns.conf, [job.id])
+    end)
+
+    job = %{job | state: "available", completed_at: nil, discarded_at: nil}
+
+    {:noreply, assign(socket, detailed: job)}
+  end
+
+  def handle_info({:update_job, job, changes}, socket) do
+    conf = socket.assigns.conf
+
+    case Oban.update_job(conf.name, job.id, changes) do
+      {:ok, updated_job} ->
+        socket =
+          socket
+          |> put_flash_with_clear(:info, "Job updated successfully")
+          |> assign(detailed: updated_job)
+
+        {:noreply, socket}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to update job")}
+    end
+  end
+
+  # Selection
+
+  def handle_info({:toggle_select, job_id}, socket) do
+    selected = socket.assigns.selected
+
+    selected =
+      if MapSet.member?(selected, job_id) do
+        MapSet.delete(selected, job_id)
+      else
+        MapSet.put(selected, job_id)
+      end
+
+    {:noreply, assign(socket, selected: selected)}
+  end
+
+  def handle_info(:toggle_select_all, socket) do
+    selected =
+      if Enum.any?(socket.assigns.selected) do
+        MapSet.new()
+      else
+        # Always include the jobs we can see currently to compensate for slower refresh rates.
+        # Without this, visible jobs may not be selected and the interface looks broken.
+        local_set = MapSet.new(socket.assigns.jobs, & &1.id)
+
+        socket.assigns.params
+        |> JobQuery.all_job_ids(socket.assigns.conf)
+        |> MapSet.new()
+        |> MapSet.union(local_set)
+      end
+
+    {:noreply, assign(socket, selected: selected)}
+  end
+
+  def handle_info(:cancel_selected, socket) do
+    job_ids = MapSet.to_list(socket.assigns.selected)
+
+    Telemetry.action(:cancel_jobs, socket, [job_ids: job_ids], fn ->
+      JobQuery.cancel_jobs(socket.assigns.conf, job_ids)
+    end)
+
+    socket =
+      socket
+      |> hide_and_clear_selected()
+      |> put_flash_with_clear(:info, "Selected jobs canceled")
+
+    {:noreply, handle_refresh(socket)}
+  end
+
+  def handle_info(:retry_selected, socket) do
+    job_ids = MapSet.to_list(socket.assigns.selected)
+
+    Telemetry.action(:retry_jobs, socket, [job_ids: job_ids], fn ->
+      JobQuery.retry_jobs(socket.assigns.conf, job_ids)
+    end)
+
+    socket =
+      socket
+      |> hide_and_clear_selected()
+      |> put_flash_with_clear(:info, "Selected jobs scheduled to run immediately")
+
+    {:noreply, handle_refresh(socket)}
+  end
+
+  def handle_info(:delete_selected, socket) do
+    job_ids = MapSet.to_list(socket.assigns.selected)
+
+    Telemetry.action(:delete_jobs, socket, [job_ids: job_ids], fn ->
+      JobQuery.delete_jobs(socket.assigns.conf, job_ids)
+    end)
+
+    socket =
+      socket
+      |> hide_and_clear_selected()
+      |> put_flash_with_clear(:info, "Selected jobs deleted")
+
+    {:noreply, handle_refresh(socket)}
+  end
+
+  # Param Helpers
+
+  defp params_with_defaults(params, socket) do
+    params =
+      params
+      |> Map.take(@known_params)
+      |> decode_params()
+
+    Map.merge(socket.assigns.default_params, params)
+  end
+
+  # Socket Helpers
+
+  defp hide_and_clear_selected(socket) do
+    %{jobs: jobs, selected: selected} = socket.assigns
+
+    jobs = for job <- jobs, do: Map.put(job, :hidden?, MapSet.member?(selected, job.id))
+
+    assign(socket, jobs: jobs, selected: MapSet.new())
+  end
+
+  # State Helpers
+
+  defp checked_mode(jobs, selected) do
+    cond do
+      Enum.empty?(selected) -> :none
+      Enum.all?(jobs, &MapSet.member?(selected, &1.id)) -> :all
+      true -> :some
+    end
+  end
+
+  defp cancelable?(jobs, access) do
+    can?(:cancel_jobs, access) and Enum.any?(jobs, &cancelable?/1)
+  end
+
+  defp runnable?(jobs, access) do
+    can?(:retry_jobs, access) and Enum.any?(jobs, &runnable?/1)
+  end
+
+  defp retryable?(jobs, access) do
+    can?(:retry_jobs, access) and Enum.any?(jobs, &retryable?/1)
+  end
+
+  defp deletable?(jobs, access) do
+    can?(:delete_jobs, access) and Enum.any?(jobs, &deletable?/1)
+  end
+
+  # Metrics Helpers
+
+  def nodes(conf) do
+    conf.name
+    |> Met.checks()
+    |> Enum.reduce(%{}, fn check, acc ->
+      node = check["node"]
+      count = length(check["running"])
+      limit = check["local_limit"] || check["limit"]
+
+      acc
+      |> Map.put_new(node, %{name: node, count: 0, limit: 0})
+      |> update_in([node, :count], &(&1 + count))
+      |> update_in([node, :limit], &(&1 + limit))
+    end)
+    |> Map.values()
+    |> Enum.sort_by(& &1.name)
+  end
+
+  defp states(conf, previous) do
+    Metrics.state_counts(conf.name, @ordered_states, previous)
+  end
+
+  defp queues(conf, previous) do
+    previous_counts = Metrics.extract_queue_counts(previous)
+    counts = Metrics.all_queue_counts(conf.name, previous_counts)
+
+    QueueQuery.all_queues(%{}, conf, counts)
+  end
+end

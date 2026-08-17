@@ -1,0 +1,255 @@
+defmodule Oban.Web.Jobs.TimelineComponent do
+  @moduledoc false
+
+  use Phoenix.Component
+
+  alias Oban.Web.Colors
+  alias Oban.Web.Components.Icons
+  alias Oban.Web.Timing
+
+  def render(assigns) do
+    assigns =
+      assigns
+      |> assign(:path, compute_path(assigns.job))
+      |> assign(:now, DateTime.from_unix!(assigns.os_time))
+
+    ~H"""
+    <div
+      id="job-timeline"
+      class="w-full"
+      phx-hook="TimelineConnectors"
+      data-entry-suspended={to_string(@path.entry == "suspended")}
+      data-entry-scheduled={to_string(@path.entry == "scheduled")}
+      data-entry-retryable={to_string(@path.entry == "retryable")}
+      data-engaged={to_string(@path.engaged)}
+      data-terminal-completed={to_string(@path.terminal == "completed")}
+      data-terminal-cancelled={to_string(@path.terminal == "cancelled")}
+      data-terminal-discarded={to_string(@path.terminal == "discarded")}
+    >
+      <div id="timeline-boxes" class="relative">
+        <svg id="timeline-connectors" class="absolute inset-0 overflow-visible pointer-events-none" />
+
+        <div class="relative grid grid-cols-4 gap-x-2 sm:gap-x-4 lg:gap-x-8 gap-y-3 sm:gap-y-5">
+          <.state_box state="suspended" job={@job} path={@path} now={@now} />
+          <div></div>
+          <div></div>
+          <.state_box state="completed" job={@job} path={@path} now={@now} />
+
+          <.state_box state="scheduled" job={@job} path={@path} now={@now} />
+          <.state_box state="available" job={@job} path={@path} now={@now} />
+          <.state_box state="executing" job={@job} path={@path} now={@now} />
+          <.state_box state="cancelled" job={@job} path={@path} now={@now} />
+
+          <.state_box state="retryable" job={@job} path={@path} now={@now} />
+          <div></div>
+          <div></div>
+          <.state_box state="discarded" job={@job} path={@path} now={@now} />
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  attr :state, :string, required: true
+  attr :job, :map, required: true
+  attr :path, :map, required: true
+  attr :now, :any, required: true
+
+  defp state_box(assigns) do
+    status = box_status(assigns.state, assigns.job, assigns.path)
+    {border_class, bg_class, text_color} = colors_for_box(assigns.state, status)
+    icon = icon_for_box(status, assigns.state)
+    dim_class = if status == :completed, do: "saturate-40", else: ""
+
+    assigns =
+      assigns
+      |> assign(:icon, icon)
+      |> assign(:border_class, border_class)
+      |> assign(:bg_class, bg_class)
+      |> assign(:text_color, text_color)
+      |> assign(:dim_class, dim_class)
+      |> assign(:timestamp, format_timestamp(assigns.state, assigns.job, assigns.now))
+      |> assign(:tooltip, timestamp_title(assigns.state, assigns.job))
+
+    ~H"""
+    <div
+      class={"flex flex-col sm:flex-row items-center sm:justify-between h-12 sm:h-12 rounded-lg border-2 px-2 sm:px-3 #{@border_class} #{@bg_class} #{@dim_class}"}
+      data-title={@tooltip}
+      phx-hook="Tippy"
+      id={"timeline-#{@state}"}
+    >
+      <div class="flex items-center gap-1 sm:gap-2">
+        <span class={"flex items-center justify-center w-5 h-5 #{@text_color}"}>
+          <.state_icon icon={@icon} />
+        </span>
+        <span class={"hidden sm:inline text-sm font-semibold capitalize #{@text_color}"}>
+          {@state}
+        </span>
+      </div>
+      <span class={"hidden sm:inline text-xs tabular-nums #{@text_color}"}>
+        {@timestamp || "—"}
+      </span>
+    </div>
+    """
+  end
+
+  defp icon_for_box(:inactive, _state), do: :pending
+  defp icon_for_box(:active, state) when state in ~w(completed cancelled discarded), do: :done
+  defp icon_for_box(:active, _state), do: :executing
+  defp icon_for_box(:completed, _state), do: :done
+
+  attr :icon, :atom, required: true
+
+  defp state_icon(%{icon: :pending} = assigns) do
+    ~H"""
+    <Icons.icon name="icon-ellipsis-horizontal-circle" class="w-5 h-5" />
+    """
+  end
+
+  defp state_icon(%{icon: :executing} = assigns) do
+    ~H"""
+    <Icons.spinner class="w-5 h-5 animate-spin" />
+    """
+  end
+
+  defp state_icon(%{icon: :done} = assigns) do
+    ~H"""
+    <Icons.icon name="icon-check-circle" class="w-5 h-5" />
+    """
+  end
+
+  # Path computation
+
+  defp compute_path(job) do
+    %{
+      entry: compute_entry_state(job),
+      terminal: compute_terminal_state(job),
+      engaged: not is_nil(job.attempted_at)
+    }
+  end
+
+  defp compute_entry_state(job) do
+    snoozed = Map.get(job.meta, "snoozed", 0)
+
+    cond do
+      job.state == "retryable" -> "retryable"
+      job.state == "suspended" -> "suspended"
+      job.attempt > 1 and snoozed < job.attempt -> "retryable"
+      true -> "scheduled"
+    end
+  end
+
+  defp compute_terminal_state(job) do
+    case job.state do
+      "completed" -> "completed"
+      "cancelled" -> "cancelled"
+      "discarded" -> "discarded"
+      _ -> nil
+    end
+  end
+
+  # Box status
+
+  defp box_status(state, job, path) do
+    cond do
+      state == job.state -> :active
+      state_completed?(state, job, path) -> :completed
+      true -> :inactive
+    end
+  end
+
+  defp state_completed?("suspended", job, path) do
+    path.entry == "suspended" and job.state != "suspended"
+  end
+
+  defp state_completed?("scheduled", job, path) do
+    path.entry in ["scheduled", "suspended"] and job.state not in ["scheduled", "suspended"]
+  end
+
+  defp state_completed?("retryable", _job, path) do
+    path.entry == "retryable"
+  end
+
+  defp state_completed?("available", job, _path) do
+    not is_nil(job.attempted_at) and job.state not in ~w(available scheduled suspended retryable)
+  end
+
+  defp state_completed?("executing", job, _path) do
+    job.state in ["completed", "cancelled", "discarded"] and not is_nil(job.attempted_at)
+  end
+
+  defp state_completed?("completed", job, _path), do: job.state == "completed"
+  defp state_completed?("cancelled", job, _path), do: job.state == "cancelled"
+  defp state_completed?("discarded", job, _path), do: job.state == "discarded"
+
+  defp colors_for_box(_state, :inactive), do: Colors.inactive_classes()
+  defp colors_for_box(state, _status), do: Colors.state_classes(state)
+
+  # Timestamp formatting
+
+  @state_labels %{
+    "suspended" => "Inserted At",
+    "scheduled" => "Scheduled At",
+    "retryable" => "Retrying At",
+    "available" => "Started At",
+    "executing" => "Attempted At",
+    "completed" => "Completed At",
+    "cancelled" => "Cancelled At",
+    "discarded" => "Discarded At"
+  }
+
+  defp format_timestamp("executing", job, now) do
+    cond do
+      job.state == "executing" and job.attempted_at ->
+        job.attempted_at |> DateTime.diff(now) |> Timing.to_duration()
+
+      job.state in ~w(completed cancelled discarded) and job.attempted_at ->
+        job.attempted_at |> DateTime.diff(now) |> Timing.to_words()
+
+      true ->
+        nil
+    end
+  end
+
+  defp format_timestamp(state, job, now) do
+    state
+    |> timestamp_for_state(job)
+    |> format_time(now)
+  end
+
+  defp format_time(nil, _now), do: nil
+
+  defp format_time(timestamp, now) do
+    timestamp
+    |> DateTime.diff(now)
+    |> Timing.to_words()
+  end
+
+  defp timestamp_for_state("suspended", job) do
+    if job.state == "suspended", do: job.inserted_at
+  end
+
+  defp timestamp_for_state("scheduled", job) do
+    if job.attempt < 2 and job.state not in ~w(suspended retryable), do: job.scheduled_at
+  end
+
+  defp timestamp_for_state("retryable", job) do
+    if job.state == "retryable" or job.attempt > 1, do: job.scheduled_at
+  end
+
+  defp timestamp_for_state("available", job) do
+    if job.state != "retryable", do: job.attempted_at
+  end
+
+  defp timestamp_for_state("executing", job), do: job.attempted_at
+  defp timestamp_for_state("completed", job), do: job.completed_at
+  defp timestamp_for_state("cancelled", job), do: job.cancelled_at
+  defp timestamp_for_state("discarded", job), do: job.discarded_at
+
+  defp timestamp_title(state, job) do
+    "#{@state_labels[state]}: #{truncate_sec(timestamp_for_state(state, job))}"
+  end
+
+  defp truncate_sec(nil), do: "—"
+  defp truncate_sec(datetime), do: DateTime.truncate(datetime, :second)
+end
