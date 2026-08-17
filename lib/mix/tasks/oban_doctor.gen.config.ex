@@ -24,6 +24,7 @@ defmodule Mix.Tasks.ObanDoctor.Gen.Config do
   alias ObanDoctor.Check.Config.InsertTriggerEnabled
   alias ObanDoctor.Check.Config.MissingPruner
   alias ObanDoctor.Check.Config.NoReindexer
+  alias ObanDoctor.Check.Config.SmartEngineNotConfigured
 
   @all_checks [
     # Worker checks
@@ -35,7 +36,8 @@ defmodule Mix.Tasks.ObanDoctor.Gen.Config do
     # Config checks
     InsertTriggerEnabled,
     MissingPruner,
-    NoReindexer
+    NoReindexer,
+    SmartEngineNotConfigured
   ]
 
   @impl Mix.Task
