@@ -1,17 +1,15 @@
 defmodule Oban.Console do
-  @moduledoc """
-  Documentation for `ObanConsole`.
-  """
+  alias Oban.Console.View.Printer
 
-  @doc """
-  Hello world.
+  def interactive() do
+    case Oban.Console.Config.oban_configured?() do
+      {:error, reason} ->
+        ["Error", reason] |> Printer.error() |> IO.puts()
 
-  ## Examples
+        {:error, reason}
 
-      iex> ObanConsole.hello()
-      :world
-
-  """
-  def list_queues() do
+      :ok ->
+        Oban.Console.Interactive.start()
+    end
   end
 end
