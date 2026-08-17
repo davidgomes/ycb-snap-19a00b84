@@ -1,0 +1,792 @@
+# WARNING: DO NOT EDIT, AUTO-GENERATED CODE!
+# See https://github.com/aws-beam/aws-codegen for more details.
+
+defmodule AWS.LicenseManagerLinuxSubscriptions do
+  @moduledoc """
+  With License Manager, you can discover and track your commercial Linux
+  subscriptions on running
+  Amazon EC2 instances.
+  """
+
+  alias AWS.Client
+  alias AWS.Request
+
+  @typedoc """
+
+  ## Example:
+
+      deregister_subscription_provider_request() :: %{
+        required("SubscriptionProviderArn") => String.t() | atom()
+      }
+
+  """
+  @type deregister_subscription_provider_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      deregister_subscription_provider_response() :: %{}
+
+  """
+  @type deregister_subscription_provider_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      filter() :: %{
+        "Name" => [String.t() | atom()],
+        "Operator" => String.t() | atom(),
+        "Values" => list([String.t() | atom()]())
+      }
+
+  """
+  @type filter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_registered_subscription_provider_request() :: %{
+        required("SubscriptionProviderArn") => String.t() | atom()
+      }
+
+  """
+  @type get_registered_subscription_provider_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_registered_subscription_provider_response() :: %{
+        "LastSuccessfulDataRetrievalTime" => [String.t() | atom()],
+        "SecretArn" => String.t() | atom(),
+        "SubscriptionProviderArn" => String.t() | atom(),
+        "SubscriptionProviderSource" => String.t() | atom(),
+        "SubscriptionProviderStatus" => String.t() | atom(),
+        "SubscriptionProviderStatusMessage" => [String.t() | atom()]
+      }
+
+  """
+  @type get_registered_subscription_provider_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_service_settings_request() :: %{}
+
+  """
+  @type get_service_settings_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      get_service_settings_response() :: %{
+        optional("HomeRegions") => list([String.t() | atom()]()),
+        optional("LinuxSubscriptionsDiscovery") => String.t() | atom(),
+        optional("LinuxSubscriptionsDiscoverySettings") => linux_subscriptions_discovery_settings(),
+        optional("Status") => String.t() | atom(),
+        optional("StatusMessage") => map()
+      }
+
+  """
+  @type get_service_settings_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      instance() :: %{
+        "AccountID" => [String.t() | atom()],
+        "AmiId" => [String.t() | atom()],
+        "DualSubscription" => [String.t() | atom()],
+        "InstanceID" => [String.t() | atom()],
+        "InstanceType" => [String.t() | atom()],
+        "LastUpdatedTime" => [String.t() | atom()],
+        "OsVersion" => [String.t() | atom()],
+        "ProductCode" => list([String.t() | atom()]()),
+        "Region" => [String.t() | atom()],
+        "RegisteredWithSubscriptionProvider" => [String.t() | atom()],
+        "Status" => [String.t() | atom()],
+        "SubscriptionName" => [String.t() | atom()],
+        "SubscriptionProviderCreateTime" => [String.t() | atom()],
+        "SubscriptionProviderUpdateTime" => [String.t() | atom()],
+        "UsageOperation" => [String.t() | atom()]
+      }
+
+  """
+  @type instance() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      internal_server_exception() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type internal_server_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      linux_subscriptions_discovery_settings() :: %{
+        "OrganizationIntegration" => String.t() | atom(),
+        "SourceRegions" => list([String.t() | atom()]())
+      }
+
+  """
+  @type linux_subscriptions_discovery_settings() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_linux_subscription_instances_request() :: %{
+        "Filters" => list(filter()),
+        "MaxResults" => integer(),
+        "NextToken" => [String.t() | atom()]
+      }
+
+  """
+  @type list_linux_subscription_instances_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_linux_subscription_instances_response() :: %{
+        optional("Instances") => list(instance()),
+        optional("NextToken") => [String.t() | atom()]
+      }
+
+  """
+  @type list_linux_subscription_instances_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_linux_subscriptions_request() :: %{
+        "Filters" => list(filter()),
+        "MaxResults" => integer(),
+        "NextToken" => [String.t() | atom()]
+      }
+
+  """
+  @type list_linux_subscriptions_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_linux_subscriptions_response() :: %{
+        optional("NextToken") => [String.t() | atom()],
+        optional("Subscriptions") => list(subscription())
+      }
+
+  """
+  @type list_linux_subscriptions_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_registered_subscription_providers_request() :: %{
+        optional("MaxResults") => integer(),
+        optional("NextToken") => [String.t() | atom()],
+        optional("SubscriptionProviderSources") => list(String.t() | atom())
+      }
+
+  """
+  @type list_registered_subscription_providers_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_registered_subscription_providers_response() :: %{
+        "NextToken" => [String.t() | atom()],
+        "RegisteredSubscriptionProviders" => list(registered_subscription_provider())
+      }
+
+  """
+  @type list_registered_subscription_providers_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_tags_for_resource_request() :: %{}
+
+  """
+  @type list_tags_for_resource_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      list_tags_for_resource_response() :: %{
+        "tags" => map()
+      }
+
+  """
+  @type list_tags_for_resource_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      register_subscription_provider_request() :: %{
+        optional("Tags") => map(),
+        required("SecretArn") => String.t() | atom(),
+        required("SubscriptionProviderSource") => String.t() | atom()
+      }
+
+  """
+  @type register_subscription_provider_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      register_subscription_provider_response() :: %{
+        "SubscriptionProviderArn" => [String.t() | atom()],
+        "SubscriptionProviderSource" => String.t() | atom(),
+        "SubscriptionProviderStatus" => String.t() | atom()
+      }
+
+  """
+  @type register_subscription_provider_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      registered_subscription_provider() :: %{
+        "LastSuccessfulDataRetrievalTime" => [String.t() | atom()],
+        "SecretArn" => String.t() | atom(),
+        "SubscriptionProviderArn" => String.t() | atom(),
+        "SubscriptionProviderSource" => String.t() | atom(),
+        "SubscriptionProviderStatus" => String.t() | atom(),
+        "SubscriptionProviderStatusMessage" => [String.t() | atom()]
+      }
+
+  """
+  @type registered_subscription_provider() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      resource_not_found_exception() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type resource_not_found_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      subscription() :: %{
+        "InstanceCount" => float(),
+        "Name" => [String.t() | atom()],
+        "Type" => [String.t() | atom()]
+      }
+
+  """
+  @type subscription() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      tag_resource_request() :: %{
+        required("tags") => map()
+      }
+
+  """
+  @type tag_resource_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      tag_resource_response() :: %{}
+
+  """
+  @type tag_resource_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      throttling_exception() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type throttling_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      untag_resource_request() :: %{
+        required("tagKeys") => list([String.t() | atom()]())
+      }
+
+  """
+  @type untag_resource_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      untag_resource_response() :: %{}
+
+  """
+  @type untag_resource_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      update_service_settings_request() :: %{
+        optional("AllowUpdate") => [boolean()],
+        required("LinuxSubscriptionsDiscovery") => String.t() | atom(),
+        required("LinuxSubscriptionsDiscoverySettings") => linux_subscriptions_discovery_settings()
+      }
+
+  """
+  @type update_service_settings_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_service_settings_response() :: %{
+        optional("HomeRegions") => list([String.t() | atom()]()),
+        optional("LinuxSubscriptionsDiscovery") => String.t() | atom(),
+        optional("LinuxSubscriptionsDiscoverySettings") => linux_subscriptions_discovery_settings(),
+        optional("Status") => String.t() | atom(),
+        optional("StatusMessage") => map()
+      }
+
+  """
+  @type update_service_settings_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      validation_exception() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type validation_exception() :: %{(String.t() | atom()) => any()}
+
+  @type deregister_subscription_provider_errors() ::
+          validation_exception()
+          | throttling_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+
+  @type get_registered_subscription_provider_errors() ::
+          validation_exception()
+          | throttling_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+
+  @type get_service_settings_errors() ::
+          validation_exception() | throttling_exception() | internal_server_exception()
+
+  @type list_linux_subscription_instances_errors() ::
+          validation_exception() | throttling_exception() | internal_server_exception()
+
+  @type list_linux_subscriptions_errors() ::
+          validation_exception() | throttling_exception() | internal_server_exception()
+
+  @type list_registered_subscription_providers_errors() ::
+          validation_exception() | throttling_exception() | internal_server_exception()
+
+  @type list_tags_for_resource_errors() ::
+          validation_exception() | resource_not_found_exception() | internal_server_exception()
+
+  @type register_subscription_provider_errors() ::
+          validation_exception() | throttling_exception() | internal_server_exception()
+
+  @type tag_resource_errors() ::
+          validation_exception() | resource_not_found_exception() | internal_server_exception()
+
+  @type untag_resource_errors() :: resource_not_found_exception() | internal_server_exception()
+
+  @type update_service_settings_errors() ::
+          validation_exception() | throttling_exception() | internal_server_exception()
+
+  def metadata do
+    %{
+      api_version: "2018-05-10",
+      content_type: "application/x-amz-json-1.1",
+      credential_scope: nil,
+      endpoint_prefix: "license-manager-linux-subscriptions",
+      global?: false,
+      hostname: nil,
+      protocol: "rest-json",
+      service_id: "License Manager Linux Subscriptions",
+      signature_version: "v4",
+      signing_name: "license-manager-linux-subscriptions",
+      target_prefix: nil
+    }
+  end
+
+  @doc """
+  Remove a third-party subscription provider from the Bring Your Own License
+  (BYOL) subscriptions
+  registered to your account.
+  """
+  @spec deregister_subscription_provider(
+          map(),
+          deregister_subscription_provider_request(),
+          list()
+        ) ::
+          {:ok, deregister_subscription_provider_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, deregister_subscription_provider_errors()}
+  def deregister_subscription_provider(%Client{} = client, input, options \\ []) do
+    url_path = "/subscription/DeregisterSubscriptionProvider"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Get details for a Bring Your Own License (BYOL) subscription that's registered
+  to your account.
+  """
+  @spec get_registered_subscription_provider(
+          map(),
+          get_registered_subscription_provider_request(),
+          list()
+        ) ::
+          {:ok, get_registered_subscription_provider_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_registered_subscription_provider_errors()}
+  def get_registered_subscription_provider(%Client{} = client, input, options \\ []) do
+    url_path = "/subscription/GetRegisteredSubscriptionProvider"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists the Linux subscriptions service settings for your account.
+  """
+  @spec get_service_settings(map(), get_service_settings_request(), list()) ::
+          {:ok, get_service_settings_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_service_settings_errors()}
+  def get_service_settings(%Client{} = client, input, options \\ []) do
+    url_path = "/subscription/GetServiceSettings"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists the running Amazon EC2 instances that were discovered with commercial
+  Linux
+  subscriptions.
+  """
+  @spec list_linux_subscription_instances(
+          map(),
+          list_linux_subscription_instances_request(),
+          list()
+        ) ::
+          {:ok, list_linux_subscription_instances_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_linux_subscription_instances_errors()}
+  def list_linux_subscription_instances(%Client{} = client, input, options \\ []) do
+    url_path = "/subscription/ListLinuxSubscriptionInstances"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists the Linux subscriptions that have been discovered.
+
+  If you have linked your
+  organization, the returned results will include data aggregated across your
+  accounts in
+  Organizations.
+  """
+  @spec list_linux_subscriptions(map(), list_linux_subscriptions_request(), list()) ::
+          {:ok, list_linux_subscriptions_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_linux_subscriptions_errors()}
+  def list_linux_subscriptions(%Client{} = client, input, options \\ []) do
+    url_path = "/subscription/ListLinuxSubscriptions"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  List Bring Your Own License (BYOL) subscription registration resources for your
+  account.
+  """
+  @spec list_registered_subscription_providers(
+          map(),
+          list_registered_subscription_providers_request(),
+          list()
+        ) ::
+          {:ok, list_registered_subscription_providers_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_registered_subscription_providers_errors()}
+  def list_registered_subscription_providers(%Client{} = client, input, options \\ []) do
+    url_path = "/subscription/ListRegisteredSubscriptionProviders"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  List the metadata tags that are assigned to the
+  specified Amazon Web Services resource.
+  """
+  @spec list_tags_for_resource(map(), String.t() | atom(), list()) ::
+          {:ok, list_tags_for_resource_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_tags_for_resource_errors()}
+  def list_tags_for_resource(%Client{} = client, resource_arn, options \\ []) do
+    url_path = "/tags/#{AWS.Util.encode_uri(resource_arn)}"
+    headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Register the supported third-party subscription provider for your Bring Your Own
+  License (BYOL) subscription.
+  """
+  @spec register_subscription_provider(map(), register_subscription_provider_request(), list()) ::
+          {:ok, register_subscription_provider_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, register_subscription_provider_errors()}
+  def register_subscription_provider(%Client{} = client, input, options \\ []) do
+    url_path = "/subscription/RegisterSubscriptionProvider"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Add metadata tags to the specified Amazon Web Services resource.
+  """
+  @spec tag_resource(map(), String.t() | atom(), tag_resource_request(), list()) ::
+          {:ok, tag_resource_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, tag_resource_errors()}
+  def tag_resource(%Client{} = client, resource_arn, input, options \\ []) do
+    url_path = "/tags/#{AWS.Util.encode_uri(resource_arn)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :put,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Remove one or more metadata tag from the specified Amazon Web Services resource.
+  """
+  @spec untag_resource(map(), String.t() | atom(), untag_resource_request(), list()) ::
+          {:ok, untag_resource_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, untag_resource_errors()}
+  def untag_resource(%Client{} = client, resource_arn, input, options \\ []) do
+    url_path = "/tags/#{AWS.Util.encode_uri(resource_arn)}"
+    headers = []
+    custom_headers = []
+
+    {query_params, input} =
+      [
+        {"tagKeys", "tagKeys"}
+      ]
+      |> Request.build_params(input)
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :delete,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Updates the service settings for Linux subscriptions.
+  """
+  @spec update_service_settings(map(), update_service_settings_request(), list()) ::
+          {:ok, update_service_settings_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, update_service_settings_errors()}
+  def update_service_settings(%Client{} = client, input, options \\ []) do
+    url_path = "/subscription/UpdateServiceSettings"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+end

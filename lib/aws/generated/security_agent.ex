@@ -1,0 +1,7036 @@
+# WARNING: DO NOT EDIT, AUTO-GENERATED CODE!
+# See https://github.com/aws-beam/aws-codegen for more details.
+
+defmodule AWS.SecurityAgent do
+  @moduledoc """
+  AWS Security Agent is a frontier agent that proactively secures your
+  applications throughout the development lifecycle.
+
+  It conducts automated security reviews tailored to your organizational
+  requirements and delivers context-aware penetration testing on demand. By
+  continuously validating security from design to deployment, AWS Security Agent
+  helps prevent vulnerabilities early across all your environments. Key
+  capabilities include design security review for architecture documents, code
+  security review for pull requests in connected repositories, and on-demand
+  penetration testing that discovers, validates, and remediates security
+  vulnerabilities through tailored multi-step attack scenarios. For more
+  information, see the [AWS Security Agent User Guide](https://docs.aws.amazon.com/securityagent/latest/userguide/what-is.html).
+  """
+
+  alias AWS.Client
+  alias AWS.Request
+
+  @typedoc """
+
+  ## Example:
+
+      list_private_connections_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+
+  """
+  @type list_private_connections_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_threat_output() :: %{
+        "anchor" => threat_anchor_shape(),
+        "comments" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "createdBy" => list(any()),
+        "evidence" => list(threat_evidence_shape()),
+        "impactedAssets" => list([String.t() | atom()]()),
+        "impactedGoal" => list([String.t() | atom()]()),
+        "prerequisites" => [String.t() | atom()],
+        "recommendation" => [String.t() | atom()],
+        "severity" => list(any()),
+        "statement" => [String.t() | atom()],
+        "status" => list(any()),
+        "stride" => list(list(any())()),
+        "threatAction" => [String.t() | atom()],
+        "threatId" => [String.t() | atom()],
+        "threatImpact" => [String.t() | atom()],
+        "threatJobId" => [String.t() | atom()],
+        "threatSource" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()],
+        "updatedBy" => list(any())
+      }
+
+  """
+  @type create_threat_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      membership_summary() :: %{
+        "agentSpaceId" => String.t() | atom(),
+        "applicationId" => String.t() | atom(),
+        "config" => list(),
+        "createdAt" => [non_neg_integer()],
+        "createdBy" => [String.t() | atom()],
+        "memberType" => list(any()),
+        "membershipId" => String.t() | atom(),
+        "metadata" => list(),
+        "updatedAt" => [non_neg_integer()],
+        "updatedBy" => [String.t() | atom()]
+      }
+
+  """
+  @type membership_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_target_domains_input() :: %{
+        required("targetDomainIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_target_domains_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      user_metadata() :: %{
+        "email" => String.t() | atom(),
+        "username" => [String.t() | atom()]
+      }
+
+  """
+  @type user_metadata() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      integrated_resource_input_item() :: %{
+        "capabilities" => list(),
+        "resource" => list()
+      }
+
+  """
+  @type integrated_resource_input_item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      document_info() :: %{
+        "artifactId" => [String.t() | atom()],
+        "integratedDocument" => integrated_document(),
+        "s3Location" => [String.t() | atom()]
+      }
+
+  """
+  @type document_info() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_pentests_output() :: %{
+        "notFound" => list([String.t() | atom()]()),
+        "pentests" => list(pentest())
+      }
+
+  """
+  @type batch_get_pentests_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_integrated_resources_input() :: %{
+        required("agentSpaceId") => String.t() | atom(),
+        required("integrationId") => String.t() | atom(),
+        required("items") => list(integrated_resource_input_item())
+      }
+
+  """
+  @type update_integrated_resources_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_create_security_requirement_result() :: %{
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "domain" => [String.t() | atom()],
+        "evaluation" => [String.t() | atom()],
+        "name" => String.t() | atom(),
+        "packId" => String.t() | atom(),
+        "remediation" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type batch_create_security_requirement_result() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_security_requirement_result() :: %{
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "domain" => [String.t() | atom()],
+        "evaluation" => [String.t() | atom()],
+        "name" => String.t() | atom(),
+        "packId" => String.t() | atom(),
+        "remediation" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type batch_get_security_requirement_result() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_pentests_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("pentestIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_pentests_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      verification_script() :: %{
+        "envVars" => list(verification_script_env_var()),
+        "instructions" => [String.t() | atom()],
+        "scriptType" => [String.t() | atom()],
+        "scriptUrl" => [String.t() | atom()]
+      }
+
+  """
+  @type verification_script() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      confluence_document_resource() :: %{
+        "name" => String.t() | atom(),
+        "pageId" => [String.t() | atom()],
+        "spaceKey" => [String.t() | atom()],
+        "spaceTitle" => [String.t() | atom()],
+        "title" => [String.t() | atom()]
+      }
+
+  """
+  @type confluence_document_resource() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_delete_security_requirements_output() :: %{
+        "deletedSecurityRequirementNames" => list(String.t() | atom()),
+        "errors" => list(batch_security_requirement_error())
+      }
+
+  """
+  @type batch_delete_security_requirements_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_pentest_job_tasks_input() :: %{
+        optional("categoryName") => [String.t() | atom()],
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        optional("pentestJobId") => [String.t() | atom()],
+        optional("stepName") => list(any()),
+        required("agentSpaceId") => [String.t() | atom()]
+      }
+
+  """
+  @type list_pentest_job_tasks_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_security_requirements_output() :: %{
+        "errors" => list(batch_security_requirement_error()),
+        "securityRequirements" => list(batch_get_security_requirement_result())
+      }
+
+  """
+  @type batch_get_security_requirements_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_threat_model_failure() :: %{
+        "reason" => [String.t() | atom()],
+        "threatModelId" => [String.t() | atom()]
+      }
+
+  """
+  @type delete_threat_model_failure() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      git_lab_repository_metadata() :: %{
+        "accessType" => list(any()),
+        "name" => String.t() | atom(),
+        "namespace" => String.t() | atom(),
+        "providerResourceId" => String.t() | atom()
+      }
+
+  """
+  @type git_lab_repository_metadata() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      integration_summary() :: %{
+        "displayName" => [String.t() | atom()],
+        "installationId" => [String.t() | atom()],
+        "integrationId" => [String.t() | atom()],
+        "privateConnectionName" => String.t() | atom(),
+        "provider" => list(any()),
+        "providerType" => list(any()),
+        "targetUrl" => String.t() | atom()
+      }
+
+  """
+  @type integration_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_threats_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        required("agentSpaceId") => [String.t() | atom()],
+        required("threatJobId") => [String.t() | atom()]
+      }
+
+  """
+  @type list_threats_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_delete_security_requirements_input() :: %{
+        required("packId") => String.t() | atom(),
+        required("securityRequirementNames") => list(String.t() | atom())
+      }
+
+  """
+  @type batch_delete_security_requirements_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_tags_for_resource_output() :: %{
+        "tags" => map()
+      }
+
+  """
+  @type list_tags_for_resource_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      start_threat_model_job_output() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "status" => list(any()),
+        "threatModelId" => [String.t() | atom()],
+        "threatModelJobId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type start_threat_model_job_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_pentest_jobs_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("pentestJobIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_pentest_jobs_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      start_threat_model_job_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("threatModelId") => [String.t() | atom()]
+      }
+
+  """
+  @type start_threat_model_job_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      throttling_exception() :: %{
+        "message" => [String.t() | atom()],
+        "quotaCode" => [String.t() | atom()],
+        "serviceCode" => [String.t() | atom()]
+      }
+
+  """
+  @type throttling_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      pentest_job() :: %{
+        "actors" => list(actor()),
+        "allowedDomains" => list(endpoint()),
+        "cleanUpStrategy" => list(any()),
+        "codeRemediationStrategy" => list(any()),
+        "createdAt" => [non_neg_integer()],
+        "disableManagedSkills" => list(list(any())()),
+        "documents" => list(document_info()),
+        "endpoints" => list(endpoint()),
+        "errorInformation" => error_information(),
+        "excludePaths" => list(endpoint()),
+        "excludeRiskTypes" => list(list(any())()),
+        "executionContext" => list(execution_context()),
+        "integratedRepositories" => list(integrated_repository()),
+        "logConfig" => cloud_watch_log(),
+        "networkTrafficConfig" => network_traffic_config(),
+        "overview" => [String.t() | atom()],
+        "pentestId" => [String.t() | atom()],
+        "pentestJobId" => [String.t() | atom()],
+        "serviceRole" => String.t() | atom(),
+        "sourceCode" => list(source_code_repository()),
+        "status" => list(any()),
+        "steps" => list(step()),
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()],
+        "vpcConfig" => vpc_config()
+      }
+
+  """
+  @type pentest_job() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_threat_model_job_tasks_output() :: %{
+        "notFound" => list([String.t() | atom()]()),
+        "threatModelJobTasks" => list(threat_model_job_task())
+      }
+
+  """
+  @type batch_get_threat_model_job_tasks_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      initiate_provider_registration_output() :: %{
+        "csrfState" => String.t() | atom(),
+        "redirectTo" => String.t() | atom()
+      }
+
+  """
+  @type initiate_provider_registration_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      endpoint() :: %{
+        "uri" => [String.t() | atom()]
+      }
+
+  """
+  @type endpoint() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_code_review_input() :: %{
+        optional("codeRemediationStrategy") => list(any()),
+        optional("logConfig") => cloud_watch_log(),
+        optional("serviceRole") => String.t() | atom(),
+        optional("validationMode") => list(any()),
+        required("agentSpaceId") => [String.t() | atom()],
+        required("assets") => assets(),
+        required("title") => [String.t() | atom()]
+      }
+
+  """
+  @type create_code_review_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      security_requirement_pack_summary() :: %{
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "managementType" => list(any()),
+        "name" => String.t() | atom(),
+        "packId" => String.t() | atom(),
+        "status" => list(any()),
+        "updatedAt" => [non_neg_integer()],
+        "vendorName" => [String.t() | atom()]
+      }
+
+  """
+  @type security_requirement_pack_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      pentest_summary() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "pentestId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type pentest_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_threat_models_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("threatModelIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_threat_models_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_findings_input() :: %{
+        optional("codeReviewJobId") => [String.t() | atom()],
+        optional("confidence") => list(any()),
+        optional("maxResults") => integer(),
+        optional("name") => [String.t() | atom()],
+        optional("nextToken") => String.t() | atom(),
+        optional("pentestJobId") => [String.t() | atom()],
+        optional("riskLevel") => list(any()),
+        optional("riskType") => [String.t() | atom()],
+        optional("status") => list(any()),
+        required("agentSpaceId") => [String.t() | atom()]
+      }
+
+  """
+  @type list_findings_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      artifact_metadata_item() :: %{
+        "agentSpaceId" => String.t() | atom(),
+        "artifactId" => String.t() | atom(),
+        "fileName" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type artifact_metadata_item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      access_denied_exception() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type access_denied_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_threat_model_jobs_output() :: %{
+        "nextToken" => String.t() | atom(),
+        "threatModelJobSummaries" => list(threat_model_job_summary())
+      }
+
+  """
+  @type list_threat_model_jobs_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_security_requirement_pack_input() :: %{
+        required("packId") => String.t() | atom()
+      }
+
+  """
+  @type delete_security_requirement_pack_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      threat_model_job_task() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "executionStatus" => list(any()),
+        "logsLocation" => log_location(),
+        "taskId" => [String.t() | atom()],
+        "threatModelId" => [String.t() | atom()],
+        "threatModelJobId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type threat_model_job_task() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      code_review() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "assets" => assets(),
+        "codeRemediationStrategy" => list(any()),
+        "codeReviewId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "logConfig" => cloud_watch_log(),
+        "serviceRole" => String.t() | atom(),
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()],
+        "validationMode" => list(any())
+      }
+
+  """
+  @type code_review() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      target_domain() :: %{
+        "createdAt" => [non_neg_integer()],
+        "domainName" => [String.t() | atom()],
+        "targetDomainId" => String.t() | atom(),
+        "verificationDetails" => verification_details(),
+        "verificationStatus" => list(any()),
+        "verificationStatusReason" => [String.t() | atom()],
+        "verifiedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type target_domain() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      tag_resource_output() :: %{}
+
+  """
+  @type tag_resource_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      code_remediation_task() :: %{
+        "status" => list(any()),
+        "statusReason" => [String.t() | atom()],
+        "taskDetails" => list(code_remediation_task_details())
+      }
+
+  """
+  @type code_remediation_task() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_delete_code_reviews_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("codeReviewIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_delete_code_reviews_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_security_requirement_packs_output() :: %{
+        "nextToken" => String.t() | atom(),
+        "securityRequirementPackSummaries" => list(security_requirement_pack_summary())
+      }
+
+  """
+  @type list_security_requirement_packs_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_agent_spaces_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+
+  """
+  @type list_agent_spaces_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      initiate_provider_registration_input() :: %{
+        required("provider") => list(any())
+      }
+
+  """
+  @type initiate_provider_registration_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_code_review_output() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "assets" => assets(),
+        "codeRemediationStrategy" => list(any()),
+        "codeReviewId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "logConfig" => cloud_watch_log(),
+        "serviceRole" => String.t() | atom(),
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()],
+        "validationMode" => list(any())
+      }
+
+  """
+  @type update_code_review_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_agent_spaces_output() :: %{
+        "agentSpaces" => list(agent_space()),
+        "notFound" => list(String.t() | atom())
+      }
+
+  """
+  @type batch_get_agent_spaces_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_membership_response() :: %{}
+
+  """
+  @type delete_membership_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      list_integrated_resources_input() :: %{
+        optional("integrationId") => String.t() | atom(),
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        optional("resourceType") => list(any()),
+        required("agentSpaceId") => String.t() | atom()
+      }
+
+  """
+  @type list_integrated_resources_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      target_domain_summary() :: %{
+        "domainName" => [String.t() | atom()],
+        "targetDomainId" => String.t() | atom(),
+        "verificationStatus" => list(any())
+      }
+
+  """
+  @type target_domain_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      threat_evidence_shape() :: %{
+        "packageId" => [String.t() | atom()],
+        "path" => [String.t() | atom()]
+      }
+
+  """
+  @type threat_evidence_shape() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_code_review_job_tasks_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("codeReviewJobTaskIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_code_review_job_tasks_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_artifacts_output() :: %{
+        "artifactSummaries" => list(artifact_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_artifacts_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_delete_code_reviews_output() :: %{
+        "deleted" => list([String.t() | atom()]()),
+        "failed" => list(delete_code_review_failure())
+      }
+
+  """
+  @type batch_delete_code_reviews_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      git_hub_repository_resource() :: %{
+        "name" => String.t() | atom(),
+        "owner" => String.t() | atom()
+      }
+
+  """
+  @type git_hub_repository_resource() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      pentest_job_summary() :: %{
+        "createdAt" => [non_neg_integer()],
+        "pentestId" => [String.t() | atom()],
+        "pentestJobId" => [String.t() | atom()],
+        "status" => list(any()),
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type pentest_job_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      describe_private_connection_input() :: %{
+        required("privateConnectionName") => String.t() | atom()
+      }
+
+  """
+  @type describe_private_connection_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_artifact_metadata_input() :: %{
+        required("agentSpaceId") => String.t() | atom(),
+        required("artifactIds") => list(String.t() | atom())
+      }
+
+  """
+  @type batch_get_artifact_metadata_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      stop_pentest_job_output() :: %{}
+
+  """
+  @type stop_pentest_job_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      update_agent_space_output() :: %{
+        "agentSpaceId" => String.t() | atom(),
+        "awsResources" => aws_resources(),
+        "codeReviewSettings" => code_review_settings(),
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "name" => String.t() | atom(),
+        "targetDomainIds" => list([String.t() | atom()]()),
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type update_agent_space_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      stop_threat_model_job_output() :: %{}
+
+  """
+  @type stop_threat_model_job_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      network_traffic_rule() :: %{
+        "effect" => list(any()),
+        "networkTrafficRuleType" => list(any()),
+        "pattern" => [String.t() | atom()]
+      }
+
+  """
+  @type network_traffic_rule() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      code_review_job_task_summary() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "codeReviewId" => [String.t() | atom()],
+        "codeReviewJobId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "executionStatus" => list(any()),
+        "riskType" => list(any()),
+        "taskId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type code_review_job_task_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_security_requirements_output() :: %{
+        "nextToken" => String.t() | atom(),
+        "securityRequirementSummaries" => list(security_requirement_summary())
+      }
+
+  """
+  @type list_security_requirements_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_security_requirements_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        required("packId") => String.t() | atom()
+      }
+
+  """
+  @type list_security_requirements_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_update_security_requirements_output() :: %{
+        "errors" => list(batch_security_requirement_error()),
+        "updatedSecurityRequirementNames" => list(String.t() | atom())
+      }
+
+  """
+  @type batch_update_security_requirements_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_pentest_output() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "assets" => assets(),
+        "createdAt" => [non_neg_integer()],
+        "excludeRiskTypes" => list(list(any())()),
+        "logConfig" => cloud_watch_log(),
+        "pentestId" => [String.t() | atom()],
+        "serviceRole" => String.t() | atom(),
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type update_pentest_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_application_response() :: %{
+        "applicationId" => String.t() | atom(),
+        "applicationName" => [String.t() | atom()],
+        "defaultKmsKeyId" => String.t() | atom(),
+        "domain" => String.t() | atom(),
+        "idcConfiguration" => id_c_configuration(),
+        "roleArn" => String.t() | atom()
+      }
+
+  """
+  @type get_application_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      security_requirement_artifact() :: %{
+        "content" => binary(),
+        "format" => list(any()),
+        "name" => String.t() | atom()
+      }
+
+  """
+  @type security_requirement_artifact() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      validation_exception() :: %{
+        "fieldList" => list(validation_exception_field()),
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type validation_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      code_location() :: %{
+        "filePath" => [String.t() | atom()],
+        "label" => [String.t() | atom()],
+        "lineEnd" => [integer()],
+        "lineStart" => [integer()]
+      }
+
+  """
+  @type code_location() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_private_connections_output() :: %{
+        "nextToken" => String.t() | atom(),
+        "privateConnections" => list(private_connection_summary())
+      }
+
+  """
+  @type list_private_connections_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_application_request() :: %{
+        optional("defaultKmsKeyId") => String.t() | atom(),
+        optional("idcInstanceArn") => String.t() | atom(),
+        optional("roleArn") => String.t() | atom(),
+        optional("tags") => map()
+      }
+
+  """
+  @type create_application_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      agent_space_summary() :: %{
+        "agentSpaceId" => String.t() | atom(),
+        "createdAt" => [non_neg_integer()],
+        "name" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type agent_space_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      stop_threat_model_job_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("threatModelJobId") => [String.t() | atom()]
+      }
+
+  """
+  @type stop_threat_model_job_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_target_domain_output() :: %{
+        "createdAt" => [non_neg_integer()],
+        "domainName" => [String.t() | atom()],
+        "targetDomainId" => String.t() | atom(),
+        "verificationDetails" => verification_details(),
+        "verificationStatus" => list(any()),
+        "verificationStatusReason" => [String.t() | atom()],
+        "verifiedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type update_target_domain_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      cloud_watch_log() :: %{
+        "logGroup" => [String.t() | atom()],
+        "logStream" => [String.t() | atom()]
+      }
+
+  """
+  @type cloud_watch_log() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_discovered_endpoints_output() :: %{
+        "discoveredEndpoints" => list(discovered_endpoint()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_discovered_endpoints_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_delete_pentests_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("pentestIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_delete_pentests_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_artifacts_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        required("agentSpaceId") => String.t() | atom()
+      }
+
+  """
+  @type list_artifacts_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      discovered_endpoint() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "description" => [String.t() | atom()],
+        "evidence" => [String.t() | atom()],
+        "operation" => [String.t() | atom()],
+        "pentestJobId" => [String.t() | atom()],
+        "taskId" => [String.t() | atom()],
+        "uri" => [String.t() | atom()]
+      }
+
+  """
+  @type discovered_endpoint() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      import_security_requirements_input() :: %{
+        required("input") => list(),
+        required("packId") => String.t() | atom()
+      }
+
+  """
+  @type import_security_requirements_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_integration_output() :: %{}
+
+  """
+  @type delete_integration_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      get_application_request() :: %{
+        required("applicationId") => String.t() | atom()
+      }
+
+  """
+  @type get_application_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_finding_output() :: %{}
+
+  """
+  @type update_finding_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      list_findings_output() :: %{
+        "findingsSummaries" => list(finding_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_findings_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      code_review_job() :: %{
+        "codeRemediationStrategy" => list(any()),
+        "codeReviewId" => [String.t() | atom()],
+        "codeReviewJobId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "documents" => list(document_info()),
+        "errorInformation" => error_information(),
+        "executionContext" => list(execution_context()),
+        "integratedRepositories" => list(integrated_repository()),
+        "logConfig" => cloud_watch_log(),
+        "overview" => [String.t() | atom()],
+        "serviceRole" => String.t() | atom(),
+        "sourceCode" => list(source_code_repository()),
+        "status" => list(any()),
+        "steps" => list(step()),
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type code_review_job() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_pentest_jobs_for_pentest_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        required("agentSpaceId") => [String.t() | atom()],
+        required("pentestId") => [String.t() | atom()]
+      }
+
+  """
+  @type list_pentest_jobs_for_pentest_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      start_code_review_job_output() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "codeReviewId" => [String.t() | atom()],
+        "codeReviewJobId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "status" => list(any()),
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type start_code_review_job_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_threats_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("threatIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_threats_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      tag_resource_input() :: %{
+        required("tags") => map()
+      }
+
+  """
+  @type tag_resource_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      start_code_review_job_input() :: %{
+        optional("diffSource") => list(),
+        required("agentSpaceId") => [String.t() | atom()],
+        required("codeReviewId") => [String.t() | atom()]
+      }
+
+  """
+  @type start_code_review_job_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      start_code_remediation_output() :: %{}
+
+  """
+  @type start_code_remediation_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      start_pentest_job_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("pentestId") => [String.t() | atom()]
+      }
+
+  """
+  @type start_pentest_job_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_agent_space_input() :: %{
+        required("agentSpaceId") => String.t() | atom()
+      }
+
+  """
+  @type delete_agent_space_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_pentest_input() :: %{
+        optional("assets") => assets(),
+        optional("codeRemediationStrategy") => list(any()),
+        optional("disableManagedSkills") => list(list(any())()),
+        optional("excludeRiskTypes") => list(list(any())()),
+        optional("logConfig") => cloud_watch_log(),
+        optional("networkTrafficConfig") => network_traffic_config(),
+        optional("serviceRole") => String.t() | atom(),
+        optional("vpcConfig") => vpc_config(),
+        required("agentSpaceId") => [String.t() | atom()],
+        required("title") => [String.t() | atom()]
+      }
+
+  """
+  @type create_pentest_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      code_review_summary() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "codeReviewId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type code_review_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      user_config() :: %{
+        "role" => list(any())
+      }
+
+  """
+  @type user_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      internal_server_exception() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type internal_server_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_threats_output() :: %{
+        "nextToken" => String.t() | atom(),
+        "threats" => list(threat_summary())
+      }
+
+  """
+  @type list_threats_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      add_artifact_output() :: %{
+        "artifactId" => String.t() | atom()
+      }
+
+  """
+  @type add_artifact_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_target_domain_input() :: %{
+        required("targetDomainId") => String.t() | atom(),
+        required("verificationMethod") => list(any())
+      }
+
+  """
+  @type update_target_domain_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_code_review_jobs_for_code_review_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        required("agentSpaceId") => [String.t() | atom()],
+        required("codeReviewId") => [String.t() | atom()]
+      }
+
+  """
+  @type list_code_review_jobs_for_code_review_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      step() :: %{
+        "createdAt" => [non_neg_integer()],
+        "name" => list(any()),
+        "status" => list(any()),
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type step() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_discovered_endpoints_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        optional("prefix") => [String.t() | atom()],
+        required("agentSpaceId") => [String.t() | atom()],
+        required("pentestJobId") => [String.t() | atom()]
+      }
+
+  """
+  @type list_discovered_endpoints_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      pentest() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "assets" => assets(),
+        "cleanUpStrategy" => list(any()),
+        "codeRemediationStrategy" => list(any()),
+        "createdAt" => [non_neg_integer()],
+        "disableManagedSkills" => list(list(any())()),
+        "excludeRiskTypes" => list(list(any())()),
+        "logConfig" => cloud_watch_log(),
+        "networkTrafficConfig" => network_traffic_config(),
+        "pentestId" => [String.t() | atom()],
+        "serviceRole" => String.t() | atom(),
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()],
+        "vpcConfig" => vpc_config()
+      }
+
+  """
+  @type pentest() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_security_requirement_error() :: %{
+        "code" => [String.t() | atom()],
+        "message" => [String.t() | atom()],
+        "securityRequirementName" => String.t() | atom()
+      }
+
+  """
+  @type batch_security_requirement_error() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      artifact() :: %{
+        "contents" => [String.t() | atom()],
+        "type" => list(any())
+      }
+
+  """
+  @type artifact() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_threats_output() :: %{
+        "notFound" => list([String.t() | atom()]()),
+        "threats" => list(threat())
+      }
+
+  """
+  @type batch_get_threats_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      verification_details() :: %{
+        "dnsTxt" => dns_verification(),
+        "httpRoute" => http_verification(),
+        "method" => list(any())
+      }
+
+  """
+  @type verification_details() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      bitbucket_integration_input() :: %{
+        "code" => String.t() | atom(),
+        "installationId" => String.t() | atom(),
+        "state" => String.t() | atom(),
+        "workspace" => String.t() | atom()
+      }
+
+  """
+  @type bitbucket_integration_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_security_requirement_pack_output() :: %{
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "importStatus" => list(any()),
+        "kmsKeyId" => String.t() | atom(),
+        "managementType" => list(any()),
+        "name" => String.t() | atom(),
+        "packId" => String.t() | atom(),
+        "status" => list(any()),
+        "updatedAt" => [non_neg_integer()],
+        "vendorName" => [String.t() | atom()]
+      }
+
+  """
+  @type get_security_requirement_pack_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      security_requirement_summary() :: %{
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "name" => String.t() | atom(),
+        "packId" => String.t() | atom(),
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type security_requirement_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      resource_not_found_exception() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type resource_not_found_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_applications_response() :: %{
+        "applicationSummaries" => list(application_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_applications_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_agent_space_output() :: %{
+        "agentSpaceId" => String.t() | atom(),
+        "awsResources" => aws_resources(),
+        "codeReviewSettings" => code_review_settings(),
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "kmsKeyId" => String.t() | atom(),
+        "name" => String.t() | atom(),
+        "targetDomainIds" => list([String.t() | atom()]()),
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type create_agent_space_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_findings_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("findingIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_findings_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      stop_code_review_job_output() :: %{}
+
+  """
+  @type stop_code_review_job_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_security_requirements_input() :: %{
+        required("packId") => String.t() | atom(),
+        required("securityRequirementNames") => list(String.t() | atom())
+      }
+
+  """
+  @type batch_get_security_requirements_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      untag_resource_input() :: %{
+        required("tagKeys") => list(String.t() | atom())
+      }
+
+  """
+  @type untag_resource_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_private_connection_certificate_input() :: %{
+        required("certificate") => String.t() | atom(),
+        required("privateConnectionName") => String.t() | atom()
+      }
+
+  """
+  @type update_private_connection_certificate_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      start_code_remediation_input() :: %{
+        optional("codeReviewJobId") => [String.t() | atom()],
+        optional("pentestJobId") => [String.t() | atom()],
+        required("agentSpaceId") => [String.t() | atom()],
+        required("findingIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type start_code_remediation_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_pentest_output() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "assets" => assets(),
+        "createdAt" => [non_neg_integer()],
+        "excludeRiskTypes" => list(list(any())()),
+        "logConfig" => cloud_watch_log(),
+        "pentestId" => [String.t() | atom()],
+        "serviceRole" => String.t() | atom(),
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type create_pentest_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_code_reviews_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("codeReviewIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_code_reviews_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      execution_context() :: %{
+        "context" => [String.t() | atom()],
+        "contextType" => list(any()),
+        "timestamp" => [non_neg_integer()]
+      }
+
+  """
+  @type execution_context() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_pentest_job_tasks_output() :: %{
+        "nextToken" => String.t() | atom(),
+        "taskSummaries" => list(task_summary())
+      }
+
+  """
+  @type list_pentest_job_tasks_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      add_artifact_input() :: %{
+        required("agentSpaceId") => String.t() | atom(),
+        required("artifactContent") => [binary()],
+        required("artifactType") => list(any()),
+        required("fileName") => [String.t() | atom()]
+      }
+
+  """
+  @type add_artifact_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_pentest_input() :: %{
+        optional("assets") => assets(),
+        optional("codeRemediationStrategy") => list(any()),
+        optional("disableManagedSkills") => list(list(any())()),
+        optional("excludeRiskTypes") => list(list(any())()),
+        optional("logConfig") => cloud_watch_log(),
+        optional("networkTrafficConfig") => network_traffic_config(),
+        optional("serviceRole") => String.t() | atom(),
+        optional("title") => [String.t() | atom()],
+        optional("vpcConfig") => vpc_config(),
+        required("agentSpaceId") => [String.t() | atom()],
+        required("pentestId") => [String.t() | atom()]
+      }
+
+  """
+  @type update_pentest_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_security_requirement_pack_input() :: %{
+        optional("description") => [String.t() | atom()],
+        optional("kmsKeyId") => String.t() | atom(),
+        optional("status") => list(any()),
+        optional("tags") => map(),
+        required("name") => String.t() | atom()
+      }
+
+  """
+  @type create_security_requirement_pack_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_integration_input() :: %{
+        optional("kmsKeyId") => String.t() | atom(),
+        optional("privateConnectionName") => String.t() | atom(),
+        optional("tags") => map(),
+        required("input") => list(),
+        required("integrationDisplayName") => [String.t() | atom()],
+        required("provider") => list(any())
+      }
+
+  """
+  @type create_integration_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_code_reviews_output() :: %{
+        "codeReviews" => list(code_review()),
+        "notFound" => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_code_reviews_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_integration_input() :: %{
+        required("integrationId") => String.t() | atom()
+      }
+
+  """
+  @type get_integration_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_pentest_job_tasks_output() :: %{
+        "notFound" => list([String.t() | atom()]()),
+        "tasks" => list(task())
+      }
+
+  """
+  @type batch_get_pentest_job_tasks_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_application_request() :: %{
+        required("applicationId") => String.t() | atom()
+      }
+
+  """
+  @type delete_application_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_application_response() :: %{
+        "applicationId" => String.t() | atom()
+      }
+
+  """
+  @type update_application_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_pentest_jobs_for_pentest_output() :: %{
+        "nextToken" => String.t() | atom(),
+        "pentestJobSummaries" => list(pentest_job_summary())
+      }
+
+  """
+  @type list_pentest_jobs_for_pentest_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_threat_model_output() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "assets" => assets(),
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "logConfig" => cloud_watch_log(),
+        "scopeDocs" => list(document_info()),
+        "serviceRole" => String.t() | atom(),
+        "threatModelId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type create_threat_model_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_threat_output() :: %{
+        "anchor" => threat_anchor_shape(),
+        "comments" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "createdBy" => list(any()),
+        "evidence" => list(threat_evidence_shape()),
+        "impactedAssets" => list([String.t() | atom()]()),
+        "impactedGoal" => list([String.t() | atom()]()),
+        "prerequisites" => [String.t() | atom()],
+        "recommendation" => [String.t() | atom()],
+        "severity" => list(any()),
+        "statement" => [String.t() | atom()],
+        "status" => list(any()),
+        "stride" => list(list(any())()),
+        "threatAction" => [String.t() | atom()],
+        "threatId" => [String.t() | atom()],
+        "threatImpact" => [String.t() | atom()],
+        "threatJobId" => [String.t() | atom()],
+        "threatSource" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()],
+        "updatedBy" => list(any())
+      }
+
+  """
+  @type update_threat_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_security_requirement_pack_filter() :: %{
+        "managementType" => list(any()),
+        "status" => list(any())
+      }
+
+  """
+  @type list_security_requirement_pack_filter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      network_traffic_config() :: %{
+        "customHeaders" => list(custom_header()),
+        "rules" => list(network_traffic_rule())
+      }
+
+  """
+  @type network_traffic_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_update_security_requirements_input() :: %{
+        required("packId") => String.t() | atom(),
+        required("securityRequirements") => list(update_security_requirement_entry())
+      }
+
+  """
+  @type batch_update_security_requirements_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_threat_model_job_tasks_output() :: %{
+        "nextToken" => String.t() | atom(),
+        "threatModelJobTaskSummaries" => list(threat_model_job_task_summary())
+      }
+
+  """
+  @type list_threat_model_job_tasks_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_threat_model_jobs_output() :: %{
+        "notFound" => list([String.t() | atom()]()),
+        "threatModelJobs" => list(threat_model_job())
+      }
+
+  """
+  @type batch_get_threat_model_jobs_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_threat_input() :: %{
+        optional("anchor") => threat_anchor_shape(),
+        optional("comments") => [String.t() | atom()],
+        optional("evidence") => list(threat_evidence_shape()),
+        optional("impactedAssets") => list([String.t() | atom()]()),
+        optional("impactedGoal") => list([String.t() | atom()]()),
+        optional("prerequisites") => [String.t() | atom()],
+        optional("recommendation") => [String.t() | atom()],
+        optional("severity") => list(any()),
+        optional("statement") => [String.t() | atom()],
+        optional("status") => list(any()),
+        optional("threatAction") => [String.t() | atom()],
+        optional("threatImpact") => [String.t() | atom()],
+        optional("threatSource") => [String.t() | atom()],
+        optional("title") => [String.t() | atom()],
+        required("agentSpaceId") => [String.t() | atom()],
+        required("threatId") => [String.t() | atom()]
+      }
+
+  """
+  @type update_threat_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_applications_request() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+
+  """
+  @type list_applications_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      conflict_exception() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type conflict_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      artifact_summary() :: %{
+        "artifactId" => String.t() | atom(),
+        "artifactType" => list(any()),
+        "fileName" => [String.t() | atom()]
+      }
+
+  """
+  @type artifact_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      threat_model_job() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "documents" => list(document_info()),
+        "errorInformation" => error_information(),
+        "executionEndTime" => [non_neg_integer()],
+        "executionStartTime" => [non_neg_integer()],
+        "integratedRepositories" => list(integrated_repository()),
+        "scopeDocs" => list(document_info()),
+        "sourceCode" => list(source_code_repository()),
+        "status" => list(any()),
+        "systemOverview" => [String.t() | atom()],
+        "threatModelId" => [String.t() | atom()],
+        "threatModelJobId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type threat_model_job() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_create_security_requirements_input() :: %{
+        required("packId") => String.t() | atom(),
+        required("securityRequirements") => list(create_security_requirement_entry())
+      }
+
+  """
+  @type batch_create_security_requirements_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_integration_output() :: %{
+        "integrationId" => String.t() | atom()
+      }
+
+  """
+  @type create_integration_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_integrated_resources_output() :: %{}
+
+  """
+  @type update_integrated_resources_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      list_threat_model_jobs_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        required("agentSpaceId") => [String.t() | atom()],
+        required("threatModelId") => [String.t() | atom()]
+      }
+
+  """
+  @type list_threat_model_jobs_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_delete_threat_models_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("threatModelIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_delete_threat_models_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      actor() :: %{
+        "authentication" => authentication(),
+        "description" => [String.t() | atom()],
+        "identifier" => [String.t() | atom()],
+        "uris" => list([String.t() | atom()]())
+      }
+
+  """
+  @type actor() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      confluence_document_metadata() :: %{
+        "name" => String.t() | atom(),
+        "pageId" => [String.t() | atom()],
+        "providerResourceId" => String.t() | atom(),
+        "spaceKey" => [String.t() | atom()],
+        "spaceTitle" => [String.t() | atom()],
+        "title" => [String.t() | atom()]
+      }
+
+  """
+  @type confluence_document_metadata() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_membership_request() :: %{
+        optional("config") => list(),
+        required("agentSpaceId") => String.t() | atom(),
+        required("applicationId") => String.t() | atom(),
+        required("memberType") => list(any()),
+        required("membershipId") => String.t() | atom()
+      }
+
+  """
+  @type create_membership_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_delete_threat_models_output() :: %{
+        "deleted" => list([String.t() | atom()]()),
+        "failed" => list(delete_threat_model_failure())
+      }
+
+  """
+  @type batch_delete_threat_models_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_private_connection_input() :: %{
+        required("privateConnectionName") => String.t() | atom()
+      }
+
+  """
+  @type delete_private_connection_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      validation_exception_field() :: %{
+        "message" => [String.t() | atom()],
+        "path" => [String.t() | atom()]
+      }
+
+  """
+  @type validation_exception_field() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_finding_input() :: %{
+        optional("attackScript") => [String.t() | atom()],
+        optional("customerNote") => [String.t() | atom()],
+        optional("description") => [String.t() | atom()],
+        optional("name") => [String.t() | atom()],
+        optional("reasoning") => [String.t() | atom()],
+        optional("riskLevel") => list(any()),
+        optional("riskScore") => [String.t() | atom()],
+        optional("riskType") => [String.t() | atom()],
+        optional("status") => list(any()),
+        required("agentSpaceId") => [String.t() | atom()],
+        required("findingId") => [String.t() | atom()]
+      }
+
+  """
+  @type update_finding_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      integrated_resource_summary() :: %{
+        "capabilities" => list(),
+        "integrationId" => String.t() | atom(),
+        "resource" => list()
+      }
+
+  """
+  @type integrated_resource_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      threat_model_summary() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "threatModelId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type threat_model_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_target_domain_output() :: %{
+        "createdAt" => [non_neg_integer()],
+        "domainName" => [String.t() | atom()],
+        "targetDomainId" => String.t() | atom(),
+        "verificationDetails" => verification_details(),
+        "verificationStatus" => list(any()),
+        "verificationStatusReason" => [String.t() | atom()],
+        "verifiedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type create_target_domain_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      threat_model_job_summary() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "status" => list(any()),
+        "threatModelId" => [String.t() | atom()],
+        "threatModelJobId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type threat_model_job_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_code_review_failure() :: %{
+        "codeReviewId" => [String.t() | atom()],
+        "reason" => [String.t() | atom()]
+      }
+
+  """
+  @type delete_code_review_failure() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_agent_space_input() :: %{
+        optional("awsResources") => aws_resources(),
+        optional("codeReviewSettings") => code_review_settings(),
+        optional("description") => [String.t() | atom()],
+        optional("name") => String.t() | atom(),
+        optional("targetDomainIds") => list([String.t() | atom()]()),
+        required("agentSpaceId") => String.t() | atom()
+      }
+
+  """
+  @type update_agent_space_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_private_connection_output() :: %{
+        "certificateExpiryTime" => [non_neg_integer()],
+        "dnsResolution" => list(any()),
+        "failureMessage" => [String.t() | atom()],
+        "hostAddress" => String.t() | atom(),
+        "name" => String.t() | atom(),
+        "resourceConfigurationId" => String.t() | atom(),
+        "resourceGatewayId" => String.t() | atom(),
+        "status" => list(any()),
+        "tags" => map(),
+        "type" => list(any()),
+        "vpcId" => String.t() | atom()
+      }
+
+  """
+  @type delete_private_connection_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      task() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "categories" => list(category()),
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "executionStatus" => list(any()),
+        "logsLocation" => log_location(),
+        "pentestId" => [String.t() | atom()],
+        "pentestJobId" => [String.t() | atom()],
+        "riskType" => list(any()),
+        "targetEndpoint" => endpoint(),
+        "taskId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type task() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      bitbucket_resource_capabilities() :: %{
+        "leaveComments" => [boolean()],
+        "remediateCode" => [boolean()]
+      }
+
+  """
+  @type bitbucket_resource_capabilities() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_pentest_failure() :: %{
+        "pentestId" => [String.t() | atom()],
+        "reason" => [String.t() | atom()]
+      }
+
+  """
+  @type delete_pentest_failure() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_threat_model_input() :: %{
+        optional("assets") => assets(),
+        optional("description") => [String.t() | atom()],
+        optional("logConfig") => cloud_watch_log(),
+        optional("scopeDocs") => list(document_info()),
+        optional("serviceRole") => String.t() | atom(),
+        optional("title") => [String.t() | atom()],
+        required("agentSpaceId") => [String.t() | atom()],
+        required("threatModelId") => [String.t() | atom()]
+      }
+
+  """
+  @type update_threat_model_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      git_hub_integration_input() :: %{
+        "code" => String.t() | atom(),
+        "installationId" => [String.t() | atom()],
+        "organizationName" => [String.t() | atom()],
+        "state" => String.t() | atom(),
+        "targetUrl" => String.t() | atom()
+      }
+
+  """
+  @type git_hub_integration_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_pentests_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        required("agentSpaceId") => [String.t() | atom()]
+      }
+
+  """
+  @type list_pentests_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_threat_model_jobs_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("threatModelJobIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_threat_model_jobs_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_delete_pentests_output() :: %{
+        "deleted" => list(pentest()),
+        "failed" => list(delete_pentest_failure())
+      }
+
+  """
+  @type batch_delete_pentests_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      verify_target_domain_input() :: %{
+        required("targetDomainId") => String.t() | atom()
+      }
+
+  """
+  @type verify_target_domain_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      vpc_config() :: %{
+        "securityGroupArns" => list(String.t() | atom()),
+        "subnetArns" => list(String.t() | atom()),
+        "vpcArn" => String.t() | atom()
+      }
+
+  """
+  @type vpc_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_create_security_requirements_output() :: %{
+        "errors" => list(batch_security_requirement_error()),
+        "securityRequirements" => list(batch_create_security_requirement_result())
+      }
+
+  """
+  @type batch_create_security_requirements_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      git_lab_integration_input() :: %{
+        "accessToken" => String.t() | atom(),
+        "groupId" => [String.t() | atom()],
+        "targetUrl" => String.t() | atom(),
+        "tokenType" => list(any())
+      }
+
+  """
+  @type git_lab_integration_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      code_remediation_task_details() :: %{
+        "codeDiffLink" => [String.t() | atom()],
+        "pullRequestLink" => [String.t() | atom()],
+        "repoName" => [String.t() | atom()]
+      }
+
+  """
+  @type code_remediation_task_details() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_integration_output() :: %{
+        "displayName" => [String.t() | atom()],
+        "installationId" => [String.t() | atom()],
+        "integrationId" => String.t() | atom(),
+        "kmsKeyId" => String.t() | atom(),
+        "privateConnectionName" => String.t() | atom(),
+        "provider" => list(any()),
+        "providerType" => list(any()),
+        "targetUrl" => String.t() | atom()
+      }
+
+  """
+  @type get_integration_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_memberships_request() :: %{
+        optional("maxResults") => integer(),
+        optional("memberType") => list(any()),
+        optional("nextToken") => String.t() | atom(),
+        required("agentSpaceId") => String.t() | atom(),
+        required("applicationId") => String.t() | atom()
+      }
+
+  """
+  @type list_memberships_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      import_security_requirements_output() :: %{
+        "importStatus" => list(any()),
+        "packId" => String.t() | atom()
+      }
+
+  """
+  @type import_security_requirements_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_artifact_input() :: %{
+        required("agentSpaceId") => String.t() | atom(),
+        required("artifactId") => String.t() | atom()
+      }
+
+  """
+  @type get_artifact_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_threat_model_job_tasks_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("threatModelJobTaskIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_threat_model_job_tasks_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      service_managed_input() :: %{
+        "certificate" => String.t() | atom(),
+        "dnsResolution" => list(any()),
+        "hostAddress" => String.t() | atom(),
+        "ipAddressType" => list(any()),
+        "ipv4AddressesPerEni" => integer(),
+        "portRanges" => list(String.t() | atom()),
+        "securityGroupIds" => list(String.t() | atom()),
+        "subnetIds" => list(String.t() | atom()),
+        "vpcId" => String.t() | atom()
+      }
+
+  """
+  @type service_managed_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      private_connection_summary() :: %{
+        "certificateExpiryTime" => [non_neg_integer()],
+        "dnsResolution" => list(any()),
+        "failureMessage" => [String.t() | atom()],
+        "hostAddress" => String.t() | atom(),
+        "name" => String.t() | atom(),
+        "resourceConfigurationId" => String.t() | atom(),
+        "resourceGatewayId" => String.t() | atom(),
+        "status" => list(any()),
+        "tags" => map(),
+        "type" => list(any()),
+        "vpcId" => String.t() | atom()
+      }
+
+  """
+  @type private_connection_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_target_domains_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+
+  """
+  @type list_target_domains_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_private_connection_input() :: %{
+        optional("tags") => map(),
+        required("mode") => list(),
+        required("privateConnectionName") => String.t() | atom()
+      }
+
+  """
+  @type create_private_connection_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_application_response() :: %{
+        "applicationId" => String.t() | atom()
+      }
+
+  """
+  @type create_application_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_memberships_response() :: %{
+        "membershipSummaries" => list(membership_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_memberships_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_target_domain_input() :: %{
+        optional("tags") => map(),
+        required("targetDomainName") => [String.t() | atom()],
+        required("verificationMethod") => list(any())
+      }
+
+  """
+  @type create_target_domain_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_threat_model_input() :: %{
+        optional("assets") => assets(),
+        optional("description") => [String.t() | atom()],
+        optional("logConfig") => cloud_watch_log(),
+        optional("reportDestination") => report_destination(),
+        optional("scopeDocs") => list(document_info()),
+        required("agentSpaceId") => [String.t() | atom()],
+        required("serviceRole") => String.t() | atom(),
+        required("title") => [String.t() | atom()]
+      }
+
+  """
+  @type create_threat_model_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_threat_models_output() :: %{
+        "nextToken" => String.t() | atom(),
+        "threatModelSummaries" => list(threat_model_summary())
+      }
+
+  """
+  @type list_threat_models_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_threat_models_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        required("agentSpaceId") => [String.t() | atom()]
+      }
+
+  """
+  @type list_threat_models_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_security_requirement_pack_input() :: %{
+        required("packId") => String.t() | atom()
+      }
+
+  """
+  @type get_security_requirement_pack_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_tags_for_resource_input() :: %{}
+
+  """
+  @type list_tags_for_resource_input() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      stop_pentest_job_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("pentestJobId") => [String.t() | atom()]
+      }
+
+  """
+  @type stop_pentest_job_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      code_review_settings() :: %{
+        "controlsScanning" => [boolean()],
+        "generalPurposeScanning" => [boolean()]
+      }
+
+  """
+  @type code_review_settings() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      git_lab_repository_resource() :: %{
+        "name" => String.t() | atom(),
+        "namespace" => String.t() | atom()
+      }
+
+  """
+  @type git_lab_repository_resource() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_target_domain_input() :: %{
+        required("targetDomainId") => String.t() | atom()
+      }
+
+  """
+  @type delete_target_domain_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      application_summary() :: %{
+        "applicationId" => String.t() | atom(),
+        "applicationName" => [String.t() | atom()],
+        "defaultKmsKeyId" => String.t() | atom(),
+        "domain" => String.t() | atom()
+      }
+
+  """
+  @type application_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      bitbucket_repository_metadata() :: %{
+        "accessType" => list(any()),
+        "name" => String.t() | atom(),
+        "providerResourceId" => String.t() | atom(),
+        "workspace" => String.t() | atom()
+      }
+
+  """
+  @type bitbucket_repository_metadata() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_code_review_job_tasks_input() :: %{
+        optional("categoryName") => [String.t() | atom()],
+        optional("codeReviewJobId") => [String.t() | atom()],
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        optional("stepName") => list(any()),
+        required("agentSpaceId") => [String.t() | atom()]
+      }
+
+  """
+  @type list_code_review_job_tasks_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_membership_request() :: %{
+        optional("memberType") => list(any()),
+        required("agentSpaceId") => String.t() | atom(),
+        required("applicationId") => String.t() | atom(),
+        required("membershipId") => String.t() | atom()
+      }
+
+  """
+  @type delete_membership_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_agent_spaces_output() :: %{
+        "agentSpaceSummaries" => list(agent_space_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_agent_spaces_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_integrations_output() :: %{
+        "integrationSummaries" => list(integration_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_integrations_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      git_lab_resource_capabilities() :: %{
+        "leaveComments" => [boolean()],
+        "remediateCode" => [boolean()]
+      }
+
+  """
+  @type git_lab_resource_capabilities() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      log_location() :: %{
+        "cloudWatchLog" => cloud_watch_log(),
+        "logType" => list(any())
+      }
+
+  """
+  @type log_location() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      source_code_repository() :: %{
+        "s3Location" => [String.t() | atom()]
+      }
+
+  """
+  @type source_code_repository() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      integrated_repository() :: %{
+        "integrationId" => [String.t() | atom()],
+        "providerResourceId" => [String.t() | atom()]
+      }
+
+  """
+  @type integrated_repository() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_integrations_input() :: %{
+        optional("filter") => list(),
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+
+  """
+  @type list_integrations_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_threat_models_output() :: %{
+        "notFound" => list([String.t() | atom()]()),
+        "threatModels" => list(threat_model())
+      }
+
+  """
+  @type batch_get_threat_models_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_integrated_resources_output() :: %{
+        "integratedResourceSummaries" => list(integrated_resource_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_integrated_resources_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      task_summary() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "executionStatus" => list(any()),
+        "pentestId" => [String.t() | atom()],
+        "pentestJobId" => [String.t() | atom()],
+        "riskType" => list(any()),
+        "taskId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type task_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_security_requirement_packs_input() :: %{
+        optional("filter") => list_security_requirement_pack_filter(),
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+
+  """
+  @type list_security_requirement_packs_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_code_review_job_tasks_output() :: %{
+        "codeReviewJobTasks" => list(code_review_job_task()),
+        "notFound" => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_code_review_job_tasks_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      bitbucket_repository_resource() :: %{
+        "name" => String.t() | atom(),
+        "workspace" => String.t() | atom()
+      }
+
+  """
+  @type bitbucket_repository_resource() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      threat() :: %{
+        "anchor" => threat_anchor_shape(),
+        "comments" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "createdBy" => list(any()),
+        "evidence" => list(threat_evidence_shape()),
+        "impactedAssets" => list([String.t() | atom()]()),
+        "impactedGoal" => list([String.t() | atom()]()),
+        "prerequisites" => [String.t() | atom()],
+        "recommendation" => [String.t() | atom()],
+        "severity" => list(any()),
+        "statement" => [String.t() | atom()],
+        "status" => list(any()),
+        "stride" => list(list(any())()),
+        "threatAction" => [String.t() | atom()],
+        "threatId" => [String.t() | atom()],
+        "threatImpact" => [String.t() | atom()],
+        "threatJobId" => [String.t() | atom()],
+        "threatSource" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()],
+        "updatedBy" => list(any())
+      }
+
+  """
+  @type threat() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_artifact_input() :: %{
+        required("agentSpaceId") => String.t() | atom(),
+        required("artifactId") => String.t() | atom()
+      }
+
+  """
+  @type delete_artifact_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      aws_resources() :: %{
+        "iamRoles" => list(String.t() | atom()),
+        "lambdaFunctionArns" => list(String.t() | atom()),
+        "logGroups" => list(String.t() | atom()),
+        "s3Buckets" => list(String.t() | atom()),
+        "secretArns" => list(String.t() | atom()),
+        "vpcs" => list(vpc_config())
+      }
+
+  """
+  @type aws_resources() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_private_connection_output() :: %{
+        "certificateExpiryTime" => [non_neg_integer()],
+        "dnsResolution" => list(any()),
+        "failureMessage" => [String.t() | atom()],
+        "hostAddress" => String.t() | atom(),
+        "name" => String.t() | atom(),
+        "resourceConfigurationId" => String.t() | atom(),
+        "resourceGatewayId" => String.t() | atom(),
+        "status" => list(any()),
+        "tags" => map(),
+        "type" => list(any()),
+        "vpcId" => String.t() | atom()
+      }
+
+  """
+  @type create_private_connection_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_findings_output() :: %{
+        "findings" => list(finding()),
+        "notFound" => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_findings_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_security_requirement_entry() :: %{
+        "description" => [String.t() | atom()],
+        "domain" => [String.t() | atom()],
+        "evaluation" => [String.t() | atom()],
+        "name" => String.t() | atom(),
+        "remediation" => [String.t() | atom()]
+      }
+
+  """
+  @type create_security_requirement_entry() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      threat_summary() :: %{
+        "createdAt" => [non_neg_integer()],
+        "createdBy" => list(any()),
+        "severity" => list(any()),
+        "statement" => [String.t() | atom()],
+        "status" => list(any()),
+        "stride" => list(list(any())()),
+        "threatId" => [String.t() | atom()],
+        "threatJobId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()],
+        "updatedBy" => list(any())
+      }
+
+  """
+  @type threat_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      git_hub_repository_metadata() :: %{
+        "accessType" => list(any()),
+        "name" => String.t() | atom(),
+        "owner" => String.t() | atom(),
+        "providerResourceId" => String.t() | atom()
+      }
+
+  """
+  @type git_hub_repository_metadata() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      code_review_job_task() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "categories" => list(category()),
+        "codeReviewId" => [String.t() | atom()],
+        "codeReviewJobId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "executionStatus" => list(any()),
+        "logsLocation" => log_location(),
+        "riskType" => list(any()),
+        "taskId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type code_review_job_task() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      code_review_job_summary() :: %{
+        "codeReviewId" => [String.t() | atom()],
+        "codeReviewJobId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "status" => list(any()),
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type code_review_job_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_code_review_jobs_output() :: %{
+        "codeReviewJobs" => list(code_review_job()),
+        "notFound" => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_code_review_jobs_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_code_reviews_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        required("agentSpaceId") => [String.t() | atom()]
+      }
+
+  """
+  @type list_code_reviews_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      threat_model() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "assets" => assets(),
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "logConfig" => cloud_watch_log(),
+        "scopeDocs" => list(document_info()),
+        "serviceRole" => String.t() | atom(),
+        "threatModelId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type threat_model() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      git_hub_resource_capabilities() :: %{
+        "leaveComments" => [boolean()],
+        "remediateCode" => [boolean()]
+      }
+
+  """
+  @type git_hub_resource_capabilities() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_private_connection_certificate_output() :: %{
+        "certificateExpiryTime" => [non_neg_integer()],
+        "dnsResolution" => list(any()),
+        "failureMessage" => [String.t() | atom()],
+        "hostAddress" => String.t() | atom(),
+        "name" => String.t() | atom(),
+        "resourceConfigurationId" => String.t() | atom(),
+        "resourceGatewayId" => String.t() | atom(),
+        "status" => list(any()),
+        "tags" => map(),
+        "type" => list(any()),
+        "vpcId" => String.t() | atom()
+      }
+
+  """
+  @type update_private_connection_certificate_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_security_requirement_pack_output() :: %{
+        "description" => [String.t() | atom()],
+        "name" => String.t() | atom(),
+        "packId" => String.t() | atom(),
+        "status" => list(any())
+      }
+
+  """
+  @type update_security_requirement_pack_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      id_c_configuration() :: %{
+        "idcApplicationArn" => String.t() | atom(),
+        "idcInstanceArn" => String.t() | atom()
+      }
+
+  """
+  @type id_c_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      finding() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "alignmentRationale" => [String.t() | atom()],
+        "attackScript" => [String.t() | atom()],
+        "codeLocations" => list(code_location()),
+        "codeRemediationTask" => code_remediation_task(),
+        "codeReviewId" => [String.t() | atom()],
+        "codeReviewJobId" => [String.t() | atom()],
+        "confidence" => list(any()),
+        "createdAt" => [non_neg_integer()],
+        "customerNote" => [String.t() | atom()],
+        "description" => [String.t() | atom()],
+        "findingId" => [String.t() | atom()],
+        "lastUpdatedBy" => [String.t() | atom()],
+        "name" => [String.t() | atom()],
+        "pentestId" => [String.t() | atom()],
+        "pentestJobId" => [String.t() | atom()],
+        "reasoning" => [String.t() | atom()],
+        "riskLevel" => list(any()),
+        "riskScore" => [String.t() | atom()],
+        "riskType" => [String.t() | atom()],
+        "status" => list(any()),
+        "taskId" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()],
+        "validationStatus" => list(any()),
+        "verificationScript" => verification_script()
+      }
+
+  """
+  @type finding() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_code_review_output() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "assets" => assets(),
+        "codeRemediationStrategy" => list(any()),
+        "codeReviewId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "logConfig" => cloud_watch_log(),
+        "serviceRole" => String.t() | atom(),
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()],
+        "validationMode" => list(any())
+      }
+
+  """
+  @type create_code_review_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_code_review_job_tasks_output() :: %{
+        "codeReviewJobTaskSummaries" => list(code_review_job_task_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_code_review_job_tasks_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      self_managed_input() :: %{
+        "certificate" => String.t() | atom(),
+        "resourceConfigurationId" => String.t() | atom()
+      }
+
+  """
+  @type self_managed_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_integration_input() :: %{
+        required("integrationId") => String.t() | atom()
+      }
+
+  """
+  @type delete_integration_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      report_destination() :: %{
+        "containerId" => [String.t() | atom()],
+        "documentId" => [String.t() | atom()],
+        "integrationId" => [String.t() | atom()],
+        "parentId" => [String.t() | atom()]
+      }
+
+  """
+  @type report_destination() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_code_review_jobs_for_code_review_output() :: %{
+        "codeReviewJobSummaries" => list(code_review_job_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_code_review_jobs_for_code_review_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_pentest_job_tasks_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("taskIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_pentest_job_tasks_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_agent_space_output() :: %{
+        "agentSpaceId" => String.t() | atom()
+      }
+
+  """
+  @type delete_agent_space_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_security_requirement_pack_output() :: %{
+        "kmsKeyId" => String.t() | atom(),
+        "packId" => String.t() | atom(),
+        "status" => list(any())
+      }
+
+  """
+  @type create_security_requirement_pack_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_code_review_jobs_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("codeReviewJobIds") => list([String.t() | atom()]())
+      }
+
+  """
+  @type batch_get_code_review_jobs_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      start_pentest_job_output() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "pentestId" => [String.t() | atom()],
+        "pentestJobId" => [String.t() | atom()],
+        "status" => list(any()),
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type start_pentest_job_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_pentests_output() :: %{
+        "nextToken" => String.t() | atom(),
+        "pentestSummaries" => list(pentest_summary())
+      }
+
+  """
+  @type list_pentests_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_application_request() :: %{
+        optional("defaultKmsKeyId") => String.t() | atom(),
+        optional("roleArn") => String.t() | atom(),
+        required("applicationId") => String.t() | atom()
+      }
+
+  """
+  @type update_application_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      category() :: %{
+        "isPrimary" => [boolean()],
+        "name" => [String.t() | atom()]
+      }
+
+  """
+  @type category() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      agent_space() :: %{
+        "agentSpaceId" => String.t() | atom(),
+        "awsResources" => aws_resources(),
+        "codeReviewSettings" => code_review_settings(),
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "kmsKeyId" => String.t() | atom(),
+        "name" => [String.t() | atom()],
+        "targetDomainIds" => list([String.t() | atom()]()),
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type agent_space() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      finding_summary() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "codeReviewId" => [String.t() | atom()],
+        "codeReviewJobId" => [String.t() | atom()],
+        "confidence" => list(any()),
+        "createdAt" => [non_neg_integer()],
+        "findingId" => [String.t() | atom()],
+        "name" => [String.t() | atom()],
+        "pentestId" => [String.t() | atom()],
+        "pentestJobId" => [String.t() | atom()],
+        "riskLevel" => list(any()),
+        "riskType" => [String.t() | atom()],
+        "status" => list(any()),
+        "updatedAt" => [non_neg_integer()],
+        "validationStatus" => list(any())
+      }
+
+  """
+  @type finding_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      authentication() :: %{
+        "providerType" => list(any()),
+        "value" => [String.t() | atom()]
+      }
+
+  """
+  @type authentication() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_threat_input() :: %{
+        optional("anchor") => threat_anchor_shape(),
+        optional("comments") => [String.t() | atom()],
+        optional("evidence") => list(threat_evidence_shape()),
+        optional("impactedAssets") => list([String.t() | atom()]()),
+        optional("impactedGoal") => list([String.t() | atom()]()),
+        optional("prerequisites") => [String.t() | atom()],
+        optional("recommendation") => [String.t() | atom()],
+        optional("severity") => list(any()),
+        optional("statement") => [String.t() | atom()],
+        optional("stride") => list(list(any())()),
+        optional("threatAction") => [String.t() | atom()],
+        optional("threatImpact") => [String.t() | atom()],
+        optional("threatSource") => [String.t() | atom()],
+        optional("title") => [String.t() | atom()],
+        required("agentSpaceId") => [String.t() | atom()],
+        required("threatJobId") => [String.t() | atom()]
+      }
+
+  """
+  @type create_threat_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_target_domains_output() :: %{
+        "nextToken" => String.t() | atom(),
+        "targetDomainSummaries" => list(target_domain_summary())
+      }
+
+  """
+  @type list_target_domains_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      error_information() :: %{
+        "code" => list(any()),
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type error_information() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_security_requirement_entry() :: %{
+        "description" => [String.t() | atom()],
+        "domain" => [String.t() | atom()],
+        "evaluation" => [String.t() | atom()],
+        "name" => String.t() | atom(),
+        "remediation" => [String.t() | atom()]
+      }
+
+  """
+  @type update_security_requirement_entry() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_artifact_metadata_output() :: %{
+        "artifactMetadataList" => list(artifact_metadata_item())
+      }
+
+  """
+  @type batch_get_artifact_metadata_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      custom_header() :: %{
+        "name" => [String.t() | atom()],
+        "value" => [String.t() | atom()]
+      }
+
+  """
+  @type custom_header() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_target_domains_output() :: %{
+        "notFound" => list([String.t() | atom()]()),
+        "targetDomains" => list(target_domain())
+      }
+
+  """
+  @type batch_get_target_domains_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_artifact_output() :: %{
+        "agentSpaceId" => String.t() | atom(),
+        "artifact" => artifact(),
+        "artifactId" => String.t() | atom(),
+        "fileName" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type get_artifact_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      verify_target_domain_output() :: %{
+        "createdAt" => [non_neg_integer()],
+        "domainName" => [String.t() | atom()],
+        "status" => list(any()),
+        "targetDomainId" => String.t() | atom(),
+        "updatedAt" => [non_neg_integer()],
+        "verificationStatusReason" => [String.t() | atom()],
+        "verifiedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type verify_target_domain_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_code_review_input() :: %{
+        optional("assets") => assets(),
+        optional("codeRemediationStrategy") => list(any()),
+        optional("logConfig") => cloud_watch_log(),
+        optional("serviceRole") => String.t() | atom(),
+        optional("title") => [String.t() | atom()],
+        optional("validationMode") => list(any()),
+        required("agentSpaceId") => [String.t() | atom()],
+        required("codeReviewId") => [String.t() | atom()]
+      }
+
+  """
+  @type update_code_review_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_threat_model_output() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "assets" => assets(),
+        "createdAt" => [non_neg_integer()],
+        "description" => [String.t() | atom()],
+        "logConfig" => cloud_watch_log(),
+        "scopeDocs" => list(document_info()),
+        "serviceRole" => String.t() | atom(),
+        "threatModelId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type update_threat_model_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      untag_resource_output() :: %{}
+
+  """
+  @type untag_resource_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      threat_model_job_task_summary() :: %{
+        "agentSpaceId" => [String.t() | atom()],
+        "createdAt" => [non_neg_integer()],
+        "executionStatus" => list(any()),
+        "taskId" => [String.t() | atom()],
+        "threatModelId" => [String.t() | atom()],
+        "threatModelJobId" => [String.t() | atom()],
+        "title" => [String.t() | atom()],
+        "updatedAt" => [non_neg_integer()]
+      }
+
+  """
+  @type threat_model_job_task_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      verification_script_env_var() :: %{
+        "name" => [String.t() | atom()],
+        "value" => [String.t() | atom()]
+      }
+
+  """
+  @type verification_script_env_var() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_code_reviews_output() :: %{
+        "codeReviewSummaries" => list(code_review_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_code_reviews_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      stop_code_review_job_input() :: %{
+        required("agentSpaceId") => [String.t() | atom()],
+        required("codeReviewJobId") => [String.t() | atom()]
+      }
+
+  """
+  @type stop_code_review_job_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      assets() :: %{
+        "actors" => list(actor()),
+        "documents" => list(document_info()),
+        "endpoints" => list(endpoint()),
+        "integratedRepositories" => list(integrated_repository()),
+        "sourceCode" => list(source_code_repository())
+      }
+
+  """
+  @type assets() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      confluence_integration_input() :: %{
+        "code" => String.t() | atom(),
+        "installationId" => String.t() | atom(),
+        "siteUrl" => String.t() | atom(),
+        "state" => String.t() | atom()
+      }
+
+  """
+  @type confluence_integration_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_agent_space_input() :: %{
+        optional("awsResources") => aws_resources(),
+        optional("codeReviewSettings") => code_review_settings(),
+        optional("description") => [String.t() | atom()],
+        optional("kmsKeyId") => String.t() | atom(),
+        optional("tags") => map(),
+        optional("targetDomainIds") => list([String.t() | atom()]()),
+        required("name") => String.t() | atom()
+      }
+
+  """
+  @type create_agent_space_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      integrated_document() :: %{
+        "integrationId" => [String.t() | atom()],
+        "resourceId" => [String.t() | atom()]
+      }
+
+  """
+  @type integrated_document() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      http_verification() :: %{
+        "routePath" => [String.t() | atom()],
+        "token" => [String.t() | atom()]
+      }
+
+  """
+  @type http_verification() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      dns_verification() :: %{
+        "dnsRecordName" => [String.t() | atom()],
+        "dnsRecordType" => list(any()),
+        "token" => [String.t() | atom()]
+      }
+
+  """
+  @type dns_verification() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_security_requirement_pack_output() :: %{}
+
+  """
+  @type delete_security_requirement_pack_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      create_membership_response() :: %{}
+
+  """
+  @type create_membership_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      threat_anchor_shape() :: %{
+        "id" => [String.t() | atom()],
+        "kind" => [String.t() | atom()],
+        "packageId" => [String.t() | atom()]
+      }
+
+  """
+  @type threat_anchor_shape() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_pentest_jobs_output() :: %{
+        "notFound" => list([String.t() | atom()]()),
+        "pentestJobs" => list(pentest_job())
+      }
+
+  """
+  @type batch_get_pentest_jobs_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      confluence_resource_capabilities() :: %{
+        "createDocument" => [boolean()],
+        "fetchDocument" => [boolean()],
+        "updateDocument" => [boolean()]
+      }
+
+  """
+  @type confluence_resource_capabilities() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_security_requirement_pack_input() :: %{
+        optional("description") => [String.t() | atom()],
+        optional("name") => String.t() | atom(),
+        optional("status") => list(any()),
+        required("packId") => String.t() | atom()
+      }
+
+  """
+  @type update_security_requirement_pack_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_threat_model_job_tasks_input() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        required("agentSpaceId") => [String.t() | atom()],
+        required("threatModelJobId") => [String.t() | atom()]
+      }
+
+  """
+  @type list_threat_model_job_tasks_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_target_domain_output() :: %{
+        "targetDomainId" => String.t() | atom()
+      }
+
+  """
+  @type delete_target_domain_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      describe_private_connection_output() :: %{
+        "certificateExpiryTime" => [non_neg_integer()],
+        "dnsResolution" => list(any()),
+        "failureMessage" => [String.t() | atom()],
+        "hostAddress" => String.t() | atom(),
+        "name" => String.t() | atom(),
+        "resourceConfigurationId" => String.t() | atom(),
+        "resourceGatewayId" => String.t() | atom(),
+        "status" => list(any()),
+        "tags" => map(),
+        "type" => list(any()),
+        "vpcId" => String.t() | atom()
+      }
+
+  """
+  @type describe_private_connection_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      service_quota_exceeded_exception() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type service_quota_exceeded_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_agent_spaces_input() :: %{
+        required("agentSpaceIds") => list(String.t() | atom())
+      }
+
+  """
+  @type batch_get_agent_spaces_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_artifact_output() :: %{}
+
+  """
+  @type delete_artifact_output() :: %{}
+
+  @type add_artifact_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type batch_create_security_requirements_errors() ::
+          service_quota_exceeded_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type batch_delete_security_requirements_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type batch_get_artifact_metadata_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type batch_get_security_requirements_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type batch_update_security_requirements_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type create_integration_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type create_private_connection_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type create_security_requirement_pack_errors() ::
+          service_quota_exceeded_exception()
+          | conflict_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type delete_artifact_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type delete_integration_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type delete_private_connection_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type delete_security_requirement_pack_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type describe_private_connection_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_artifact_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_integration_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_security_requirement_pack_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type import_security_requirements_errors() ::
+          service_quota_exceeded_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type initiate_provider_registration_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_artifacts_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_integrated_resources_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_integrations_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_private_connections_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_security_requirement_packs_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_security_requirements_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type update_integrated_resources_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type update_private_connection_certificate_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type update_security_requirement_pack_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  def metadata do
+    %{
+      api_version: "2025-09-06",
+      content_type: "application/x-amz-json-1.1",
+      credential_scope: nil,
+      endpoint_prefix: "securityagent",
+      global?: false,
+      hostname: nil,
+      protocol: "rest-json",
+      service_id: "SecurityAgent",
+      signature_version: "v4",
+      signing_name: "securityagent",
+      target_prefix: nil
+    }
+  end
+
+  @doc """
+  Uploads an artifact to an agent space.
+
+  Artifacts provide additional context for security testing, such as architecture
+  diagrams, API specifications, or configuration files.
+  """
+  @spec add_artifact(map(), add_artifact_input(), list()) ::
+          {:ok, add_artifact_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, add_artifact_errors()}
+  def add_artifact(%Client{} = client, input, options \\ []) do
+    url_path = "/AddArtifact"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      201
+    )
+  end
+
+  @doc """
+  Batch creates security requirements in a customer managed pack.
+  """
+  @spec batch_create_security_requirements(
+          map(),
+          batch_create_security_requirements_input(),
+          list()
+        ) ::
+          {:ok, batch_create_security_requirements_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, batch_create_security_requirements_errors()}
+  def batch_create_security_requirements(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchCreateSecurityRequirements"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      201
+    )
+  end
+
+  @doc """
+  Deletes one or more code reviews from an agent space.
+  """
+  @spec batch_delete_code_reviews(map(), batch_delete_code_reviews_input(), list()) ::
+          {:ok, batch_delete_code_reviews_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_delete_code_reviews(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchDeleteCodeReviews"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Deletes one or more pentests from an agent space.
+  """
+  @spec batch_delete_pentests(map(), batch_delete_pentests_input(), list()) ::
+          {:ok, batch_delete_pentests_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_delete_pentests(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchDeletePentests"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Batch deletes security requirements from a customer managed pack.
+  """
+  @spec batch_delete_security_requirements(
+          map(),
+          batch_delete_security_requirements_input(),
+          list()
+        ) ::
+          {:ok, batch_delete_security_requirements_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, batch_delete_security_requirements_errors()}
+  def batch_delete_security_requirements(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchDeleteSecurityRequirements"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Deletes one or more threat models from an agent space.
+  """
+  @spec batch_delete_threat_models(map(), batch_delete_threat_models_input(), list()) ::
+          {:ok, batch_delete_threat_models_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_delete_threat_models(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchDeleteThreatModels"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about one or more agent spaces.
+  """
+  @spec batch_get_agent_spaces(map(), batch_get_agent_spaces_input(), list()) ::
+          {:ok, batch_get_agent_spaces_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_get_agent_spaces(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetAgentSpaces"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves metadata for one or more artifacts in an agent space.
+  """
+  @spec batch_get_artifact_metadata(map(), batch_get_artifact_metadata_input(), list()) ::
+          {:ok, batch_get_artifact_metadata_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, batch_get_artifact_metadata_errors()}
+  def batch_get_artifact_metadata(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetArtifactMetadata"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about one or more tasks within a code review job.
+  """
+  @spec batch_get_code_review_job_tasks(map(), batch_get_code_review_job_tasks_input(), list()) ::
+          {:ok, batch_get_code_review_job_tasks_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_get_code_review_job_tasks(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetCodeReviewJobTasks"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about one or more code review jobs in an agent space.
+  """
+  @spec batch_get_code_review_jobs(map(), batch_get_code_review_jobs_input(), list()) ::
+          {:ok, batch_get_code_review_jobs_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_get_code_review_jobs(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetCodeReviewJobs"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about one or more code reviews in an agent space.
+  """
+  @spec batch_get_code_reviews(map(), batch_get_code_reviews_input(), list()) ::
+          {:ok, batch_get_code_reviews_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_get_code_reviews(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetCodeReviews"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about one or more security findings in an agent space.
+  """
+  @spec batch_get_findings(map(), batch_get_findings_input(), list()) ::
+          {:ok, batch_get_findings_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_get_findings(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetFindings"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about one or more tasks within a pentest job.
+  """
+  @spec batch_get_pentest_job_tasks(map(), batch_get_pentest_job_tasks_input(), list()) ::
+          {:ok, batch_get_pentest_job_tasks_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_get_pentest_job_tasks(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetPentestJobTasks"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about one or more pentest jobs in an agent space.
+  """
+  @spec batch_get_pentest_jobs(map(), batch_get_pentest_jobs_input(), list()) ::
+          {:ok, batch_get_pentest_jobs_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_get_pentest_jobs(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetPentestJobs"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about one or more pentests in an agent space.
+  """
+  @spec batch_get_pentests(map(), batch_get_pentests_input(), list()) ::
+          {:ok, batch_get_pentests_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_get_pentests(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetPentests"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Batch retrieves security requirements from a pack.
+  """
+  @spec batch_get_security_requirements(map(), batch_get_security_requirements_input(), list()) ::
+          {:ok, batch_get_security_requirements_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, batch_get_security_requirements_errors()}
+  def batch_get_security_requirements(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetSecurityRequirements"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about one or more target domains.
+  """
+  @spec batch_get_target_domains(map(), batch_get_target_domains_input(), list()) ::
+          {:ok, batch_get_target_domains_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_get_target_domains(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetTargetDomains"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about one or more tasks within a threat model job.
+  """
+  @spec batch_get_threat_model_job_tasks(map(), batch_get_threat_model_job_tasks_input(), list()) ::
+          {:ok, batch_get_threat_model_job_tasks_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_get_threat_model_job_tasks(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetThreatModelJobTasks"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about one or more threat model jobs in an agent space.
+  """
+  @spec batch_get_threat_model_jobs(map(), batch_get_threat_model_jobs_input(), list()) ::
+          {:ok, batch_get_threat_model_jobs_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_get_threat_model_jobs(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetThreatModelJobs"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about one or more threat models in an agent space.
+  """
+  @spec batch_get_threat_models(map(), batch_get_threat_models_input(), list()) ::
+          {:ok, batch_get_threat_models_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_get_threat_models(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetThreatModels"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about one or more threats.
+  """
+  @spec batch_get_threats(map(), batch_get_threats_input(), list()) ::
+          {:ok, batch_get_threats_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def batch_get_threats(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchGetThreats"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Batch updates security requirements within a customer managed pack.
+  """
+  @spec batch_update_security_requirements(
+          map(),
+          batch_update_security_requirements_input(),
+          list()
+        ) ::
+          {:ok, batch_update_security_requirements_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, batch_update_security_requirements_errors()}
+  def batch_update_security_requirements(%Client{} = client, input, options \\ []) do
+    url_path = "/BatchUpdateSecurityRequirements"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Creates a new agent space.
+
+  An agent space is a dedicated workspace for securing a specific application.
+  """
+  @spec create_agent_space(map(), create_agent_space_input(), list()) ::
+          {:ok, create_agent_space_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def create_agent_space(%Client{} = client, input, options \\ []) do
+    url_path = "/CreateAgentSpace"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Creates a new application.
+
+  An application is the top-level organizational unit that supports IAM Identity
+  Center integration.
+  """
+  @spec create_application(map(), create_application_request(), list()) ::
+          {:ok, create_application_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def create_application(%Client{} = client, input, options \\ []) do
+    url_path = "/CreateApplication"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Creates a new code review configuration in an agent space.
+
+  A code review defines the parameters for automated security-focused code
+  analysis.
+  """
+  @spec create_code_review(map(), create_code_review_input(), list()) ::
+          {:ok, create_code_review_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def create_code_review(%Client{} = client, input, options \\ []) do
+    url_path = "/CreateCodeReview"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Creates a new integration with a third-party provider, such as GitHub, for code
+  review and remediation.
+  """
+  @spec create_integration(map(), create_integration_input(), list()) ::
+          {:ok, create_integration_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_integration_errors()}
+  def create_integration(%Client{} = client, input, options \\ []) do
+    url_path = "/CreateIntegration"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      201
+    )
+  end
+
+  @doc """
+  Creates a new membership, granting a user access to an agent space within an
+  application.
+  """
+  @spec create_membership(map(), create_membership_request(), list()) ::
+          {:ok, create_membership_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def create_membership(%Client{} = client, input, options \\ []) do
+    url_path = "/CreateMembership"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Creates a new pentest configuration in an agent space.
+
+  A pentest defines the security test parameters, including target assets, risk
+  type exclusions, and logging configuration.
+  """
+  @spec create_pentest(map(), create_pentest_input(), list()) ::
+          {:ok, create_pentest_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def create_pentest(%Client{} = client, input, options \\ []) do
+    url_path = "/CreatePentest"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Creates a private connection for reaching a self-hosted provider instance over
+  private networking using Amazon VPC Lattice.
+  """
+  @spec create_private_connection(map(), create_private_connection_input(), list()) ::
+          {:ok, create_private_connection_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_private_connection_errors()}
+  def create_private_connection(%Client{} = client, input, options \\ []) do
+    url_path = "/CreatePrivateConnection"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      201
+    )
+  end
+
+  @doc """
+  Creates a customer managed security requirement pack.
+  """
+  @spec create_security_requirement_pack(map(), create_security_requirement_pack_input(), list()) ::
+          {:ok, create_security_requirement_pack_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_security_requirement_pack_errors()}
+  def create_security_requirement_pack(%Client{} = client, input, options \\ []) do
+    url_path = "/CreateSecurityRequirementPack"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      201
+    )
+  end
+
+  @doc """
+  Creates a new target domain for penetration testing.
+
+  A target domain is a web domain that must be registered and verified before it
+  can be tested.
+  """
+  @spec create_target_domain(map(), create_target_domain_input(), list()) ::
+          {:ok, create_target_domain_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def create_target_domain(%Client{} = client, input, options \\ []) do
+    url_path = "/CreateTargetDomain"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Creates a new threat under a threat model job.
+  """
+  @spec create_threat(map(), create_threat_input(), list()) ::
+          {:ok, create_threat_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def create_threat(%Client{} = client, input, options \\ []) do
+    url_path = "/CreateThreat"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Creates a new threat model configuration in an agent space.
+
+  A threat model defines the parameters for automated threat analysis.
+  """
+  @spec create_threat_model(map(), create_threat_model_input(), list()) ::
+          {:ok, create_threat_model_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def create_threat_model(%Client{} = client, input, options \\ []) do
+    url_path = "/CreateThreatModel"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Deletes an agent space and all of its associated resources, including pentests,
+  findings, and artifacts.
+  """
+  @spec delete_agent_space(map(), delete_agent_space_input(), list()) ::
+          {:ok, delete_agent_space_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def delete_agent_space(%Client{} = client, input, options \\ []) do
+    url_path = "/DeleteAgentSpace"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Deletes an application and its associated configuration, including IAM Identity
+  Center settings.
+  """
+  @spec delete_application(map(), delete_application_request(), list()) ::
+          {:ok, nil, any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def delete_application(%Client{} = client, input, options \\ []) do
+    url_path = "/DeleteApplication"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Deletes an artifact from an agent space.
+  """
+  @spec delete_artifact(map(), delete_artifact_input(), list()) ::
+          {:ok, delete_artifact_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_artifact_errors()}
+  def delete_artifact(%Client{} = client, input, options \\ []) do
+    url_path = "/DeleteArtifact"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Deletes an integration with a third-party provider.
+  """
+  @spec delete_integration(map(), delete_integration_input(), list()) ::
+          {:ok, delete_integration_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_integration_errors()}
+  def delete_integration(%Client{} = client, input, options \\ []) do
+    url_path = "/DeleteIntegration"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Deletes a membership, revoking a user's access to an agent space.
+  """
+  @spec delete_membership(map(), delete_membership_request(), list()) ::
+          {:ok, delete_membership_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def delete_membership(%Client{} = client, input, options \\ []) do
+    url_path = "/DeleteMembership"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Deletes a private connection.
+  """
+  @spec delete_private_connection(map(), delete_private_connection_input(), list()) ::
+          {:ok, delete_private_connection_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_private_connection_errors()}
+  def delete_private_connection(%Client{} = client, input, options \\ []) do
+    url_path = "/DeletePrivateConnection"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Deletes a customer managed security requirement pack and all its associated
+  security requirements.
+  """
+  @spec delete_security_requirement_pack(map(), delete_security_requirement_pack_input(), list()) ::
+          {:ok, delete_security_requirement_pack_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_security_requirement_pack_errors()}
+  def delete_security_requirement_pack(%Client{} = client, input, options \\ []) do
+    url_path = "/DeleteSecurityRequirementPack"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Deletes a target domain registration.
+
+  After deletion, the domain can no longer be used for penetration testing.
+  """
+  @spec delete_target_domain(map(), delete_target_domain_input(), list()) ::
+          {:ok, delete_target_domain_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def delete_target_domain(%Client{} = client, input, options \\ []) do
+    url_path = "/DeleteTargetDomain"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves the details of a private connection.
+  """
+  @spec describe_private_connection(map(), describe_private_connection_input(), list()) ::
+          {:ok, describe_private_connection_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, describe_private_connection_errors()}
+  def describe_private_connection(%Client{} = client, input, options \\ []) do
+    url_path = "/DescribePrivateConnection"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about an application.
+  """
+  @spec get_application(map(), get_application_request(), list()) ::
+          {:ok, get_application_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def get_application(%Client{} = client, input, options \\ []) do
+    url_path = "/GetApplication"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves an artifact from an agent space.
+  """
+  @spec get_artifact(map(), get_artifact_input(), list()) ::
+          {:ok, get_artifact_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_artifact_errors()}
+  def get_artifact(%Client{} = client, input, options \\ []) do
+    url_path = "/GetArtifact"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about an integration.
+  """
+  @spec get_integration(map(), get_integration_input(), list()) ::
+          {:ok, get_integration_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_integration_errors()}
+  def get_integration(%Client{} = client, input, options \\ []) do
+    url_path = "/GetIntegration"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves information about a security requirement pack.
+  """
+  @spec get_security_requirement_pack(map(), get_security_requirement_pack_input(), list()) ::
+          {:ok, get_security_requirement_pack_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_security_requirement_pack_errors()}
+  def get_security_requirement_pack(%Client{} = client, input, options \\ []) do
+    url_path = "/GetSecurityRequirementPack"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Imports security requirements from uploaded documents into a customer managed
+  security requirement pack.
+
+  The import process asynchronously extracts and generates structured security
+  requirements from the provided source files.
+  """
+  @spec import_security_requirements(map(), import_security_requirements_input(), list()) ::
+          {:ok, import_security_requirements_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, import_security_requirements_errors()}
+  def import_security_requirements(%Client{} = client, input, options \\ []) do
+    url_path = "/ImportSecurityRequirements"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      201
+    )
+  end
+
+  @doc """
+  Initiates the OAuth registration flow with a third-party provider.
+
+  Returns a redirect URL and CSRF state token for completing the authorization.
+  """
+  @spec initiate_provider_registration(map(), initiate_provider_registration_input(), list()) ::
+          {:ok, initiate_provider_registration_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, initiate_provider_registration_errors()}
+  def initiate_provider_registration(%Client{} = client, input, options \\ []) do
+    url_path = "/oauth2/provider/register"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of agent space summaries in your account.
+  """
+  @spec list_agent_spaces(map(), list_agent_spaces_input(), list()) ::
+          {:ok, list_agent_spaces_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_agent_spaces(%Client{} = client, input, options \\ []) do
+    url_path = "/ListAgentSpaces"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of application summaries in your account.
+  """
+  @spec list_applications(map(), list_applications_request(), list()) ::
+          {:ok, list_applications_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_applications(%Client{} = client, input, options \\ []) do
+    url_path = "/ListApplications"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of artifact summaries for the specified agent space.
+  """
+  @spec list_artifacts(map(), list_artifacts_input(), list()) ::
+          {:ok, list_artifacts_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_artifacts_errors()}
+  def list_artifacts(%Client{} = client, input, options \\ []) do
+    url_path = "/ListArtifacts"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of task summaries for the specified code review job,
+  optionally filtered by step name or category.
+  """
+  @spec list_code_review_job_tasks(map(), list_code_review_job_tasks_input(), list()) ::
+          {:ok, list_code_review_job_tasks_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_code_review_job_tasks(%Client{} = client, input, options \\ []) do
+    url_path = "/ListCodeReviewJobTasks"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of code review job summaries for the specified code
+  review configuration.
+  """
+  @spec list_code_review_jobs_for_code_review(
+          map(),
+          list_code_review_jobs_for_code_review_input(),
+          list()
+        ) ::
+          {:ok, list_code_review_jobs_for_code_review_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_code_review_jobs_for_code_review(%Client{} = client, input, options \\ []) do
+    url_path = "/ListCodeReviewJobsForCodeReview"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of code review summaries for the specified agent space.
+  """
+  @spec list_code_reviews(map(), list_code_reviews_input(), list()) ::
+          {:ok, list_code_reviews_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_code_reviews(%Client{} = client, input, options \\ []) do
+    url_path = "/ListCodeReviews"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of endpoints discovered during a pentest job execution.
+  """
+  @spec list_discovered_endpoints(map(), list_discovered_endpoints_input(), list()) ::
+          {:ok, list_discovered_endpoints_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_discovered_endpoints(%Client{} = client, input, options \\ []) do
+    url_path = "/ListDiscoveredEndpoints"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists the security findings for a pentest job.
+  """
+  @spec list_findings(map(), list_findings_input(), list()) ::
+          {:ok, list_findings_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_findings(%Client{} = client, input, options \\ []) do
+    url_path = "/ListFindings"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists the integrated resources for an agent space, optionally filtered by
+  integration or resource type.
+  """
+  @spec list_integrated_resources(map(), list_integrated_resources_input(), list()) ::
+          {:ok, list_integrated_resources_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_integrated_resources_errors()}
+  def list_integrated_resources(%Client{} = client, input, options \\ []) do
+    url_path = "/ListIntegratedResources"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists the integrations in your account, optionally filtered by provider or
+  provider type.
+  """
+  @spec list_integrations(map(), list_integrations_input(), list()) ::
+          {:ok, list_integrations_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_integrations_errors()}
+  def list_integrations(%Client{} = client, input, options \\ []) do
+    url_path = "/ListIntegrations"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of membership summaries for the specified agent space
+  within an application.
+  """
+  @spec list_memberships(map(), list_memberships_request(), list()) ::
+          {:ok, list_memberships_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_memberships(%Client{} = client, input, options \\ []) do
+    url_path = "/ListMemberships"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of task summaries for the specified pentest job,
+  optionally filtered by step name or category.
+  """
+  @spec list_pentest_job_tasks(map(), list_pentest_job_tasks_input(), list()) ::
+          {:ok, list_pentest_job_tasks_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_pentest_job_tasks(%Client{} = client, input, options \\ []) do
+    url_path = "/ListPentestJobTasks"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of pentest job summaries for the specified pentest
+  configuration.
+  """
+  @spec list_pentest_jobs_for_pentest(map(), list_pentest_jobs_for_pentest_input(), list()) ::
+          {:ok, list_pentest_jobs_for_pentest_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_pentest_jobs_for_pentest(%Client{} = client, input, options \\ []) do
+    url_path = "/ListPentestJobsForPentest"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of pentest summaries for the specified agent space.
+  """
+  @spec list_pentests(map(), list_pentests_input(), list()) ::
+          {:ok, list_pentests_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_pentests(%Client{} = client, input, options \\ []) do
+    url_path = "/ListPentests"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists the private connections in your account.
+  """
+  @spec list_private_connections(map(), list_private_connections_input(), list()) ::
+          {:ok, list_private_connections_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_private_connections_errors()}
+  def list_private_connections(%Client{} = client, input, options \\ []) do
+    url_path = "/ListPrivateConnections"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists all security requirement packs in the caller's account.
+  """
+  @spec list_security_requirement_packs(map(), list_security_requirement_packs_input(), list()) ::
+          {:ok, list_security_requirement_packs_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_security_requirement_packs_errors()}
+  def list_security_requirement_packs(%Client{} = client, input, options \\ []) do
+    url_path = "/ListSecurityRequirementPacks"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists security requirements within a pack.
+  """
+  @spec list_security_requirements(map(), list_security_requirements_input(), list()) ::
+          {:ok, list_security_requirements_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_security_requirements_errors()}
+  def list_security_requirements(%Client{} = client, input, options \\ []) do
+    url_path = "/ListSecurityRequirements"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns the tags associated with the specified resource.
+  """
+  @spec list_tags_for_resource(map(), String.t() | atom(), list()) ::
+          {:ok, list_tags_for_resource_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_tags_for_resource(%Client{} = client, resource_arn, options \\ []) do
+    url_path = "/tags/#{AWS.Util.encode_uri(resource_arn)}"
+    headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Returns a paginated list of target domain summaries in your account.
+  """
+  @spec list_target_domains(map(), list_target_domains_input(), list()) ::
+          {:ok, list_target_domains_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_target_domains(%Client{} = client, input, options \\ []) do
+    url_path = "/ListTargetDomains"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of task summaries for the specified threat model job.
+  """
+  @spec list_threat_model_job_tasks(map(), list_threat_model_job_tasks_input(), list()) ::
+          {:ok, list_threat_model_job_tasks_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_threat_model_job_tasks(%Client{} = client, input, options \\ []) do
+    url_path = "/ListThreatModelJobTasks"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of threat model job summaries for the specified threat
+  model.
+  """
+  @spec list_threat_model_jobs(map(), list_threat_model_jobs_input(), list()) ::
+          {:ok, list_threat_model_jobs_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_threat_model_jobs(%Client{} = client, input, options \\ []) do
+    url_path = "/ListThreatModelJobs"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of threat model summaries for the specified agent
+  space.
+  """
+  @spec list_threat_models(map(), list_threat_models_input(), list()) ::
+          {:ok, list_threat_models_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_threat_models(%Client{} = client, input, options \\ []) do
+    url_path = "/ListThreatModels"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Returns a paginated list of threats for a threat model job.
+  """
+  @spec list_threats(map(), list_threats_input(), list()) ::
+          {:ok, list_threats_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def list_threats(%Client{} = client, input, options \\ []) do
+    url_path = "/ListThreats"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Initiates code remediation for one or more security findings.
+
+  This creates pull requests in integrated repositories to fix the identified
+  vulnerabilities.
+  """
+  @spec start_code_remediation(map(), start_code_remediation_input(), list()) ::
+          {:ok, start_code_remediation_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def start_code_remediation(%Client{} = client, input, options \\ []) do
+    url_path = "/StartCodeRemediation"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Starts a new code review job for a code review configuration.
+
+  The job executes the security-focused code analysis defined in the code review.
+  """
+  @spec start_code_review_job(map(), start_code_review_job_input(), list()) ::
+          {:ok, start_code_review_job_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def start_code_review_job(%Client{} = client, input, options \\ []) do
+    url_path = "/StartCodeReviewJob"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Starts a new pentest job for a pentest configuration.
+
+  The job executes the security tests defined in the pentest.
+  """
+  @spec start_pentest_job(map(), start_pentest_job_input(), list()) ::
+          {:ok, start_pentest_job_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def start_pentest_job(%Client{} = client, input, options \\ []) do
+    url_path = "/StartPentestJob"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Starts a new threat model job for a threat model configuration.
+  """
+  @spec start_threat_model_job(map(), start_threat_model_job_input(), list()) ::
+          {:ok, start_threat_model_job_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def start_threat_model_job(%Client{} = client, input, options \\ []) do
+    url_path = "/StartThreatModelJob"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Stops a running code review job.
+
+  The job transitions to a stopping state and then to stopped after cleanup
+  completes.
+  """
+  @spec stop_code_review_job(map(), stop_code_review_job_input(), list()) ::
+          {:ok, stop_code_review_job_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def stop_code_review_job(%Client{} = client, input, options \\ []) do
+    url_path = "/StopCodeReviewJob"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Stops a running pentest job.
+
+  The job transitions to a stopping state and then to stopped after cleanup
+  completes.
+  """
+  @spec stop_pentest_job(map(), stop_pentest_job_input(), list()) ::
+          {:ok, stop_pentest_job_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def stop_pentest_job(%Client{} = client, input, options \\ []) do
+    url_path = "/StopPentestJob"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Stops a running threat model job.
+  """
+  @spec stop_threat_model_job(map(), stop_threat_model_job_input(), list()) ::
+          {:ok, stop_threat_model_job_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def stop_threat_model_job(%Client{} = client, input, options \\ []) do
+    url_path = "/StopThreatModelJob"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Adds tags to a resource.
+  """
+  @spec tag_resource(map(), String.t() | atom(), tag_resource_input(), list()) ::
+          {:ok, tag_resource_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def tag_resource(%Client{} = client, resource_arn, input, options \\ []) do
+    url_path = "/tags/#{AWS.Util.encode_uri(resource_arn)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      204
+    )
+  end
+
+  @doc """
+  Removes tags from a resource.
+  """
+  @spec untag_resource(map(), String.t() | atom(), untag_resource_input(), list()) ::
+          {:ok, untag_resource_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def untag_resource(%Client{} = client, resource_arn, input, options \\ []) do
+    url_path = "/tags/#{AWS.Util.encode_uri(resource_arn)}"
+    headers = []
+    custom_headers = []
+
+    {query_params, input} =
+      [
+        {"tagKeys", "tagKeys"}
+      ]
+      |> Request.build_params(input)
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :delete,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      204
+    )
+  end
+
+  @doc """
+  Updates the configuration of an existing agent space, including its name,
+  description, AWS resources, target domains, and code review settings.
+  """
+  @spec update_agent_space(map(), update_agent_space_input(), list()) ::
+          {:ok, update_agent_space_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def update_agent_space(%Client{} = client, input, options \\ []) do
+    url_path = "/UpdateAgentSpace"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Updates the configuration of an existing application, including the IAM role and
+  default KMS key.
+  """
+  @spec update_application(map(), update_application_request(), list()) ::
+          {:ok, update_application_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def update_application(%Client{} = client, input, options \\ []) do
+    url_path = "/UpdateApplication"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Updates an existing code review configuration.
+  """
+  @spec update_code_review(map(), update_code_review_input(), list()) ::
+          {:ok, update_code_review_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def update_code_review(%Client{} = client, input, options \\ []) do
+    url_path = "/UpdateCodeReview"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Updates the status or risk level of a security finding.
+  """
+  @spec update_finding(map(), update_finding_input(), list()) ::
+          {:ok, update_finding_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def update_finding(%Client{} = client, input, options \\ []) do
+    url_path = "/UpdateFinding"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Updates the integrated resources for an agent space, including their
+  capabilities.
+  """
+  @spec update_integrated_resources(map(), update_integrated_resources_input(), list()) ::
+          {:ok, update_integrated_resources_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, update_integrated_resources_errors()}
+  def update_integrated_resources(%Client{} = client, input, options \\ []) do
+    url_path = "/UpdateIntegratedResources"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Updates an existing pentest configuration.
+  """
+  @spec update_pentest(map(), update_pentest_input(), list()) ::
+          {:ok, update_pentest_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def update_pentest(%Client{} = client, input, options \\ []) do
+    url_path = "/UpdatePentest"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Updates the certificate associated with a private connection.
+
+  Certificates can be added or replaced but not removed.
+  """
+  @spec update_private_connection_certificate(
+          map(),
+          update_private_connection_certificate_input(),
+          list()
+        ) ::
+          {:ok, update_private_connection_certificate_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, update_private_connection_certificate_errors()}
+  def update_private_connection_certificate(%Client{} = client, input, options \\ []) do
+    url_path = "/UpdatePrivateConnectionCertificate"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Updates a security requirement pack.
+
+  For customer managed packs, both metadata and status can be updated. For AWS
+  managed packs, only status can be updated.
+  """
+  @spec update_security_requirement_pack(map(), update_security_requirement_pack_input(), list()) ::
+          {:ok, update_security_requirement_pack_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, update_security_requirement_pack_errors()}
+  def update_security_requirement_pack(%Client{} = client, input, options \\ []) do
+    url_path = "/UpdateSecurityRequirementPack"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Updates the verification method for a target domain.
+  """
+  @spec update_target_domain(map(), update_target_domain_input(), list()) ::
+          {:ok, update_target_domain_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def update_target_domain(%Client{} = client, input, options \\ []) do
+    url_path = "/UpdateTargetDomain"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Updates a threat.
+  """
+  @spec update_threat(map(), update_threat_input(), list()) ::
+          {:ok, update_threat_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def update_threat(%Client{} = client, input, options \\ []) do
+    url_path = "/UpdateThreat"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Updates an existing threat model configuration.
+  """
+  @spec update_threat_model(map(), update_threat_model_input(), list()) ::
+          {:ok, update_threat_model_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def update_threat_model(%Client{} = client, input, options \\ []) do
+    url_path = "/UpdateThreatModel"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Initiates verification of a target domain.
+
+  This checks whether the domain ownership verification token has been properly
+  configured.
+  """
+  @spec verify_target_domain(map(), verify_target_domain_input(), list()) ::
+          {:ok, verify_target_domain_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+  def verify_target_domain(%Client{} = client, input, options \\ []) do
+    url_path = "/VerifyTargetDomain"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+end

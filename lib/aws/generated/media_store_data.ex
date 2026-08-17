@@ -1,0 +1,453 @@
+# WARNING: DO NOT EDIT, AUTO-GENERATED CODE!
+# See https://github.com/aws-beam/aws-codegen for more details.
+
+defmodule AWS.MediaStoreData do
+  @moduledoc """
+  An AWS Elemental MediaStore asset is an object, similar to an object in the
+  Amazon S3
+  service.
+
+  Objects are the fundamental entities that are stored in AWS Elemental
+  MediaStore.
+  """
+
+  alias AWS.Client
+  alias AWS.Request
+
+  @typedoc """
+
+  ## Example:
+
+      container_not_found_exception() :: %{
+        "Message" => String.t() | atom()
+      }
+
+  """
+  @type container_not_found_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_object_request() :: %{}
+
+  """
+  @type delete_object_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_object_response() :: %{}
+
+  """
+  @type delete_object_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      describe_object_request() :: %{}
+
+  """
+  @type describe_object_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      describe_object_response() :: %{
+        "CacheControl" => String.t() | atom(),
+        "ContentLength" => float(),
+        "ContentType" => String.t() | atom(),
+        "ETag" => String.t() | atom(),
+        "LastModified" => non_neg_integer()
+      }
+
+  """
+  @type describe_object_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_object_request() :: %{
+        optional("Range") => String.t() | atom()
+      }
+
+  """
+  @type get_object_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_object_response() :: %{
+        "Body" => binary(),
+        "CacheControl" => String.t() | atom(),
+        "ContentLength" => float(),
+        "ContentRange" => String.t() | atom(),
+        "ContentType" => String.t() | atom(),
+        "ETag" => String.t() | atom(),
+        "LastModified" => non_neg_integer(),
+        "StatusCode" => integer()
+      }
+
+  """
+  @type get_object_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      internal_server_error() :: %{
+        "Message" => String.t() | atom()
+      }
+
+  """
+  @type internal_server_error() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      item() :: %{
+        "ContentLength" => float(),
+        "ContentType" => String.t() | atom(),
+        "ETag" => String.t() | atom(),
+        "LastModified" => non_neg_integer(),
+        "Name" => String.t() | atom(),
+        "Type" => list(any())
+      }
+
+  """
+  @type item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_items_request() :: %{
+        optional("MaxResults") => integer(),
+        optional("NextToken") => String.t() | atom(),
+        optional("Path") => String.t() | atom()
+      }
+
+  """
+  @type list_items_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_items_response() :: %{
+        "Items" => list(item()),
+        "NextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_items_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      object_not_found_exception() :: %{
+        "Message" => String.t() | atom()
+      }
+
+  """
+  @type object_not_found_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      put_object_request() :: %{
+        optional("CacheControl") => String.t() | atom(),
+        optional("ContentType") => String.t() | atom(),
+        optional("StorageClass") => list(any()),
+        optional("UploadAvailability") => list(any()),
+        required("Body") => binary()
+      }
+
+  """
+  @type put_object_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      put_object_response() :: %{
+        "ContentSHA256" => String.t() | atom(),
+        "ETag" => String.t() | atom(),
+        "StorageClass" => list(any())
+      }
+
+  """
+  @type put_object_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      requested_range_not_satisfiable_exception() :: %{
+        "Message" => String.t() | atom()
+      }
+
+  """
+  @type requested_range_not_satisfiable_exception() :: %{(String.t() | atom()) => any()}
+
+  @type delete_object_errors() ::
+          object_not_found_exception() | internal_server_error() | container_not_found_exception()
+
+  @type describe_object_errors() ::
+          object_not_found_exception() | internal_server_error() | container_not_found_exception()
+
+  @type get_object_errors() ::
+          requested_range_not_satisfiable_exception()
+          | object_not_found_exception()
+          | internal_server_error()
+          | container_not_found_exception()
+
+  @type list_items_errors() :: internal_server_error() | container_not_found_exception()
+
+  @type put_object_errors() :: internal_server_error() | container_not_found_exception()
+
+  def metadata do
+    %{
+      api_version: "2017-09-01",
+      content_type: "application/x-amz-json-1.1",
+      credential_scope: nil,
+      endpoint_prefix: "data.mediastore",
+      global?: false,
+      hostname: nil,
+      protocol: "rest-json",
+      service_id: "MediaStore Data",
+      signature_version: "v4",
+      signing_name: "mediastore",
+      target_prefix: nil
+    }
+  end
+
+  @doc """
+  Deletes an object at the specified path.
+  """
+  @spec delete_object(map(), String.t() | atom(), delete_object_request(), list()) ::
+          {:ok, delete_object_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_object_errors()}
+  def delete_object(%Client{} = client, path, input, options \\ []) do
+    url_path = "/#{AWS.Util.encode_multi_segment_uri(path)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :delete,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Gets the headers for an object at the specified path.
+  """
+  @spec describe_object(map(), String.t() | atom(), describe_object_request(), list()) ::
+          {:ok, describe_object_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, describe_object_errors()}
+  def describe_object(%Client{} = client, path, input, options \\ []) do
+    url_path = "/#{AWS.Util.encode_multi_segment_uri(path)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    options =
+      Keyword.put(
+        options,
+        :response_header_parameters,
+        [
+          {"Cache-Control", "CacheControl"},
+          {"Content-Length", "ContentLength"},
+          {"Content-Type", "ContentType"},
+          {"ETag", "ETag"},
+          {"Last-Modified", "LastModified"}
+        ]
+      )
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :head,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Downloads the object at the specified path.
+
+  If the object’s upload availability is set to `streaming`, AWS Elemental
+  MediaStore downloads the object even if it’s still uploading the object.
+  """
+  @spec get_object(map(), String.t() | atom(), String.t() | atom() | nil, list()) ::
+          {:ok, get_object_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_object_errors()}
+  def get_object(%Client{} = client, path, range \\ nil, options \\ []) do
+    url_path = "/#{AWS.Util.encode_multi_segment_uri(path)}"
+    headers = []
+
+    headers =
+      if !is_nil(range) do
+        [{"Range", range} | headers]
+      else
+        headers
+      end
+
+    query_params = []
+
+    options =
+      Keyword.put(
+        options,
+        :response_header_parameters,
+        [
+          {"Cache-Control", "CacheControl"},
+          {"Content-Length", "ContentLength"},
+          {"Content-Range", "ContentRange"},
+          {"Content-Type", "ContentType"},
+          {"ETag", "ETag"},
+          {"Last-Modified", "LastModified"}
+        ]
+      )
+
+    options =
+      Keyword.put(
+        options,
+        :receive_body_as_binary?,
+        true
+      )
+
+    meta = metadata()
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Provides a list of metadata entries about folders and objects in the specified
+  folder.
+  """
+  @spec list_items(
+          map(),
+          String.t() | atom() | nil,
+          String.t() | atom() | nil,
+          String.t() | atom() | nil,
+          list()
+        ) ::
+          {:ok, list_items_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_items_errors()}
+  def list_items(
+        %Client{} = client,
+        max_results \\ nil,
+        next_token \\ nil,
+        path \\ nil,
+        options \\ []
+      ) do
+    url_path = "/"
+    headers = []
+    query_params = []
+
+    query_params =
+      if !is_nil(path) do
+        [{"Path", path} | query_params]
+      else
+        query_params
+      end
+
+    query_params =
+      if !is_nil(next_token) do
+        [{"NextToken", next_token} | query_params]
+      else
+        query_params
+      end
+
+    query_params =
+      if !is_nil(max_results) do
+        [{"MaxResults", max_results} | query_params]
+      else
+        query_params
+      end
+
+    meta = metadata()
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Uploads an object to the specified path.
+
+  Object sizes are limited to 25 MB for standard upload availability and 10 MB for
+  streaming upload availability.
+  """
+  @spec put_object(map(), String.t() | atom(), put_object_request(), list()) ::
+          {:ok, put_object_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, put_object_errors()}
+  def put_object(%Client{} = client, path, input, options \\ []) do
+    url_path = "/#{AWS.Util.encode_multi_segment_uri(path)}"
+
+    {headers, input} =
+      [
+        {"CacheControl", "Cache-Control"},
+        {"ContentType", "Content-Type"},
+        {"StorageClass", "x-amz-storage-class"},
+        {"UploadAvailability", "x-amz-upload-availability"}
+      ]
+      |> Request.build_params(input)
+
+    custom_headers = []
+    query_params = []
+
+    options =
+      Keyword.put(
+        options,
+        :send_body_as_binary?,
+        true
+      )
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :put,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+end
