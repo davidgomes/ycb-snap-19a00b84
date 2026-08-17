@@ -212,7 +212,10 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
   end
 
   defp docker_instructions(image, env) do
-    envs = Enum.map_join(env, "\n", fn {key, value} -> ~s/  -e #{key}="#{value}" \\/ end)
+    envs =
+      Enum.map_join(env, "\n", fn {key, value} ->
+        ~s/  -e #{key}="#{shell_escape(value)}" \\/
+      end)
 
     """
     docker run -p 8080:8080 -p 8081:8081 --pull always \\
@@ -222,7 +225,10 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
   end
 
   defp fly_instructions(image, env, hub_name, deployment_group_name) do
-    envs = Enum.map_join(env, " \\\n", fn {key, value} -> ~s/  #{key}="#{value}"/ end)
+    envs =
+      Enum.map_join(env, " \\\n", fn {key, value} ->
+        ~s/  #{key}="#{shell_escape(value)}"/
+      end)
 
     example_dir =
       "lb-server-#{hub_name}-#{deployment_group_name}"
@@ -242,6 +248,14 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
       fly deploy --ha=false
       """
     }
+  end
+
+  # Escapes a value so it is safe to interpolate inside a double-quoted
+  # shell string (guards against characters like ", \, $ and `).
+  defp shell_escape(value) do
+    value
+    |> to_string()
+    |> String.replace(["\\", "\"", "$", "`"], fn char -> "\\" <> char end)
   end
 
   defp k8s_instructions(image, env, deployment_group_name) do
