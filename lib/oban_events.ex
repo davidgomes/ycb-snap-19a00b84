@@ -65,6 +65,7 @@ defmodule ObanEvents do
 
   Using this module provides:
   - `emit/2` - Dispatch events to handlers via Oban jobs
+  - `emit/3` - Same as `emit/2`, plus custom metadata (see `ObanEvents.Event`)
   - `get_handlers!/1` - Get handlers for an event
   - `all_events/0` - List all registered events
   - `registered?/1` - Check if an event exists
@@ -96,6 +97,15 @@ defmodule ObanEvents do
   Returns `{:ok, jobs}` on success. Raises `ArgumentError` if event is not registered.
   """
   @callback emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+
+  @doc """
+  Emit an event with additional custom metadata.
+
+  Behaves exactly like `emit/2`, but merges the given metadata map with the
+  automatically generated `:id` and `:emitted_at` fields before attaching it
+  to each dispatched job. See `ObanEvents.Event` for details.
+  """
+  @callback emit(atom(), map(), map()) :: {:ok, [Oban.Job.t()]}
 
   @doc """
   Get all handler modules registered for a given event.
@@ -132,7 +142,7 @@ defmodule ObanEvents do
 
   defmacro __before_compile__(_env) do
     quote do
-      alias ObanEvents.DispatchWorker
+      alias ObanEvents.{DispatchWorker, Event}
 
       @doc """
       Emit an event.
@@ -174,21 +184,46 @@ defmodule ObanEvents do
 
       Note: Handlers always receive data with string keys, regardless of how you emit.
 
+      Every emitted event is also tagged with automatically generated metadata
+      (a unique `:id` and `:emitted_at` timestamp) that travels with the job for
+      tracing and observability purposes. See `emit/3` to attach additional
+      custom metadata, and `ObanEvents.Event` for details.
+
       ## Errors
 
       Raises `ArgumentError` if the event is not registered.
       """
       @spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
       def emit(event_name, data) when is_atom(event_name) and is_map(data) do
+        emit(event_name, data, %{})
+      end
+
+      @doc """
+      Emit an event with additional custom metadata.
+
+      Behaves exactly like `emit/2`, but merges the given `metadata` map with
+      the automatically generated `:id` and `:emitted_at` fields before
+      attaching it to each dispatched job. Useful for propagating tracing
+      context such as a request id or the module that triggered the event.
+
+      ## Examples
+
+          #{inspect(__MODULE__)}.emit(:user_created, %{user_id: user.id}, %{source: "signup_form"})
+      """
+      @spec emit(atom(), map(), map()) :: {:ok, [Oban.Job.t()]}
+      def emit(event_name, data, metadata)
+          when is_atom(event_name) and is_map(data) and is_map(metadata) do
+        event = Event.new(event_name, data, metadata)
         handlers = get_handlers!(event_name)
 
         jobs =
           Enum.map(handlers, fn handler_module ->
             DispatchWorker.new(
               %{
-                event: Atom.to_string(event_name),
+                event: Atom.to_string(event.name),
                 handler: Atom.to_string(handler_module),
-                data: data
+                data: event.data,
+                metadata: event.metadata
               },
               queue: @oban_queue,
               max_attempts: @oban_max_attempts,
