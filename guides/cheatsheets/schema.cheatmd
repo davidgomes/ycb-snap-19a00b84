@@ -438,6 +438,49 @@ custom_fields: [
 
 Takes precedence over the operators derived from `ecto_type`.
 
+### Ordering
+
+```elixir
+defmodule Pet do
+  use Ecto.Schema
+
+  @derive {
+    Flop.Schema,
+    filterable: [:name, :human_age],
+    sortable: [:name, :human_age],
+    adapter_opts: [
+      custom_fields: [
+        human_age: [
+          filter: {CustomFilters, :human_age, []},
+          order_by: {CustomFilters, :order_by_human_age, []},
+          ecto_type: :integer
+        ]
+      ]
+    ]
+  }
+
+  schema "pets" do
+    field :name, :string
+    field :age, :integer
+  end
+end
+```
+
+```elixir
+defmodule CustomFilters do
+  import Ecto.Query
+
+  def order_by_human_age(q, direction, _) do
+    order_by(q, [p], [{^direction, p.age}])
+  end
+end
+```
+
+A custom field only needs to define the `filter` option to be filterable, or
+the `order_by` option to be sortable. Setting a field as sortable without an
+`order_by` option (or filterable without a `filter` option) raises an
+error.
+
 ### Bindings
 
 ```elixir

@@ -308,7 +308,7 @@ defmodule Flop.Adapter.Ecto do
 
         Enum.reduce(directions, query, fn {_, field} = expr, acc_query ->
           field_info = Flop.Schema.field_info(struct, field)
-          apply_order_by_field(acc_query, expr, field_info, struct)
+          apply_order_by_field(acc_query, expr, field_info, struct, opts)
         end)
     end
   end
@@ -341,6 +341,7 @@ defmodule Flop.Adapter.Ecto do
          %FieldInfo{
            extra: %{type: :join, binding: binding, field: field}
          },
+         _,
          _
        ) do
     order_by_direction(
@@ -356,11 +357,19 @@ defmodule Flop.Adapter.Ecto do
          %FieldInfo{
            extra: %{type: :compound, fields: fields}
          },
-         struct
+         struct,
+         opts
        ) do
     Enum.reduce(fields, q, fn field, acc_query ->
       field_info = Flop.Schema.field_info(struct, field)
-      apply_order_by_field(acc_query, {direction, field}, field_info, struct)
+
+      apply_order_by_field(
+        acc_query,
+        {direction, field},
+        field_info,
+        struct,
+        opts
+      )
     end)
   end
 
@@ -368,12 +377,30 @@ defmodule Flop.Adapter.Ecto do
          q,
          {order_direction, field},
          %FieldInfo{extra: %{type: :alias}},
+         _,
          _
        ) do
     order_by_direction(q, order_direction, dynamic(selected_as(^field)))
   end
 
-  defp apply_order_by_field(q, {order_direction, field}, _, _) do
+  defp apply_order_by_field(
+         q,
+         {{_, order_direction}, _field},
+         %FieldInfo{extra: %{type: :custom} = custom_opts},
+         _,
+         opts
+       ) do
+    {mod, fun, custom_order_by_opts} = Map.fetch!(custom_opts, :order_by)
+
+    custom_opts =
+      opts
+      |> Keyword.get(:extra_opts, [])
+      |> Keyword.merge(custom_order_by_opts)
+
+    apply(mod, fun, [q, order_direction, custom_opts])
+  end
+
+  defp apply_order_by_field(q, {order_direction, field}, _, _, _) do
     order_by_direction(q, order_direction, dynamic([r], field(r, ^field)))
   end
 
@@ -872,7 +899,8 @@ defmodule Flop.Adapter.Ecto do
 
   defp normalize_custom_field_opts({name, opts}) when is_list(opts) do
     opts = %{
-      filter: Keyword.fetch!(opts, :filter),
+      filter: Keyword.get(opts, :filter),
+      order_by: Keyword.get(opts, :order_by),
       ecto_type: Keyword.fetch!(opts, :ecto_type),
       operators: Keyword.get(opts, :operators),
       bindings: Keyword.get(opts, :bindings, [])
@@ -983,22 +1011,46 @@ defmodule Flop.Adapter.Ecto do
          opts
        ) do
     sortable = Keyword.fetch!(opts, :sortable)
+    filterable = Keyword.fetch!(opts, :filterable)
 
-    illegal_fields =
+    illegal_sortable_fields =
       custom_fields
-      |> Map.keys()
-      |> Enum.filter(&(&1 in sortable))
+      |> Enum.filter(fn {field, field_opts} ->
+        field in sortable && is_nil(field_opts[:order_by])
+      end)
+      |> Enum.map(fn {field, _} -> field end)
 
-    if illegal_fields != [] do
+    if illegal_sortable_fields != [] do
       raise ArgumentError, """
-      cannot sort by custom fields
+      cannot sort by custom fields without order_by option
 
-      Custom fields are not allowed to be sortable. These custom fields were
-      configured as sortable:
+      Custom fields are only allowed to be sortable if an `order_by`
+      function is configured. These custom fields were configured as
+      sortable, but have no `order_by` option set:
 
-          #{inspect(illegal_fields)}
+          #{inspect(illegal_sortable_fields)}
 
-      Use alias fields if you want to implement custom sorting.
+      Set the `order_by` option for these custom fields, or use alias fields
+      if you want to implement custom sorting.
+      """
+    end
+
+    illegal_filterable_fields =
+      custom_fields
+      |> Enum.filter(fn {field, field_opts} ->
+        field in filterable && is_nil(field_opts[:filter])
+      end)
+      |> Enum.map(fn {field, _} -> field end)
+
+    if illegal_filterable_fields != [] do
+      raise ArgumentError, """
+      cannot filter by custom fields without filter option
+
+      Custom fields are only allowed to be filterable if a `filter`
+      function is configured. These custom fields were configured as
+      filterable, but have no `filter` option set:
+
+          #{inspect(illegal_filterable_fields)}
       """
     end
 

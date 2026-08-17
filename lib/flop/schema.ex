@@ -384,7 +384,9 @@ defprotocol Flop.Schema do
   ID of the current user), use the `extra_opts` option when calling Flop
   functions.
 
-  Note that as of now, custom fields only support filtering, not sorting.
+  Custom fields can also be made sortable by configuring an `:order_by`
+  function in addition to (or instead of) the `:filter` function. See
+  `t:custom_field_option/0` for details.
 
   Schema:
 
@@ -540,8 +542,9 @@ defprotocol Flop.Schema do
     Supports fields from the Ecto schema, join fields, compound fields and
     custom fields. Alias fields are not supported.
   - `:sortable` (required) - A list of fields that can be used for sorting.
-    Supports fields from the Ecto schema, join fields, and alias fields. Custom
-    fields and compound fields are not supported.
+    Supports fields from the Ecto schema, join fields, compound fields and
+    alias fields. Custom fields are supported if an `:order_by` function is
+    configured for them.
   - `:default_limit` - The default limit applied if no `limit`, `page_size`,
     `first` or `last` parameter is set. Set to `false` to not set any default
     limit.
@@ -602,9 +605,15 @@ defprotocol Flop.Schema do
   @typedoc """
   Defines the options for a custom field.
 
-  - `:filter` (required) - A module/function/options tuple referencing a
-    custom filter function. The function must take the Ecto query, the
-    `Flop.Filter` struct, and the options from the tuple as arguments.
+  - `:filter` - A module/function/options tuple referencing a custom filter
+    function. The function must take the Ecto query, the `Flop.Filter`
+    struct, and the options from the tuple as arguments. Required if the
+    field is listed as filterable.
+  - `:order_by` - A module/function/options tuple referencing a custom order
+    function. The function must take the Ecto query, the order direction
+    (e.g. `:asc`, `:desc`, `:asc_nulls_first`, ...), and the options from the
+    tuple as arguments, and must return the (potentially ordered) query.
+    Required if the field is listed as sortable.
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator
     and value validation is based on this option.
   - `:bindings` - If the custom filter function requires certain named bindings
@@ -620,6 +629,7 @@ defprotocol Flop.Schema do
   """
   @type custom_field_option ::
           {:filter, {module, atom, keyword}}
+          | {:order_by, {module, atom, keyword}}
           | {:ecto_type, ecto_type()}
           | {:bindings, [atom]}
           | {:operators, [Flop.Filter.op()]}
