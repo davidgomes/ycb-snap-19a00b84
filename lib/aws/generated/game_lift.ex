@@ -844,6 +844,7 @@ defmodule AWS.GameLift do
         "Essential" => boolean(),
         "HealthCheck" => container_health_check(),
         "ImageUri" => String.t() | atom(),
+        "LinuxCapabilities" => linux_capabilities(),
         "MemoryHardLimitMebibytes" => integer(),
         "MountPoints" => list(container_mount_point()),
         "PortConfiguration" => container_port_configuration(),
@@ -2203,6 +2204,17 @@ defmodule AWS.GameLift do
 
   ## Example:
       
+      linux_capabilities() :: %{
+        "Include" => list(list(any())())
+      }
+      
+  """
+  @type linux_capabilities() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
       list_aliases_input() :: %{
         optional("Limit") => integer(),
         optional("Name") => String.t() | atom(),
@@ -2833,6 +2845,7 @@ defmodule AWS.GameLift do
         "DependsOn" => list(container_dependency()),
         "EnvironmentOverride" => list(container_environment()),
         "ImageUri" => String.t() | atom(),
+        "LinuxCapabilities" => linux_capabilities(),
         "MountPoints" => list(container_mount_point()),
         "PortConfiguration" => container_port_configuration(),
         "ResolvedImageDigest" => String.t() | atom(),
@@ -4170,6 +4183,7 @@ defmodule AWS.GameLift do
         "ContainerGroupDefinitionArn" => String.t() | atom(),
         "ContainerGroupPortMappings" => list(container_group_port_mapping()),
         "ContainerGroupType" => list(any()),
+        "FleetArn" => String.t() | atom(),
         "FleetId" => String.t() | atom(),
         "InstanceId" => String.t() | atom(),
         "Location" => String.t() | atom()
@@ -4414,6 +4428,7 @@ defmodule AWS.GameLift do
         "DependsOn" => list(container_dependency()),
         "EnvironmentOverride" => list(container_environment()),
         "ImageUri" => String.t() | atom(),
+        "LinuxCapabilities" => linux_capabilities(),
         "MountPoints" => list(container_mount_point()),
         "PortConfiguration" => container_port_configuration(),
         "ServerSdkVersion" => String.t() | atom()
@@ -4467,6 +4482,7 @@ defmodule AWS.GameLift do
         "Essential" => boolean(),
         "HealthCheck" => container_health_check(),
         "ImageUri" => String.t() | atom(),
+        "LinuxCapabilities" => linux_capabilities(),
         "MemoryHardLimitMebibytes" => integer(),
         "MountPoints" => list(container_mount_point()),
         "PortConfiguration" => container_port_configuration(),

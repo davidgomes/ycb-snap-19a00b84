@@ -586,6 +586,7 @@ defmodule AWS.ECS do
         "guardDutyEnabled" => boolean(),
         "launchType" => list(any()),
         "loadBalancers" => list(load_balancer()),
+        "monitoring" => monitoring_configuration(),
         "networkConfiguration" => network_configuration(),
         "platformFamily" => String.t() | atom(),
         "platformVersion" => String.t() | atom(),
@@ -1205,6 +1206,7 @@ defmodule AWS.ECS do
         optional("forceNewDeployment") => boolean(),
         optional("healthCheckGracePeriodSeconds") => integer(),
         optional("loadBalancers") => list(load_balancer()),
+        optional("monitoring") => monitoring_configuration(),
         optional("networkConfiguration") => network_configuration(),
         optional("placementConstraints") => list(placement_constraint()),
         optional("placementStrategy") => list(placement_strategy()),
@@ -2745,6 +2747,7 @@ defmodule AWS.ECS do
         optional("healthCheckGracePeriodSeconds") => integer(),
         optional("launchType") => list(any()),
         optional("loadBalancers") => list(load_balancer()),
+        optional("monitoring") => monitoring_configuration(),
         optional("networkConfiguration") => network_configuration(),
         optional("placementConstraints") => list(placement_constraint()),
         optional("placementStrategy") => list(placement_strategy()),
@@ -4337,6 +4340,29 @@ defmodule AWS.ECS do
       
   """
   @type missing_version_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      metric_configuration() :: %{
+        "metricNames" => list(String.t() | atom()),
+        "resolutionSeconds" => integer()
+      }
+      
+  """
+  @type metric_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      monitoring_configuration() :: %{
+        "metricConfigurations" => list(metric_configuration())
+      }
+      
+  """
+  @type monitoring_configuration() :: %{(String.t() | atom()) => any()}
 
   @typedoc """
 
