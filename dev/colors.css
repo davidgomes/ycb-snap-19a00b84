@@ -1,0 +1,452 @@
+/* Playground colour mapping — two dials.
+ *
+ * `primary` routes through --pg-accent-* and `secondary` through
+ * --pg-accent2-*, so the topbar dials restyle the whole page live (no
+ * rebuild). Default primary is `neutral`: near-black solids in light mode,
+ * white solids in dark (light-dark(), driven by color-scheme) — the
+ * monochrome look lives in the token VALUE, exactly like shadcn. Default
+ * secondary is pink, the brand accent. User apps map both to plain ramps
+ * in their own colors.css.
+ */
+
+/* `static` so every token here is emitted as a real custom property, not
+   only the ones some generated utility happens to reference. `inline` alone
+   substitutes each token's VALUE into the utilities it generates and emits
+   nothing, which left the Colours page - it paints ramp swatches with
+   style="background-color: var(--color-info-50)" - drawing blank info and
+   success ramps and a single lonely warning/danger swatch. */
+@theme static inline {
+  --color-primary-50: var(--pg-accent-50);
+  --color-primary-100: var(--pg-accent-100);
+  --color-primary-200: var(--pg-accent-200);
+  --color-primary-300: var(--pg-accent-300);
+  --color-primary-400: var(--pg-accent-400);
+  --color-primary-500: var(--pg-accent-500);
+  --color-primary-600: var(--pg-accent-600);
+  --color-primary-700: var(--pg-accent-700);
+  --color-primary-800: var(--pg-accent-800);
+  --color-primary-900: var(--pg-accent-900);
+  --color-primary-950: var(--pg-accent-950);
+
+  --color-secondary-50: var(--pg-accent2-50);
+  --color-secondary-100: var(--pg-accent2-100);
+  --color-secondary-200: var(--pg-accent2-200);
+  --color-secondary-300: var(--pg-accent2-300);
+  --color-secondary-400: var(--pg-accent2-400);
+  --color-secondary-500: var(--pg-accent2-500);
+  --color-secondary-600: var(--pg-accent2-600);
+  --color-secondary-700: var(--pg-accent2-700);
+  --color-secondary-800: var(--pg-accent2-800);
+  --color-secondary-900: var(--pg-accent2-900);
+  --color-secondary-950: var(--pg-accent2-950);
+
+  --color-success-50: var(--color-green-50);
+  --color-success-100: var(--color-green-100);
+  --color-success-200: var(--color-green-200);
+  --color-success-300: var(--color-green-300);
+  --color-success-400: var(--color-green-400);
+  --color-success-500: var(--color-green-500);
+  --color-success-600: var(--color-green-600);
+  --color-success-700: var(--color-green-700);
+  --color-success-800: var(--color-green-800);
+  --color-success-900: var(--color-green-900);
+  --color-success-950: var(--color-green-950);
+
+  --color-danger-50: var(--color-red-50);
+  --color-danger-100: var(--color-red-100);
+  --color-danger-200: var(--color-red-200);
+  --color-danger-300: var(--color-red-300);
+  --color-danger-400: var(--color-red-400);
+  --color-danger-500: var(--color-red-500);
+  --color-danger-600: var(--color-red-600);
+  --color-danger-700: var(--color-red-700);
+  --color-danger-800: var(--color-red-800);
+  --color-danger-900: var(--color-red-900);
+  --color-danger-950: var(--color-red-950);
+
+  --color-warning-50: var(--color-yellow-50);
+  --color-warning-100: var(--color-yellow-100);
+  --color-warning-200: var(--color-yellow-200);
+  --color-warning-300: var(--color-yellow-300);
+  --color-warning-400: var(--color-yellow-400);
+  --color-warning-500: var(--color-yellow-500);
+  --color-warning-600: var(--color-yellow-600);
+  --color-warning-700: var(--color-yellow-700);
+  --color-warning-800: var(--color-yellow-800);
+  --color-warning-900: var(--color-yellow-900);
+  --color-warning-950: var(--color-yellow-950);
+
+  --color-info-50: var(--color-sky-50);
+  --color-info-100: var(--color-sky-100);
+  --color-info-200: var(--color-sky-200);
+  --color-info-300: var(--color-sky-300);
+  --color-info-400: var(--color-sky-400);
+  --color-info-500: var(--color-sky-500);
+  --color-info-600: var(--color-sky-600);
+  --color-info-700: var(--color-sky-700);
+  --color-info-800: var(--color-sky-800);
+  --color-info-900: var(--color-sky-900);
+  --color-info-950: var(--color-sky-950);
+
+  --color-gray-50: var(--pg-gray-50);
+  --color-gray-100: var(--pg-gray-100);
+  --color-gray-200: var(--pg-gray-200);
+  --color-gray-300: var(--pg-gray-300);
+  --color-gray-400: var(--pg-gray-400);
+  --color-gray-500: var(--pg-gray-500);
+  --color-gray-600: var(--pg-gray-600);
+  --color-gray-700: var(--pg-gray-700);
+  --color-gray-800: var(--pg-gray-800);
+  --color-gray-900: var(--pg-gray-900);
+  --color-gray-950: var(--pg-gray-950);
+}
+
+/* light-dark() resolves off color-scheme; dark mode is class-based here. */
+:root {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
+}
+
+/* Accent: neutral (default) — black button in light, white button in dark.
+   Derived from the gray dial (not literals) so a slate/stone chrome gives a
+   slate/stone-tinted monochrome accent: one temperature across the page. */
+:root,
+[data-primary="neutral"] {
+  --pg-accent-50: light-dark(var(--pg-gray-50), var(--pg-gray-900));
+  --pg-accent-100: light-dark(var(--pg-gray-100), var(--pg-gray-700));
+  --pg-accent-200: light-dark(var(--pg-gray-200), var(--pg-gray-800));
+  --pg-accent-300: light-dark(var(--pg-gray-300), var(--pg-gray-300));
+  --pg-accent-400: light-dark(var(--pg-gray-400), var(--pg-gray-600));
+  --pg-accent-500: light-dark(var(--pg-gray-600), var(--pg-gray-400));
+  --pg-accent-600: light-dark(var(--pg-gray-900), var(--pg-gray-50));
+  --pg-accent-700: light-dark(var(--pg-gray-800), var(--pg-gray-200));
+  --pg-accent-800: light-dark(var(--pg-gray-700), var(--pg-gray-300));
+  --pg-accent-900: light-dark(var(--pg-gray-900), var(--pg-gray-100));
+  --pg-accent-950: light-dark(var(--pg-gray-950), var(--pg-gray-50));
+  --pc-button-solid-fg: light-dark(#ffffff, var(--pg-gray-900));
+}
+
+[data-primary="blue"] {
+  --pg-accent-50: #eff6ff;
+  --pg-accent-100: #dbeafe;
+  --pg-accent-200: #bfdbfe;
+  --pg-accent-300: #93c5fd;
+  --pg-accent-400: #60a5fa;
+  --pg-accent-500: #3b82f6;
+  --pg-accent-600: #2563eb;
+  --pg-accent-700: #1d4ed8;
+  --pg-accent-800: #1e40af;
+  --pg-accent-900: #1e3a8a;
+  --pg-accent-950: #172554;
+  --pc-button-solid-fg: #ffffff;
+}
+
+[data-primary="indigo"] {
+  --pg-accent-50: #eef2ff;
+  --pg-accent-100: #e0e7ff;
+  --pg-accent-200: #c7d2fe;
+  --pg-accent-300: #a5b4fc;
+  --pg-accent-400: #818cf8;
+  --pg-accent-500: #6366f1;
+  --pg-accent-600: #4f46e5;
+  --pg-accent-700: #4338ca;
+  --pg-accent-800: #3730a3;
+  --pg-accent-900: #312e81;
+  --pg-accent-950: #1e1b4b;
+  --pc-button-solid-fg: #ffffff;
+}
+
+[data-primary="violet"] {
+  --pg-accent-50: #f5f3ff;
+  --pg-accent-100: #ede9fe;
+  --pg-accent-200: #ddd6fe;
+  --pg-accent-300: #c4b5fd;
+  --pg-accent-400: #a78bfa;
+  --pg-accent-500: #8b5cf6;
+  --pg-accent-600: #7c3aed;
+  --pg-accent-700: #6d28d9;
+  --pg-accent-800: #5b21b6;
+  --pg-accent-900: #4c1d95;
+  --pg-accent-950: #2e1065;
+  --pc-button-solid-fg: #ffffff;
+}
+
+[data-primary="emerald"] {
+  --pg-accent-50: #ecfdf5;
+  --pg-accent-100: #d1fae5;
+  --pg-accent-200: #a7f3d0;
+  --pg-accent-300: #6ee7b9;
+  --pg-accent-400: #34d399;
+  --pg-accent-500: #10b981;
+  --pg-accent-600: #059669;
+  --pg-accent-700: #047857;
+  --pg-accent-800: #065f46;
+  --pg-accent-900: #064e3b;
+  --pg-accent-950: #022c22;
+  --pc-button-solid-fg: #ffffff;
+}
+
+[data-primary="rose"] {
+  --pg-accent-50: #fff1f2;
+  --pg-accent-100: #ffe4e6;
+  --pg-accent-200: #fecdd3;
+  --pg-accent-300: #fda4af;
+  --pg-accent-400: #fb7185;
+  --pg-accent-500: #f43f5e;
+  --pg-accent-600: #e11d48;
+  --pg-accent-700: #be123c;
+  --pg-accent-800: #9f1239;
+  --pg-accent-900: #881337;
+  --pg-accent-950: #4c0519;
+  --pc-button-solid-fg: #ffffff;
+}
+
+[data-primary="amber"] {
+  --pg-accent-50: #fffbeb;
+  --pg-accent-100: #fef3c7;
+  --pg-accent-200: #fde68a;
+  --pg-accent-300: #fcd34d;
+  --pg-accent-400: #fbbf24;
+  --pg-accent-500: #f59e0b;
+  --pg-accent-600: #d97706;
+  --pg-accent-700: #b45309;
+  --pg-accent-800: #92400e;
+  --pg-accent-900: #78350f;
+  --pg-accent-950: #451a03;
+  --pc-button-solid-fg: #ffffff;
+}
+
+
+/* Secondary dial: the brand-accent ramp. Default pink; values are the
+   Tailwind palette, extracted from the shipped binary. */
+:root,
+[data-secondary="pink"] {
+  --pg-accent2-50: oklch(97.1% 0.014 343.198);
+  --pg-accent2-100: oklch(94.8% 0.028 342.258);
+  --pg-accent2-200: oklch(89.9% 0.061 343.231);
+  --pg-accent2-300: oklch(82.3% 0.12 346.018);
+  --pg-accent2-400: oklch(71.8% 0.202 349.761);
+  --pg-accent2-500: oklch(65.6% 0.241 354.308);
+  --pg-accent2-600: oklch(59.2% 0.249 0.584);
+  --pg-accent2-700: oklch(52.5% 0.223 3.958);
+  --pg-accent2-800: oklch(45.9% 0.187 3.815);
+  --pg-accent2-900: oklch(40.8% 0.153 2.432);
+  --pg-accent2-950: oklch(28.4% 0.109 3.907);
+}
+
+[data-secondary="fuchsia"] {
+  --pg-accent2-50: oklch(97.7% 0.017 320.058);
+  --pg-accent2-100: oklch(95.2% 0.037 318.852);
+  --pg-accent2-200: oklch(90.3% 0.076 319.62);
+  --pg-accent2-300: oklch(83.3% 0.145 321.434);
+  --pg-accent2-400: oklch(74% 0.238 322.16);
+  --pg-accent2-500: oklch(66.7% 0.295 322.15);
+  --pg-accent2-600: oklch(59.1% 0.293 322.896);
+  --pg-accent2-700: oklch(51.8% 0.253 323.949);
+  --pg-accent2-800: oklch(45.2% 0.211 324.591);
+  --pg-accent2-900: oklch(40.1% 0.17 325.612);
+  --pg-accent2-950: oklch(29.3% 0.136 325.661);
+}
+
+[data-secondary="teal"] {
+  --pg-accent2-50: oklch(98.4% 0.014 180.72);
+  --pg-accent2-100: oklch(95.3% 0.051 180.801);
+  --pg-accent2-200: oklch(91% 0.096 180.426);
+  --pg-accent2-300: oklch(85.5% 0.138 181.071);
+  --pg-accent2-400: oklch(77.7% 0.152 181.912);
+  --pg-accent2-500: oklch(70.4% 0.14 182.503);
+  --pg-accent2-600: oklch(60% 0.118 184.704);
+  --pg-accent2-700: oklch(51.1% 0.096 186.391);
+  --pg-accent2-800: oklch(43.7% 0.078 188.216);
+  --pg-accent2-900: oklch(38.6% 0.063 188.416);
+  --pg-accent2-950: oklch(27.7% 0.046 192.524);
+}
+
+[data-secondary="cyan"] {
+  --pg-accent2-50: oklch(98.4% 0.019 200.873);
+  --pg-accent2-100: oklch(95.6% 0.045 203.388);
+  --pg-accent2-200: oklch(91.7% 0.08 205.041);
+  --pg-accent2-300: oklch(86.5% 0.127 207.078);
+  --pg-accent2-400: oklch(78.9% 0.154 211.53);
+  --pg-accent2-500: oklch(71.5% 0.143 215.221);
+  --pg-accent2-600: oklch(60.9% 0.126 221.723);
+  --pg-accent2-700: oklch(52% 0.105 223.128);
+  --pg-accent2-800: oklch(45% 0.085 224.283);
+  --pg-accent2-900: oklch(39.8% 0.07 227.392);
+  --pg-accent2-950: oklch(30.2% 0.056 229.695);
+}
+
+[data-secondary="lime"] {
+  --pg-accent2-50: oklch(98.6% 0.031 120.757);
+  --pg-accent2-100: oklch(96.7% 0.067 122.328);
+  --pg-accent2-200: oklch(93.8% 0.127 124.321);
+  --pg-accent2-300: oklch(89.7% 0.196 126.665);
+  --pg-accent2-400: oklch(84.1% 0.238 128.85);
+  --pg-accent2-500: oklch(76.8% 0.233 130.85);
+  --pg-accent2-600: oklch(64.8% 0.2 131.684);
+  --pg-accent2-700: oklch(53.2% 0.157 131.589);
+  --pg-accent2-800: oklch(45.3% 0.124 130.933);
+  --pg-accent2-900: oklch(40.5% 0.101 131.063);
+  --pg-accent2-950: oklch(27.4% 0.072 132.109);
+}
+
+[data-secondary="orange"] {
+  --pg-accent2-50: oklch(98% 0.016 73.684);
+  --pg-accent2-100: oklch(95.4% 0.038 75.164);
+  --pg-accent2-200: oklch(90.1% 0.076 70.697);
+  --pg-accent2-300: oklch(83.7% 0.128 66.29);
+  --pg-accent2-400: oklch(75% 0.183 55.934);
+  --pg-accent2-500: oklch(70.5% 0.213 47.604);
+  --pg-accent2-600: oklch(64.6% 0.222 41.116);
+  --pg-accent2-700: oklch(55.3% 0.195 38.402);
+  --pg-accent2-800: oklch(47% 0.157 37.304);
+  --pg-accent2-900: oklch(40.8% 0.123 38.172);
+  --pg-accent2-950: oklch(26.6% 0.079 36.259);
+}
+
+/* Neutral accent, dark mode: checked primary-600 is near-white, so white
+   check glyphs vanish. The radio dot follows --pc-button-solid-fg by
+   itself; the checkbox tick is an image, swapped via its token.
+   `.dark` sits on the document element while data-primary sits on the
+   playground wrapper, so match dark as ancestor OR same element. */
+.dark [data-primary="neutral"],
+.dark[data-primary="neutral"] {
+  --pc-checkbox-check: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%2318181b' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+}
+
+/* Neutral accent, dark mode: the checked switch track is near-white, so the
+   white thumb vanishes. Invert the thumb like the solid button. */
+.dark [data-primary="neutral"] .pc-switch input:checked ~ .pc-switch__fake-input-bg,
+.dark[data-primary="neutral"] .pc-switch input:checked ~ .pc-switch__fake-input-bg {
+  background-color: var(--pg-gray-900);
+}
+
+/* Raw-var bridge: components that read var(--color-primary-*) directly
+ * (chat bubbles via --pc-chat-user-bg, any token defaults) must track the
+ * dials too. @theme inline only rewires UTILITIES - it never emits the
+ * --color-* variables themselves - so mirror the mapping as plain custom
+ * properties. Declared on :root AND the [data-*] wrappers so the mapping
+ * re-resolves against each dial's accent overrides (custom properties
+ * substitute at the element they're declared on, not at point of use).
+ * In user apps this bridge is not needed: a normal @theme emits the
+ * --color-* vars on :root already.
+ */
+:root,
+[data-primary] {
+  --color-primary-50: var(--pg-accent-50);
+  --color-primary-100: var(--pg-accent-100);
+  --color-primary-200: var(--pg-accent-200);
+  --color-primary-300: var(--pg-accent-300);
+  --color-primary-400: var(--pg-accent-400);
+  --color-primary-500: var(--pg-accent-500);
+  --color-primary-600: var(--pg-accent-600);
+  --color-primary-700: var(--pg-accent-700);
+  --color-primary-800: var(--pg-accent-800);
+  --color-primary-900: var(--pg-accent-900);
+  --color-primary-950: var(--pg-accent-950);
+}
+
+:root,
+[data-gray] {
+  --color-gray-50: var(--pg-gray-50);
+  --color-gray-100: var(--pg-gray-100);
+  --color-gray-200: var(--pg-gray-200);
+  --color-gray-300: var(--pg-gray-300);
+  --color-gray-400: var(--pg-gray-400);
+  --color-gray-500: var(--pg-gray-500);
+  --color-gray-600: var(--pg-gray-600);
+  --color-gray-700: var(--pg-gray-700);
+  --color-gray-800: var(--pg-gray-800);
+  --color-gray-900: var(--pg-gray-900);
+  --color-gray-950: var(--pg-gray-950);
+}
+
+:root,
+[data-secondary] {
+  --color-secondary-50: var(--pg-accent2-50);
+  --color-secondary-100: var(--pg-accent2-100);
+  --color-secondary-200: var(--pg-accent2-200);
+  --color-secondary-300: var(--pg-accent2-300);
+  --color-secondary-400: var(--pg-accent2-400);
+  --color-secondary-500: var(--pg-accent2-500);
+  --color-secondary-600: var(--pg-accent2-600);
+  --color-secondary-700: var(--pg-accent2-700);
+  --color-secondary-800: var(--pg-accent2-800);
+  --color-secondary-900: var(--pg-accent2-900);
+  --color-secondary-950: var(--pg-accent2-950);
+}
+
+/* Neutral dial - the gray every surface (and the ghost material)
+   derives from. Default zinc; literals from tailwindcss@4 theme.css. */
+:root, [data-gray="zinc"] {
+  --pg-gray-50: oklch(98.5% 0 none);
+  --pg-gray-100: oklch(96.7% 0.001 286.375);
+  --pg-gray-200: oklch(92% 0.004 286.32);
+  --pg-gray-300: oklch(87.1% 0.006 286.286);
+  --pg-gray-400: oklch(70.5% 0.015 286.067);
+  --pg-gray-500: oklch(55.2% 0.016 285.938);
+  --pg-gray-600: oklch(44.2% 0.017 285.786);
+  --pg-gray-700: oklch(37% 0.013 285.805);
+  --pg-gray-800: oklch(27.4% 0.006 286.033);
+  --pg-gray-900: oklch(21% 0.006 285.885);
+  --pg-gray-950: oklch(14.1% 0.005 285.823);
+}
+
+[data-gray="slate"] {
+  --pg-gray-50: oklch(98.4% 0.003 247.858);
+  --pg-gray-100: oklch(96.8% 0.007 247.896);
+  --pg-gray-200: oklch(92.9% 0.013 255.508);
+  --pg-gray-300: oklch(86.9% 0.022 252.894);
+  --pg-gray-400: oklch(70.4% 0.04 256.788);
+  --pg-gray-500: oklch(55.4% 0.046 257.417);
+  --pg-gray-600: oklch(44.6% 0.043 257.281);
+  --pg-gray-700: oklch(37.2% 0.044 257.287);
+  --pg-gray-800: oklch(27.9% 0.041 260.031);
+  --pg-gray-900: oklch(20.8% 0.042 265.755);
+  --pg-gray-950: oklch(12.9% 0.042 264.695);
+}
+
+[data-gray="gray"] {
+  --pg-gray-50: oklch(98.5% 0.002 247.839);
+  --pg-gray-100: oklch(96.7% 0.003 264.542);
+  --pg-gray-200: oklch(92.8% 0.006 264.531);
+  --pg-gray-300: oklch(87.2% 0.01 258.338);
+  --pg-gray-400: oklch(70.7% 0.022 261.325);
+  --pg-gray-500: oklch(55.1% 0.027 264.364);
+  --pg-gray-600: oklch(44.6% 0.03 256.802);
+  --pg-gray-700: oklch(37.3% 0.034 259.733);
+  --pg-gray-800: oklch(27.8% 0.033 256.848);
+  --pg-gray-900: oklch(21% 0.034 264.665);
+  --pg-gray-950: oklch(13% 0.028 261.692);
+}
+
+[data-gray="neutral"] {
+  --pg-gray-50: oklch(98.5% 0 none);
+  --pg-gray-100: oklch(97% 0 none);
+  --pg-gray-200: oklch(92.2% 0 none);
+  --pg-gray-300: oklch(87% 0 none);
+  --pg-gray-400: oklch(70.8% 0 none);
+  --pg-gray-500: oklch(55.6% 0 none);
+  --pg-gray-600: oklch(43.9% 0 none);
+  --pg-gray-700: oklch(37.1% 0 none);
+  --pg-gray-800: oklch(26.9% 0 none);
+  --pg-gray-900: oklch(20.5% 0 none);
+  --pg-gray-950: oklch(14.5% 0 none);
+}
+
+[data-gray="stone"] {
+  --pg-gray-50: oklch(98.5% 0.001 106.423);
+  --pg-gray-100: oklch(97% 0.001 106.424);
+  --pg-gray-200: oklch(92.3% 0.003 48.717);
+  --pg-gray-300: oklch(86.9% 0.005 56.366);
+  --pg-gray-400: oklch(70.9% 0.01 56.259);
+  --pg-gray-500: oklch(55.3% 0.013 58.071);
+  --pg-gray-600: oklch(44.4% 0.011 73.639);
+  --pg-gray-700: oklch(37.4% 0.01 67.558);
+  --pg-gray-800: oklch(26.8% 0.007 34.298);
+  --pg-gray-900: oklch(21.6% 0.006 56.043);
+  --pg-gray-950: oklch(14.7% 0.004 49.25);
+}
+
