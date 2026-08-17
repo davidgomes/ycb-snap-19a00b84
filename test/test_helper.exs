@@ -3,3 +3,4 @@
 ExUnit.start()
 
 Mimic.copy(Oban.Console.Repo)
+Mimic.copy(Oban)
