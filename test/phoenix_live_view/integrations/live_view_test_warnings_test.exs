@@ -1,0 +1,141 @@
+defmodule Phoenix.LiveView.LiveViewTestWarningsTest do
+  use ExUnit.Case, async: false
+
+  import ExUnit.CaptureIO
+
+  import Phoenix.ConnTest
+  import Phoenix.LiveViewTest
+
+  alias Phoenix.LiveViewTest.Support.Endpoint
+
+  @endpoint Endpoint
+
+  describe "live" do
+    test "warns for duplicate ids when on_error: warn" do
+      conn = Plug.Test.init_test_session(Phoenix.ConnTest.build_conn(), %{})
+      conn = get(conn, "/duplicate-id")
+
+      Process.flag(:trap_exit, true)
+
+      assert capture_io(:stderr, fn ->
+               {:ok, view, _html} = live(conn, nil, on_error: :warn)
+               render(view)
+             end) =~
+               "Duplicate id found while testing LiveView: a"
+
+      refute_receive {:EXIT, _, _}
+    end
+
+    test "warns for duplicate component when on_error: warn" do
+      conn = Plug.Test.init_test_session(Phoenix.ConnTest.build_conn(), %{})
+      conn = get(conn, "/dynamic-duplicate-component")
+
+      Process.flag(:trap_exit, true)
+
+      warning =
+        capture_io(:stderr, fn ->
+          {:ok, view, _html} = live(conn, nil, on_error: :warn)
+
+          view |> element("button", "Toggle duplicate LC") |> render_click() =~
+            "I am LiveComponent2"
+
+          render(view)
+        end)
+
+      assert warning =~ "Duplicate live component found while testing LiveView:"
+      assert warning =~ "I am LiveComponent2"
+      refute warning =~ "I am a LC inside nested LV"
+
+      refute_receive {:EXIT, _, _}
+    end
+  end
+
+  describe "live_isolated" do
+    test "warns for duplicate ids when on_error: warn" do
+      Process.flag(:trap_exit, true)
+
+      assert capture_io(:stderr, fn ->
+               {:ok, view, _html} =
+                 live_isolated(
+                   Phoenix.ConnTest.build_conn(),
+                   Phoenix.LiveViewTest.Support.DuplicateIdLive,
+                   on_error: :warn
+                 )
+
+               render(view)
+             end) =~
+               "Duplicate id found while testing LiveView: a"
+
+      refute_receive {:EXIT, _, _}
+    end
+
+    test "warns for duplicate component when on_error: warn" do
+      Process.flag(:trap_exit, true)
+
+      warning =
+        capture_io(:stderr, fn ->
+          {:ok, view, _html} =
+            live_isolated(
+              Phoenix.ConnTest.build_conn(),
+              Phoenix.LiveViewTest.Support.DynamicDuplicateComponentLive,
+              on_error: :warn
+            )
+
+          view |> element("button", "Toggle duplicate LC") |> render_click() =~
+            "I am LiveComponent2"
+
+          render(view)
+        end)
+
+      assert warning =~ "Duplicate live component found while testing LiveView:"
+      assert warning =~ "I am LiveComponent2"
+      refute warning =~ "I am a LC inside nested LV"
+
+      refute_receive {:EXIT, _, _}
+    end
+  end
+
+  describe "missing form id" do
+    test "warns for form with missing id" do
+      orig = Application.get_env(:phoenix_live_view, :test_warnings)
+
+      Application.put_env(:phoenix_live_view, :test_warnings, missing_form_id: :warn)
+
+      on_exit(fn ->
+        Application.put_env(:phoenix_live_view, :test_warnings, orig)
+      end)
+
+      warning =
+        capture_io(:stderr, fn ->
+          {:ok, view, _html} = live(Phoenix.ConnTest.build_conn(), "/form-missing-id")
+          render(view)
+        end)
+
+      assert warning =~ "Detected a form with phx-change but missing id"
+      assert warning =~ "should-warn"
+    end
+
+    test "does not warn for forms that are not eligible for recovery" do
+      orig = Application.get_env(:phoenix_live_view, :test_warnings)
+
+      Application.put_env(:phoenix_live_view, :test_warnings, missing_form_id: :warn)
+
+      on_exit(fn ->
+        Application.put_env(:phoenix_live_view, :test_warnings, orig)
+      end)
+
+      warning =
+        capture_io(:stderr, fn ->
+          {:ok, view, _html} = live(Phoenix.ConnTest.build_conn(), "/form-missing-id")
+          render(view)
+        end)
+
+      # a form without phx-change is never recovered
+      refute warning =~ "no-change"
+      # a form that opted out with phx-auto-recover="ignore" is never recovered
+      refute warning =~ "opted-out"
+      # a form that explicitly opted out of the check with phx-ignore-missing-id
+      refute warning =~ "ignored"
+    end
+  end
+end
