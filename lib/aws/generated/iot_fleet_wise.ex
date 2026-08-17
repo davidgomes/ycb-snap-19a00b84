@@ -1,0 +1,3978 @@
+# WARNING: DO NOT EDIT, AUTO-GENERATED CODE!
+# See https://github.com/aws-beam/aws-codegen for more details.
+
+defmodule AWS.IoTFleetWise do
+  @moduledoc """
+  Amazon Web Services IoT FleetWise is a fully managed service that you can use to
+  collect, model, and transfer
+  vehicle data to the Amazon Web Services cloud at scale.
+
+  With Amazon Web Services IoT FleetWise, you can standardize all of
+  your vehicle data models, independent of the in-vehicle communication
+  architecture, and
+  define data collection rules to transfer only high-value data to the cloud.
+
+  For more information, see [What is Amazon Web Services IoT FleetWise?](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/) in
+  the
+  *Amazon Web Services IoT FleetWise Developer Guide*.
+
+  Access to certain Amazon Web Services IoT FleetWise features is currently gated.
+  For more information, see [Amazon Web Services Region and feature availability](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/fleetwise-regions.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+
+  alias AWS.Client
+  alias AWS.Request
+
+  @typedoc """
+
+  ## Example:
+      
+      signal_fetch_information() :: %{
+        "actions" => list(String.t() | atom()),
+        "conditionLanguageVersion" => integer(),
+        "fullyQualifiedName" => String.t() | atom(),
+        "signalFetchConfig" => list()
+      }
+      
+  """
+  @type signal_fetch_information() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      put_encryption_configuration_request() :: %{
+        optional("kmsKeyId") => [String.t() | atom()],
+        required("encryptionType") => list(any())
+      }
+      
+  """
+  @type put_encryption_configuration_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_decoder_manifest_network_interfaces_response() :: %{
+        optional("networkInterfaces") => list(network_interface()),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_decoder_manifest_network_interfaces_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      timestream_resources() :: %{
+        "timestreamDatabaseName" => String.t() | atom(),
+        "timestreamTableName" => String.t() | atom()
+      }
+      
+  """
+  @type timestream_resources() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      iam_resources() :: %{
+        "roleArn" => String.t() | atom()
+      }
+      
+  """
+  @type iam_resources() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_vehicle_response_item() :: %{
+        "arn" => String.t() | atom(),
+        "vehicleName" => String.t() | atom()
+      }
+      
+  """
+  @type update_vehicle_response_item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_logging_options_response() :: %{
+        required("cloudWatchLogDelivery") => cloud_watch_log_delivery_options()
+      }
+      
+  """
+  @type get_logging_options_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_model_manifest_nodes_request() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_model_manifest_nodes_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      time_based_signal_fetch_config() :: %{
+        "executionFrequencyMs" => float()
+      }
+      
+  """
+  @type time_based_signal_fetch_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      message_signal() :: %{
+        "structuredMessage" => list(),
+        "topicName" => String.t() | atom()
+      }
+      
+  """
+  @type message_signal() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_vehicle_request_item() :: %{
+        "associationBehavior" => list(any()),
+        "attributes" => map(),
+        "decoderManifestArn" => String.t() | atom(),
+        "modelManifestArn" => String.t() | atom(),
+        "stateTemplates" => list(state_template_association()),
+        "tags" => list(tag()),
+        "vehicleName" => String.t() | atom()
+      }
+      
+  """
+  @type create_vehicle_request_item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      attribute() :: %{
+        "allowedValues" => list(String.t() | atom()),
+        "assignedValue" => String.t() | atom(),
+        "comment" => String.t() | atom(),
+        "dataType" => list(any()),
+        "defaultValue" => String.t() | atom(),
+        "deprecationMessage" => String.t() | atom(),
+        "description" => String.t() | atom(),
+        "fullyQualifiedName" => String.t() | atom(),
+        "max" => float(),
+        "min" => float(),
+        "unit" => String.t() | atom()
+      }
+      
+  """
+  @type attribute() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      put_logging_options_request() :: %{
+        required("cloudWatchLogDelivery") => cloud_watch_log_delivery_options()
+      }
+      
+  """
+  @type put_logging_options_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_vehicle_error() :: %{
+        "code" => String.t() | atom(),
+        "message" => String.t() | atom(),
+        "vehicleName" => String.t() | atom()
+      }
+      
+  """
+  @type create_vehicle_error() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_vehicle_response() :: %{
+        optional("arn") => String.t() | atom(),
+        optional("vehicleName") => String.t() | atom()
+      }
+      
+  """
+  @type update_vehicle_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_state_templates_response() :: %{
+        "nextToken" => String.t() | atom(),
+        "summaries" => list(state_template_summary())
+      }
+      
+  """
+  @type list_state_templates_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      data_partition_storage_options() :: %{
+        "maximumSize" => storage_maximum_size(),
+        "minimumTimeToLive" => storage_minimum_time_to_live(),
+        "storageLocation" => String.t() | atom()
+      }
+      
+  """
+  @type data_partition_storage_options() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      storage_maximum_size() :: %{
+        "unit" => list(any()),
+        "value" => integer()
+      }
+      
+  """
+  @type storage_maximum_size() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      s3_config() :: %{
+        "bucketArn" => String.t() | atom(),
+        "dataFormat" => list(any()),
+        "prefix" => String.t() | atom(),
+        "storageCompressionFormat" => list(any())
+      }
+      
+  """
+  @type s3_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_vehicle_response() :: %{
+        required("arn") => String.t() | atom(),
+        required("vehicleName") => String.t() | atom()
+      }
+      
+  """
+  @type delete_vehicle_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_vehicle_error() :: %{
+        "code" => integer(),
+        "message" => String.t() | atom(),
+        "vehicleName" => String.t() | atom()
+      }
+      
+  """
+  @type update_vehicle_error() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_fleets_response() :: %{
+        optional("fleetSummaries") => list(fleet_summary()),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_fleets_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_encryption_configuration_request() :: %{}
+      
+  """
+  @type get_encryption_configuration_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_model_manifest_response() :: %{
+        required("arn") => String.t() | atom(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type delete_model_manifest_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_signal_catalog_request() :: %{}
+      
+  """
+  @type get_signal_catalog_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      condition_based_signal_fetch_config() :: %{
+        "conditionExpression" => String.t() | atom(),
+        "triggerMode" => list(any())
+      }
+      
+  """
+  @type condition_based_signal_fetch_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      throttling_exception() :: %{
+        "message" => String.t() | atom(),
+        "quotaCode" => String.t() | atom(),
+        "retryAfterSeconds" => integer(),
+        "serviceCode" => String.t() | atom()
+      }
+      
+  """
+  @type throttling_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      custom_decoding_signal() :: %{
+        "id" => String.t() | atom()
+      }
+      
+  """
+  @type custom_decoding_signal() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_decoder_manifest_signals_request() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_decoder_manifest_signals_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      invalid_network_interface() :: %{
+        "interfaceId" => String.t() | atom(),
+        "reason" => list(any())
+      }
+      
+  """
+  @type invalid_network_interface() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      condition_based_collection_scheme() :: %{
+        "conditionLanguageVersion" => integer(),
+        "expression" => String.t() | atom(),
+        "minimumTriggerIntervalMs" => float(),
+        "triggerMode" => list(any())
+      }
+      
+  """
+  @type condition_based_collection_scheme() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      access_denied_exception() :: %{
+        "message" => String.t() | atom()
+      }
+      
+  """
+  @type access_denied_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      can_interface() :: %{
+        "name" => String.t() | atom(),
+        "protocolName" => String.t() | atom(),
+        "protocolVersion" => String.t() | atom()
+      }
+      
+  """
+  @type can_interface() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      invalid_signal_decoder() :: %{
+        "hint" => String.t() | atom(),
+        "name" => String.t() | atom(),
+        "reason" => list(any())
+      }
+      
+  """
+  @type invalid_signal_decoder() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_campaign_response() :: %{
+        optional("arn") => String.t() | atom(),
+        optional("name") => String.t() | atom(),
+        optional("status") => list(any())
+      }
+      
+  """
+  @type update_campaign_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      decoder_manifest_validation_exception() :: %{
+        "invalidNetworkInterfaces" => list(invalid_network_interface()),
+        "invalidSignals" => list(invalid_signal_decoder()),
+        "message" => String.t() | atom()
+      }
+      
+  """
+  @type decoder_manifest_validation_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_signal_catalog_response() :: %{
+        required("arn") => String.t() | atom(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type update_signal_catalog_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      put_logging_options_response() :: %{}
+      
+  """
+  @type put_logging_options_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      tag() :: %{
+        "Key" => String.t() | atom(),
+        "Value" => String.t() | atom()
+      }
+      
+  """
+  @type tag() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      storage_minimum_time_to_live() :: %{
+        "unit" => list(any()),
+        "value" => integer()
+      }
+      
+  """
+  @type storage_minimum_time_to_live() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_campaign_request() :: %{
+        optional("compression") => list(any()),
+        optional("dataDestinationConfigs") => list(list()),
+        optional("dataExtraDimensions") => list(String.t() | atom()),
+        optional("dataPartitions") => list(data_partition()),
+        optional("description") => String.t() | atom(),
+        optional("diagnosticsMode") => list(any()),
+        optional("expiryTime") => non_neg_integer(),
+        optional("postTriggerCollectionDuration") => float(),
+        optional("priority") => integer(),
+        optional("signalsToCollect") => list(signal_information()),
+        optional("signalsToFetch") => list(signal_fetch_information()),
+        optional("spoolingMode") => list(any()),
+        optional("startTime") => non_neg_integer(),
+        optional("tags") => list(tag()),
+        required("collectionScheme") => list(),
+        required("signalCatalogArn") => String.t() | atom(),
+        required("targetArn") => String.t() | atom()
+      }
+      
+  """
+  @type create_campaign_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_decoder_manifest_response() :: %{
+        optional("description") => String.t() | atom(),
+        optional("message") => String.t() | atom(),
+        optional("modelManifestArn") => String.t() | atom(),
+        optional("status") => list(any()),
+        required("arn") => String.t() | atom(),
+        required("creationTime") => non_neg_integer(),
+        required("lastModificationTime") => non_neg_integer(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type get_decoder_manifest_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      import_signal_catalog_response() :: %{
+        required("arn") => String.t() | atom(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type import_signal_catalog_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      batch_create_vehicle_request() :: %{
+        required("vehicles") => list(create_vehicle_request_item())
+      }
+      
+  """
+  @type batch_create_vehicle_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      custom_property() :: %{
+        "comment" => String.t() | atom(),
+        "dataEncoding" => list(any()),
+        "dataType" => list(any()),
+        "deprecationMessage" => String.t() | atom(),
+        "description" => String.t() | atom(),
+        "fullyQualifiedName" => String.t() | atom(),
+        "structFullyQualifiedName" => String.t() | atom()
+      }
+      
+  """
+  @type custom_property() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      data_partition_upload_options() :: %{
+        "conditionLanguageVersion" => integer(),
+        "expression" => String.t() | atom()
+      }
+      
+  """
+  @type data_partition_upload_options() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_model_manifest_response() :: %{
+        optional("description") => String.t() | atom(),
+        optional("signalCatalogArn") => String.t() | atom(),
+        optional("status") => list(any()),
+        required("arn") => String.t() | atom(),
+        required("creationTime") => non_neg_integer(),
+        required("lastModificationTime") => non_neg_integer(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type get_model_manifest_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      limit_exceeded_exception() :: %{
+        "message" => String.t() | atom(),
+        "resourceId" => String.t() | atom(),
+        "resourceType" => String.t() | atom()
+      }
+      
+  """
+  @type limit_exceeded_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      can_signal() :: %{
+        "factor" => float(),
+        "isBigEndian" => [boolean()],
+        "isSigned" => [boolean()],
+        "length" => integer(),
+        "messageId" => integer(),
+        "name" => String.t() | atom(),
+        "offset" => float(),
+        "signalValueType" => list(any()),
+        "startBit" => integer()
+      }
+      
+  """
+  @type can_signal() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      decoder_manifest_summary() :: %{
+        "arn" => String.t() | atom(),
+        "creationTime" => non_neg_integer(),
+        "description" => String.t() | atom(),
+        "lastModificationTime" => non_neg_integer(),
+        "message" => String.t() | atom(),
+        "modelManifestArn" => String.t() | atom(),
+        "name" => String.t() | atom(),
+        "status" => list(any())
+      }
+      
+  """
+  @type decoder_manifest_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_fleet_request() :: %{
+        optional("description") => String.t() | atom()
+      }
+      
+  """
+  @type update_fleet_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_fleets_request() :: %{
+        optional("listResponseScope") => list(any()),
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_fleets_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      on_change_state_template_update_strategy() :: %{}
+      
+  """
+  @type on_change_state_template_update_strategy() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      time_based_collection_scheme() :: %{
+        "periodMs" => float()
+      }
+      
+  """
+  @type time_based_collection_scheme() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_vehicle_request_item() :: %{
+        "attributeUpdateMode" => list(any()),
+        "attributes" => map(),
+        "decoderManifestArn" => String.t() | atom(),
+        "modelManifestArn" => String.t() | atom(),
+        "stateTemplatesToAdd" => list(state_template_association()),
+        "stateTemplatesToRemove" => list(String.t() | atom()),
+        "stateTemplatesToUpdate" => list(state_template_association()),
+        "vehicleName" => String.t() | atom()
+      }
+      
+  """
+  @type update_vehicle_request_item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      vehicle_middleware() :: %{
+        "name" => String.t() | atom(),
+        "protocolName" => list(any())
+      }
+      
+  """
+  @type vehicle_middleware() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      vehicle_status() :: %{
+        "campaignName" => String.t() | atom(),
+        "status" => list(any()),
+        "vehicleName" => String.t() | atom()
+      }
+      
+  """
+  @type vehicle_status() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      vehicle_summary() :: %{
+        "arn" => String.t() | atom(),
+        "attributes" => map(),
+        "creationTime" => non_neg_integer(),
+        "decoderManifestArn" => String.t() | atom(),
+        "lastModificationTime" => non_neg_integer(),
+        "modelManifestArn" => String.t() | atom(),
+        "vehicleName" => String.t() | atom()
+      }
+      
+  """
+  @type vehicle_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_fleets_for_vehicle_response() :: %{
+        optional("fleets") => list(String.t() | atom()),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_fleets_for_vehicle_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      custom_decoding_interface() :: %{
+        "name" => String.t() | atom()
+      }
+      
+  """
+  @type custom_decoding_interface() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      campaign_summary() :: %{
+        "arn" => String.t() | atom(),
+        "creationTime" => non_neg_integer(),
+        "description" => String.t() | atom(),
+        "lastModificationTime" => non_neg_integer(),
+        "name" => String.t() | atom(),
+        "signalCatalogArn" => String.t() | atom(),
+        "status" => list(any()),
+        "targetArn" => String.t() | atom()
+      }
+      
+  """
+  @type campaign_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      import_decoder_manifest_request() :: %{
+        required("networkFileDefinitions") => list(list())
+      }
+      
+  """
+  @type import_decoder_manifest_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_model_manifests_response() :: %{
+        optional("nextToken") => String.t() | atom(),
+        optional("summaries") => list(model_manifest_summary())
+      }
+      
+  """
+  @type list_model_manifests_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      batch_create_vehicle_response() :: %{
+        optional("errors") => list(create_vehicle_error()),
+        optional("vehicles") => list(create_vehicle_response_item())
+      }
+      
+  """
+  @type batch_create_vehicle_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_decoder_manifest_response() :: %{
+        required("arn") => String.t() | atom(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type create_decoder_manifest_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_vehicle_status_response() :: %{
+        optional("campaigns") => list(vehicle_status()),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type get_vehicle_status_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_model_manifest_response() :: %{
+        required("arn") => String.t() | atom(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type create_model_manifest_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      associate_vehicle_fleet_request() :: %{
+        required("fleetId") => String.t() | atom()
+      }
+      
+  """
+  @type associate_vehicle_fleet_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_fleet_request() :: %{}
+      
+  """
+  @type get_fleet_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_model_manifest_request() :: %{}
+      
+  """
+  @type get_model_manifest_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      validation_exception() :: %{
+        "fieldList" => list(validation_exception_field()),
+        "message" => String.t() | atom(),
+        "reason" => list(any())
+      }
+      
+  """
+  @type validation_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_vehicle_response() :: %{
+        optional("arn") => String.t() | atom(),
+        optional("thingArn") => String.t() | atom(),
+        optional("vehicleName") => String.t() | atom()
+      }
+      
+  """
+  @type create_vehicle_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_fleet_response() :: %{
+        required("arn") => String.t() | atom(),
+        required("id") => String.t() | atom()
+      }
+      
+  """
+  @type create_fleet_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_decoder_manifest_request() :: %{
+        optional("defaultForUnmappedSignals") => list(any()),
+        optional("description") => String.t() | atom(),
+        optional("networkInterfaces") => list(network_interface()),
+        optional("signalDecoders") => list(signal_decoder()),
+        optional("tags") => list(tag()),
+        required("modelManifestArn") => String.t() | atom()
+      }
+      
+  """
+  @type create_decoder_manifest_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      invalid_node_exception() :: %{
+        "invalidNodes" => list(list()),
+        "message" => String.t() | atom(),
+        "reason" => String.t() | atom()
+      }
+      
+  """
+  @type invalid_node_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_state_template_response() :: %{
+        "arn" => String.t() | atom(),
+        "creationTime" => non_neg_integer(),
+        "dataExtraDimensions" => list(String.t() | atom()),
+        "description" => String.t() | atom(),
+        "id" => String.t() | atom(),
+        "lastModificationTime" => non_neg_integer(),
+        "metadataExtraDimensions" => list(String.t() | atom()),
+        "name" => String.t() | atom(),
+        "signalCatalogArn" => String.t() | atom(),
+        "stateTemplateProperties" => list(String.t() | atom())
+      }
+      
+  """
+  @type get_state_template_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_decoder_manifest_response() :: %{
+        required("arn") => String.t() | atom(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type update_decoder_manifest_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      structured_message_field_name_and_data_type_pair() :: %{
+        "dataType" => list(),
+        "fieldName" => String.t() | atom()
+      }
+      
+  """
+  @type structured_message_field_name_and_data_type_pair() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      signal_information() :: %{
+        "dataPartitionId" => String.t() | atom(),
+        "maxSampleCount" => float(),
+        "minimumSamplingIntervalMs" => float(),
+        "name" => String.t() | atom()
+      }
+      
+  """
+  @type signal_information() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      batch_update_vehicle_response() :: %{
+        optional("errors") => list(update_vehicle_error()),
+        optional("vehicles") => list(update_vehicle_response_item())
+      }
+      
+  """
+  @type batch_update_vehicle_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      r_o_s2_primitive_message_definition() :: %{
+        "offset" => float(),
+        "primitiveType" => list(any()),
+        "scaling" => float(),
+        "upperBound" => float()
+      }
+      
+  """
+  @type r_o_s2_primitive_message_definition() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_vehicle_request() :: %{
+        optional("associationBehavior") => list(any()),
+        optional("attributes") => map(),
+        optional("stateTemplates") => list(state_template_association()),
+        optional("tags") => list(tag()),
+        required("decoderManifestArn") => String.t() | atom(),
+        required("modelManifestArn") => String.t() | atom()
+      }
+      
+  """
+  @type create_vehicle_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_state_template_response() :: %{
+        "arn" => String.t() | atom(),
+        "id" => String.t() | atom(),
+        "name" => String.t() | atom()
+      }
+      
+  """
+  @type create_state_template_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      import_decoder_manifest_response() :: %{
+        required("arn") => String.t() | atom(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type import_decoder_manifest_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_state_template_request() :: %{}
+      
+  """
+  @type get_state_template_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      disassociate_vehicle_fleet_response() :: %{}
+      
+  """
+  @type disassociate_vehicle_fleet_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_model_manifest_request() :: %{
+        optional("description") => String.t() | atom(),
+        optional("nodesToAdd") => list(String.t() | atom()),
+        optional("nodesToRemove") => list(String.t() | atom()),
+        optional("status") => list(any())
+      }
+      
+  """
+  @type update_model_manifest_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_fleet_response() :: %{
+        optional("arn") => String.t() | atom(),
+        optional("id") => String.t() | atom()
+      }
+      
+  """
+  @type delete_fleet_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      internal_server_exception() :: %{
+        "message" => String.t() | atom(),
+        "retryAfterSeconds" => integer()
+      }
+      
+  """
+  @type internal_server_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_decoder_manifest_request() :: %{}
+      
+  """
+  @type get_decoder_manifest_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      structured_message_list_definition() :: %{
+        "capacity" => integer(),
+        "listType" => list(any()),
+        "memberType" => list(),
+        "name" => String.t() | atom()
+      }
+      
+  """
+  @type structured_message_list_definition() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      custom_struct() :: %{
+        "comment" => String.t() | atom(),
+        "deprecationMessage" => String.t() | atom(),
+        "description" => String.t() | atom(),
+        "fullyQualifiedName" => String.t() | atom()
+      }
+      
+  """
+  @type custom_struct() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_fleet_request() :: %{
+        optional("description") => String.t() | atom(),
+        optional("tags") => list(tag()),
+        required("signalCatalogArn") => String.t() | atom()
+      }
+      
+  """
+  @type create_fleet_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      resource_not_found_exception() :: %{
+        "message" => String.t() | atom(),
+        "resourceId" => String.t() | atom(),
+        "resourceType" => String.t() | atom()
+      }
+      
+  """
+  @type resource_not_found_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      network_interface() :: %{
+        "canInterface" => can_interface(),
+        "customDecodingInterface" => custom_decoding_interface(),
+        "interfaceId" => String.t() | atom(),
+        "obdInterface" => obd_interface(),
+        "type" => list(any()),
+        "vehicleMiddleware" => vehicle_middleware()
+      }
+      
+  """
+  @type network_interface() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      tag_resource_request() :: %{
+        required("ResourceARN") => String.t() | atom(),
+        required("Tags") => list(tag())
+      }
+      
+  """
+  @type tag_resource_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_campaign_request() :: %{}
+      
+  """
+  @type delete_campaign_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      associate_vehicle_fleet_response() :: %{}
+      
+  """
+  @type associate_vehicle_fleet_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_vehicle_request() :: %{}
+      
+  """
+  @type get_vehicle_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      signal_decoder() :: %{
+        "canSignal" => can_signal(),
+        "customDecodingSignal" => custom_decoding_signal(),
+        "fullyQualifiedName" => String.t() | atom(),
+        "interfaceId" => String.t() | atom(),
+        "messageSignal" => message_signal(),
+        "obdSignal" => obd_signal(),
+        "type" => list(any())
+      }
+      
+  """
+  @type signal_decoder() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      invalid_signal() :: %{
+        "name" => String.t() | atom(),
+        "reason" => String.t() | atom()
+      }
+      
+  """
+  @type invalid_signal() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      can_dbc_definition() :: %{
+        "canDbcFiles" => list(binary()),
+        "networkInterface" => String.t() | atom(),
+        "signalsMap" => map()
+      }
+      
+  """
+  @type can_dbc_definition() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      put_encryption_configuration_response() :: %{
+        "encryptionStatus" => list(any()),
+        "encryptionType" => list(any()),
+        "kmsKeyId" => [String.t() | atom()]
+      }
+      
+  """
+  @type put_encryption_configuration_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_vehicle_request() :: %{}
+      
+  """
+  @type delete_vehicle_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_signal_catalog_nodes_request() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        optional("signalNodeType") => list(any())
+      }
+      
+  """
+  @type list_signal_catalog_nodes_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      actuator() :: %{
+        "allowedValues" => list(String.t() | atom()),
+        "assignedValue" => String.t() | atom(),
+        "comment" => String.t() | atom(),
+        "dataType" => list(any()),
+        "deprecationMessage" => String.t() | atom(),
+        "description" => String.t() | atom(),
+        "fullyQualifiedName" => String.t() | atom(),
+        "max" => float(),
+        "min" => float(),
+        "structFullyQualifiedName" => String.t() | atom(),
+        "unit" => String.t() | atom()
+      }
+      
+  """
+  @type actuator() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_register_account_status_response() :: %{
+        optional("timestreamRegistrationResponse") => timestream_registration_response(),
+        required("accountStatus") => list(any()),
+        required("creationTime") => non_neg_integer(),
+        required("customerAccountId") => String.t() | atom(),
+        required("iamRegistrationResponse") => iam_registration_response(),
+        required("lastModificationTime") => non_neg_integer()
+      }
+      
+  """
+  @type get_register_account_status_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      tag_resource_response() :: %{}
+      
+  """
+  @type tag_resource_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_campaign_response() :: %{
+        optional("arn") => String.t() | atom(),
+        optional("name") => String.t() | atom()
+      }
+      
+  """
+  @type delete_campaign_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      signal_catalog_summary() :: %{
+        "arn" => String.t() | atom(),
+        "creationTime" => non_neg_integer(),
+        "lastModificationTime" => non_neg_integer(),
+        "name" => String.t() | atom()
+      }
+      
+  """
+  @type signal_catalog_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_decoder_manifests_response() :: %{
+        optional("nextToken") => String.t() | atom(),
+        optional("summaries") => list(decoder_manifest_summary())
+      }
+      
+  """
+  @type list_decoder_manifests_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_fleet_response() :: %{
+        optional("arn") => String.t() | atom(),
+        optional("id") => String.t() | atom()
+      }
+      
+  """
+  @type update_fleet_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_state_template_request() :: %{
+        optional("dataExtraDimensions") => list(String.t() | atom()),
+        optional("description") => String.t() | atom(),
+        optional("metadataExtraDimensions") => list(String.t() | atom()),
+        optional("stateTemplatePropertiesToAdd") => list(String.t() | atom()),
+        optional("stateTemplatePropertiesToRemove") => list(String.t() | atom())
+      }
+      
+  """
+  @type update_state_template_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_vehicles_request() :: %{
+        optional("attributeNames") => list(String.t() | atom()),
+        optional("attributeValues") => list(String.t() | atom()),
+        optional("listResponseScope") => list(any()),
+        optional("maxResults") => integer(),
+        optional("modelManifestArn") => String.t() | atom(),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_vehicles_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      model_manifest_summary() :: %{
+        "arn" => String.t() | atom(),
+        "creationTime" => non_neg_integer(),
+        "description" => String.t() | atom(),
+        "lastModificationTime" => non_neg_integer(),
+        "name" => String.t() | atom(),
+        "signalCatalogArn" => String.t() | atom(),
+        "status" => list(any())
+      }
+      
+  """
+  @type model_manifest_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      invalid_signals_exception() :: %{
+        "invalidSignals" => list(invalid_signal()),
+        "message" => String.t() | atom()
+      }
+      
+  """
+  @type invalid_signals_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_state_template_response() :: %{
+        "arn" => String.t() | atom(),
+        "id" => String.t() | atom(),
+        "name" => String.t() | atom()
+      }
+      
+  """
+  @type delete_state_template_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      conflict_exception() :: %{
+        "message" => String.t() | atom(),
+        "resource" => String.t() | atom(),
+        "resourceType" => String.t() | atom()
+      }
+      
+  """
+  @type conflict_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      untag_resource_response() :: %{}
+      
+  """
+  @type untag_resource_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_decoder_manifest_signals_response() :: %{
+        optional("nextToken") => String.t() | atom(),
+        optional("signalDecoders") => list(signal_decoder())
+      }
+      
+  """
+  @type list_decoder_manifest_signals_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_model_manifest_nodes_response() :: %{
+        optional("nextToken") => String.t() | atom(),
+        optional("nodes") => list(list())
+      }
+      
+  """
+  @type list_model_manifest_nodes_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      state_template_summary() :: %{
+        "arn" => String.t() | atom(),
+        "creationTime" => non_neg_integer(),
+        "description" => String.t() | atom(),
+        "id" => String.t() | atom(),
+        "lastModificationTime" => non_neg_integer(),
+        "name" => String.t() | atom(),
+        "signalCatalogArn" => String.t() | atom()
+      }
+      
+  """
+  @type state_template_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      periodic_state_template_update_strategy() :: %{
+        "stateTemplateUpdateRate" => time_period()
+      }
+      
+  """
+  @type periodic_state_template_update_strategy() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_fleet_response() :: %{
+        optional("description") => String.t() | atom(),
+        required("arn") => String.t() | atom(),
+        required("creationTime") => non_neg_integer(),
+        required("id") => String.t() | atom(),
+        required("lastModificationTime") => non_neg_integer(),
+        required("signalCatalogArn") => String.t() | atom()
+      }
+      
+  """
+  @type get_fleet_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      validation_exception_field() :: %{
+        "message" => [String.t() | atom()],
+        "name" => [String.t() | atom()]
+      }
+      
+  """
+  @type validation_exception_field() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      untag_resource_request() :: %{
+        required("ResourceARN") => String.t() | atom(),
+        required("TagKeys") => list(String.t() | atom())
+      }
+      
+  """
+  @type untag_resource_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_vehicle_status_request() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type get_vehicle_status_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_campaigns_response() :: %{
+        optional("campaignSummaries") => list(campaign_summary()),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_campaigns_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_model_manifest_request() :: %{
+        optional("description") => String.t() | atom(),
+        optional("tags") => list(tag()),
+        required("nodes") => list(String.t() | atom()),
+        required("signalCatalogArn") => String.t() | atom()
+      }
+      
+  """
+  @type create_model_manifest_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      disassociate_vehicle_fleet_request() :: %{
+        required("fleetId") => String.t() | atom()
+      }
+      
+  """
+  @type disassociate_vehicle_fleet_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_campaign_response() :: %{
+        optional("arn") => String.t() | atom(),
+        optional("collectionScheme") => list(),
+        optional("compression") => list(any()),
+        optional("creationTime") => non_neg_integer(),
+        optional("dataDestinationConfigs") => list(list()),
+        optional("dataExtraDimensions") => list(String.t() | atom()),
+        optional("dataPartitions") => list(data_partition()),
+        optional("description") => String.t() | atom(),
+        optional("diagnosticsMode") => list(any()),
+        optional("expiryTime") => non_neg_integer(),
+        optional("lastModificationTime") => non_neg_integer(),
+        optional("name") => String.t() | atom(),
+        optional("postTriggerCollectionDuration") => float(),
+        optional("priority") => integer(),
+        optional("signalCatalogArn") => String.t() | atom(),
+        optional("signalsToCollect") => list(signal_information()),
+        optional("signalsToFetch") => list(signal_fetch_information()),
+        optional("spoolingMode") => list(any()),
+        optional("startTime") => non_neg_integer(),
+        optional("status") => list(any()),
+        optional("targetArn") => String.t() | atom()
+      }
+      
+  """
+  @type get_campaign_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      register_account_response() :: %{
+        optional("timestreamResources") => timestream_resources(),
+        required("creationTime") => non_neg_integer(),
+        required("iamResources") => iam_resources(),
+        required("lastModificationTime") => non_neg_integer(),
+        required("registerAccountStatus") => list(any())
+      }
+      
+  """
+  @type register_account_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_signal_catalog_response() :: %{
+        required("arn") => String.t() | atom(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type delete_signal_catalog_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_signal_catalog_response() :: %{
+        required("arn") => String.t() | atom(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type create_signal_catalog_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_model_manifest_response() :: %{
+        required("arn") => String.t() | atom(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type update_model_manifest_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      node_counts() :: %{
+        "totalActuators" => integer(),
+        "totalAttributes" => integer(),
+        "totalBranches" => integer(),
+        "totalNodes" => integer(),
+        "totalProperties" => integer(),
+        "totalSensors" => integer(),
+        "totalStructs" => integer()
+      }
+      
+  """
+  @type node_counts() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      timestream_registration_response() :: %{
+        "errorMessage" => String.t() | atom(),
+        "registrationStatus" => list(any()),
+        "timestreamDatabaseArn" => String.t() | atom(),
+        "timestreamDatabaseName" => String.t() | atom(),
+        "timestreamTableArn" => String.t() | atom(),
+        "timestreamTableName" => String.t() | atom()
+      }
+      
+  """
+  @type timestream_registration_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_campaign_request() :: %{}
+      
+  """
+  @type get_campaign_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_state_templates_request() :: %{
+        optional("listResponseScope") => list(any()),
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_state_templates_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      data_partition() :: %{
+        "id" => String.t() | atom(),
+        "storageOptions" => data_partition_storage_options(),
+        "uploadOptions" => data_partition_upload_options()
+      }
+      
+  """
+  @type data_partition() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      timestream_config() :: %{
+        "executionRoleArn" => String.t() | atom(),
+        "timestreamTableArn" => String.t() | atom()
+      }
+      
+  """
+  @type timestream_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      state_template_association() :: %{
+        "identifier" => String.t() | atom(),
+        "stateTemplateUpdateStrategy" => list()
+      }
+      
+  """
+  @type state_template_association() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_decoder_manifest_request() :: %{}
+      
+  """
+  @type delete_decoder_manifest_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_register_account_status_request() :: %{}
+      
+  """
+  @type get_register_account_status_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      sensor() :: %{
+        "allowedValues" => list(String.t() | atom()),
+        "comment" => String.t() | atom(),
+        "dataType" => list(any()),
+        "deprecationMessage" => String.t() | atom(),
+        "description" => String.t() | atom(),
+        "fullyQualifiedName" => String.t() | atom(),
+        "max" => float(),
+        "min" => float(),
+        "structFullyQualifiedName" => String.t() | atom(),
+        "unit" => String.t() | atom()
+      }
+      
+  """
+  @type sensor() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_fleet_request() :: %{}
+      
+  """
+  @type delete_fleet_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_tags_for_resource_response() :: %{
+        optional("Tags") => list(tag())
+      }
+      
+  """
+  @type list_tags_for_resource_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_decoder_manifest_network_interfaces_request() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_decoder_manifest_network_interfaces_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      fleet_summary() :: %{
+        "arn" => String.t() | atom(),
+        "creationTime" => non_neg_integer(),
+        "description" => String.t() | atom(),
+        "id" => String.t() | atom(),
+        "lastModificationTime" => non_neg_integer(),
+        "signalCatalogArn" => String.t() | atom()
+      }
+      
+  """
+  @type fleet_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      cloud_watch_log_delivery_options() :: %{
+        "logGroupName" => String.t() | atom(),
+        "logType" => list(any())
+      }
+      
+  """
+  @type cloud_watch_log_delivery_options() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_vehicles_in_fleet_request() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_vehicles_in_fleet_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_decoder_manifest_request() :: %{
+        optional("defaultForUnmappedSignals") => list(any()),
+        optional("description") => String.t() | atom(),
+        optional("networkInterfacesToAdd") => list(network_interface()),
+        optional("networkInterfacesToRemove") => list(String.t() | atom()),
+        optional("networkInterfacesToUpdate") => list(network_interface()),
+        optional("signalDecodersToAdd") => list(signal_decoder()),
+        optional("signalDecodersToRemove") => list(String.t() | atom()),
+        optional("signalDecodersToUpdate") => list(signal_decoder()),
+        optional("status") => list(any())
+      }
+      
+  """
+  @type update_decoder_manifest_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_vehicle_response() :: %{
+        optional("arn") => String.t() | atom(),
+        optional("attributes") => map(),
+        optional("creationTime") => non_neg_integer(),
+        optional("decoderManifestArn") => String.t() | atom(),
+        optional("lastModificationTime") => non_neg_integer(),
+        optional("modelManifestArn") => String.t() | atom(),
+        optional("stateTemplates") => list(state_template_association()),
+        optional("vehicleName") => String.t() | atom()
+      }
+      
+  """
+  @type get_vehicle_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_vehicle_request() :: %{
+        optional("attributeUpdateMode") => list(any()),
+        optional("attributes") => map(),
+        optional("decoderManifestArn") => String.t() | atom(),
+        optional("modelManifestArn") => String.t() | atom(),
+        optional("stateTemplatesToAdd") => list(state_template_association()),
+        optional("stateTemplatesToRemove") => list(String.t() | atom()),
+        optional("stateTemplatesToUpdate") => list(state_template_association())
+      }
+      
+  """
+  @type update_vehicle_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_signal_catalog_request() :: %{
+        optional("description") => String.t() | atom(),
+        optional("nodesToAdd") => list(list()),
+        optional("nodesToRemove") => list(String.t() | atom()),
+        optional("nodesToUpdate") => list(list())
+      }
+      
+  """
+  @type update_signal_catalog_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_encryption_configuration_response() :: %{
+        "creationTime" => non_neg_integer(),
+        "encryptionStatus" => list(any()),
+        "encryptionType" => list(any()),
+        "errorMessage" => String.t() | atom(),
+        "kmsKeyId" => [String.t() | atom()],
+        "lastModificationTime" => non_neg_integer()
+      }
+      
+  """
+  @type get_encryption_configuration_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_signal_catalog_request() :: %{}
+      
+  """
+  @type delete_signal_catalog_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      obd_signal() :: %{
+        "bitMaskLength" => integer(),
+        "bitRightShift" => integer(),
+        "byteLength" => integer(),
+        "isSigned" => [boolean()],
+        "offset" => float(),
+        "pid" => integer(),
+        "pidResponseLength" => integer(),
+        "scaling" => float(),
+        "serviceMode" => integer(),
+        "signalValueType" => list(any()),
+        "startByte" => integer()
+      }
+      
+  """
+  @type obd_signal() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_signal_catalogs_request() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_signal_catalogs_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      batch_update_vehicle_request() :: %{
+        required("vehicles") => list(update_vehicle_request_item())
+      }
+      
+  """
+  @type batch_update_vehicle_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_campaigns_request() :: %{
+        optional("listResponseScope") => list(any()),
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        optional("status") => String.t() | atom()
+      }
+      
+  """
+  @type list_campaigns_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_vehicles_in_fleet_response() :: %{
+        optional("nextToken") => String.t() | atom(),
+        optional("vehicles") => list(String.t() | atom())
+      }
+      
+  """
+  @type list_vehicles_in_fleet_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_signal_catalog_response() :: %{
+        optional("description") => String.t() | atom(),
+        optional("nodeCounts") => node_counts(),
+        required("arn") => String.t() | atom(),
+        required("creationTime") => non_neg_integer(),
+        required("lastModificationTime") => non_neg_integer(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type get_signal_catalog_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_vehicle_response_item() :: %{
+        "arn" => String.t() | atom(),
+        "thingArn" => String.t() | atom(),
+        "vehicleName" => String.t() | atom()
+      }
+      
+  """
+  @type create_vehicle_response_item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_decoder_manifest_response() :: %{
+        required("arn") => String.t() | atom(),
+        required("name") => String.t() | atom()
+      }
+      
+  """
+  @type delete_decoder_manifest_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      time_period() :: %{
+        "unit" => list(any()),
+        "value" => integer()
+      }
+      
+  """
+  @type time_period() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_signal_catalogs_response() :: %{
+        optional("nextToken") => String.t() | atom(),
+        optional("summaries") => list(signal_catalog_summary())
+      }
+      
+  """
+  @type list_signal_catalogs_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_campaign_response() :: %{
+        optional("arn") => String.t() | atom(),
+        optional("name") => String.t() | atom()
+      }
+      
+  """
+  @type create_campaign_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      mqtt_topic_config() :: %{
+        "executionRoleArn" => String.t() | atom(),
+        "mqttTopicArn" => String.t() | atom()
+      }
+      
+  """
+  @type mqtt_topic_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_signal_catalog_request() :: %{
+        optional("description") => String.t() | atom(),
+        optional("nodes") => list(list()),
+        optional("tags") => list(tag())
+      }
+      
+  """
+  @type create_signal_catalog_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_model_manifest_request() :: %{}
+      
+  """
+  @type delete_model_manifest_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_fleets_for_vehicle_request() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_fleets_for_vehicle_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_signal_catalog_nodes_response() :: %{
+        optional("nextToken") => String.t() | atom(),
+        optional("nodes") => list(list())
+      }
+      
+  """
+  @type list_signal_catalog_nodes_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_model_manifests_request() :: %{
+        optional("listResponseScope") => list(any()),
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        optional("signalCatalogArn") => String.t() | atom()
+      }
+      
+  """
+  @type list_model_manifests_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      obd_interface() :: %{
+        "dtcRequestIntervalSeconds" => integer(),
+        "hasTransmissionEcu" => [boolean()],
+        "name" => String.t() | atom(),
+        "obdStandard" => String.t() | atom(),
+        "pidRequestIntervalSeconds" => integer(),
+        "requestMessageId" => integer(),
+        "useExtendedIds" => [boolean()]
+      }
+      
+  """
+  @type obd_interface() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      iam_registration_response() :: %{
+        "errorMessage" => String.t() | atom(),
+        "registrationStatus" => list(any()),
+        "roleArn" => String.t() | atom()
+      }
+      
+  """
+  @type iam_registration_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      get_logging_options_request() :: %{}
+      
+  """
+  @type get_logging_options_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_vehicles_response() :: %{
+        optional("nextToken") => String.t() | atom(),
+        optional("vehicleSummaries") => list(vehicle_summary())
+      }
+      
+  """
+  @type list_vehicles_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      register_account_request() :: %{
+        optional("iamResources") => iam_resources(),
+        optional("timestreamResources") => timestream_resources()
+      }
+      
+  """
+  @type register_account_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      branch() :: %{
+        "comment" => String.t() | atom(),
+        "deprecationMessage" => String.t() | atom(),
+        "description" => String.t() | atom(),
+        "fullyQualifiedName" => String.t() | atom()
+      }
+      
+  """
+  @type branch() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_decoder_manifests_request() :: %{
+        optional("listResponseScope") => list(any()),
+        optional("maxResults") => integer(),
+        optional("modelManifestArn") => String.t() | atom(),
+        optional("nextToken") => String.t() | atom()
+      }
+      
+  """
+  @type list_decoder_manifests_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      delete_state_template_request() :: %{}
+      
+  """
+  @type delete_state_template_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+      
+      list_tags_for_resource_request() :: %{
+        required("ResourceARN") => String.t() | atom()
+      }
+      
+  """
+  @type list_tags_for_resource_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      import_signal_catalog_request() :: %{
+        optional("description") => String.t() | atom(),
+        optional("tags") => list(tag()),
+        optional("vss") => list()
+      }
+      
+  """
+  @type import_signal_catalog_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_campaign_request() :: %{
+        optional("dataExtraDimensions") => list(String.t() | atom()),
+        optional("description") => String.t() | atom(),
+        required("action") => list(any())
+      }
+      
+  """
+  @type update_campaign_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      create_state_template_request() :: %{
+        optional("dataExtraDimensions") => list(String.t() | atom()),
+        optional("description") => String.t() | atom(),
+        optional("metadataExtraDimensions") => list(String.t() | atom()),
+        optional("tags") => list(tag()),
+        required("signalCatalogArn") => String.t() | atom(),
+        required("stateTemplateProperties") => list(String.t() | atom())
+      }
+      
+  """
+  @type create_state_template_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+      
+      update_state_template_response() :: %{
+        "arn" => String.t() | atom(),
+        "id" => String.t() | atom(),
+        "name" => String.t() | atom()
+      }
+      
+  """
+  @type update_state_template_response() :: %{(String.t() | atom()) => any()}
+
+  @type associate_vehicle_fleet_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type batch_create_vehicle_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type batch_update_vehicle_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type create_campaign_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type create_decoder_manifest_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | decoder_manifest_validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type create_fleet_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type create_model_manifest_errors() ::
+          conflict_exception()
+          | invalid_signals_exception()
+          | resource_not_found_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type create_signal_catalog_errors() ::
+          conflict_exception()
+          | invalid_signals_exception()
+          | invalid_node_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type create_state_template_errors() ::
+          conflict_exception()
+          | invalid_signals_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type create_vehicle_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type delete_campaign_errors() ::
+          resource_not_found_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type delete_decoder_manifest_errors() ::
+          conflict_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type delete_fleet_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type delete_model_manifest_errors() ::
+          conflict_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type delete_signal_catalog_errors() ::
+          conflict_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type delete_state_template_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type delete_vehicle_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type disassociate_vehicle_fleet_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_campaign_errors() ::
+          resource_not_found_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_decoder_manifest_errors() ::
+          resource_not_found_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_encryption_configuration_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_fleet_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_logging_options_errors() :: access_denied_exception() | throttling_exception()
+
+  @type get_model_manifest_errors() ::
+          resource_not_found_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_register_account_status_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_signal_catalog_errors() ::
+          resource_not_found_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_state_template_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_vehicle_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_vehicle_status_errors() ::
+          resource_not_found_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type import_decoder_manifest_errors() ::
+          conflict_exception()
+          | invalid_signals_exception()
+          | resource_not_found_exception()
+          | validation_exception()
+          | decoder_manifest_validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type import_signal_catalog_errors() ::
+          conflict_exception()
+          | invalid_signals_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_campaigns_errors() ::
+          validation_exception() | access_denied_exception() | throttling_exception()
+
+  @type list_decoder_manifest_network_interfaces_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_decoder_manifest_signals_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_decoder_manifests_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_fleets_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_fleets_for_vehicle_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_model_manifest_nodes_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_model_manifests_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_signal_catalog_nodes_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_signal_catalogs_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_state_templates_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_tags_for_resource_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_vehicles_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_vehicles_in_fleet_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type put_encryption_configuration_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type put_logging_options_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type register_account_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type tag_resource_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type untag_resource_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type update_campaign_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type update_decoder_manifest_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | decoder_manifest_validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type update_fleet_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type update_model_manifest_errors() ::
+          conflict_exception()
+          | invalid_signals_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type update_signal_catalog_errors() ::
+          conflict_exception()
+          | invalid_signals_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | invalid_node_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type update_state_template_errors() ::
+          invalid_signals_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type update_vehicle_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | limit_exceeded_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  def metadata do
+    %{
+      api_version: "2021-06-17",
+      content_type: "application/x-amz-json-1.0",
+      credential_scope: nil,
+      endpoint_prefix: "iotfleetwise",
+      global?: false,
+      hostname: nil,
+      protocol: "json",
+      service_id: "IoTFleetWise",
+      signature_version: "v4",
+      signing_name: "iotfleetwise",
+      target_prefix: "IoTAutobahnControlPlane"
+    }
+  end
+
+  @doc """
+  Adds, or associates, a vehicle with a fleet.
+  """
+  @spec associate_vehicle_fleet(map(), associate_vehicle_fleet_request(), list()) ::
+          {:ok, associate_vehicle_fleet_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, associate_vehicle_fleet_errors()}
+  def associate_vehicle_fleet(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "AssociateVehicleFleet", input, options)
+  end
+
+  @doc """
+  Creates a group, or batch, of vehicles.
+
+  You must specify a decoder manifest and a vehicle model (model manifest) for
+  each
+  vehicle.
+
+  For more information, see [Create multiple vehicles (AWS
+  CLI)](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/create-vehicles-cli.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec batch_create_vehicle(map(), batch_create_vehicle_request(), list()) ::
+          {:ok, batch_create_vehicle_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, batch_create_vehicle_errors()}
+  def batch_create_vehicle(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "BatchCreateVehicle", input, options)
+  end
+
+  @doc """
+  Updates a group, or batch, of vehicles.
+
+  You must specify a decoder manifest and a vehicle model (model manifest) for
+  each
+  vehicle.
+
+  For more information, see [Update multiple vehicles (AWS
+  CLI)](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/update-vehicles-cli.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec batch_update_vehicle(map(), batch_update_vehicle_request(), list()) ::
+          {:ok, batch_update_vehicle_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, batch_update_vehicle_errors()}
+  def batch_update_vehicle(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "BatchUpdateVehicle", input, options)
+  end
+
+  @doc """
+  Creates an orchestration of data collection rules.
+
+  The Amazon Web Services IoT FleetWise Edge Agent software
+  running in vehicles uses campaigns to decide how to collect and transfer data to
+  the
+  cloud. You create campaigns in the cloud. After you or your team approve
+  campaigns,
+  Amazon Web Services IoT FleetWise automatically deploys them to vehicles.
+
+  For more information, see [Collect and transfer data with
+  campaigns](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/campaigns.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+
+  Access to certain Amazon Web Services IoT FleetWise features is currently gated.
+  For more information, see [Amazon Web Services Region and feature availability](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/fleetwise-regions.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec create_campaign(map(), create_campaign_request(), list()) ::
+          {:ok, create_campaign_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_campaign_errors()}
+  def create_campaign(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "CreateCampaign", input, options)
+  end
+
+  @doc """
+  Creates the decoder manifest associated with a model manifest.
+
+  To create a decoder
+  manifest, the following must be true:
+
+    *
+  Every signal decoder has a unique name.
+
+    *
+  Each signal decoder is associated with a network interface.
+
+    *
+  Each network interface has a unique ID.
+
+    *
+  The signal decoders are specified in the model manifest.
+  """
+  @spec create_decoder_manifest(map(), create_decoder_manifest_request(), list()) ::
+          {:ok, create_decoder_manifest_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_decoder_manifest_errors()}
+  def create_decoder_manifest(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "CreateDecoderManifest", input, options)
+  end
+
+  @doc """
+  Creates a fleet that represents a group of vehicles.
+
+  You must create both a signal catalog and vehicles before you can create a
+  fleet.
+
+  For more information, see
+  [Fleets](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/fleets.html)
+  in the
+  *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec create_fleet(map(), create_fleet_request(), list()) ::
+          {:ok, create_fleet_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_fleet_errors()}
+  def create_fleet(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "CreateFleet", input, options)
+  end
+
+  @doc """
+  Creates a vehicle model (model manifest) that specifies signals (attributes,
+  branches, sensors, and actuators).
+
+  For more information, see [Vehicle models](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/vehicle-models.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec create_model_manifest(map(), create_model_manifest_request(), list()) ::
+          {:ok, create_model_manifest_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_model_manifest_errors()}
+  def create_model_manifest(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "CreateModelManifest", input, options)
+  end
+
+  @doc """
+  Creates a collection of standardized signals that can be reused to create
+  vehicle
+  models.
+  """
+  @spec create_signal_catalog(map(), create_signal_catalog_request(), list()) ::
+          {:ok, create_signal_catalog_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_signal_catalog_errors()}
+  def create_signal_catalog(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "CreateSignalCatalog", input, options)
+  end
+
+  @doc """
+  Creates a state template.
+
+  State templates contain state properties, which are signals that belong to a
+  signal catalog that is synchronized between the Amazon Web Services IoT
+  FleetWise Edge and the Amazon Web Services Cloud.
+
+  Access to certain Amazon Web Services IoT FleetWise features is currently gated.
+  For more information, see [Amazon Web Services Region and feature availability](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/fleetwise-regions.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec create_state_template(map(), create_state_template_request(), list()) ::
+          {:ok, create_state_template_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_state_template_errors()}
+  def create_state_template(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "CreateStateTemplate", input, options)
+  end
+
+  @doc """
+  Creates a vehicle, which is an instance of a vehicle model (model manifest).
+
+  Vehicles
+  created from the same vehicle model consist of the same signals inherited from
+  the
+  vehicle model.
+
+  If you have an existing Amazon Web Services IoT thing, you can use Amazon Web
+  Services IoT FleetWise to create a
+  vehicle and collect data from your thing.
+
+  For more information, see [Create a vehicle (AWS
+  CLI)](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/create-vehicle-cli.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec create_vehicle(map(), create_vehicle_request(), list()) ::
+          {:ok, create_vehicle_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_vehicle_errors()}
+  def create_vehicle(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "CreateVehicle", input, options)
+  end
+
+  @doc """
+  Deletes a data collection campaign.
+
+  Deleting a campaign suspends all data collection
+  and removes it from any vehicles.
+  """
+  @spec delete_campaign(map(), delete_campaign_request(), list()) ::
+          {:ok, delete_campaign_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_campaign_errors()}
+  def delete_campaign(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "DeleteCampaign", input, options)
+  end
+
+  @doc """
+  Deletes a decoder manifest.
+
+  You can't delete a decoder manifest if it has vehicles
+  associated with it.
+  """
+  @spec delete_decoder_manifest(map(), delete_decoder_manifest_request(), list()) ::
+          {:ok, delete_decoder_manifest_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_decoder_manifest_errors()}
+  def delete_decoder_manifest(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "DeleteDecoderManifest", input, options)
+  end
+
+  @doc """
+  Deletes a fleet.
+
+  Before you delete a fleet, all vehicles must be
+  dissociated from the fleet. For more information, see [Delete a fleet (AWS CLI)](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/delete-fleet-cli.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec delete_fleet(map(), delete_fleet_request(), list()) ::
+          {:ok, delete_fleet_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_fleet_errors()}
+  def delete_fleet(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "DeleteFleet", input, options)
+  end
+
+  @doc """
+  Deletes a vehicle model (model manifest).
+  """
+  @spec delete_model_manifest(map(), delete_model_manifest_request(), list()) ::
+          {:ok, delete_model_manifest_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_model_manifest_errors()}
+  def delete_model_manifest(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "DeleteModelManifest", input, options)
+  end
+
+  @doc """
+  Deletes a signal catalog.
+  """
+  @spec delete_signal_catalog(map(), delete_signal_catalog_request(), list()) ::
+          {:ok, delete_signal_catalog_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_signal_catalog_errors()}
+  def delete_signal_catalog(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "DeleteSignalCatalog", input, options)
+  end
+
+  @doc """
+  Deletes a state template.
+  """
+  @spec delete_state_template(map(), delete_state_template_request(), list()) ::
+          {:ok, delete_state_template_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_state_template_errors()}
+  def delete_state_template(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "DeleteStateTemplate", input, options)
+  end
+
+  @doc """
+  Deletes a vehicle and removes it from any campaigns.
+  """
+  @spec delete_vehicle(map(), delete_vehicle_request(), list()) ::
+          {:ok, delete_vehicle_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_vehicle_errors()}
+  def delete_vehicle(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "DeleteVehicle", input, options)
+  end
+
+  @doc """
+  Removes, or disassociates, a vehicle from a fleet.
+
+  Disassociating a vehicle from a
+  fleet doesn't delete the vehicle.
+  """
+  @spec disassociate_vehicle_fleet(map(), disassociate_vehicle_fleet_request(), list()) ::
+          {:ok, disassociate_vehicle_fleet_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, disassociate_vehicle_fleet_errors()}
+  def disassociate_vehicle_fleet(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "DisassociateVehicleFleet", input, options)
+  end
+
+  @doc """
+  Retrieves information about a campaign.
+
+  Access to certain Amazon Web Services IoT FleetWise features is currently gated.
+  For more information, see [Amazon Web Services Region and feature availability](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/fleetwise-regions.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec get_campaign(map(), get_campaign_request(), list()) ::
+          {:ok, get_campaign_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_campaign_errors()}
+  def get_campaign(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "GetCampaign", input, options)
+  end
+
+  @doc """
+  Retrieves information about a created decoder manifest.
+  """
+  @spec get_decoder_manifest(map(), get_decoder_manifest_request(), list()) ::
+          {:ok, get_decoder_manifest_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_decoder_manifest_errors()}
+  def get_decoder_manifest(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "GetDecoderManifest", input, options)
+  end
+
+  @doc """
+  Retrieves the encryption configuration for resources and data in Amazon Web
+  Services IoT FleetWise.
+  """
+  @spec get_encryption_configuration(map(), get_encryption_configuration_request(), list()) ::
+          {:ok, get_encryption_configuration_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_encryption_configuration_errors()}
+  def get_encryption_configuration(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "GetEncryptionConfiguration", input, options)
+  end
+
+  @doc """
+  Retrieves information about a fleet.
+  """
+  @spec get_fleet(map(), get_fleet_request(), list()) ::
+          {:ok, get_fleet_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_fleet_errors()}
+  def get_fleet(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "GetFleet", input, options)
+  end
+
+  @doc """
+  Retrieves the logging options.
+  """
+  @spec get_logging_options(map(), get_logging_options_request(), list()) ::
+          {:ok, get_logging_options_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_logging_options_errors()}
+  def get_logging_options(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "GetLoggingOptions", input, options)
+  end
+
+  @doc """
+  Retrieves information about a vehicle model (model manifest).
+  """
+  @spec get_model_manifest(map(), get_model_manifest_request(), list()) ::
+          {:ok, get_model_manifest_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_model_manifest_errors()}
+  def get_model_manifest(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "GetModelManifest", input, options)
+  end
+
+  @doc """
+  Retrieves information about the status of registering your Amazon Web Services
+  account, IAM, and
+  Amazon Timestream resources so that Amazon Web Services IoT FleetWise can
+  transfer your vehicle data to the Amazon Web Services
+  Cloud.
+
+  For more information, including step-by-step procedures, see [Setting up Amazon Web Services IoT
+  FleetWise](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/setting-up.html).
+
+  This API operation doesn't require input parameters.
+  """
+  @spec get_register_account_status(map(), get_register_account_status_request(), list()) ::
+          {:ok, get_register_account_status_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_register_account_status_errors()}
+  def get_register_account_status(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "GetRegisterAccountStatus", input, options)
+  end
+
+  @doc """
+  Retrieves information about a signal catalog.
+  """
+  @spec get_signal_catalog(map(), get_signal_catalog_request(), list()) ::
+          {:ok, get_signal_catalog_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_signal_catalog_errors()}
+  def get_signal_catalog(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "GetSignalCatalog", input, options)
+  end
+
+  @doc """
+  Retrieves information about a state template.
+
+  Access to certain Amazon Web Services IoT FleetWise features is currently gated.
+  For more information, see [Amazon Web Services Region and feature availability](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/fleetwise-regions.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec get_state_template(map(), get_state_template_request(), list()) ::
+          {:ok, get_state_template_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_state_template_errors()}
+  def get_state_template(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "GetStateTemplate", input, options)
+  end
+
+  @doc """
+  Retrieves information about a vehicle.
+  """
+  @spec get_vehicle(map(), get_vehicle_request(), list()) ::
+          {:ok, get_vehicle_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_vehicle_errors()}
+  def get_vehicle(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "GetVehicle", input, options)
+  end
+
+  @doc """
+  Retrieves information about the status of campaigns, decoder manifests, or state
+  templates
+  associated with a vehicle.
+  """
+  @spec get_vehicle_status(map(), get_vehicle_status_request(), list()) ::
+          {:ok, get_vehicle_status_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_vehicle_status_errors()}
+  def get_vehicle_status(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "GetVehicleStatus", input, options)
+  end
+
+  @doc """
+  Creates a decoder manifest using your existing CAN DBC file from your local
+  device.
+
+  The CAN signal name must be unique and not repeated across CAN message
+  definitions in a .dbc file.
+  """
+  @spec import_decoder_manifest(map(), import_decoder_manifest_request(), list()) ::
+          {:ok, import_decoder_manifest_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, import_decoder_manifest_errors()}
+  def import_decoder_manifest(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ImportDecoderManifest", input, options)
+  end
+
+  @doc """
+  Creates a signal catalog using your existing VSS formatted content from your
+  local
+  device.
+  """
+  @spec import_signal_catalog(map(), import_signal_catalog_request(), list()) ::
+          {:ok, import_signal_catalog_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, import_signal_catalog_errors()}
+  def import_signal_catalog(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ImportSignalCatalog", input, options)
+  end
+
+  @doc """
+  Lists information about created campaigns.
+
+  This API operation uses pagination. Specify the `nextToken` parameter in the
+  request to return more results.
+  """
+  @spec list_campaigns(map(), list_campaigns_request(), list()) ::
+          {:ok, list_campaigns_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_campaigns_errors()}
+  def list_campaigns(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListCampaigns", input, options)
+  end
+
+  @doc """
+  Lists the network interfaces specified in a decoder manifest.
+
+  This API operation uses pagination. Specify the `nextToken` parameter in the
+  request to return more results.
+  """
+  @spec list_decoder_manifest_network_interfaces(
+          map(),
+          list_decoder_manifest_network_interfaces_request(),
+          list()
+        ) ::
+          {:ok, list_decoder_manifest_network_interfaces_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_decoder_manifest_network_interfaces_errors()}
+  def list_decoder_manifest_network_interfaces(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListDecoderManifestNetworkInterfaces", input, options)
+  end
+
+  @doc """
+  A list of information about signal decoders specified in a decoder manifest.
+
+  This API operation uses pagination. Specify the `nextToken` parameter in the
+  request to return more results.
+  """
+  @spec list_decoder_manifest_signals(map(), list_decoder_manifest_signals_request(), list()) ::
+          {:ok, list_decoder_manifest_signals_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_decoder_manifest_signals_errors()}
+  def list_decoder_manifest_signals(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListDecoderManifestSignals", input, options)
+  end
+
+  @doc """
+  Lists decoder manifests.
+
+  This API operation uses pagination. Specify the `nextToken` parameter in the
+  request to return more results.
+  """
+  @spec list_decoder_manifests(map(), list_decoder_manifests_request(), list()) ::
+          {:ok, list_decoder_manifests_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_decoder_manifests_errors()}
+  def list_decoder_manifests(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListDecoderManifests", input, options)
+  end
+
+  @doc """
+  Retrieves information for each created fleet in an Amazon Web Services account.
+
+  This API operation uses pagination. Specify the `nextToken` parameter in the
+  request to return more results.
+  """
+  @spec list_fleets(map(), list_fleets_request(), list()) ::
+          {:ok, list_fleets_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_fleets_errors()}
+  def list_fleets(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListFleets", input, options)
+  end
+
+  @doc """
+  Retrieves a list of IDs for all fleets that the vehicle is associated with.
+
+  This API operation uses pagination. Specify the `nextToken` parameter in the
+  request to return more results.
+  """
+  @spec list_fleets_for_vehicle(map(), list_fleets_for_vehicle_request(), list()) ::
+          {:ok, list_fleets_for_vehicle_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_fleets_for_vehicle_errors()}
+  def list_fleets_for_vehicle(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListFleetsForVehicle", input, options)
+  end
+
+  @doc """
+  Lists information about nodes specified in a vehicle model (model manifest).
+
+  This API operation uses pagination. Specify the `nextToken` parameter in the
+  request to return more results.
+  """
+  @spec list_model_manifest_nodes(map(), list_model_manifest_nodes_request(), list()) ::
+          {:ok, list_model_manifest_nodes_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_model_manifest_nodes_errors()}
+  def list_model_manifest_nodes(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListModelManifestNodes", input, options)
+  end
+
+  @doc """
+  Retrieves a list of vehicle models (model manifests).
+
+  This API operation uses pagination. Specify the `nextToken` parameter in the
+  request to return more results.
+  """
+  @spec list_model_manifests(map(), list_model_manifests_request(), list()) ::
+          {:ok, list_model_manifests_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_model_manifests_errors()}
+  def list_model_manifests(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListModelManifests", input, options)
+  end
+
+  @doc """
+  Lists of information about the signals (nodes) specified in a signal catalog.
+
+  This API operation uses pagination. Specify the `nextToken` parameter in the
+  request to return more results.
+  """
+  @spec list_signal_catalog_nodes(map(), list_signal_catalog_nodes_request(), list()) ::
+          {:ok, list_signal_catalog_nodes_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_signal_catalog_nodes_errors()}
+  def list_signal_catalog_nodes(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListSignalCatalogNodes", input, options)
+  end
+
+  @doc """
+  Lists all the created signal catalogs in an Amazon Web Services account.
+
+  You can use to list information about
+  each signal (node) specified in a signal catalog.
+
+  This API operation uses pagination. Specify the `nextToken` parameter in the
+  request to return more results.
+  """
+  @spec list_signal_catalogs(map(), list_signal_catalogs_request(), list()) ::
+          {:ok, list_signal_catalogs_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_signal_catalogs_errors()}
+  def list_signal_catalogs(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListSignalCatalogs", input, options)
+  end
+
+  @doc """
+  Lists information about created state templates.
+
+  Access to certain Amazon Web Services IoT FleetWise features is currently gated.
+  For more information, see [Amazon Web Services Region and feature availability](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/fleetwise-regions.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec list_state_templates(map(), list_state_templates_request(), list()) ::
+          {:ok, list_state_templates_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_state_templates_errors()}
+  def list_state_templates(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListStateTemplates", input, options)
+  end
+
+  @doc """
+  Lists the tags (metadata) you have assigned to the resource.
+  """
+  @spec list_tags_for_resource(map(), list_tags_for_resource_request(), list()) ::
+          {:ok, list_tags_for_resource_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_tags_for_resource_errors()}
+  def list_tags_for_resource(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListTagsForResource", input, options)
+  end
+
+  @doc """
+  Retrieves a list of summaries of created vehicles.
+
+  This API operation uses pagination. Specify the `nextToken` parameter in the
+  request to return more results.
+  """
+  @spec list_vehicles(map(), list_vehicles_request(), list()) ::
+          {:ok, list_vehicles_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_vehicles_errors()}
+  def list_vehicles(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListVehicles", input, options)
+  end
+
+  @doc """
+  Retrieves a list of summaries of all vehicles associated with a fleet.
+
+  This API operation uses pagination. Specify the `nextToken` parameter in the
+  request to return more results.
+  """
+  @spec list_vehicles_in_fleet(map(), list_vehicles_in_fleet_request(), list()) ::
+          {:ok, list_vehicles_in_fleet_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_vehicles_in_fleet_errors()}
+  def list_vehicles_in_fleet(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "ListVehiclesInFleet", input, options)
+  end
+
+  @doc """
+  Creates or updates the encryption configuration.
+
+  Amazon Web Services IoT FleetWise can encrypt your data and
+  resources using an Amazon Web Services managed key. Or, you can use a KMS key
+  that you own and
+  manage. For more information, see [Data encryption](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/data-encryption.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec put_encryption_configuration(map(), put_encryption_configuration_request(), list()) ::
+          {:ok, put_encryption_configuration_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, put_encryption_configuration_errors()}
+  def put_encryption_configuration(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "PutEncryptionConfiguration", input, options)
+  end
+
+  @doc """
+  Creates or updates the logging option.
+  """
+  @spec put_logging_options(map(), put_logging_options_request(), list()) ::
+          {:ok, put_logging_options_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, put_logging_options_errors()}
+  def put_logging_options(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "PutLoggingOptions", input, options)
+  end
+
+  @doc """
+
+  This API operation contains deprecated parameters.
+
+  Register your account again
+  without the Timestream resources parameter so that Amazon Web Services IoT
+  FleetWise can remove the Timestream
+  metadata stored. You should then pass the data destination into the
+  [CreateCampaign](https://docs.aws.amazon.com/iot-fleetwise/latest/APIReference/API_CreateCampaign.html) API operation.
+
+  You must delete any existing campaigns that include an empty data destination
+  before you register your account again. For more information, see the
+  [DeleteCampaign](https://docs.aws.amazon.com/iot-fleetwise/latest/APIReference/API_DeleteCampaign.html)
+  API operation.
+
+  If you want to delete the Timestream inline policy from the service-linked role,
+  such
+  as to mitigate an overly permissive policy, you must first delete any existing
+  campaigns. Then delete the service-linked role and register your account again
+  to
+  enable CloudWatch metrics. For more information, see
+  [DeleteServiceLinkedRole](https://docs.aws.amazon.com/IAM/latest/APIReference/API_DeleteServiceLinkedRole.html) in the *Identity and Access Management API
+  Reference*.
+
+  Registers your Amazon Web Services account, IAM, and Amazon Timestream resources
+  so Amazon Web Services IoT FleetWise can
+  transfer your vehicle data to the Amazon Web Services Cloud. For more
+  information, including
+  step-by-step procedures, see [Setting up
+  Amazon Web Services IoT
+  FleetWise](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/setting-up.html).
+
+  An Amazon Web Services account is **not** the same thing as a
+  "user." An [Amazon Web Services user](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction_identity-management.html#intro-identity-users)
+  is an identity that you create using Identity and Access Management (IAM) and
+  takes the form of either an [IAM user](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users.html) or an [IAM role, both
+  with
+  credentials](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles.html). A
+  single Amazon Web Services account can, and typically does,
+  contain many users and roles.
+  """
+  @spec register_account(map(), register_account_request(), list()) ::
+          {:ok, register_account_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, register_account_errors()}
+  def register_account(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "RegisterAccount", input, options)
+  end
+
+  @doc """
+  Adds to or modifies the tags of the given resource.
+
+  Tags are metadata which can be
+  used to manage a resource.
+  """
+  @spec tag_resource(map(), tag_resource_request(), list()) ::
+          {:ok, tag_resource_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, tag_resource_errors()}
+  def tag_resource(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "TagResource", input, options)
+  end
+
+  @doc """
+  Removes the given tags (metadata) from the resource.
+  """
+  @spec untag_resource(map(), untag_resource_request(), list()) ::
+          {:ok, untag_resource_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, untag_resource_errors()}
+  def untag_resource(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "UntagResource", input, options)
+  end
+
+  @doc """
+  Updates a campaign.
+  """
+  @spec update_campaign(map(), update_campaign_request(), list()) ::
+          {:ok, update_campaign_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, update_campaign_errors()}
+  def update_campaign(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "UpdateCampaign", input, options)
+  end
+
+  @doc """
+  Updates a decoder manifest.
+
+  A decoder manifest can only be updated when the status is `DRAFT`. Only
+  `ACTIVE` decoder manifests can be associated with vehicles.
+  """
+  @spec update_decoder_manifest(map(), update_decoder_manifest_request(), list()) ::
+          {:ok, update_decoder_manifest_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, update_decoder_manifest_errors()}
+  def update_decoder_manifest(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "UpdateDecoderManifest", input, options)
+  end
+
+  @doc """
+  Updates the description of an existing fleet.
+  """
+  @spec update_fleet(map(), update_fleet_request(), list()) ::
+          {:ok, update_fleet_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, update_fleet_errors()}
+  def update_fleet(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "UpdateFleet", input, options)
+  end
+
+  @doc """
+  Updates a vehicle model (model manifest).
+
+  If created vehicles are associated with a
+  vehicle model, it can't be updated.
+  """
+  @spec update_model_manifest(map(), update_model_manifest_request(), list()) ::
+          {:ok, update_model_manifest_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, update_model_manifest_errors()}
+  def update_model_manifest(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "UpdateModelManifest", input, options)
+  end
+
+  @doc """
+  Updates a signal catalog.
+  """
+  @spec update_signal_catalog(map(), update_signal_catalog_request(), list()) ::
+          {:ok, update_signal_catalog_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, update_signal_catalog_errors()}
+  def update_signal_catalog(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "UpdateSignalCatalog", input, options)
+  end
+
+  @doc """
+  Updates a state template.
+
+  Access to certain Amazon Web Services IoT FleetWise features is currently gated.
+  For more information, see [Amazon Web Services Region and feature availability](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/fleetwise-regions.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec update_state_template(map(), update_state_template_request(), list()) ::
+          {:ok, update_state_template_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, update_state_template_errors()}
+  def update_state_template(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "UpdateStateTemplate", input, options)
+  end
+
+  @doc """
+  Updates a vehicle.
+
+  Access to certain Amazon Web Services IoT FleetWise features is currently gated.
+  For more information, see [Amazon Web Services Region and feature availability](https://docs.aws.amazon.com/iot-fleetwise/latest/developerguide/fleetwise-regions.html)
+  in the *Amazon Web Services IoT FleetWise Developer Guide*.
+  """
+  @spec update_vehicle(map(), update_vehicle_request(), list()) ::
+          {:ok, update_vehicle_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, update_vehicle_errors()}
+  def update_vehicle(%Client{} = client, input, options \\ []) do
+    meta =
+      metadata()
+
+    Request.request_post(client, meta, "UpdateVehicle", input, options)
+  end
+end

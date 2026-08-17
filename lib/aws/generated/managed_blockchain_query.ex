@@ -1,0 +1,1048 @@
+# WARNING: DO NOT EDIT, AUTO-GENERATED CODE!
+# See https://github.com/aws-beam/aws-codegen for more details.
+
+defmodule AWS.ManagedBlockchainQuery do
+  @moduledoc """
+  Amazon Managed Blockchain (AMB) Query provides you with convenient access to
+  multi-blockchain network data, which makes
+  it easier for you to extract contextual data related to blockchain activity.
+
+  You can use AMB Query to
+  read data from public blockchain networks, such as Bitcoin Mainnet and Ethereum
+  Mainnet. You can
+  also get information such as the current and historical balances of addresses,
+  or you can get a
+  list of blockchain transactions for a given time period. Additionally, you can
+  get details of a
+  given transaction, such as transaction events, which you can further analyze or
+  use in business
+  logic for your applications.
+  """
+
+  alias AWS.Client
+  alias AWS.Request
+
+  @typedoc """
+
+  ## Example:
+
+      contract_identifier() :: %{
+        "contractAddress" => String.t() | atom(),
+        "network" => String.t() | atom()
+      }
+
+  """
+  @type contract_identifier() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_token_balance_output_item() :: %{
+        "atBlockchainInstant" => blockchain_instant(),
+        "balance" => [String.t() | atom()],
+        "lastUpdatedTime" => blockchain_instant(),
+        "ownerIdentifier" => owner_identifier(),
+        "tokenIdentifier" => token_identifier()
+      }
+
+  """
+  @type batch_get_token_balance_output_item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      confirmation_status_filter() :: %{
+        "include" => list(String.t() | atom())
+      }
+
+  """
+  @type confirmation_status_filter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_transaction_output() :: %{
+        "transaction" => transaction()
+      }
+
+  """
+  @type get_transaction_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_token_balance_input_item() :: %{
+        "atBlockchainInstant" => blockchain_instant(),
+        "ownerIdentifier" => owner_identifier(),
+        "tokenIdentifier" => token_identifier()
+      }
+
+  """
+  @type batch_get_token_balance_input_item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      token_identifier() :: %{
+        "contractAddress" => String.t() | atom(),
+        "network" => String.t() | atom(),
+        "tokenId" => String.t() | atom()
+      }
+
+  """
+  @type token_identifier() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      throttling_exception() :: %{
+        "message" => String.t() | atom(),
+        "quotaCode" => String.t() | atom(),
+        "retryAfterSeconds" => [integer()],
+        "serviceCode" => String.t() | atom()
+      }
+
+  """
+  @type throttling_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_filtered_transaction_events_sort() :: %{
+        "sortBy" => String.t() | atom(),
+        "sortOrder" => String.t() | atom()
+      }
+
+  """
+  @type list_filtered_transaction_events_sort() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      access_denied_exception() :: %{
+        "message" => String.t() | atom()
+      }
+
+  """
+  @type access_denied_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_token_balances_output() :: %{
+        "nextToken" => String.t() | atom(),
+        "tokenBalances" => list(token_balance())
+      }
+
+  """
+  @type list_token_balances_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      contract_filter() :: %{
+        "deployerAddress" => String.t() | atom(),
+        "network" => String.t() | atom(),
+        "tokenStandard" => String.t() | atom()
+      }
+
+  """
+  @type contract_filter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_transactions_input() :: %{
+        optional("confirmationStatusFilter") => confirmation_status_filter(),
+        optional("fromBlockchainInstant") => blockchain_instant(),
+        optional("maxResults") => [integer()],
+        optional("nextToken") => String.t() | atom(),
+        optional("sort") => list_transactions_sort(),
+        optional("toBlockchainInstant") => blockchain_instant(),
+        required("address") => String.t() | atom(),
+        required("network") => String.t() | atom()
+      }
+
+  """
+  @type list_transactions_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_asset_contracts_output() :: %{
+        "contracts" => list(asset_contract()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_asset_contracts_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      time_filter() :: %{
+        "from" => blockchain_instant(),
+        "to" => blockchain_instant()
+      }
+
+  """
+  @type time_filter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      validation_exception() :: %{
+        "fieldList" => list(validation_exception_field()),
+        "message" => String.t() | atom(),
+        "reason" => String.t() | atom()
+      }
+
+  """
+  @type validation_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_filtered_transaction_events_output() :: %{
+        "events" => list(transaction_event()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_filtered_transaction_events_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      asset_contract() :: %{
+        "contractIdentifier" => contract_identifier(),
+        "deployerAddress" => String.t() | atom(),
+        "tokenStandard" => String.t() | atom()
+      }
+
+  """
+  @type asset_contract() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      internal_server_exception() :: %{
+        "message" => String.t() | atom(),
+        "retryAfterSeconds" => [integer()]
+      }
+
+  """
+  @type internal_server_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_transactions_sort() :: %{
+        "sortBy" => String.t() | atom(),
+        "sortOrder" => String.t() | atom()
+      }
+
+  """
+  @type list_transactions_sort() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      transaction_event() :: %{
+        "blockchainInstant" => blockchain_instant(),
+        "confirmationStatus" => String.t() | atom(),
+        "contractAddress" => String.t() | atom(),
+        "eventType" => String.t() | atom(),
+        "from" => String.t() | atom(),
+        "network" => String.t() | atom(),
+        "spentVoutIndex" => [integer()],
+        "spentVoutTransactionHash" => [String.t() | atom()],
+        "spentVoutTransactionId" => [String.t() | atom()],
+        "to" => String.t() | atom(),
+        "tokenId" => String.t() | atom(),
+        "transactionHash" => String.t() | atom(),
+        "transactionId" => [String.t() | atom()],
+        "value" => [String.t() | atom()],
+        "voutIndex" => [integer()],
+        "voutSpent" => [boolean()]
+      }
+
+  """
+  @type transaction_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      resource_not_found_exception() :: %{
+        "message" => String.t() | atom(),
+        "resourceId" => String.t() | atom(),
+        "resourceType" => String.t() | atom()
+      }
+
+  """
+  @type resource_not_found_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      transaction_output_item() :: %{
+        "confirmationStatus" => String.t() | atom(),
+        "network" => String.t() | atom(),
+        "transactionHash" => String.t() | atom(),
+        "transactionId" => String.t() | atom(),
+        "transactionTimestamp" => [non_neg_integer()]
+      }
+
+  """
+  @type transaction_output_item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_token_balance_input() :: %{
+        optional("atBlockchainInstant") => blockchain_instant(),
+        required("ownerIdentifier") => owner_identifier(),
+        required("tokenIdentifier") => token_identifier()
+      }
+
+  """
+  @type get_token_balance_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      contract_metadata() :: %{
+        "decimals" => [integer()],
+        "name" => [String.t() | atom()],
+        "symbol" => [String.t() | atom()]
+      }
+
+  """
+  @type contract_metadata() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_transaction_events_input() :: %{
+        optional("maxResults") => [integer()],
+        optional("nextToken") => String.t() | atom(),
+        optional("transactionHash") => String.t() | atom(),
+        optional("transactionId") => String.t() | atom(),
+        required("network") => String.t() | atom()
+      }
+
+  """
+  @type list_transaction_events_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      transaction() :: %{
+        "blockHash" => String.t() | atom(),
+        "blockNumber" => [String.t() | atom()],
+        "confirmationStatus" => String.t() | atom(),
+        "contractAddress" => String.t() | atom(),
+        "cumulativeGasUsed" => [String.t() | atom()],
+        "effectiveGasPrice" => [String.t() | atom()],
+        "executionStatus" => String.t() | atom(),
+        "from" => String.t() | atom(),
+        "gasUsed" => [String.t() | atom()],
+        "network" => String.t() | atom(),
+        "numberOfTransactions" => [float()],
+        "signatureR" => [String.t() | atom()],
+        "signatureS" => [String.t() | atom()],
+        "signatureV" => [integer()],
+        "to" => String.t() | atom(),
+        "transactionFee" => [String.t() | atom()],
+        "transactionHash" => String.t() | atom(),
+        "transactionId" => [String.t() | atom()],
+        "transactionIndex" => [float()],
+        "transactionTimestamp" => [non_neg_integer()]
+      }
+
+  """
+  @type transaction() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_token_balance_input() :: %{
+        optional("getTokenBalanceInputs") => list(batch_get_token_balance_input_item())
+      }
+
+  """
+  @type batch_get_token_balance_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      validation_exception_field() :: %{
+        "message" => [String.t() | atom()],
+        "name" => [String.t() | atom()]
+      }
+
+  """
+  @type validation_exception_field() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      token_filter() :: %{
+        "contractAddress" => String.t() | atom(),
+        "network" => String.t() | atom(),
+        "tokenId" => String.t() | atom()
+      }
+
+  """
+  @type token_filter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_token_balance_error_item() :: %{
+        "atBlockchainInstant" => blockchain_instant(),
+        "errorCode" => [String.t() | atom()],
+        "errorMessage" => [String.t() | atom()],
+        "errorType" => String.t() | atom(),
+        "ownerIdentifier" => owner_identifier(),
+        "tokenIdentifier" => token_identifier()
+      }
+
+  """
+  @type batch_get_token_balance_error_item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      owner_identifier() :: %{
+        "address" => String.t() | atom()
+      }
+
+  """
+  @type owner_identifier() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      vout_filter() :: %{
+        "voutSpent" => [boolean()]
+      }
+
+  """
+  @type vout_filter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_asset_contracts_input() :: %{
+        optional("maxResults") => [integer()],
+        optional("nextToken") => String.t() | atom(),
+        required("contractFilter") => contract_filter()
+      }
+
+  """
+  @type list_asset_contracts_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      token_balance() :: %{
+        "atBlockchainInstant" => blockchain_instant(),
+        "balance" => [String.t() | atom()],
+        "lastUpdatedTime" => blockchain_instant(),
+        "ownerIdentifier" => owner_identifier(),
+        "tokenIdentifier" => token_identifier()
+      }
+
+  """
+  @type token_balance() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_transaction_events_output() :: %{
+        "events" => list(transaction_event()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_transaction_events_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      batch_get_token_balance_output() :: %{
+        "errors" => list(batch_get_token_balance_error_item()),
+        "tokenBalances" => list(batch_get_token_balance_output_item())
+      }
+
+  """
+  @type batch_get_token_balance_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_token_balances_input() :: %{
+        optional("maxResults") => [integer()],
+        optional("nextToken") => String.t() | atom(),
+        optional("ownerFilter") => owner_filter(),
+        required("tokenFilter") => token_filter()
+      }
+
+  """
+  @type list_token_balances_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_transactions_output() :: %{
+        "nextToken" => String.t() | atom(),
+        "transactions" => list(transaction_output_item())
+      }
+
+  """
+  @type list_transactions_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      blockchain_instant() :: %{
+        "time" => [non_neg_integer()]
+      }
+
+  """
+  @type blockchain_instant() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      owner_filter() :: %{
+        "address" => String.t() | atom()
+      }
+
+  """
+  @type owner_filter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_asset_contract_input() :: %{
+        required("contractIdentifier") => contract_identifier()
+      }
+
+  """
+  @type get_asset_contract_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_filtered_transaction_events_input() :: %{
+        optional("confirmationStatusFilter") => confirmation_status_filter(),
+        optional("maxResults") => [integer()],
+        optional("nextToken") => String.t() | atom(),
+        optional("sort") => list_filtered_transaction_events_sort(),
+        optional("timeFilter") => time_filter(),
+        optional("voutFilter") => vout_filter(),
+        required("addressIdentifierFilter") => address_identifier_filter(),
+        required("network") => [String.t() | atom()]
+      }
+
+  """
+  @type list_filtered_transaction_events_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_asset_contract_output() :: %{
+        "contractIdentifier" => contract_identifier(),
+        "deployerAddress" => String.t() | atom(),
+        "metadata" => contract_metadata(),
+        "tokenStandard" => String.t() | atom()
+      }
+
+  """
+  @type get_asset_contract_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_transaction_input() :: %{
+        optional("transactionHash") => String.t() | atom(),
+        optional("transactionId") => String.t() | atom(),
+        required("network") => String.t() | atom()
+      }
+
+  """
+  @type get_transaction_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      service_quota_exceeded_exception() :: %{
+        "message" => String.t() | atom(),
+        "quotaCode" => String.t() | atom(),
+        "resourceId" => String.t() | atom(),
+        "resourceType" => String.t() | atom(),
+        "serviceCode" => String.t() | atom()
+      }
+
+  """
+  @type service_quota_exceeded_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      address_identifier_filter() :: %{
+        "transactionEventToAddress" => list(String.t() | atom())
+      }
+
+  """
+  @type address_identifier_filter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_token_balance_output() :: %{
+        "atBlockchainInstant" => blockchain_instant(),
+        "balance" => [String.t() | atom()],
+        "lastUpdatedTime" => blockchain_instant(),
+        "ownerIdentifier" => owner_identifier(),
+        "tokenIdentifier" => token_identifier()
+      }
+
+  """
+  @type get_token_balance_output() :: %{(String.t() | atom()) => any()}
+
+  @type batch_get_token_balance_errors() ::
+          service_quota_exceeded_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_asset_contract_errors() ::
+          service_quota_exceeded_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_token_balance_errors() ::
+          service_quota_exceeded_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_transaction_errors() ::
+          service_quota_exceeded_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_asset_contracts_errors() ::
+          service_quota_exceeded_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_filtered_transaction_events_errors() ::
+          service_quota_exceeded_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_token_balances_errors() ::
+          service_quota_exceeded_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_transaction_events_errors() ::
+          service_quota_exceeded_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_transactions_errors() ::
+          service_quota_exceeded_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  def metadata do
+    %{
+      api_version: "2023-05-04",
+      content_type: "application/x-amz-json-1.1",
+      credential_scope: nil,
+      endpoint_prefix: "managedblockchain-query",
+      global?: false,
+      hostname: nil,
+      protocol: "rest-json",
+      service_id: "ManagedBlockchain Query",
+      signature_version: "v4",
+      signing_name: "managedblockchain-query",
+      target_prefix: nil
+    }
+  end
+
+  @doc """
+  Gets the token balance for a batch of tokens by using the `BatchGetTokenBalance`
+  action for every token in the request.
+
+  Only the native tokens BTC and ETH, and the ERC-20,
+  ERC-721, and ERC 1155 token standards are supported.
+  """
+  @spec batch_get_token_balance(map(), batch_get_token_balance_input(), list()) ::
+          {:ok, batch_get_token_balance_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, batch_get_token_balance_errors()}
+  def batch_get_token_balance(%Client{} = client, input, options \\ []) do
+    url_path = "/batch-get-token-balance"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Gets the information about a specific contract deployed on the blockchain.
+
+    
+  The Bitcoin blockchain networks do not support this
+  operation.
+
+    
+  Metadata is currently only available for some `ERC-20` contracts.
+  Metadata will be available for additional contracts in the future.
+  """
+  @spec get_asset_contract(map(), get_asset_contract_input(), list()) ::
+          {:ok, get_asset_contract_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_asset_contract_errors()}
+  def get_asset_contract(%Client{} = client, input, options \\ []) do
+    url_path = "/get-asset-contract"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Gets the balance of a specific token, including native tokens, for a given
+  address (wallet or contract) on the blockchain.
+
+  Only the native tokens BTC and ETH, and the ERC-20,
+  ERC-721, and ERC 1155 token standards are supported.
+  """
+  @spec get_token_balance(map(), get_token_balance_input(), list()) ::
+          {:ok, get_token_balance_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_token_balance_errors()}
+  def get_token_balance(%Client{} = client, input, options \\ []) do
+    url_path = "/get-token-balance"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Gets the details of a transaction.
+
+  This action will return transaction details for all transactions
+  that are *confirmed* on the blockchain, even if they have not reached
+  [finality](https://docs.aws.amazon.com/managed-blockchain/latest/ambq-dg/key-concepts.html#finality).
+  """
+  @spec get_transaction(map(), get_transaction_input(), list()) ::
+          {:ok, get_transaction_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_transaction_errors()}
+  def get_transaction(%Client{} = client, input, options \\ []) do
+    url_path = "/get-transaction"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists all the contracts for a given contract type deployed by an address
+  (either a contract address or a wallet address).
+
+  The Bitcoin blockchain networks do not support this
+  operation.
+  """
+  @spec list_asset_contracts(map(), list_asset_contracts_input(), list()) ::
+          {:ok, list_asset_contracts_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_asset_contracts_errors()}
+  def list_asset_contracts(%Client{} = client, input, options \\ []) do
+    url_path = "/list-asset-contracts"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists all the transaction events for an address on the blockchain.
+
+  This operation is only supported on the Bitcoin networks.
+  """
+  @spec list_filtered_transaction_events(map(), list_filtered_transaction_events_input(), list()) ::
+          {:ok, list_filtered_transaction_events_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_filtered_transaction_events_errors()}
+  def list_filtered_transaction_events(%Client{} = client, input, options \\ []) do
+    url_path = "/list-filtered-transaction-events"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  This action returns the following for a given blockchain network:
+
+    *
+  Lists all token balances owned by an address (either a contract
+  address or a wallet address).
+
+    *
+  Lists all token balances for all tokens created by a contract.
+
+    *
+  Lists all token balances for a given token.
+
+  You must always specify the network property of
+  the `tokenFilter` when using this operation.
+  """
+  @spec list_token_balances(map(), list_token_balances_input(), list()) ::
+          {:ok, list_token_balances_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_token_balances_errors()}
+  def list_token_balances(%Client{} = client, input, options \\ []) do
+    url_path = "/list-token-balances"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists all the transaction events for a transaction
+
+  This action will return transaction details for all transactions
+  that are *confirmed* on the blockchain, even if they have not reached
+  [finality](https://docs.aws.amazon.com/managed-blockchain/latest/ambq-dg/key-concepts.html#finality).
+  """
+  @spec list_transaction_events(map(), list_transaction_events_input(), list()) ::
+          {:ok, list_transaction_events_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_transaction_events_errors()}
+  def list_transaction_events(%Client{} = client, input, options \\ []) do
+    url_path = "/list-transaction-events"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists all the transaction events for a transaction.
+  """
+  @spec list_transactions(map(), list_transactions_input(), list()) ::
+          {:ok, list_transactions_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_transactions_errors()}
+  def list_transactions(%Client{} = client, input, options \\ []) do
+    url_path = "/list-transactions"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+end

@@ -1,0 +1,1046 @@
+# WARNING: DO NOT EDIT, AUTO-GENERATED CODE!
+# See https://github.com/aws-beam/aws-codegen for more details.
+
+defmodule AWS.MWAA do
+  @moduledoc """
+  Amazon Managed Workflows for Apache Airflow
+
+  This section contains the Amazon Managed Workflows for Apache Airflow (MWAA) API
+  reference documentation.
+
+  For more information, see [What is Amazon MWAA?](https://docs.aws.amazon.com/mwaa/latest/userguide/what-is-mwaa.html).
+
+  ## Endpoints
+
+    * `api.airflow.{region}.amazonaws.com` (use
+  `api.airflow.{region}.api.aws` for IPv6) - This endpoint is used for environment
+  management.
+
+      *
+  [CreateEnvironment](https://docs.aws.amazon.com/mwaa/latest/API/API_CreateEnvironment.html)       *
+  [DeleteEnvironment](https://docs.aws.amazon.com/mwaa/latest/API/API_DeleteEnvironment.html)
+
+      *
+  [GetEnvironment](https://docs.aws.amazon.com/mwaa/latest/API/API_GetEnvironment.html)       *
+  [ListEnvironments](https://docs.aws.amazon.com/mwaa/latest/API/API_ListEnvironments.html)
+
+      *
+  [ListTagsForResource](https://docs.aws.amazon.com/mwaa/latest/API/API_ListTagsForResource.html)       *
+  [TagResource](https://docs.aws.amazon.com/mwaa/latest/API/API_TagResource.html)
+
+      *
+  [UntagResource](https://docs.aws.amazon.com/mwaa/latest/API/API_UntagResource.html)       *
+  [UpdateEnvironment](https://docs.aws.amazon.com/mwaa/latest/API/API_UpdateEnvironment.html)
+
+    * `env.airflow.{region}.amazonaws.com` (use
+  `env.airflow.{region}.api.aws` for IPv6) - This endpoint is used to operate the
+  Airflow environment.
+
+      *
+  [CreateCliToken](https://docs.aws.amazon.com/mwaa/latest/API/API_CreateCliToken.html )
+
+      *
+  [CreateWebLoginToken](https://docs.aws.amazon.com/mwaa/latest/API/API_CreateWebLoginToken.html)
+
+      *
+  [InvokeRestApi](https://docs.aws.amazon.com/mwaa/latest/API/API_InvokeRestApi.html) 
+
+  ## Regions
+
+  For a list of supported regions, see [Amazon MWAA endpoints and
+  quotas](https://docs.aws.amazon.com/general/latest/gr/mwaa.html) in the *Amazon
+  Web Services General Reference*.
+  """
+
+  alias AWS.Client
+  alias AWS.Request
+
+  @typedoc """
+
+  ## Example:
+
+      create_environment_output() :: %{
+        optional("Arn") => String.t() | atom()
+      }
+
+  """
+  @type create_environment_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      rest_api_server_exception() :: %{
+        "RestApiResponse" => any(),
+        "RestApiStatusCode" => [integer()]
+      }
+
+  """
+  @type rest_api_server_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      service_unavailable_exception() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type service_unavailable_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_tags_for_resource_output() :: %{
+        optional("Tags") => map()
+      }
+
+  """
+  @type list_tags_for_resource_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invoke_rest_api_request() :: %{
+        optional("Body") => any(),
+        optional("QueryParameters") => [any()],
+        required("Method") => String.t() | atom(),
+        required("Path") => String.t() | atom()
+      }
+
+  """
+  @type invoke_rest_api_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      access_denied_exception() :: %{
+        "Message" => [String.t() | atom()]
+      }
+
+  """
+  @type access_denied_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      tag_resource_output() :: %{}
+
+  """
+  @type tag_resource_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      network_configuration() :: %{
+        "SecurityGroupIds" => list(String.t() | atom()),
+        "SubnetIds" => list(String.t() | atom())
+      }
+
+  """
+  @type network_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      publish_metrics_input() :: %{
+        "MetricData" => list(metric_datum())
+      }
+
+  """
+  @type publish_metrics_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_environment_output() :: %{}
+
+  """
+  @type delete_environment_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      metric_datum() :: %{
+        "Dimensions" => list(dimension()),
+        "MetricName" => [String.t() | atom()],
+        "StatisticValues" => statistic_set(),
+        "Timestamp" => [non_neg_integer()],
+        "Unit" => String.t() | atom(),
+        "Value" => [float()]
+      }
+
+  """
+  @type metric_datum() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invoke_rest_api_response() :: %{
+        "RestApiResponse" => any(),
+        "RestApiStatusCode" => [integer()]
+      }
+
+  """
+  @type invoke_rest_api_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      validation_exception() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type validation_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      logging_configuration() :: %{
+        "DagProcessingLogs" => module_logging_configuration(),
+        "SchedulerLogs" => module_logging_configuration(),
+        "TaskLogs" => module_logging_configuration(),
+        "WebserverLogs" => module_logging_configuration(),
+        "WorkerLogs" => module_logging_configuration()
+      }
+
+  """
+  @type logging_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      last_update() :: %{
+        "CreatedAt" => non_neg_integer(),
+        "Error" => update_error(),
+        "Source" => String.t() | atom(),
+        "Status" => String.t() | atom(),
+        "WorkerReplacementStrategy" => String.t() | atom()
+      }
+
+  """
+  @type last_update() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_cli_token_request() :: %{}
+
+  """
+  @type create_cli_token_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      tag_resource_input() :: %{
+        required("Tags") => map()
+      }
+
+  """
+  @type tag_resource_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      internal_server_exception() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type internal_server_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_network_configuration_input() :: %{
+        "SecurityGroupIds" => list(String.t() | atom())
+      }
+
+  """
+  @type update_network_configuration_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      resource_not_found_exception() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type resource_not_found_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      untag_resource_input() :: %{
+        required("tagKeys") => list(String.t() | atom())
+      }
+
+  """
+  @type untag_resource_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      rest_api_client_exception() :: %{
+        "RestApiResponse" => any(),
+        "RestApiStatusCode" => [integer()]
+      }
+
+  """
+  @type rest_api_client_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_environment_output() :: %{
+        optional("Environment") => environment()
+      }
+
+  """
+  @type get_environment_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      environment() :: %{
+        "WebserverUrl" => String.t() | atom(),
+        "NetworkConfiguration" => network_configuration(),
+        "WeeklyMaintenanceWindowStart" => String.t() | atom(),
+        "AirflowConfigurationOptions" => map(),
+        "ExecutionRoleArn" => String.t() | atom(),
+        "MinWorkers" => integer(),
+        "DagS3Path" => String.t() | atom(),
+        "EnvironmentClass" => String.t() | atom(),
+        "RequirementsS3ObjectVersion" => String.t() | atom(),
+        "WebserverAccessMode" => String.t() | atom(),
+        "AirflowVersion" => String.t() | atom(),
+        "MaxWorkers" => integer(),
+        "MinWebservers" => integer(),
+        "CreatedAt" => non_neg_integer(),
+        "Name" => String.t() | atom(),
+        "LastUpdate" => last_update(),
+        "RequirementsS3Path" => String.t() | atom(),
+        "PluginsS3ObjectVersion" => String.t() | atom(),
+        "LoggingConfiguration" => logging_configuration(),
+        "WebserverVpcEndpointService" => String.t() | atom(),
+        "MaxWebservers" => integer(),
+        "Status" => String.t() | atom(),
+        "ServiceRoleArn" => String.t() | atom(),
+        "StartupScriptS3Path" => [String.t() | atom()],
+        "CeleryExecutorQueue" => String.t() | atom(),
+        "Arn" => String.t() | atom(),
+        "StartupScriptS3ObjectVersion" => [String.t() | atom()],
+        "KmsKey" => String.t() | atom(),
+        "DatabaseVpcEndpointService" => String.t() | atom(),
+        "EndpointManagement" => String.t() | atom(),
+        "Tags" => map(),
+        "PluginsS3Path" => String.t() | atom(),
+        "Schedulers" => integer(),
+        "SourceBucketArn" => String.t() | atom()
+      }
+
+  """
+  @type environment() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      logging_configuration_input() :: %{
+        "DagProcessingLogs" => module_logging_configuration_input(),
+        "SchedulerLogs" => module_logging_configuration_input(),
+        "TaskLogs" => module_logging_configuration_input(),
+        "WebserverLogs" => module_logging_configuration_input(),
+        "WorkerLogs" => module_logging_configuration_input()
+      }
+
+  """
+  @type logging_configuration_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_error() :: %{
+        "ErrorCode" => String.t() | atom(),
+        "ErrorMessage" => String.t() | atom()
+      }
+
+  """
+  @type update_error() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      publish_metrics_output() :: %{}
+
+  """
+  @type publish_metrics_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      statistic_set() :: %{
+        "Maximum" => [float()],
+        "Minimum" => [float()],
+        "SampleCount" => [integer()],
+        "Sum" => [float()]
+      }
+
+  """
+  @type statistic_set() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_environment_input() :: %{
+        "AirflowConfigurationOptions" => map(),
+        "AirflowVersion" => String.t() | atom(),
+        "DagS3Path" => String.t() | atom(),
+        "EndpointManagement" => String.t() | atom(),
+        "EnvironmentClass" => String.t() | atom(),
+        "ExecutionRoleArn" => String.t() | atom(),
+        "KmsKey" => String.t() | atom(),
+        "LoggingConfiguration" => logging_configuration_input(),
+        "MaxWebservers" => integer(),
+        "MaxWorkers" => integer(),
+        "MinWebservers" => integer(),
+        "MinWorkers" => integer(),
+        "NetworkConfiguration" => network_configuration(),
+        "PluginsS3ObjectVersion" => String.t() | atom(),
+        "PluginsS3Path" => String.t() | atom(),
+        "RequirementsS3ObjectVersion" => String.t() | atom(),
+        "RequirementsS3Path" => String.t() | atom(),
+        "Schedulers" => integer(),
+        "SourceBucketArn" => String.t() | atom(),
+        "StartupScriptS3ObjectVersion" => String.t() | atom(),
+        "StartupScriptS3Path" => String.t() | atom(),
+        "Tags" => map(),
+        "WebserverAccessMode" => String.t() | atom(),
+        "WeeklyMaintenanceWindowStart" => String.t() | atom()
+      }
+
+  """
+  @type create_environment_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_cli_token_response() :: %{
+        optional("CliToken") => String.t() | atom(),
+        optional("WebServerHostname") => String.t() | atom()
+      }
+
+  """
+  @type create_cli_token_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      module_logging_configuration_input() :: %{
+        "Enabled" => boolean(),
+        "LogLevel" => String.t() | atom()
+      }
+
+  """
+  @type module_logging_configuration_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_environment_input() :: %{
+        optional("AirflowConfigurationOptions") => map(),
+        optional("AirflowVersion") => String.t() | atom(),
+        optional("DagS3Path") => String.t() | atom(),
+        optional("EnvironmentClass") => String.t() | atom(),
+        optional("ExecutionRoleArn") => String.t() | atom(),
+        optional("LoggingConfiguration") => logging_configuration_input(),
+        optional("MaxWebservers") => integer(),
+        optional("MaxWorkers") => integer(),
+        optional("MinWebservers") => integer(),
+        optional("MinWorkers") => integer(),
+        optional("NetworkConfiguration") => update_network_configuration_input(),
+        optional("PluginsS3ObjectVersion") => String.t() | atom(),
+        optional("PluginsS3Path") => String.t() | atom(),
+        optional("RequirementsS3ObjectVersion") => String.t() | atom(),
+        optional("RequirementsS3Path") => String.t() | atom(),
+        optional("Schedulers") => integer(),
+        optional("SourceBucketArn") => String.t() | atom(),
+        optional("StartupScriptS3ObjectVersion") => String.t() | atom(),
+        optional("StartupScriptS3Path") => String.t() | atom(),
+        optional("WebserverAccessMode") => String.t() | atom(),
+        optional("WeeklyMaintenanceWindowStart") => String.t() | atom(),
+        optional("WorkerReplacementStrategy") => String.t() | atom()
+      }
+
+  """
+  @type update_environment_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_tags_for_resource_input() :: %{}
+
+  """
+  @type list_tags_for_resource_input() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      module_logging_configuration() :: %{
+        "CloudWatchLogGroupArn" => String.t() | atom(),
+        "Enabled" => boolean(),
+        "LogLevel" => String.t() | atom()
+      }
+
+  """
+  @type module_logging_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_environments_output() :: %{
+        optional("NextToken") => String.t() | atom(),
+        required("Environments") => list(String.t() | atom())
+      }
+
+  """
+  @type list_environments_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      dimension() :: %{
+        "Name" => [String.t() | atom()],
+        "Value" => [String.t() | atom()]
+      }
+
+  """
+  @type dimension() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_web_login_token_response() :: %{
+        optional("AirflowIdentity") => String.t() | atom(),
+        optional("IamIdentity") => String.t() | atom(),
+        optional("WebServerHostname") => String.t() | atom(),
+        optional("WebToken") => String.t() | atom()
+      }
+
+  """
+  @type create_web_login_token_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_environment_input() :: %{}
+
+  """
+  @type delete_environment_input() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      get_environment_input() :: %{}
+
+  """
+  @type get_environment_input() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      untag_resource_output() :: %{}
+
+  """
+  @type untag_resource_output() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      create_web_login_token_request() :: %{}
+
+  """
+  @type create_web_login_token_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      list_environments_input() :: %{
+        optional("MaxResults") => [integer()],
+        optional("NextToken") => String.t() | atom()
+      }
+
+  """
+  @type list_environments_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_environment_output() :: %{
+        optional("Arn") => String.t() | atom()
+      }
+
+  """
+  @type update_environment_output() :: %{(String.t() | atom()) => any()}
+
+  @type create_cli_token_errors() :: resource_not_found_exception()
+
+  @type create_environment_errors() ::
+          internal_server_exception() | validation_exception() | service_unavailable_exception()
+
+  @type create_web_login_token_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+
+  @type delete_environment_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | service_unavailable_exception()
+
+  @type get_environment_errors() ::
+          resource_not_found_exception() | internal_server_exception() | validation_exception()
+
+  @type invoke_rest_api_errors() ::
+          rest_api_client_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | rest_api_server_exception()
+
+  @type list_environments_errors() :: internal_server_exception() | validation_exception()
+
+  @type list_tags_for_resource_errors() ::
+          resource_not_found_exception() | internal_server_exception() | validation_exception()
+
+  @type publish_metrics_errors() :: internal_server_exception() | validation_exception()
+
+  @type tag_resource_errors() ::
+          resource_not_found_exception() | internal_server_exception() | validation_exception()
+
+  @type untag_resource_errors() ::
+          resource_not_found_exception() | internal_server_exception() | validation_exception()
+
+  @type update_environment_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | service_unavailable_exception()
+
+  def metadata do
+    %{
+      api_version: "2020-07-01",
+      content_type: "application/x-amz-json-1.1",
+      credential_scope: nil,
+      endpoint_prefix: "airflow",
+      global?: false,
+      hostname: nil,
+      protocol: "rest-json",
+      service_id: "MWAA",
+      signature_version: "v4",
+      signing_name: "airflow",
+      target_prefix: nil
+    }
+  end
+
+  @doc """
+  Creates a CLI token for the Airflow CLI.
+
+  To learn more, see [Creating an Apache Airflow CLI token](https://docs.aws.amazon.com/mwaa/latest/userguide/call-mwaa-apis-cli.html).
+  """
+  @spec create_cli_token(map(), String.t() | atom(), create_cli_token_request(), list()) ::
+          {:ok, create_cli_token_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_cli_token_errors()}
+  def create_cli_token(%Client{} = client, name, input, options \\ []) do
+    url_path = "/clitoken/#{AWS.Util.encode_uri(name)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata() |> Map.put_new(:host_prefix, "env.")
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Creates an Amazon Managed Workflows for Apache Airflow (Amazon MWAA)
+  environment.
+  """
+  @spec create_environment(map(), String.t() | atom(), create_environment_input(), list()) ::
+          {:ok, create_environment_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_environment_errors()}
+  def create_environment(%Client{} = client, name, input, options \\ []) do
+    url_path = "/environments/#{AWS.Util.encode_uri(name)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata() |> Map.put_new(:host_prefix, "api.")
+
+    Request.request_rest(
+      client,
+      meta,
+      :put,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Creates a web login token for the Airflow Web UI.
+
+  To learn more, see [Creating an Apache Airflow web login token](https://docs.aws.amazon.com/mwaa/latest/userguide/call-mwaa-apis-web.html).
+  """
+  @spec create_web_login_token(
+          map(),
+          String.t() | atom(),
+          create_web_login_token_request(),
+          list()
+        ) ::
+          {:ok, create_web_login_token_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_web_login_token_errors()}
+  def create_web_login_token(%Client{} = client, name, input, options \\ []) do
+    url_path = "/webtoken/#{AWS.Util.encode_uri(name)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata() |> Map.put_new(:host_prefix, "env.")
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Deletes an Amazon Managed Workflows for Apache Airflow (Amazon MWAA)
+  environment.
+  """
+  @spec delete_environment(map(), String.t() | atom(), delete_environment_input(), list()) ::
+          {:ok, delete_environment_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_environment_errors()}
+  def delete_environment(%Client{} = client, name, input, options \\ []) do
+    url_path = "/environments/#{AWS.Util.encode_uri(name)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata() |> Map.put_new(:host_prefix, "api.")
+
+    Request.request_rest(
+      client,
+      meta,
+      :delete,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Describes an Amazon Managed Workflows for Apache Airflow (MWAA) environment.
+  """
+  @spec get_environment(map(), String.t() | atom(), list()) ::
+          {:ok, get_environment_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_environment_errors()}
+  def get_environment(%Client{} = client, name, options \\ []) do
+    url_path = "/environments/#{AWS.Util.encode_uri(name)}"
+    headers = []
+    query_params = []
+
+    meta = metadata() |> Map.put_new(:host_prefix, "api.")
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Invokes the Apache Airflow REST API on the webserver with the specified inputs.
+
+  To learn more, see [Using the Apache Airflow REST API](https://docs.aws.amazon.com/mwaa/latest/userguide/access-mwaa-apache-airflow-rest-api.html)
+  """
+  @spec invoke_rest_api(map(), String.t() | atom(), invoke_rest_api_request(), list()) ::
+          {:ok, invoke_rest_api_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, invoke_rest_api_errors()}
+  def invoke_rest_api(%Client{} = client, name, input, options \\ []) do
+    url_path = "/restapi/#{AWS.Util.encode_uri(name)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata() |> Map.put_new(:host_prefix, "env.")
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists the Amazon Managed Workflows for Apache Airflow (MWAA) environments.
+  """
+  @spec list_environments(map(), String.t() | atom() | nil, String.t() | atom() | nil, list()) ::
+          {:ok, list_environments_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_environments_errors()}
+  def list_environments(%Client{} = client, max_results \\ nil, next_token \\ nil, options \\ []) do
+    url_path = "/environments"
+    headers = []
+    query_params = []
+
+    query_params =
+      if !is_nil(next_token) do
+        [{"NextToken", next_token} | query_params]
+      else
+        query_params
+      end
+
+    query_params =
+      if !is_nil(max_results) do
+        [{"MaxResults", max_results} | query_params]
+      else
+        query_params
+      end
+
+    meta = metadata() |> Map.put_new(:host_prefix, "api.")
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Lists the key-value tag pairs associated to the Amazon Managed Workflows for
+  Apache Airflow (MWAA) environment.
+
+  For example, `"Environment": "Staging"`.
+  """
+  @spec list_tags_for_resource(map(), String.t() | atom(), list()) ::
+          {:ok, list_tags_for_resource_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_tags_for_resource_errors()}
+  def list_tags_for_resource(%Client{} = client, resource_arn, options \\ []) do
+    url_path = "/tags/#{AWS.Util.encode_uri(resource_arn)}"
+    headers = []
+    query_params = []
+
+    meta = metadata() |> Map.put_new(:host_prefix, "api.")
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  **Internal only**.
+
+  Publishes environment health metrics to Amazon CloudWatch.
+  """
+  @spec publish_metrics(map(), String.t() | atom(), publish_metrics_input(), list()) ::
+          {:ok, publish_metrics_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, publish_metrics_errors()}
+  def publish_metrics(%Client{} = client, environment_name, input, options \\ []) do
+    url_path = "/metrics/environments/#{AWS.Util.encode_uri(environment_name)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata() |> Map.put_new(:host_prefix, "ops.")
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Associates key-value tag pairs to your Amazon Managed Workflows for Apache
+  Airflow (MWAA) environment.
+  """
+  @spec tag_resource(map(), String.t() | atom(), tag_resource_input(), list()) ::
+          {:ok, tag_resource_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, tag_resource_errors()}
+  def tag_resource(%Client{} = client, resource_arn, input, options \\ []) do
+    url_path = "/tags/#{AWS.Util.encode_uri(resource_arn)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata() |> Map.put_new(:host_prefix, "api.")
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Removes key-value tag pairs associated to your Amazon Managed Workflows for
+  Apache Airflow (MWAA) environment.
+
+  For example, `"Environment": "Staging"`.
+  """
+  @spec untag_resource(map(), String.t() | atom(), untag_resource_input(), list()) ::
+          {:ok, untag_resource_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, untag_resource_errors()}
+  def untag_resource(%Client{} = client, resource_arn, input, options \\ []) do
+    url_path = "/tags/#{AWS.Util.encode_uri(resource_arn)}"
+    headers = []
+    custom_headers = []
+
+    {query_params, input} =
+      [
+        {"tagKeys", "tagKeys"}
+      ]
+      |> Request.build_params(input)
+
+    meta = metadata() |> Map.put_new(:host_prefix, "api.")
+
+    Request.request_rest(
+      client,
+      meta,
+      :delete,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Updates an Amazon Managed Workflows for Apache Airflow (MWAA) environment.
+  """
+  @spec update_environment(map(), String.t() | atom(), update_environment_input(), list()) ::
+          {:ok, update_environment_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, update_environment_errors()}
+  def update_environment(%Client{} = client, name, input, options \\ []) do
+    url_path = "/environments/#{AWS.Util.encode_uri(name)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata() |> Map.put_new(:host_prefix, "api.")
+
+    Request.request_rest(
+      client,
+      meta,
+      :patch,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+end
