@@ -378,12 +378,15 @@ defprotocol Flop.Schema do
   `{mod :: module, function :: atom, opts :: keyword}`.
 
   - `filter` is called to filter by the field. It receives the Ecto query, the
-    Flop filter and an options keyword list, and returns the updated query. A
-    custom field needs it to be filterable.
-  - `field_dynamic` is called to order by the field. It receives an options
-    keyword list and returns an `Ecto.Query.dynamic_expr`, which Flop applies
-    the order direction to. It receives neither the query nor the direction. A
-    custom field needs it to be sortable.
+    Flop filter and an options keyword list, and returns the updated query. Use
+    this when the built-in operators cannot express the filter. A custom field
+    needs either `filter` or `field_dynamic` to be filterable.
+  - `field_dynamic` is called to order by the field, and to filter by the field
+    when `filter` is not set. It receives an options keyword list and returns an
+    `Ecto.Query.dynamic_expr`. For ordering, Flop applies the order direction to
+    the expression. For filtering, Flop applies the built-in operators to it.
+    It receives neither the query nor the direction. A custom field needs it to
+    be sortable.
 
   If runtime options are necessary (like the timezone of the request or the user
   ID of the current user), use the `extra_opts` option when calling Flop
@@ -624,11 +627,13 @@ defprotocol Flop.Schema do
   - `:filter` - A module/function/options tuple referencing a custom filter
     function. The function must take the Ecto query, the `Flop.Filter` struct,
     and the options from the tuple as arguments, and return the updated query.
-    Required if the field is filterable.
+    Required if the field is filterable and `:field_dynamic` is not set.
   - `:field_dynamic` - A module/function/options tuple referencing a function
     that returns the field expression as an `Ecto.Query.dynamic_expr`. The
     function takes the options from the tuple as its only argument. Flop applies
-    the order direction to the expression. Required if the field is sortable.
+    the order direction to the expression when sorting, and the built-in filter
+    operators when filtering if `:filter` is not set. Required if the field is
+    sortable. Also sufficient to make the field filterable.
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator
     and value validation is based on this option.
   - `:bindings` - If either callback requires certain named bindings to be

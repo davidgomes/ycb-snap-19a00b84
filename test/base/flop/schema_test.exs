@@ -413,7 +413,7 @@ defmodule Flop.SchemaTest do
     assert error.message =~ ":inserted_at"
   end
 
-  test "raises error if a filterable custom field has no filter" do
+  test "raises error if a filterable custom field has neither callback" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Sage do
@@ -423,7 +423,6 @@ defmodule Flop.SchemaTest do
             sortable: [],
             custom_fields: [
               inserted_at: [
-                field_dynamic: {__MODULE__, :some_function, []},
                 ecto_type: :utc_datetime
               ]
             ]
@@ -432,10 +431,34 @@ defmodule Flop.SchemaTest do
         end
       end
 
-    assert error.message =~
-             "custom field without filter function marked as filterable"
+    assert error.message =~ "without filter or field_dynamic"
 
     assert error.message =~ ":inserted_at"
+  end
+
+  test "allows a filterable custom field with only field_dynamic" do
+    defmodule Cilantro do
+      @derive {
+        Flop.Schema,
+        filterable: [:inserted_at],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [
+            field_dynamic: {__MODULE__, :some_function, []},
+            ecto_type: :utc_datetime
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    assert %Flop.FieldInfo{
+             extra: %{
+               type: :custom,
+               filter: nil,
+               field_dynamic: {Cilantro, :some_function, []}
+             }
+           } = Schema.field_info(struct(Cilantro), :inserted_at)
   end
 
   test "allows a custom field with only the callback it needs" do
@@ -463,5 +486,16 @@ defmodule Flop.SchemaTest do
 
     assert %Flop.FieldInfo{extra: %{type: :custom, filter: nil}} =
              Schema.field_info(struct(Thyme), :sorted)
+  end
+
+  test "accepts filters for a custom field with only field_dynamic" do
+    assert {:ok, %Flop{filters: [filter]}} =
+             Flop.validate(
+               %{filters: [%{field: :age_score, op: :==, value: 40}]},
+               for: MyApp.CustomFieldPet
+             )
+
+    assert filter.field == :age_score
+    assert filter.value == 40
   end
 end

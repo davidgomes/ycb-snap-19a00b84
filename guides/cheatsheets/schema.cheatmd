@@ -387,6 +387,10 @@ end
 
 ### Custom field functions
 
+If the field only needs the built-in operators applied to an expression,
+`field_dynamic` is enough for both filtering and ordering. A `filter`
+function is only needed when you have to rewrite the query yourself.
+
 ```elixir
 defmodule CustomFields do
   import Ecto.Query
