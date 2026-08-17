@@ -145,8 +145,8 @@ defmodule Warehouse.Kit do
     {sku_demands, remainder} =
       Enum.reduce_while(kits, {sku_demands, demand}, fn kit, {sku_demands, remainder} ->
         able_grabs = AdditiveMap.get(availability, kit.sku_id)
+        sku_demand = min(remainder, able_grabs) * kit.quantity
         new_remainder = max(remainder - able_grabs, 0)
-        sku_demand = (remainder - new_remainder) * kit.quantity
 
         acc = {AdditiveMap.add(sku_demands, kit.sku_id, sku_demand), new_remainder}
 

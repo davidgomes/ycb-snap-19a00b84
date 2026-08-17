@@ -105,6 +105,15 @@ defmodule Warehouse.KitTest do
       assert AdditiveMap.get(demand, sku_one_id) == 20
       assert AdditiveMap.get(demand, sku_two_id) == 0
     end
+
+    test "does not add demand to other skus when demand is lower than first sku capacity" do
+      %{sku: %{id: sku_one_id}, kit: kit_one} = sku_stock_fixture(20)
+      %{sku: %{id: sku_two_id}, kit: kit_two} = sku_stock_fixture(20)
+
+      demand = Kit.kit_sku_demand([kit_one, kit_two], 15)
+      assert AdditiveMap.get(demand, sku_one_id) == 15
+      assert AdditiveMap.get(demand, sku_two_id) == 0
+    end
   end
 
   describe "kit_sku_availability/1" do
