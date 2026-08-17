@@ -1,0 +1,15 @@
+<h1>Show Subscriber</h1>
+
+<ul>
+  <li>
+    <strong>Name:</strong>
+    <%= @subscriber.name %>
+  </li>
+
+  <li>
+    <strong>Email:</strong>
+    <%= @subscriber.email %>
+  </li>
+</ul>
+
+<span><%= link "New Subscriber", to: Routes.subscriber_path(@conn, :new) %></span>
