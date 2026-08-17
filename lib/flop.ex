@@ -638,6 +638,18 @@ defmodule Flop do
 
   Also note that you will need to pass the `for` option in order for Flop to be
   able to find your join, compound, alias and custom field configuration.
+
+  ## Cursor pagination requires the repo
+
+  Flop determines the placement of nulls from the repo's Ecto adapter. Without
+  a repo, this function raises for a cursor with `:asc` or `:desc`. The repo
+  can be set via application environment, backend module, or by passing the
+  option directly:
+
+      Flop.query(MyApp.Pet, flop, for: MyApp.Pet, repo: MyApp.Repo)
+
+  If you only use the `:asc_nulls_first`, `:asc_nulls_last`, `:desc_nulls_first`
+  and `:desc_nulls_last` directions, the repo is not required.
   """
   @doc since: "0.1.0"
   @doc group: :queries
