@@ -1,0 +1,103 @@
+defmodule Guardian.Permissions.AtomEncodingTest do
+  use ExUnit.Case, async: true
+
+  defmodule Impl do
+    use Guardian,
+      permissions: %{
+        user: [:read, :write],
+        profile: %{read: 0b1, write: 0b10}
+      }
+
+    use Guardian.Permissions, encoding: Guardian.Permissions.AtomEncoding
+
+    def subject_for_token(resource, _claims), do: {:ok, resource}
+    def resource_from_claims(claims), do: {:ok, claims["sub"]}
+
+    def build_claims(claims, _resource, opts) do
+      encode_permissions_into_claims!(claims, Keyword.get(opts, :permissions))
+    end
+  end
+
+  describe "encode_permissions" do
+    test "it encodes to an empty map when there are no permissions given" do
+      %{} = result = Impl.encode_permissions!(%{})
+      assert Enum.empty?(result)
+    end
+
+    test "it encodes when provided with an atom map" do
+      perms = %{profile: [:read, :write], user: [:read]}
+      result = Impl.encode_permissions!(perms)
+      assert result == %{profile: [:write, :read], user: [:read]}
+    end
+
+    test "it encodes when provided with a string map" do
+      perms = %{"profile" => ["read", "write"], "user" => ["read"]}
+      result = Impl.encode_permissions!(perms)
+      assert result == %{profile: [:write, :read], user: [:read]}
+    end
+
+    test "it encodes when provided with an integer" do
+      perms = %{profile: [], user: 0b1}
+      result = Impl.encode_permissions!(perms)
+      assert result == %{profile: [], user: [:read]}
+    end
+
+    test "it is ok with using max permissions" do
+      perms = %{profile: Impl.max(), user: 0b1}
+      result = Impl.encode_permissions!(perms)
+      assert result == %{profile: [:read, :write], user: [:read]}
+    end
+
+    test "when setting from an integer it does not lose resolution" do
+      perms = %{profile: Impl.max(), user: 0b111111}
+      result = Impl.encode_permissions!(perms)
+      assert result == %{profile: [:read, :write], user: [:read, :write]}
+    end
+  end
+
+  describe "encode/3 with a list of binaries" do
+    alias Guardian.Permissions.AtomEncoding
+
+    @perm_set Guardian.Permissions.normalize_permissions(%{"default" => ["read", "write"]})
+
+    test "it encodes known permissions to existing atoms" do
+      assert AtomEncoding.encode(["read", "write"], "default", @perm_set) == [:write, :read]
+    end
+
+    test "it drops unknown permissions instead of minting atoms" do
+      assert AtomEncoding.encode(["read", "bogus"], "default", @perm_set) == [:read]
+    end
+
+    test "it does not create atoms for attacker-supplied binaries" do
+      attacker = for i <- 1..5_000, do: "attacker_perm_#{i}"
+
+      assert AtomEncoding.encode(attacker, "default", @perm_set) == []
+
+      for permission <- attacker do
+        assert_raise ArgumentError, ~r/not an already existing atom/, fn ->
+          String.to_existing_atom(permission)
+        end
+      end
+    end
+  end
+
+  describe "decode_permissions" do
+    test "it decodes to an empty map when there are no permissions given" do
+      perms = %{profile: [:read], user: []}
+      result = Impl.decode_permissions(perms)
+      assert result == %{profile: [:read], user: []}
+    end
+
+    test "when setting from an integer it ignores extra resolution" do
+      perms = %{profile: [:read, :write], user: [:read, :write]}
+      result = Impl.decode_permissions(perms)
+      assert result == %{profile: [:read, :write], user: [:read, :write]}
+    end
+
+    test "it ignores unknown permission sets" do
+      perms = %{profile: [:read, :write], unknown: [:read]}
+      result = Impl.decode_permissions(perms)
+      assert result == %{profile: [:read, :write]}
+    end
+  end
+end
