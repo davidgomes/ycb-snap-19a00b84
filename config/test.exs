@@ -23,6 +23,9 @@ config :free_oban_ui, FreeObanUiWeb.Endpoint,
 # In test we don't send emails
 config :free_oban_ui, FreeObanUi.Mailer, adapter: Swoosh.Adapters.Test
 
+# Disable queues and plugins during test; jobs are inserted but not executed
+config :free_oban_ui, Oban, testing: :manual
+
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 
