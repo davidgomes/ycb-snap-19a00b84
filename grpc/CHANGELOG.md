@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Enhancements
+
+  * The client load balancer is now ETS-backed and performs a real pick on every RPC (per-request), instead of caching a single pick refreshed on a timer. `persistent_term` writes on DNS reconciliation were removed; `persistent_term` now only stores a lightweight `{lb_mod, lb_state}` handle set once at connect time and erased on disconnect.
+
 ## v1.0.0 (2026-06-15)
 
 ### Enhancements
