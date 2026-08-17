@@ -1,0 +1,322 @@
+defmodule PetalComponents.CardTest do
+  use ComponentCase
+  import PetalComponents.Card
+
+  test "Basic card" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.card>
+        <.card_content category="Article" heading="Enhance your Phoenix development">
+          <div class="mt-4 font-light text-gray-500 text-md">
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus eget leo interdum, feugiat ligula eu, facilisis massa. Nunc sollicitudin massa a elit laoreet.
+          </div>
+        </.card_content>
+      </.card>
+      """)
+
+    assert html =~ "Enhance"
+    assert html =~ "Article"
+    assert html =~ "pc-card--basic"
+  end
+
+  test "Outline card" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.card variant="outline">
+        <.card_content category="Article" heading="Enhance your Phoenix development">
+          <div class="mt-4 font-light text-gray-500 text-md">
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus eget leo interdum, feugiat ligula eu, facilisis massa. Nunc sollicitudin massa a elit laoreet.
+          </div>
+        </.card_content>
+      </.card>
+      """)
+
+    assert html =~ "Enhance"
+    assert html =~ "Article"
+    assert html =~ "pc-card--outline"
+  end
+
+  test "Card with media no url" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.card variant="outline">
+        <.card_media class="h-48" />
+        <.card_content category="Article" heading="Enhance your Phoenix development">
+          <div class="mt-4 font-light text-gray-500 text-md">
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus eget leo interdum, feugiat ligula eu, facilisis massa. Nunc sollicitudin massa a elit laoreet.
+          </div>
+        </.card_content>
+      </.card>
+      """)
+
+    assert html =~ "Enhance"
+    assert html =~ "Article"
+    assert html =~ "pc-card--outline"
+    assert html =~ "pc-card__image-placeholder"
+  end
+
+  test "Card with media and url" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.card variant="outline">
+        <.card_media
+          class="h-48"
+          src="https://images.unsplash.com/photo-1551434678-e076c223a692?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2340&q=80"
+        />
+        <.card_content category="Article" heading="Enhance your Phoenix development">
+          <div class="mt-4 font-light text-gray-500 text-md">
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus eget leo interdum, feugiat ligula eu, facilisis massa. Nunc sollicitudin massa a elit laoreet.
+          </div>
+        </.card_content>
+      </.card>
+      """)
+
+    assert html =~ "Enhance"
+    assert html =~ "Article"
+    assert html =~ "pc-card--outline"
+    assert html =~ "<img"
+  end
+
+  test "dark mode" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.card variant="outline">
+        <.card_media
+          class="h-48"
+          src="https://images.unsplash.com/photo-1551434678-e076c223a692?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2340&q=80"
+        />
+        <.card_content category="Article" heading="Enhance your Phoenix development">
+          <div class="mt-4 font-light text-gray-500 text-md">
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus eget leo interdum, feugiat ligula eu, facilisis massa. Nunc sollicitudin massa a elit laoreet.
+          </div>
+        </.card_content>
+      </.card>
+      """)
+
+    assert html =~ "Enhance"
+    assert html =~ "Article"
+    assert html =~ "pc-card--outline"
+    assert html =~ "<img"
+  end
+
+  test "should include additional assigns" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.card variant="outline" custom-attr="1">
+        <.card_media
+          custom-attr="2"
+          class="h-48"
+          src="https://images.unsplash.com/photo-1551434678-e076c223a692?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2340&q=80"
+        />
+        <.card_media custom-attr="3" class="h-48" />
+        <.card_content custom-attr="4" category="Article" heading="Enhance your Phoenix development">
+          <div class="mt-4 font-light text-gray-500 text-md">
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus eget leo interdum, feugiat ligula eu, facilisis massa. Nunc sollicitudin massa a elit laoreet.
+          </div>
+        </.card_content>
+        <.card_footer class="footer-class" custom-attr="5">FOOTER</.card_footer>
+      </.card>
+      """)
+
+    for i <- 1..5 do
+      assert html =~ ~s{custom-attr="#{i}"}
+    end
+
+    assert html =~ "footer-class"
+  end
+
+  @sample_review %{
+    name: "John Doe",
+    username: "@johndoe",
+    img: "https://example.com/avatar.jpg",
+    body: "This is an amazing product!"
+  }
+
+  describe "basic rendering" do
+    test "renders with all required attributes" do
+      assigns = @sample_review
+
+      html =
+        rendered_to_string(~H"""
+        <.review_card name={@name} username={@username} img={@img} body={@body} />
+        """)
+
+      assert html =~ "pc-review-card"
+      assert html =~ "John Doe"
+      assert html =~ "@johndoe"
+      assert html =~ "This is an amazing product!"
+      assert html =~ "https://example.com/avatar.jpg"
+    end
+
+    test "renders with proper semantic elements" do
+      assigns = @sample_review
+
+      html =
+        rendered_to_string(~H"""
+        <.review_card name={@name} username={@username} img={@img} body={@body} />
+        """)
+
+      assert html =~ "<figure"
+      assert html =~ "<figcaption"
+      assert html =~ "<blockquote"
+    end
+  end
+
+  describe "component structure" do
+    test "includes all necessary sections" do
+      assigns = @sample_review
+
+      html =
+        rendered_to_string(~H"""
+        <.review_card name={@name} username={@username} img={@img} body={@body} />
+        """)
+
+      assert html =~ "pc-review-header"
+      assert html =~ "pc-review-meta"
+      assert html =~ "pc-review-name"
+      assert html =~ "pc-review-username"
+      assert html =~ "pc-review-body"
+    end
+
+    test "renders avatar component" do
+      assigns = @sample_review
+
+      html =
+        rendered_to_string(~H"""
+        <.review_card name={@name} username={@username} img={@img} body={@body} />
+        """)
+
+      assert html =~ "pc-avatar"
+      assert html =~ ~s(src="https://example.com/avatar.jpg")
+    end
+  end
+
+  describe "customization" do
+    test "applies custom classes" do
+      assigns = Map.put(@sample_review, :custom_class, "my-custom-class")
+
+      html =
+        rendered_to_string(~H"""
+        <.review_card name={@name} username={@username} img={@img} body={@body} class={@custom_class} />
+        """)
+
+      assert html =~ "my-custom-class"
+    end
+
+    test "passes through rest attributes" do
+      assigns = @sample_review
+
+      html =
+        rendered_to_string(~H"""
+        <.review_card
+          name={@name}
+          username={@username}
+          img={@img}
+          body={@body}
+          data-test="review-card"
+          aria-label="Review"
+        />
+        """)
+
+      assert html =~ ~s(data-test="review-card")
+      assert html =~ ~s(aria-label="Review")
+    end
+  end
+
+  describe "typography components" do
+    test "uses typography components with correct classes" do
+      assigns = @sample_review
+
+      html =
+        rendered_to_string(~H"""
+        <.review_card name={@name} username={@username} img={@img} body={@body} />
+        """)
+
+      assert html =~ "text-sm"
+      assert html =~ "pc-text"
+    end
+  end
+
+  describe "validation" do
+    test "raises when required attributes are missing (img is optional now)" do
+      assert_raise KeyError, ~r/key :name not found/, fn ->
+        assigns = %{}
+
+        rendered_to_string(~H"""
+        <.review_card />
+        """)
+      end
+
+      assert_raise KeyError, ~r/key :username not found/, fn ->
+        assigns = %{name: "John"}
+
+        rendered_to_string(~H"""
+        <.review_card name={@name} />
+        """)
+      end
+
+      assert_raise KeyError, ~r/key :body not found/, fn ->
+        assigns = %{name: "John", username: "@john"}
+
+        rendered_to_string(~H"""
+        <.review_card name={@name} username={@username} />
+        """)
+      end
+    end
+
+    test "review_card without img falls back to the name-hashed gradient monogram" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <.review_card name="Amelia Ward" username="@ameliabuilds" body="Great components." />
+        """)
+
+      refute html =~ "<img"
+      assert html =~ "pc-avatar"
+      # deterministic initials from the name
+      assert html =~ "AW"
+    end
+  end
+
+  test "card_header renders title, description and action" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.card_header title="Login to your account" description="Enter your email below">
+        <:action><button>Sign up</button></:action>
+      </.card_header>
+      """)
+
+    assert html =~ "pc-card__header"
+    assert html =~ "pc-card__title"
+    assert html =~ "Login to your account"
+    assert html =~ "pc-card__description"
+    assert html =~ "pc-card__header-action"
+    assert html =~ "Sign up"
+  end
+
+  test "muted variant renders the tinted well" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.card variant="muted">hi</.card>
+      """)
+
+    assert html =~ "pc-card--muted"
+  end
+end

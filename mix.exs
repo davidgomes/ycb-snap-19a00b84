@@ -1,0 +1,109 @@
+defmodule PetalComponents.MixProject do
+  use Mix.Project
+
+  @source_url "https://github.com/petalframework/petal_components"
+  @version "4.13.0"
+
+  def project do
+    [
+      app: :petal_components,
+      version: @version,
+      elixir: "~> 1.14",
+      elixirc_paths: elixirc_paths(Mix.env()),
+      start_permanent: Mix.env() == :prod,
+      description: description(),
+      package: package(),
+      deps: deps(),
+      docs: docs(),
+      aliases: [
+        audit: ["format", "credo", "coveralls"]
+      ],
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
+        wallaby: :test,
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ]
+    ]
+  end
+
+  # Specifies which paths to compile per environment.
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
+  # Run "mix help compile.app" to learn about applications.
+  def application do
+    [
+      extra_applications: [:logger]
+    ]
+  end
+
+  # Run "mix help deps" to learn about dependencies.
+  defp deps do
+    [
+      {:a11y_audit, "~> 0.3.0", only: :test, optional: true},
+      {:phoenix_playground, "~> 0.1.4", only: [:dev, :test]},
+      {:tailwind, "~> 0.3", only: :dev, runtime: false},
+      {:websock_adapter, "~> 0.5.7"},
+      {:wallaby, "~> 0.30.9", runtime: false, only: :test, optional: true},
+      {:phoenix, "~> 1.7"},
+      {:phoenix_live_view, "~> 1.1"},
+      {:lazy_html, ">= 0.0.0", only: [:dev, :test]},
+      {:phoenix_html, "~> 4.1"},
+      {:phoenix_html_helpers, "~> 1.0"},
+      {:mdex, "~> 0.12", optional: true},
+      # mdex's optional syntax highlighter - present here so the dev playground
+      # highlights chat code blocks; optional for consumers (chat falls back to
+      # plain rendering without it).
+      {:lumis, "~> 0.6", optional: true},
+      {:jason, "~> 1.2"},
+      {:ex_doc, "~> 0.24", only: :dev, runtime: false},
+      {:phoenix_ecto, "~> 4.4"},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:excoveralls, "~> 0.10", only: :test},
+      {:heroicons,
+       github: "tailwindlabs/heroicons",
+       tag: "v2.2.0",
+       app: false,
+       compile: false,
+       sparse: "optimized",
+       only: [:dev, :test]}
+    ]
+  end
+
+  defp description() do
+    """
+    Shadcn-style Phoenix LiveView components that AI assistants can actually use. Pair with the MCP server so AI coding tools can inspect the real component API.
+    """
+  end
+
+  defp package do
+    [
+      maintainers: ["Matt Platts", "Nic Hoban"],
+      licenses: ["MIT"],
+      links: %{
+        "GitHub" => @source_url,
+        "Docs" => "https://petal.build/components",
+        "MCP server" => "https://mcp.petal.build",
+        "Rules for AI tools" => "https://petal.build/petal-components/rules.md",
+        "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"
+      },
+      files:
+        ~w(mix.exs priv lib assets guides README.md LICENSE.md CHANGELOG.md rules.md UPGRADE_GUIDE.md)
+    ]
+  end
+
+  defp docs() do
+    [
+      main: "readme",
+      logo: "logo.png",
+      name: "Petal Components",
+      source_ref: "v#{@version}",
+      canonical: "http://hexdocs.pm/petal_components",
+      source_url: @source_url,
+      extras: ["README.md", "guides/streaming_chat.md", "rules.md", "UPGRADE_GUIDE.md"]
+    ]
+  end
+end
