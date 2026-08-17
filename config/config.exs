@@ -22,6 +22,14 @@ config :free_oban_ui, FreeObanUiWeb.Endpoint,
   pubsub_server: FreeObanUi.PubSub,
   live_view: [signing_salt: "NlgPets+"]
 
+# Configures Oban for background job processing
+config :free_oban_ui, Oban,
+  engine: Oban.Engines.Basic,
+  notifier: Oban.Notifiers.Postgres,
+  repo: FreeObanUi.Repo,
+  queues: [default: 10],
+  plugins: [{Oban.Plugins.Pruner, max_age: 60 * 60 * 24}]
+
 # Configures the mailer
 #
 # By default it uses the "Local" adapter which stores the emails

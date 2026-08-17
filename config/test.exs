@@ -20,6 +20,9 @@ config :free_oban_ui, FreeObanUiWeb.Endpoint,
   secret_key_base: "ULwqnhKUGeOOkOlqyQ2Ah24EqdoXUVyLaUMyLAv8NDe0ARqP+9NlyrJyeK3YAFTY",
   server: false
 
+# In test, Oban jobs should not actually be executed by queues/plugins
+config :free_oban_ui, Oban, testing: :manual
+
 # In test we don't send emails
 config :free_oban_ui, FreeObanUi.Mailer, adapter: Swoosh.Adapters.Test
 
