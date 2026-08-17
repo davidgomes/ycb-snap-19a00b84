@@ -44,7 +44,7 @@ defmodule Hello do
     resources_plugs nomatch_404: true
     
     resource "/hello/:name" do %{name: name} after 
-      content_types_provided do: ['application/xml': :to_xml]
+      content_types_provided do: ["application/xml": :to_xml]
       defh to_xml(conn, state), do: {"<Person><name>#{state.name}</name></Person>", conn, state}
     end
     
@@ -52,7 +52,7 @@ defmodule Hello do
       plug ApiCommon # this is also a plug pipeline
       
       allowed_methods do: ["GET", "PUT", "DELETE"]
-      content_types_accepted do: ['application/json': :from_json]
+      content_types_accepted do: ["application/json": :from_json]
 
       defh resource_exists(conn, state) do
 	case Hello.Db.get(state.name) do
@@ -74,14 +74,14 @@ defmodule Hello do
       plug ApiCommon #this is also a plug pipeline
       
       allowed_methods do: ["POST"]
-      content_types_accepted do: ['application/json': :from_json]
+      content_types_accepted do: ["application/json": :from_json]
       post_is_create do: true
 
       defh create_path(conn, state), do: {state.newpath, conn, state}
       
       defh from_json(conn, state) do
 	value = conn |> Ewebmachine.fetch_req_body([]) |> Ewebmachine.req_body() |> Poison.decode!()
-	newpath = "#{:io_lib.format("~9..0b", [:rand.uniform(999999999)])}"
+	newpath = "#{:io_lib.format(~c"~9..0b", [:rand.uniform(999999999)])}"
 	_ = Hello.Db.put(value["id"], value)
 	{true, conn, Map.put(state, :newpath, newpath)}
       end
@@ -91,14 +91,14 @@ defmodule Hello do
       plug ApiCommon #this is also a plug pipeline
       
       allowed_methods do: ["POST"]
-      content_types_accepted do: ['application/json': :from_json]
+      content_types_accepted do: ["application/json": :from_json]
       post_is_create do: true
       
       defh create_path(conn, state), do: {state.newpath, conn, state}
       
       defh from_json(conn, state) do
 	value = conn |> Ewebmachine.fetch_req_body([]) |> Ewebmachine.req_body() |> Poison.decode!()
-	newpath = "#{:io_lib.format("~9..0b", [:rand.uniform(999999999)])}"
+	newpath = "#{:io_lib.format(~c"~9..0b", [:rand.uniform(999999999)])}"
 	_ = Hello.Db.put(value["id"], value)
 	conn = Plug.Conn.put_private(conn, :resp_redirect, true)
 	{true, conn, Map.put(state, :newpath, newpath)}
