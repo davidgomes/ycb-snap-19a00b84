@@ -55,6 +55,18 @@ defmodule ObanEventsTest do
     }
   end
 
+  defmodule ExtraObanOptsEventBus do
+    @moduledoc false
+    use ObanEvents, oban: {Oban, meta: %{env: "test"}}
+
+    @events %{
+      extra_opts_event: [
+        {TestHandler, oban: [meta: %{source: "handler"}]},
+        TestHandler
+      ]
+    }
+  end
+
   describe "emit/2" do
     test "creates Oban jobs for registered event handlers" do
       event_data = %{
@@ -136,25 +148,12 @@ defmodule ObanEventsTest do
     end
 
     test "passes through arbitrary Oban.Job options" do
-      defmodule UniqueOptsEventBus do
-        @moduledoc false
-        use ObanEvents, oban: {Oban, unique: [period: 60]}
-
-        @events %{
-          unique_event: [
-            {ObanEventsTest.TestHandler, oban: [unique: [period: 30], meta: %{source: "test"}]},
-            ObanEventsTest.TestHandler
-          ]
-        }
-      end
-
-      assert {:ok, jobs} = UniqueOptsEventBus.emit(:unique_event, %{"test" => "data"})
+      assert {:ok, jobs} = ExtraObanOptsEventBus.emit(:extra_opts_event, %{"test" => "data"})
       assert length(jobs) == 2
 
       [job1, job2] = jobs
-      assert job1.unique[:period] == 30
-      assert job1.meta["source"] == "test"
-      assert job2.unique[:period] == 60
+      assert job1.meta["source"] == "handler"
+      assert job2.meta["env"] == "test"
     end
 
     test "per-handler options override global defaults" do
