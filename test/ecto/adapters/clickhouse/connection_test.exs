@@ -820,6 +820,12 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
     assert Connection.quote_name(~s{has`tick}, ?`) |> IO.iodata_to_binary() ==
              ~s{`has\\`tick`}
 
+    assert Connection.quote_name(~s{has'quote}, ?') |> IO.iodata_to_binary() ==
+             ~s{'has''quote'}
+
+    assert Connection.quote_name(~s{has\\slash}, ?') |> IO.iodata_to_binary() ==
+             ~s{'has\\\\slash'}
+
     query = insert(nil, ~s{schema"quoted}, [~s{field"quoted}], [], :raise, [])
 
     assert query == ~s{INSERT INTO "schema\\"quoted"("field\\"quoted")}
@@ -837,6 +843,18 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
       assert Connection.quote_name(value, quoter) |> IO.iodata_to_binary() ==
                <<quoter, expected::binary, quoter>>
     end
+
+    single_expected =
+      for <<byte <- value>>, into: <<>> do
+        case byte do
+          ?' -> "''"
+          ?\\ -> "\\\\"
+          _ -> <<byte>>
+        end
+      end
+
+    assert Connection.quote_name(value, ?') |> IO.iodata_to_binary() ==
+             <<?', single_expected::binary, ?'>>
   end
 
   test "binary ops" do
