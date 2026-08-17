@@ -454,8 +454,11 @@ defmodule EctoJob.JobQueue do
 
   @spec do_notify_failed(repo(), job(), binary()) :: :ok
   defp do_notify_failed(repo, _job = %queue{notify: payload}, event) do
-    topic = queue.__schema__(:source) <> "." <> event
-    repo.query("SELECT pg_notify($1, $2)", [topic, payload])
+    if repo.__adapter__() == Ecto.Adapters.Postgres do
+      topic = queue.__schema__(:source) <> "." <> event
+      repo.query("SELECT pg_notify($1, $2)", [topic, payload])
+    end
+
     :ok
   end
 end
