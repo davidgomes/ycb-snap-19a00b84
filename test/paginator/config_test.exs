@@ -50,6 +50,13 @@ defmodule Paginator.ConfigTest do
 
       assert config.cursor_fields == [{{:payments, :id}, :asc}]
     end
+
+    test "applies expression cursor fields with a handler function" do
+      handler = fn -> nil end
+      config = Config.new(cursor_fields: [{:rank_value, handler}, :id])
+
+      assert config.cursor_fields == [{{:rank_value, handler}, :asc}, {:id, :asc}]
+    end
   end
 
   describe "Config.new/2 applies min/max limit" do
@@ -151,6 +158,18 @@ defmodule Paginator.ConfigTest do
                    fn ->
                      Config.validate!(config)
                    end
+    end
+
+    test "ok when after cursor matches expression cursor fields" do
+      handler = fn -> nil end
+
+      config =
+        Config.new(
+          cursor_fields: [{:rank_value, handler}, :id],
+          after: Cursor.encode(%{rank_value: 0.5, id: 1})
+        )
+
+      Config.validate!(config)
     end
 
     test "ok when after cursor matches cursor_fields with schema" do

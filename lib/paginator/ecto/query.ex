@@ -23,7 +23,10 @@ defmodule Paginator.Ecto.Query do
   defp filter_values(query, fields, values, cursor_direction) when is_list(values) do
     new_values =
       fields
-      |> Enum.map(&elem(&1, 0))
+      |> Enum.map(fn
+        {{field, func}, _order} when is_function(func) and is_atom(field) -> field
+        {field, _order} -> field
+      end)
       |> Enum.zip(values)
       |> Map.new()
 
@@ -36,9 +39,9 @@ defmodule Paginator.Ecto.Query do
     where(query, [{q, 0}], ^filters)
   end
 
-  defp build_where_expression(query, [{column, order}], values, cursor_direction) do
-    value = Map.get(values, column)
-    {q_position, q_binding} = column_position(query, column)
+  defp build_where_expression(query, [{field, order} = column], values, cursor_direction) do
+    value = column_value(column, values)
+    {q_position, q_binding} = column_position(query, field)
 
     DynamicFilterBuilder.build!(%{
       sort_order: order,
@@ -50,9 +53,9 @@ defmodule Paginator.Ecto.Query do
     })
   end
 
-  defp build_where_expression(query, [{column, order} | fields], values, cursor_direction) do
-    value = Map.get(values, column)
-    {q_position, q_binding} = column_position(query, column)
+  defp build_where_expression(query, [{field, order} = column | fields], values, cursor_direction) do
+    value = column_value(column, values)
+    {q_position, q_binding} = column_position(query, field)
 
     filters = build_where_expression(query, fields, values, cursor_direction)
 
@@ -64,6 +67,14 @@ defmodule Paginator.Ecto.Query do
       column: q_binding,
       next_filters: filters
     })
+  end
+
+  defp column_value({{field, func}, _order}, values) when is_function(func) and is_atom(field) do
+    Map.get(values, field)
+  end
+
+  defp column_value({column, _order}, values) do
+    Map.get(values, column)
   end
 
   defp maybe_where(query, %Config{
@@ -101,6 +112,10 @@ defmodule Paginator.Ecto.Query do
     |> filter_values(cursor_fields, after_values, :after)
     |> filter_values(cursor_fields, before_values, :before)
   end
+
+  # With custom column handler
+  defp column_position(_query, {_, handler} = column) when is_function(handler),
+    do: {0, column}
 
   # Lookup position of binding in query aliases
   defp column_position(query, {binding_name, column}) do

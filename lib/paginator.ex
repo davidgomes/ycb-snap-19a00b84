@@ -166,6 +166,32 @@ defmodule Paginator do
         limit: 50
       )
 
+  ## Example with a computed expression
+
+  When the sort key is a fragment or other expression, pass a function that
+  returns an `Ecto.Query.dynamic/1` as the cursor field value. That function is
+  used to build the pagination `WHERE` clause.
+
+      query =
+        from(
+          p in Post,
+          select_merge: %{
+            rank_value: fragment("ts_rank(document, plainto_tsquery('simple', ?))", ^q)
+          },
+          order_by: [desc: fragment("ts_rank(document, plainto_tsquery('simple', ?))", ^q), desc: p.id]
+        )
+
+      Repo.paginate(query,
+        cursor_fields: [
+          {:rank_value,
+           fn ->
+             dynamic([p], fragment("ts_rank(document, plainto_tsquery('simple', ?))", ^q))
+           end},
+          :id
+        ],
+        limit: 50
+      )
+
   """
   @callback paginate(queryable :: Ecto.Query.t(), opts :: Keyword.t(), repo_opts :: Keyword.t()) ::
               Paginator.Page.t()
@@ -309,6 +335,12 @@ defmodule Paginator do
        }) do
     cursor_fields
     |> Enum.map(fn
+      {{cursor_field, func}, _order} when is_atom(cursor_field) and is_function(func) ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
+      {cursor_field, func} when is_atom(cursor_field) and is_function(func) ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
       {cursor_field, _order} ->
         {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
 

@@ -96,6 +96,13 @@ defmodule Paginator.Config do
         when is_atom(schema) and is_atom(field) and value in @order_directions ->
           {schema, field}
 
+        {{field, func}, value}
+        when is_function(func) and is_atom(field) and value in @order_directions ->
+          field
+
+        {field, func} when is_function(func) and is_atom(field) ->
+          field
+
         field when is_atom(field) ->
           field
 
@@ -136,6 +143,9 @@ defmodule Paginator.Config do
     Enum.map(fields, fn
       {{_binding, _column}, _direction} = field -> field
       {_column, direction} = field when direction in @order_directions -> field
+      {field, func} = column when is_atom(field) and is_function(func) ->
+        {column, sorting_direction}
+
       {_binding, _column} = field -> {field, sorting_direction}
       field -> {field, sorting_direction}
     end)
