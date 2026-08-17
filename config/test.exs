@@ -26,6 +26,9 @@ config :free_oban_ui, FreeObanUi.Mailer, adapter: Swoosh.Adapters.Test
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 
+# Oban testing mode
+config :free_oban_ui, Oban, testing: :manual
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 
