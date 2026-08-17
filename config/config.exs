@@ -31,6 +31,13 @@ config :free_oban_ui, FreeObanUiWeb.Endpoint,
 # at the `config/runtime.exs`.
 config :free_oban_ui, FreeObanUi.Mailer, adapter: Swoosh.Adapters.Local
 
+# Configures Oban, the background job processor backing the jobs dashboard
+config :free_oban_ui, Oban,
+  engine: Oban.Engines.Basic,
+  repo: FreeObanUi.Repo,
+  queues: [default: 10, mailers: 5],
+  plugins: [{Oban.Plugins.Pruner, max_age: 60 * 60 * 24}]
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.17.11",
