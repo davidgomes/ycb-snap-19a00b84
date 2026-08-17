@@ -83,10 +83,7 @@ Using the ESCT as a consumer of the content is easy by just following these simp
 3. **Load the Live Markdown files in an instance of Livebook**
     - For further instructions on getting Livebook setup locally, please refer to [their documentation](https://livebook.dev/#install).
 4. **Complete the training as instructed and save your progress along the way!**
-5. **When you think you're finished, create a PR to **your own fork** of the training repo**
-    - You will receive feedback as to whether you completed it or not in the CI stage of your version control system<sup>*</sup>
-
-*<sup>\*</sup>Feedback functionality will initially work in GitLab, GitHub support is [in the works](https://github.com/podium/elixir-secure-coding/issues/17) but lower priority*
+5. **Feedback will be provided directly within Livebook via the "Graded Cell" smart cell**
 
 ### For "Educators"
 Using the ESCT as a purveyor of the curriculum is relatively straight-forward:

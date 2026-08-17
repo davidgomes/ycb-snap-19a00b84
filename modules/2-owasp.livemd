@@ -1,14 +1,12 @@
 # ESCT: Part 2 - OWASP
 
 ```elixir
-Mix.install([
-  {:grading_client, path: "#{__DIR__}/grading_client"},
-  :bcrypt_elixir,
-  :httpoison,
-  {:absinthe, "~> 1.7.0"},
-  {:phoenix, "~> 1.0"},
-  {:plug, "~> 1.3.2"}
-])
+Mix.install(
+  [
+    {:grading_client, path: "#{__DIR__}/grading_client"}
+  ],
+  config_path: "#{__DIR__}/grading_client/config/config.exs"
+)
 
 md5_hash = :crypto.hash(:md5, "users_password")
 bcrypt_salted_hash = Bcrypt.hash_pwd_salt("users_password")
@@ -104,26 +102,40 @@ Notable CWEs included are CWE-259: Use of Hard-coded Password, CWE-327: Broken o
 _Please uncomment the function call that you believe is correct._
 
 ```elixir
-defmodule PasswordCompare do
-  def option_one(password, md5_hash) do
-    case :crypto.hash(:md5, password) == md5_hash do
-      true -> :entry_granted_op1
-      false -> :entry_denied_op1
-    end
-  end
+result =
+  (
+    defmodule PasswordCompare do
+      def option_one(password, md5_hash) do
+        case :crypto.hash(:md5, password) == md5_hash do
+          true -> :entry_granted_op1
+          false -> :entry_denied_op1
+        end
+      end
 
-  def option_two(password, bcrypt_salted_hash) do
-    case Bcrypt.verify_pass(password, bcrypt_salted_hash) do
-      true -> :entry_granted_op2
-      false -> :entry_denied_op2
+      def option_two(password, bcrypt_salted_hash) do
+        case Bcrypt.verify_pass(password, bcrypt_salted_hash) do
+          true -> :entry_granted_op2
+          false -> :entry_denied_op2
+        end
+      end
     end
-  end
+
+    # DO NOT CHANGE CODE ABOVE THIS LINE =========================
+
+    # PasswordCompare.option_one("users_password", md5_hash)
+    # PasswordCompare.option_two("users_password", bcrypt_salted_hash)
+  )
+
+case GradingClient.check_answer(OWASP, 1, result) do
+  :correct ->
+    IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
+
+  {:incorrect, help_text} when is_binary(help_text) ->
+    IO.puts([IO.ANSI.red(), "Incorrect: ", IO.ANSI.reset(), help_text])
+
+  _ ->
+    IO.puts([IO.ANSI.red(), "Incorrect.", IO.ANSI.reset()])
 end
-
-# DO NOT CHANGE CODE ABOVE THIS LINE =========================
-
-# PasswordCompare.option_one("users_password", md5_hash)
-# PasswordCompare.option_two("users_password", bcrypt_salted_hash)
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -244,19 +256,36 @@ Notable CWE included is CWE-1104: Use of Unmaintained Third-Party Components
 
 ### <span style="color:red">QUIZ</span>
 
-**Which of the outdated components currently installed is vulnerable?**
+**Which of the outdated components listed below is vulnerable?**
 
-_Please change the atom below to the name of the vulnerable package installed in this Livebook AND update the afflicted package._
+_Please select the name of the vulnerable package._
 
-_HINT: Installed dependencies can be found at the very top, it was the very first cell you ran._
+_HINT: Check the changelogs for each dependency._
 
 ```elixir
-# CHANGE ME
-vulnerable_dependency = :vulnerable_dependency
+result =
+  (
+    answer =
+      Kino.Input.select("Answer",
+        ecto: "Ecto v2.2.2",
+        nx: "Nx v0.5.0",
+        plug: "Plug v1.3.2"
+      )
 
-# DO NOT CHANGE CODE BELOW THIS LINE ============================
-Application.spec(vulnerable_dependency)[:vsn] |> List.to_string() |> IO.puts()
-IO.puts(vulnerable_dependency)
+    Kino.render(answer)
+    Kino.Input.read(answer)
+  )
+
+case GradingClient.check_answer(OWASP, 2, result) do
+  :correct ->
+    IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
+
+  {:incorrect, help_text} when is_binary(help_text) ->
+    IO.puts([IO.ANSI.red(), "Incorrect: ", IO.ANSI.reset(), help_text])
+
+  _ ->
+    IO.puts([IO.ANSI.red(), "Incorrect.", IO.ANSI.reset()])
+end
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->

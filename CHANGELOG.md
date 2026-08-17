@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added 
 
+- Self-evaluation for the OWASP module via the Graded Cell smart cell
 - Codespell GitHub Action
 - CHANGELOG.md
 
