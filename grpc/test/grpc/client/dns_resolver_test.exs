@@ -846,7 +846,7 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "stale persistent_term prevention" do
+  describe "stale channel selection prevention" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.99"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
@@ -1088,8 +1088,10 @@ defmodule GRPC.Client.ReResolveTest do
       state = get_state(ctx.ref)
       assert match?({:failed, _}, Map.get(state.real_channels, "10.0.0.2:50051"))
 
-      # Wait for several :refresh cycles (15s default, but we'll trigger manually).
-      # Round-robin will eventually pick 10.0.0.2. Without the fix, this crashes.
+      # :refresh is no longer scheduled by the connection (LB picks now happen
+      # per-request against the ETS table), but manually sending it must not
+      # crash the GenServer, and pick_channel/2 must keep excluding failed
+      # channels regardless.
       pid = whereis_name(ctx.ref)
 
       for _ <- 1..5 do
