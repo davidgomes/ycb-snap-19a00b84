@@ -17,7 +17,7 @@ defmodule FreeObanUiWeb.Router do
   scope "/", FreeObanUiWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", JobsLive, :index
   end
 
   # Other scopes may use custom stacks.
