@@ -47,7 +47,6 @@ defmodule ElixirLS.LanguageServer.Providers.FoldingRange do
   alias __MODULE__
 
   @type input :: %{
-          tokens: [FoldingRange.Token.t()],
           lines: [FoldingRange.Line.t()]
         }
 
@@ -106,16 +105,11 @@ defmodule ElixirLS.LanguageServer.Providers.FoldingRange do
   end
 
   def convert_text_to_input(text) do
-    %{
-      tokens: FoldingRange.Token.format_string(text),
-      lines: FoldingRange.Line.format_string(text)
-    }
+    %{lines: FoldingRange.Line.format_string(text)}
   end
 
   defp indentation_ranges(lines) do
-    # Indentation only reads `:lines`, but its spec takes the full input map; pass empty tokens
-    # rather than run the (unused) tokenizer.
-    {:ok, ranges} = FoldingRange.Indentation.provide_ranges(%{tokens: [], lines: lines})
+    {:ok, ranges} = FoldingRange.Indentation.provide_ranges(%{lines: lines})
     ranges
   end
 
