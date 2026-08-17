@@ -13,15 +13,16 @@ defmodule EctoShorts.QueryBuilder.Schema do
   @behaviour QueryBuilder
 
   @impl QueryBuilder
-  def create_schema_filter({filter_field, val}, query) do
+  def create_schema_filter(query, filter_field, val) do
     create_schema_filter(
-      {filter_field, val},
+      query,
       QueryBuilder.query_schema(query),
-      query
+      filter_field,
+      val
     )
   end
 
-  def create_schema_filter({filter_field, val}, schema, query) do
+  def create_schema_filter(query, schema, filter_field, val) do
     cond do
       filter_field in schema.__schema__(:query_fields) ->
         create_schema_query_field_filter(query, schema, filter_field, val)
