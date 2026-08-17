@@ -11,6 +11,8 @@ defmodule ObanDoctor.Check.Worker.NoMaxAttempts do
   - Expected failure modes (network issues vs bugs)
   - Time sensitivity of the job
 
+  See [Oban.Worker options](https://hexdocs.pm/oban/Oban.Worker.html#module-defining-workers).
+
   ## Examples
 
   Using default (20 attempts):
