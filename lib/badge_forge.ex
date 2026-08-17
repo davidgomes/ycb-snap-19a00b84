@@ -31,7 +31,7 @@ defmodule BadgeForge do
         type: Enum.random(@badge_types)
       }
 
-      Oban.Job.new(args, worker: "badge_forge.workers.GenerateBadge", queue: :badges)
+      Oban.Job.new(args, worker: "badge_forge.generator.GenerateBadge", queue: :badges)
     end
 
     1..count

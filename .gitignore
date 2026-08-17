@@ -29,3 +29,6 @@ badge_forge-*.tar
 __pycache__/
 .venv/
 *.egg-info/
+
+# Generated badges
+/priv/static/badges/*.pdf

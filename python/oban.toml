@@ -1,6 +1,5 @@
-# Oban configuration for BadgeForge Python worker
-
 dsn = "postgresql://postgres:postgres@localhost/badge_forge_dev"
 
 [queues]
+default = 5
 badges = 10

@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from string.templatelib import Template
 
 from oban import Job, worker
 from weasyprint import HTML
@@ -10,11 +11,11 @@ BADGES_DIR = Path(__file__).parent.parent.parent / "priv" / "static" / "badges"
 
 
 def render_badge_html(name: str, company: str, badge_type: str) -> str:
-    return f"""<!DOCTYPE html>
+    template: Template = t"""<!DOCTYPE html>
 <html>
 <head>
     <style>
-        body {{
+        body {
             font-family: system-ui, sans-serif;
             width: 4in;
             height: 3in;
@@ -23,23 +24,23 @@ def render_badge_html(name: str, company: str, badge_type: str) -> str:
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
-        }}
-        .event {{
+        }
+        .event {
             font-size: 12pt;
             color: #666;
             margin-bottom: 0.25in;
-        }}
-        .name {{
+        }
+        .name {
             font-size: 24pt;
             font-weight: bold;
             margin-bottom: 0.1in;
-        }}
-        .company {{
+        }
+        .company {
             font-size: 14pt;
             color: #444;
             margin-bottom: auto;
-        }}
-        .type {{
+        }
+        .type {
             font-size: 11pt;
             text-transform: uppercase;
             letter-spacing: 0.05em;
@@ -47,7 +48,7 @@ def render_badge_html(name: str, company: str, badge_type: str) -> str:
             background: #333;
             color: white;
             align-self: flex-start;
-        }}
+        }
     </style>
 </head>
 <body>
@@ -57,6 +58,8 @@ def render_badge_html(name: str, company: str, badge_type: str) -> str:
     <div class="type">{badge_type}</div>
 </body>
 </html>"""
+
+    return str(template)
 
 
 @worker(queue="badges")
