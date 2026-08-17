@@ -889,6 +889,47 @@ defmodule Surface.DirectivesTest do
       assert js_attribute(doc, "div > button", "phx-click") == [["push", %{"event" => "ok"}]]
     end
 
+    test "translate available events" do
+      html =
+        render_surface do
+          ~F"""
+          <div :on-click="click" />
+          <div :on-click-away="click-away" />
+          <div :on-capture-click="capture-click" />
+          <div :on-change="change" />
+          <div :on-submit="submit" />
+          <div :on-blur="blur" />
+          <div :on-focus="focus" />
+          <div :on-window-blur="window-blur" />
+          <div :on-window-focus="window-focus" />
+          <div :on-keydown="keydown" />
+          <div :on-keyup="keyup" />
+          <div :on-window-keydown="window-keydown" />
+          <div :on-window-keyup="window-keyup" />
+          <div :on-viewport-top="viewport-top" />
+          <div :on-viewport-bottom="viewport-bottom" />
+          """
+        end
+
+      assert html =~ """
+             <div phx-click="click"></div>
+             <div phx-click-away="click-away"></div>
+             <div phx-capture-click="capture-click"></div>
+             <div phx-change="change"></div>
+             <div phx-submit="submit"></div>
+             <div phx-blur="blur"></div>
+             <div phx-focus="focus"></div>
+             <div phx-window-blur="window-blur"></div>
+             <div phx-window-focus="window-focus"></div>
+             <div phx-keydown="keydown"></div>
+             <div phx-keyup="keyup"></div>
+             <div phx-window-keydown="window-keydown"></div>
+             <div phx-window-keyup="window-keyup"></div>
+             <div phx-viewport-top="viewport-top"></div>
+             <div phx-viewport-bottom="viewport-bottom"></div>
+             """
+    end
+
     test "do not translate invalid events" do
       html =
         render_surface do
