@@ -12,6 +12,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Support SQLite.
 - Support MySQL.
+- Support ordering by custom fields. Add a `:sorter` option to a custom field
+  to allow adding it to the `:sortable` list. Custom fields can now define a
+  `:filter`, a `:sorter`, or both, and only need the option required for the
+  list (`:filterable` or `:sortable`) they are added to. Custom fields cannot
+  be used as order fields for cursor-based pagination.
 
 ### Fixed
 

@@ -388,7 +388,7 @@ defmodule Flop.SchemaTest do
              )
   end
 
-  test "raises error if custom field is added to sortable list" do
+  test "raises error if custom field without sorter is added to sortable list" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Parsley do
@@ -408,5 +408,46 @@ defmodule Flop.SchemaTest do
       end
 
     assert error.message =~ "cannot sort by custom field"
+  end
+
+  test "raises error if custom field without filter is added to filterable list" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Rosemary do
+          @derive {
+            Flop.Schema,
+            filterable: [:inserted_at],
+            sortable: [],
+            custom_fields: [
+              inserted_at: [
+                sorter: {__MODULE__, :some_function, []},
+                ecto_type: :utc_datetime
+              ]
+            ]
+          }
+          defstruct [:id, :inserted_at]
+        end
+      end
+
+    assert error.message =~ "cannot filter by custom field"
+  end
+
+  test "allows sorting by a custom field with a sorter configured" do
+    defmodule Thyme do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [
+            sorter: {__MODULE__, :some_function, []},
+            ecto_type: :utc_datetime
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    assert Schema.sortable(struct(Thyme)) == [:inserted_at]
   end
 end

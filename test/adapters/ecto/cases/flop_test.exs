@@ -99,6 +99,23 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       assert result == expected
     end
 
+    test "orders by custom fields" do
+      pets = Enum.map(1..20, &insert(:pet, age: &1))
+      expected = Enum.sort_by(pets, &(&1.age * 7))
+
+      result = Flop.all(Pet, %Flop{order_by: [:dog_age]}, for: Pet)
+      assert result == expected
+
+      result =
+        Flop.all(
+          Pet,
+          %Flop{order_by: [:dog_age], order_directions: [:desc]},
+          for: Pet
+        )
+
+      assert result == Enum.reverse(expected)
+    end
+
     test "orders by compound fields" do
       pets = insert_list(20, :pet)
 

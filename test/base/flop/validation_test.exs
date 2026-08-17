@@ -26,19 +26,30 @@ defmodule Flop.ValidationTest do
 
   defmodule Thing do
     use Ecto.Schema
+    import Ecto.Query
 
     @derive {Flop.Schema,
              filterable: [],
-             sortable: [:name, :full_name, :thing_count],
+             sortable: [:name, :full_name, :thing_count, :custom_name],
              adapter_opts: [
                compound_fields: [full_name: [:family_name, :given_name]],
-               alias_fields: [:thing_count]
+               alias_fields: [:thing_count],
+               custom_fields: [
+                 custom_name: [
+                   sorter: {__MODULE__, :custom_name_sorter, []},
+                   ecto_type: :string
+                 ]
+               ]
              ]}
 
     schema "things" do
       field :name, :string
       field :family_name, :string
       field :given_name, :string
+    end
+
+    def custom_name_sorter(query, direction, _opts) do
+      order_by(query, [t], [{^direction, t.name}])
     end
   end
 
@@ -764,7 +775,7 @@ defmodule Flop.ValidationTest do
       assert {:error, changeset} = validate(params, for: Thing)
 
       assert errors_on(changeset)[:order_by] == [
-               "cursor pagination is not supported for compound and alias fields"
+               "cursor pagination is not supported for compound, alias, and custom fields"
              ]
     end
 
@@ -772,6 +783,15 @@ defmodule Flop.ValidationTest do
       params = %{first: 2, after: @cursor, order_by: [:thing_count]}
       assert {:error, changeset} = validate(params, for: Thing)
       assert errors_on(changeset)[:order_by] != nil
+    end
+
+    test "rejects a custom field as cursor order field" do
+      params = %{first: 2, after: @cursor, order_by: [:custom_name]}
+      assert {:error, changeset} = validate(params, for: Thing)
+
+      assert errors_on(changeset)[:order_by] == [
+               "cursor pagination is not supported for compound, alias, and custom fields"
+             ]
     end
 
     test "rejects them for last/before as well" do

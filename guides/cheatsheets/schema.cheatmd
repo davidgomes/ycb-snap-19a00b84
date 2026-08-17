@@ -452,6 +452,32 @@ custom_fields: [
 
 `Flop.with_named_bindings/4` adds these bindings when the filter is used.
 
+### Sorter function
+
+```elixir
+custom_fields: [
+  human_age: [
+    sorter: {CustomFilters, :human_age_sorter, []},
+    ecto_type: :integer
+  ]
+]
+```
+
+```elixir
+defmodule CustomFilters do
+  import Ecto.Query
+
+  def human_age_sorter(query, direction, _opts) do
+    order_by(query, [p], [{^direction, fragment("? * 7", p.age)}])
+  end
+end
+```
+
+A custom field only needs a `filter` function if it is added to the
+`filterable` list, and only needs a `sorter` function if it is added to the
+`sortable` list. Custom fields cannot be used as order fields for cursor-based
+pagination.
+
 ## Ecto types
 {: .col-2}
 
