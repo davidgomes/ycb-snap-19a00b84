@@ -109,6 +109,82 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       assert issues == []
     end
 
+    test "does not flag workers using :incomplete named group" do
+      workers = [
+        %{
+          module: MyApp.Workers.IncompleteWorker,
+          file: "lib/my_app/workers/incomplete_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :incomplete],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = UniquenessMissingStates.run(context)
+
+      assert issues == []
+    end
+
+    test "does not flag workers using :successful named group" do
+      workers = [
+        %{
+          module: MyApp.Workers.SuccessfulWorker,
+          file: "lib/my_app/workers/successful_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :successful],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = UniquenessMissingStates.run(context)
+
+      assert issues == []
+    end
+
+    test "does not flag workers using :scheduled named group" do
+      workers = [
+        %{
+          module: MyApp.Workers.ScheduledWorker,
+          file: "lib/my_app/workers/scheduled_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :scheduled],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = UniquenessMissingStates.run(context)
+
+      assert issues == []
+    end
+
+    test "does not flag workers using a single-element named group list" do
+      workers = [
+        %{
+          module: MyApp.Workers.IncompleteListWorker,
+          file: "lib/my_app/workers/incomplete_list_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: [:incomplete]],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = UniquenessMissingStates.run(context)
+
+      assert issues == []
+    end
+
     test "detects workers missing only some states" do
       workers = [
         %{

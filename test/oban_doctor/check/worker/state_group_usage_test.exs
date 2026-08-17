@@ -66,6 +66,63 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsageTest do
       assert length(issues) == 1
     end
 
+    test "returns no issues when worker uses :incomplete named group" do
+      workers = [
+        %{
+          module: MyApp.Workers.IncompleteWorker,
+          file: "lib/my_app/workers/incomplete_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :incomplete],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = StateGroupUsage.run(context)
+
+      assert issues == []
+    end
+
+    test "returns no issues when worker uses :successful named group" do
+      workers = [
+        %{
+          module: MyApp.Workers.SuccessfulWorker,
+          file: "lib/my_app/workers/successful_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :successful],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = StateGroupUsage.run(context)
+
+      assert issues == []
+    end
+
+    test "returns no issues when worker uses :scheduled named group" do
+      workers = [
+        %{
+          module: MyApp.Workers.ScheduledWorker,
+          file: "lib/my_app/workers/scheduled_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :scheduled],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = StateGroupUsage.run(context)
+
+      assert issues == []
+    end
+
     test "returns no issues when worker uses explicit states" do
       workers = [
         %{

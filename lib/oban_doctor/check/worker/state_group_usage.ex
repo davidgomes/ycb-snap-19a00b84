@@ -2,6 +2,13 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsage do
   @moduledoc """
   Checks for workers using the `:all` state group in unique configuration.
 
+  Oban provides named state groups for unique constraints:
+
+    * `:successful` (default) - excludes cancelled/discarded, safe for most cases
+    * `:incomplete` - only unfinished jobs, good for preventing concurrent execution
+    * `:scheduled` - only scheduled jobs, useful for debouncing
+    * `:all` - includes cancelled and discarded jobs (DANGEROUS)
+
   Using `states: :all` (or `states: [:all]`) in unique configuration is dangerous
   because it includes `:completed` and `:discarded` states. This means once a job
   completes or is discarded, you can never enqueue another job with the same
@@ -12,8 +19,13 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsage do
   Bad - prevents re-enqueueing forever:
       unique: [fields: [:args], states: :all]
 
-  Good - allows re-enqueueing after completion:
+  Good - use a named group to prevent concurrent execution:
+      unique: [fields: [:args], states: :incomplete]
+
+  Good - explicit non-final states:
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  See [Oban unique jobs](https://hexdocs.pm/oban/unique_jobs.html).
   """
 
   use ObanDoctor.Check, category: :worker
