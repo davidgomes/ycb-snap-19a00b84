@@ -4,7 +4,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     Hooks functions for loading and authorizing resources for the LiveView events.
     If you want to authorize `handle_params` and `handle_event` LiveView callbacks
-    you can use `mount_canary` macro to attach the hooks.
+    you can use the `mount_hook` macro to attach the hooks, mirroring how `Canary.Plugs`
+    functions are attached with `plug`.
 
     For `handle_params` it uses `socket.assigns.live_action` as `:action`.
     For `handle_event` it uses the event name as `:action`.
@@ -23,13 +24,13 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       ```elixir
       use Canary.Hooks
 
-      mount_canary :load_and_authorize_resource,
+      mount_hook :load_and_authorize_resource,
         on: [:handle_params, :handle_event],
         model: Post,
         required: true,
         only: [:show, :edit, :update]
 
-      mount_canary :authorize_resource,
+      mount_hook :authorize_resource,
         on: [:handle_event],
         model: Post,
         only: [:my_event]
@@ -140,7 +141,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
         _ ->
           IO.warn(
-            "Invalid type #{inspect(hook)} for Canary hook call. Please review defined hooks with mount_canary/2.",
+            "Invalid type #{inspect(hook)} for Canary hook call. Please review defined hooks with mount_hook/2.",
             module: __MODULE__
           )
 
@@ -153,20 +154,23 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     It creates a wrapper function to handle_params and handle_event,
     and attaches the hooks to the Live View.
 
+    This is the `Canary.Hooks` counterpart to `plug` in `Canary.Plugs`, providing a
+    consistent API for attaching Canary's authorization functions in both contexts.
+
     ## Example
       ```
-      mount_canary :load_and_authorize_resource,
+      mount_hook :load_and_authorize_resource,
         model: Post,
         required: true,
         only: [:edit: :update]
       ```
     """
-    defmacro mount_canary(type, opts) do
+    defmacro mount_hook(type, opts) do
       stages = get_stages(opts)
 
       if Enum.empty?(stages),
         do:
-          IO.warn("mount_canary called with empty :on stages",
+          IO.warn("mount_hook called with empty :on stages",
             module: __CALLER__.module,
             file: __CALLER__.file,
             line: __CALLER__.line
@@ -233,12 +237,12 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     ```elixir
 
-    mount_canary :authorize_resource,
+    mount_hook :authorize_resource,
       model: Post,
       only: [:show, :edit, :update]
       current_user: :current_user
 
-    mount_canary :authorize_resource,
+    mount_hook :authorize_resource,
       model: Post,
       as: :custom_resource_name,
       except: [:new, :create],
@@ -285,12 +289,12 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     ```elixir
 
-    mount_canary :load_resource,
+    mount_hook :load_resource,
       model: Post,
       only: [:show, :edit, :update],
       preload: [:comments]
 
-    mount_canary :load_resource,
+    mount_hook :load_resource,
       on: [:handle_params, :handle_event]
       model: Post,
       as: :custom_name,
@@ -341,14 +345,14 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     ```elixir
 
-    mount_canary :load_and_authorize_resource,
+    mount_hook :load_and_authorize_resource,
       model: Comments,
       id_name: :post_id,
       id_field: :post_id,
       required: true,
       only: [:comments]
 
-    mount_canary :load_and_authorize_resource,
+    mount_hook :load_and_authorize_resource,
       model: Post,
       as: :custom_name,
       except: [:new, :create],

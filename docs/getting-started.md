@@ -58,7 +58,7 @@ In order to use Canary you need to configure it `config/config.exs`. All setting
 
 > #### Info {: .info}
 >
-> For the module configuration the `:error_handler` should be used instead of separate handler for not found and unauthorized errors. The handleds still can be overritten with plug / mount_canary options.
+> For the module configuration the `:error_handler` should be used instead of separate handler for not found and unauthorized errors. The handleds still can be overritten with plug / mount_hook options.
 
 
 ### Example
@@ -91,7 +91,7 @@ with this override it will perform authorization check using `conn.assings.curre
 ```elixir
 use Canary.Hooks
 
-mount_canary :load_and_authorize_resource,
+mount_hook :load_and_authorize_resource,
   on: :handle_event,
   current_user: :current_member,
   model: Team
@@ -119,7 +119,7 @@ plug :load_and_authorize_resource,
 ```elixir
 use Canary.Hooks
 
-mount_canary :load_and_authorize_resource,
+mount_hook :load_and_authorize_resource,
   model: Team,
   current_user: :current_member,
   only: [:special_action]
@@ -175,13 +175,13 @@ Canary Plugs and Hooks uses the same configuration options.
         {Hypervisors.preload_active_machines, [:plan, :distribution, :hypervisor, :networks]}
     ]
 
-  mount_canary :authorize_resource,
+  mount_hook :authorize_resource,
     on: [:handle_params, :handle_event],
     current_user: :current_member,
     model: Machine,
     only: [:index, :new]
 
-  mount_canary :load_and_authorize_resource,
+  mount_hook :load_and_authorize_resource,
     on: [:handle_event],
     current_user: :current_member,
     model: Machine,
@@ -218,7 +218,7 @@ The `resource_name` can be also overriten with the `:as` option.
 
 For example:
 ```elixir
-# replace plug with mount_canary for LiveView Hooks
+# replace plug with mount_hook for LiveView Hooks
 plug :load_resource,
   model: Event,
   as: :public_event,
@@ -351,7 +351,7 @@ By default, when a resource is not found, Canary simply sets the resource in `as
 config :canary, error_handler: ErrorHandler
 ```
 
-You can also specify handlers on an individual basis (which will override the corresponding configured handler, if any) by specifying the corresponding `opt` in the plug / mount_canary call:
+You can also specify handlers on an individual basis (which will override the corresponding configured handler, if any) by specifying the corresponding `opt` in the plug / mount_hook call:
 
 <!-- tabs-open -->
 ### Conn Plugs
@@ -374,7 +374,7 @@ end
 
 ### LiveView Hooks
 ```elixir
-mount_canary :load_and_authorize_resource Post,
+mount_hook :load_and_authorize_resource Post,
   unauthorized_handler: {Helpers, :handle_unauthorized},
   not_found_handler: {Helpers, :handle_not_found}
 ```

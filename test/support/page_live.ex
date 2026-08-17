@@ -2,10 +2,10 @@ defmodule Canary.HooksHelper.PageLive do
   use Phoenix.LiveView
   use Canary.Hooks
 
-  mount_canary :load_resource,
+  mount_hook :load_resource,
     model: Post
 
-  mount_canary :load_and_authorize_resource,
+  mount_hook :load_and_authorize_resource,
     on: [:handle_params, :handle_event],
     model: User,
     only: [:show]

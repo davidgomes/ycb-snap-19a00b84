@@ -30,7 +30,7 @@ defmodule Canary do
     use MyAppWeb, :live_view
     use Canary.Hooks
 
-    mount_canary :load_and_authorize_resource,
+    mount_hook :load_and_authorize_resource,
       on: [:handle_params, :handle_event],
       current_user: :current_user,
       model: Post,

@@ -6,6 +6,9 @@
     * added `:error_handler` and ErrorHandler behaviour
     * aded  `:required` option
 
+  * Breaking changes
+    * Renamed the `mount_canary` macro to `mount_hook` for a consistent API between `Canary.Plugs` and `Canary.Hooks`
+
   * Dependency changes
     * Elixir ~> 1.14 is now required
 

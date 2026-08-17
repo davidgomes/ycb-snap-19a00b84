@@ -2,11 +2,11 @@ defmodule Canary.HooksHelper.PostLive do
   use Phoenix.LiveView
   use Canary.Hooks
 
-  mount_canary :load_resource,
+  mount_hook :load_resource,
     model: Post,
     only: [:show]
 
-  mount_canary :load_resource,
+  mount_hook :load_resource,
     model: Post,
     only: [:edit, :update],
     required: true

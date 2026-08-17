@@ -328,7 +328,7 @@ defmodule Canary.HooksTest do
                  Map.fetch!(socket.assigns, :post)
                end
              end) =~
-               "Invalid type :invalid_hook for Canary hook call. Please review defined hooks with mount_canary/2"
+               "Invalid type :invalid_hook for Canary hook call. Please review defined hooks with mount_hook/2"
     end
   end
 
@@ -382,16 +382,16 @@ defmodule Canary.HooksTest do
     end
   end
 
-  describe "mount_canary/2" do
+  describe "mount_hook/2" do
     defmodule TestLive do
       use Phoenix.LiveView
       use Canary.Hooks
 
-      mount_canary(:load_resource,
+      mount_hook(:load_resource,
         model: Post
       )
 
-      mount_canary(:load_and_authorize_resource,
+      mount_hook(:load_and_authorize_resource,
         on: [:handle_params, :handle_event],
         model: User,
         only: [:show]
@@ -443,7 +443,7 @@ defmodule Canary.HooksTest do
                  use Phoenix.LiveView
                  use Canary.Hooks
 
-                 mount_canary(:load_resource,
+                 mount_hook(:load_resource,
                    model: Post,
                    on: [:invalid_stage]
                  )
@@ -453,7 +453,7 @@ defmodule Canary.HooksTest do
                  end
                end
              end) =~
-               "mount_canary called with empty :on stages"
+               "mount_hook called with empty :on stages"
     end
   end
 

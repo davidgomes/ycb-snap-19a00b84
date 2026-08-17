@@ -67,7 +67,7 @@ Will load the `Project.Post` having the id given in `conn.params["id"]` through 
 
 ### LiveView Hooks example
 ```elixir
-mount_canary :load_resource, model: Project.Post
+mount_hook :load_resource, model: Project.Post
 ```
 
 Will load the `Project.Post` having the id given in `params["id"]` through `YourApp.Repo`, and assign it to `socket.assigns.post`
@@ -177,7 +177,7 @@ Single action form:
 ```elixir
 plug :load_and_authorize_resource, model: Post, except: :show
 
-mount_canary :load_and_authorize_resource, model: Post, except: :show
+mount_hook :load_and_authorize_resource, model: Post, except: :show
 ```
 
 List form:
@@ -185,7 +185,7 @@ List form:
 ```elixir
 plug :load_and_authorize_resource, model: Post, except: [:show, :create]
 
-mount_canary :load_and_authorize_resource, model: Post, except: [:show, :create]
+mount_hook :load_and_authorize_resource, model: Post, except: [:show, :create]
 ```
 
 ### Authorizing only specific actions
@@ -199,7 +199,7 @@ Single action form:
 ```elixir
 plug :load_and_authorize_resource, model: Post, only: :show
 
-mount_canary :load_and_authorize_resource, model: Post, only: :show
+mount_hook :load_and_authorize_resource, model: Post, only: :show
 ```
 
 List form:
@@ -207,7 +207,7 @@ List form:
 ```elixir
 plug :load_and_authorize_resource, model: Post, only: [:show, :create]
 
-mount_canary :load_and_authorize_resource, model: Post, only: [:show, :create]
+mount_hook :load_and_authorize_resource, model: Post, only: [:show, :create]
 ```
 
 > Note: Having both `:only` and `:except` in opts is invalid. Canary will raise `ArgumentError` "You can't use both :except and :only options"
@@ -227,7 +227,7 @@ The current user key can also be overridden for individual plugs as follows:
 ```elixir
 plug :load_and_authorize_resource, model: Post, current_user: :current_admin
 
-mount_canary :load_and_authorize_resource, model: Post, current_user: :current_admin
+mount_hook :load_and_authorize_resource, model: Post, current_user: :current_admin
 ```
 
 ### Specifying resource_name
@@ -239,7 +239,7 @@ For example,
 ```elixir
 plug :load_and_authorize_resource, model: Post, as: :new_post
 
-mount_canary :load_and_authorize_resource, model: Post, as: :new_post
+mount_hook :load_and_authorize_resource, model: Post, as: :new_post
 ```
 
 will load the post into `assigns.new_post`
@@ -251,7 +251,7 @@ Associations can be preloaded with `Repo.preload` by passing the `:preload` opti
 ```elixir
 plug :load_and_authorize_resource, model: Post, preload: :comments
 
-mount_canary :load_and_authorize_resource, model: Post, preload: :comments
+mount_hook :load_and_authorize_resource, model: Post, preload: :comments
 ```
 
 ### Non-id actions
