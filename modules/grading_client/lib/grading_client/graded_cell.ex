@@ -23,41 +23,41 @@ defmodule GradingClient.GradedCell do
   @impl true
   def to_source(attrs) do
     modules = Map.new(GradingClient.Answers.get_modules(), &{inspect(&1), &1})
+    source_attr = attrs["source"] || ""
 
     source_ast =
       try do
-        source_attr = attrs["source"]
         source = Code.string_to_quoted!(source_attr)
+
+        [module_id_str, question_id_str] =
+          source_attr
+          |> String.split("\n", parts: 2)
+          |> hd()
+          |> String.trim_leading("#")
+          |> String.split(":", parts: 2)
+
+        module_id =
+          case modules[String.trim(module_id_str)] do
+            nil ->
+              raise "invalid module id: #{module_id_str}"
+
+            module_id ->
+              module_id
+          end
+
+        question_id =
+          case Integer.parse(String.trim(question_id_str)) do
+            {id, ""} ->
+              id
+
+            _ ->
+              raise "invalid question id: #{question_id_str}"
+          end
 
         quote do
           result = unquote(source)
 
-          [module_id, question_id] =
-            unquote(source_attr)
-            |> String.split("\n", parts: 2)
-            |> hd()
-            |> String.trim_leading("#")
-            |> String.split(":", parts: 2)
-
-          module_id =
-            case unquote(Macro.escape(modules))[String.trim(module_id)] do
-              nil ->
-                raise "invalid module id: #{module_id}"
-
-              module_id ->
-                module_id
-            end
-
-          question_id =
-            case Integer.parse(String.trim(question_id)) do
-              {id, ""} ->
-                id
-
-              _ ->
-                raise "invalid question id: #{question_id}"
-            end
-
-          case GradingClient.check_answer(module_id, question_id, result) do
+          case GradingClient.check_answer(unquote(module_id), unquote(question_id), result) do
             :correct ->
               IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
 
