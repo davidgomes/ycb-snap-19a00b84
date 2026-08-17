@@ -106,6 +106,11 @@ defmodule Paginator do
 
       Repo.paginate(query, cursor_fields: [inserted_at: :asc, id: :desc], limit: 50)
 
+  Available sort orders are `:asc`, `:desc`, `:asc_nulls_first`,
+  `:asc_nulls_last`, `:desc_nulls_first`, and `:desc_nulls_last`.
+  `:asc` follows Postgres `:asc_nulls_last` and `:desc` follows
+  `:desc_nulls_first`.
+
   ## Example with sorting on columns in joined tables
 
       from(
