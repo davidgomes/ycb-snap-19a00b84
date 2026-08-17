@@ -1,0 +1,61 @@
+defmodule HexpmWeb.API.RetirementController do
+  use HexpmWeb, :controller
+
+  plug :maybe_fetch_package when action in [:create_all]
+  plug :maybe_fetch_release when action in [:create, :delete]
+
+  plug :authorize, domains: [{"api", "write"}, "package"], fun: {AuthHelpers, :package_owner}
+
+  def create_all(conn, params) do
+    if package = conn.assigns.package do
+      {replace?, params} = Map.pop(params, "replace", false)
+
+      case Releases.retire(package, params,
+             audit: audit_data(conn),
+             replace: replace? in [true, "true"]
+           ) do
+        :ok ->
+          conn
+          |> api_cache(:private)
+          |> send_resp(204, "")
+
+        {:error, _, changeset, _} ->
+          validation_failed(conn, changeset)
+      end
+    else
+      not_found(conn)
+    end
+  end
+
+  def create(conn, params) do
+    package = conn.assigns.package
+
+    if release = conn.assigns.release do
+      case Releases.retire(package, release, params, audit: audit_data(conn)) do
+        :ok ->
+          conn
+          |> api_cache(:private)
+          |> send_resp(204, "")
+
+        {:error, _, changeset, _} ->
+          validation_failed(conn, changeset)
+      end
+    else
+      not_found(conn)
+    end
+  end
+
+  def delete(conn, _params) do
+    package = conn.assigns.package
+
+    if release = conn.assigns.release do
+      Releases.unretire(package, release, audit: audit_data(conn))
+
+      conn
+      |> api_cache(:private)
+      |> send_resp(204, "")
+    else
+      not_found(conn)
+    end
+  end
+end

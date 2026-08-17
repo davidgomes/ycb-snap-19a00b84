@@ -1,0 +1,6 @@
+Mox.defmock(Hexpm.Billing.Mock, for: Hexpm.Billing.Behaviour)
+Mox.defmock(Hexpm.Pwned.Mock, for: Hexpm.Pwned)
+Mox.defmock(Hexpm.HTTP.Mock, for: Hexpm.HTTP.Interface)
+Mox.defmock(Hexpm.Hexdocs.Search.Mock, for: Hexpm.Hexdocs.Search)
+Mox.defmock(Hexpm.CronMonitor.SentryMock, for: Hexpm.CronMonitor.Sentry)
+Mox.defmock(Hexpm.Accounts.SSO.OIDC.Mock, for: Hexpm.Accounts.SSO.OIDC)

@@ -1,0 +1,705 @@
+defmodule Hexpm.AdminTasksTest do
+  use Hexpm.DataCase, async: true
+  use Oban.Testing, repo: Hexpm.RepoBase
+  import Swoosh.TestAssertions
+
+  alias Hexpm.AdminTasks
+  alias Hexpm.Accounts.{Organization, OrganizationUser, User}
+  alias Hexpm.Repository.{Package, Release}
+
+  describe "change_password/3" do
+    test "changes password by username" do
+      user = insert(:user, username: "testuser")
+
+      assert :ok = AdminTasks.change_password(:username, "testuser", "new_password")
+
+      updated_user = Repo.get!(User, user.id)
+      assert Bcrypt.verify_pass("new_password", updated_user.password)
+    end
+
+    test "changes password by email" do
+      email = Fake.sequence(:email)
+      user = insert(:user, emails: [build(:email, email: email)])
+
+      assert :ok = AdminTasks.change_password(:email, email, "new_password")
+
+      updated_user = Repo.get!(User, user.id)
+      assert Bcrypt.verify_pass("new_password", updated_user.password)
+    end
+
+    test "returns error for nonexistent username" do
+      assert {:error, :user_not_found} =
+               AdminTasks.change_password(:username, "nonexistent", "password")
+    end
+
+    test "returns error for nonexistent email" do
+      assert {:error, :user_not_found} =
+               AdminTasks.change_password(:email, "nonexistent@example.com", "password")
+    end
+  end
+
+  describe "reset_tfa/1" do
+    test "disables 2FA for user with 2FA enabled" do
+      user = insert(:user_with_tfa)
+
+      assert User.tfa_enabled?(user)
+      assert :ok = AdminTasks.reset_tfa(user.username)
+
+      updated_user = Repo.get!(User, user.id)
+      refute User.tfa_enabled?(updated_user)
+    end
+
+    test "returns error when 2FA is not enabled" do
+      user = insert(:user)
+
+      assert {:error, :tfa_not_enabled} = AdminTasks.reset_tfa(user.username)
+    end
+
+    test "returns error for nonexistent user" do
+      assert {:error, :user_not_found} = AdminTasks.reset_tfa("nonexistent")
+    end
+
+    test "finds user by email" do
+      email = Fake.sequence(:email)
+      user = insert(:user_with_tfa, emails: [build(:email, email: email)])
+
+      assert :ok = AdminTasks.reset_tfa(email)
+
+      updated_user = Repo.get!(User, user.id)
+      refute User.tfa_enabled?(updated_user)
+    end
+  end
+
+  describe "remove_user/1" do
+    test "removes user" do
+      user = insert(:user)
+      user_id = user.id
+
+      assert :ok = AdminTasks.remove_user(user.username)
+
+      refute Repo.get(User, user_id)
+    end
+
+    test "returns error for nonexistent user" do
+      assert {:error, :user_not_found} = AdminTasks.remove_user("nonexistent")
+    end
+
+    test "reserves the username and writes an audit log" do
+      user = insert(:user)
+      username = user.username
+
+      assert :ok = AdminTasks.remove_user(user.username)
+
+      assert Repo.exists?(Hexpm.Accounts.ReservedUsername.by_name(username))
+
+      delete_log = Repo.get_by(Hexpm.Accounts.AuditLog, action: "user.delete")
+      assert delete_log
+      assert delete_log.params["username"] == username
+      assert delete_log.user_agent == "ADMIN"
+    end
+
+    test "does not send a notification email when removing a user" do
+      user = insert(:user)
+
+      assert :ok = AdminTasks.remove_user(user.username)
+
+      refute_email_sent()
+    end
+
+    test "removes user with associated records" do
+      user = insert(:user)
+      user_id = user.id
+      email_ids = Enum.map(user.emails, & &1.id)
+
+      key = insert(:key, user: user)
+      package = insert(:package)
+      package_owner = insert(:package_owner, package: package, user: user)
+      session = insert(:session, user_id: user.id)
+      oauth_client = insert(:oauth_client)
+      oauth_token = insert(:oauth_token, user: user, client_id: oauth_client.client_id)
+
+      audit_log =
+        insert(:audit_log,
+          user: user,
+          action: "test.action",
+          user_data: %{"id" => user.id, "username" => user.username}
+        )
+
+      audit_log_with_key =
+        insert(:audit_log,
+          user: user,
+          key: key,
+          action: "test.key_action",
+          user_data: %{"id" => user.id, "username" => user.username},
+          key_data: %{"id" => key.id, "name" => key.name}
+        )
+
+      organization = insert(:organization)
+      org_user = insert(:organization_user, user: user, organization: organization)
+      report = insert(:package_report, author: user, package: package, description: "test report")
+
+      comment =
+        Repo.insert!(%Hexpm.Repository.PackageReportComment{
+          text: "test comment",
+          author_id: user.id,
+          package_report_id: report.id
+        })
+
+      password_reset =
+        Repo.insert!(%Hexpm.Accounts.PasswordReset{
+          key: "test_key",
+          primary_email: "test@example.com",
+          user_id: user.id
+        })
+
+      release = insert(:release, package: package, publisher: user)
+
+      assert :ok = AdminTasks.remove_user(user.username)
+
+      refute Repo.get(User, user_id)
+
+      # CASCADE deletes
+      for email_id <- email_ids do
+        refute Repo.get(Hexpm.Accounts.Email, email_id)
+      end
+
+      refute Repo.get(Hexpm.Accounts.Key, key.id)
+      refute Repo.get(Hexpm.Repository.PackageOwner, package_owner.id)
+      refute Repo.get(Hexpm.UserSession, session.id)
+      refute Repo.get(Hexpm.OAuth.Token, oauth_token.id)
+      refute Repo.get(Hexpm.Accounts.OrganizationUser, org_user.id)
+      refute Repo.get(Hexpm.Accounts.PasswordReset, password_reset.id)
+
+      # SET NULL preserves records, user_data and key_data survive deletion
+      audit_log_reloaded = Repo.get(Hexpm.Accounts.AuditLog, audit_log.id)
+      assert audit_log_reloaded.user_id == nil
+      assert audit_log_reloaded.user_data["username"] == user.username
+
+      audit_log_with_key_reloaded = Repo.get(Hexpm.Accounts.AuditLog, audit_log_with_key.id)
+      assert audit_log_with_key_reloaded.user_id == nil
+      assert audit_log_with_key_reloaded.key_id == nil
+      assert audit_log_with_key_reloaded.user_data["username"] == user.username
+      assert audit_log_with_key_reloaded.key_data["name"] == key.name
+      assert Repo.get(Hexpm.Repository.PackageReport, report.id).author_id == nil
+      assert Repo.get(Hexpm.Repository.PackageReportComment, comment.id).author_id == nil
+      assert Repo.get(Release, release.id).publisher_id == nil
+    end
+  end
+
+  describe "remove_user/2 with delete_packages" do
+    test "deletes sole-owned packages" do
+      user = insert(:user)
+      package = insert(:package)
+      insert(:package_owner, package: package, user: user)
+      package_id = package.id
+
+      assert :ok = AdminTasks.remove_user(user.username, delete_packages: true)
+
+      refute Repo.get(User, user.id)
+      refute Repo.get(Package, package_id)
+    end
+
+    test "preserves packages with multiple owners" do
+      user = insert(:user)
+      other_user = insert(:user)
+      package = insert(:package)
+      insert(:package_owner, package: package, user: user)
+      insert(:package_owner, package: package, user: other_user)
+      package_id = package.id
+
+      assert :ok = AdminTasks.remove_user(user.username, delete_packages: true)
+
+      refute Repo.get(User, user.id)
+      assert Repo.get(Package, package_id)
+    end
+
+    test "without option leaves packages intact" do
+      user = insert(:user)
+      package = insert(:package)
+      insert(:package_owner, package: package, user: user)
+      insert(:release, package: package, publisher: user)
+      package_id = package.id
+
+      assert :ok = AdminTasks.remove_user(user.username)
+
+      refute Repo.get(User, user.id)
+      assert Repo.get(Package, package_id)
+    end
+  end
+
+  describe "rename_user/2" do
+    test "renames user" do
+      user = insert(:user, username: "oldname")
+
+      assert :ok = AdminTasks.rename_user("oldname", "newname")
+
+      updated_user = Repo.get!(User, user.id)
+      assert updated_user.username == "newname"
+    end
+
+    test "returns error for nonexistent user" do
+      assert {:error, :user_not_found} = AdminTasks.rename_user("nonexistent", "newname")
+    end
+  end
+
+  describe "remove_organization_member/2" do
+    test "removes an organization member and writes an admin audit log" do
+      organization = insert(:organization)
+      insert(:organization_user, organization: organization, user: insert(:user))
+      user = insert(:user)
+      organization_user = insert(:organization_user, organization: organization, user: user)
+
+      assert :ok = AdminTasks.remove_organization_member(organization.name, user.username)
+
+      refute Repo.get(OrganizationUser, organization_user.id)
+
+      audit_log = Repo.get_by(Hexpm.Accounts.AuditLog, action: "organization.member.remove")
+      assert audit_log.user_agent == "ADMIN"
+      assert audit_log.params["organization"]["name"] == organization.name
+      assert audit_log.params["user"]["username"] == user.username
+    end
+
+    test "finds a member by email" do
+      organization = insert(:organization)
+      insert(:organization_user, organization: organization, user: insert(:user))
+      email = Fake.sequence(:email)
+      user = insert(:user, emails: [build(:email, email: email)])
+      organization_user = insert(:organization_user, organization: organization, user: user)
+
+      assert :ok = AdminTasks.remove_organization_member(organization.name, email)
+
+      refute Repo.get(OrganizationUser, organization_user.id)
+    end
+
+    test "does not remove the last member" do
+      organization = insert(:organization)
+      user = insert(:user)
+      organization_user = insert(:organization_user, organization: organization, user: user)
+
+      assert {:error, :last_member} =
+               AdminTasks.remove_organization_member(organization.name, user.username)
+
+      assert Repo.get(OrganizationUser, organization_user.id)
+    end
+
+    test "returns an error for a nonexistent organization" do
+      user = insert(:user)
+
+      assert {:error, :organization_not_found} =
+               AdminTasks.remove_organization_member("nonexistent", user.username)
+    end
+
+    test "returns an error for a nonexistent user" do
+      organization = insert(:organization)
+
+      assert {:error, :user_not_found} =
+               AdminTasks.remove_organization_member(organization.name, "nonexistent")
+    end
+
+    test "returns an error when the user is not a member" do
+      organization = insert(:organization)
+      user = insert(:user)
+
+      assert {:error, :member_not_found} =
+               AdminTasks.remove_organization_member(organization.name, user.username)
+    end
+  end
+
+  describe "allow_republish/3" do
+    test "resets inserted_at timestamp for release" do
+      package = insert(:package)
+      old_time = ~U[2020-01-01 00:00:00Z]
+      release = insert(:release, package: package, version: "1.0.0", inserted_at: old_time)
+
+      assert :ok = AdminTasks.allow_republish(package.name, "1.0.0")
+
+      updated_release = Repo.get!(Release, release.id)
+      assert DateTime.compare(updated_release.inserted_at, old_time) == :gt
+    end
+
+    test "works with organization option" do
+      repository = insert(:repository)
+      package = insert(:package, repository_id: repository.id)
+      old_time = ~U[2020-01-01 00:00:00Z]
+      release = insert(:release, package: package, version: "1.0.0", inserted_at: old_time)
+
+      assert :ok =
+               AdminTasks.allow_republish(package.name, "1.0.0", organization: repository.name)
+
+      updated_release = Repo.get!(Release, release.id)
+      assert DateTime.compare(updated_release.inserted_at, old_time) == :gt
+    end
+
+    test "returns error for nonexistent package" do
+      assert {:error, :package_not_found} =
+               AdminTasks.allow_republish("nonexistent", "1.0.0")
+    end
+
+    test "returns error for nonexistent release" do
+      package = insert(:package)
+
+      assert {:error, :release_not_found} =
+               AdminTasks.allow_republish(package.name, "99.99.99")
+    end
+  end
+
+  describe "remove_package/2" do
+    test "removes package" do
+      package = insert(:package)
+      release = insert(:release, package: package)
+      package_id = package.id
+      release_id = release.id
+
+      assert :ok = AdminTasks.remove_package("hexpm", package.name)
+
+      refute Repo.get(Package, package_id)
+      refute Repo.get(Release, release_id)
+    end
+
+    test "returns error for nonexistent repository" do
+      assert {:error, :repository_not_found} =
+               AdminTasks.remove_package("nonexistent_repo", "pkg")
+    end
+
+    test "returns error for nonexistent package" do
+      assert {:error, :package_not_found} =
+               AdminTasks.remove_package("hexpm", "nonexistent")
+    end
+  end
+
+  describe "remove_release/3" do
+    test "removes release" do
+      package = insert(:package)
+      release = insert(:release, package: package, version: "1.0.0")
+      release_id = release.id
+
+      assert :ok = AdminTasks.remove_release("hexpm", package.name, "1.0.0")
+
+      refute Repo.get(Release, release_id)
+    end
+
+    test "returns error for nonexistent repository" do
+      assert {:error, :repository_not_found} =
+               AdminTasks.remove_release("nonexistent_repo", "pkg", "1.0.0")
+    end
+
+    test "returns error for nonexistent package" do
+      assert {:error, :package_not_found} =
+               AdminTasks.remove_release("hexpm", "nonexistent", "1.0.0")
+    end
+
+    test "returns error for nonexistent release" do
+      package = insert(:package)
+
+      assert {:error, :release_not_found} =
+               AdminTasks.remove_release("hexpm", package.name, "99.99.99")
+    end
+  end
+
+  describe "add_owner/3" do
+    test "adds owner to package" do
+      package = insert(:package)
+      owner = insert(:user)
+      insert(:package_owner, package: package, user: owner)
+      new_owner = insert(:user)
+
+      assert {:ok, package_owner} = AdminTasks.add_owner(package.name, new_owner.username)
+
+      assert package_owner.user_id == new_owner.id
+      assert package_owner.package_id == package.id
+    end
+
+    test "adds owner with level option" do
+      package = insert(:package)
+      owner = insert(:user)
+      insert(:package_owner, package: package, user: owner)
+      new_owner = insert(:user)
+
+      assert {:ok, package_owner} =
+               AdminTasks.add_owner(package.name, new_owner.username, level: "maintainer")
+
+      assert package_owner.level == "maintainer"
+    end
+
+    test "finds user by email" do
+      package = insert(:package)
+      owner = insert(:user)
+      insert(:package_owner, package: package, user: owner)
+      email = Fake.sequence(:email)
+      new_owner = insert(:user, emails: [build(:email, email: email)])
+
+      assert {:ok, package_owner} = AdminTasks.add_owner(package.name, email)
+
+      assert package_owner.user_id == new_owner.id
+    end
+  end
+
+  describe "remove_owner/2" do
+    test "removes owner from package" do
+      package = insert(:package)
+      owner1 = insert(:user)
+      owner2 = insert(:user)
+      insert(:package_owner, package: package, user: owner1)
+      insert(:package_owner, package: package, user: owner2)
+
+      assert :ok = AdminTasks.remove_owner(package.name, owner2.username)
+
+      owners = Repo.all(Ecto.assoc(package, :package_owners))
+      assert length(owners) == 1
+      assert hd(owners).user_id == owner1.id
+    end
+
+    test "returns error when not an owner" do
+      package = insert(:package)
+      owner = insert(:user)
+      insert(:package_owner, package: package, user: owner)
+      non_owner = insert(:user)
+
+      assert {:error, :not_owner} = AdminTasks.remove_owner(package.name, non_owner.username)
+    end
+
+    test "returns error when trying to remove last owner" do
+      package = insert(:package)
+      owner = insert(:user)
+      insert(:package_owner, package: package, user: owner)
+
+      assert {:error, :last_owner} = AdminTasks.remove_owner(package.name, owner.username)
+    end
+  end
+
+  describe "rename_organization/2" do
+    test "renames organization" do
+      organization = insert(:organization, name: "old_org")
+
+      assert :ok = AdminTasks.rename_organization("old_org", "new_org")
+
+      updated_org = Repo.get!(Organization, organization.id)
+      assert updated_org.name == "new_org"
+    end
+
+    test "updates organization user's username" do
+      organization = insert(:organization, name: "old_org")
+
+      assert :ok = AdminTasks.rename_organization("old_org", "new_org")
+
+      updated_org = Repo.get!(Organization, organization.id) |> Repo.preload(:user)
+      assert updated_org.user.username == "new_org"
+    end
+
+    test "returns error for nonexistent organization" do
+      assert {:error, :organization_not_found} =
+               AdminTasks.rename_organization("nonexistent", "new_name")
+    end
+  end
+
+  describe "add_install/2" do
+    test "adds new install record" do
+      initial_count = Repo.aggregate(Hexpm.Repository.Install, :count)
+
+      assert :ok = AdminTasks.add_install("2.0.0", ["1.14.0", "1.15.0"])
+
+      new_count = Repo.aggregate(Hexpm.Repository.Install, :count)
+      assert new_count == initial_count + 1
+
+      install = Repo.one(from i in Hexpm.Repository.Install, order_by: [desc: i.id], limit: 1)
+      assert install.hex == "2.0.0"
+      assert install.elixirs == ["1.14.0", "1.15.0"]
+    end
+
+    test "works with nil hex_version (just uploads)" do
+      assert :ok = AdminTasks.add_install(nil, [])
+    end
+  end
+
+  describe "security_password_reset/2" do
+    test "sends password reset email" do
+      user = insert(:user)
+
+      assert :ok = AdminTasks.security_password_reset(user.username)
+
+      # Verify password reset record was created
+      user = Repo.preload(user, :password_resets, force: true)
+      assert length(user.password_resets) == 1
+    end
+
+    test "finds user by email" do
+      email = Fake.sequence(:email)
+      user = insert(:user, emails: [build(:email, email: email)])
+
+      assert :ok = AdminTasks.security_password_reset(email)
+
+      user = Repo.preload(user, :password_resets, force: true)
+      assert length(user.password_resets) == 1
+    end
+
+    test "returns error for nonexistent user" do
+      assert {:error, :user_not_found} = AdminTasks.security_password_reset("nonexistent")
+    end
+
+    test "returns error for organization user" do
+      organization = insert(:organization)
+
+      assert {:error, :organization_user} =
+               AdminTasks.security_password_reset(organization.user.username)
+    end
+
+    test "disable_password option sets password to nil" do
+      user = insert(:user)
+      assert user.password != nil
+
+      assert :ok = AdminTasks.security_password_reset(user.username, disable_password: true)
+
+      updated_user = Repo.get!(User, user.id)
+      assert updated_user.password == nil
+    end
+
+    test "revoke_all_access option revokes keys and sessions" do
+      user = insert(:user)
+      key = insert(:key, user: user)
+      session = insert(:session, user_id: user.id)
+
+      assert :ok = AdminTasks.security_password_reset(user.username, revoke_all_access: true)
+
+      # Verify key was revoked
+      updated_key = Repo.get!(Hexpm.Accounts.Key, key.id)
+      assert updated_key.revoke_at != nil
+
+      # Verify session was revoked
+      updated_session = Repo.get!(Hexpm.UserSession, session.id)
+      assert updated_session.revoked_at != nil
+    end
+
+    test "combines both options" do
+      user = insert(:user)
+      key = insert(:key, user: user)
+
+      assert :ok =
+               AdminTasks.security_password_reset(user.username,
+                 disable_password: true,
+                 revoke_all_access: true
+               )
+
+      updated_user = Repo.get!(User, user.id)
+      assert updated_user.password == nil
+
+      updated_key = Repo.get!(Hexpm.Accounts.Key, key.id)
+      assert updated_key.revoke_at != nil
+    end
+  end
+
+  describe "retry_oban_jobs/1" do
+    alias Hexpm.Hexdocs.Workers
+
+    test "retries discarded jobs at priority 8" do
+      discarded = insert_discarded_job(Workers.Upload, %{key: "docs/retried-1.0.0.tar.gz"})
+      {:ok, available} = Oban.insert(Workers.Upload.new(%{key: "docs/untouched-1.0.0.tar.gz"}))
+
+      assert {:ok, 1} = AdminTasks.retry_oban_jobs()
+
+      retried = Repo.get!(Oban.Job, discarded.id)
+      assert retried.state == "available"
+      assert retried.priority == 8
+
+      # A job that was never discarded is left alone.
+      assert Repo.get!(Oban.Job, available.id).state == "available"
+    end
+
+    test "with uniq: true retries one job per worker and args" do
+      insert_discarded_job(Workers.Upload, %{key: "docs/dup-1.0.0.tar.gz"})
+      insert_discarded_job(Workers.Upload, %{key: "docs/dup-1.0.0.tar.gz"})
+
+      assert {:ok, 1} = AdminTasks.retry_oban_jobs(uniq: true)
+
+      assert Repo.aggregate(available_uploads(), :count) == 1
+      assert Repo.aggregate(discarded_uploads(), :count) == 1
+    end
+
+    test "without uniq retries every discarded job" do
+      insert_discarded_job(Workers.Upload, %{key: "docs/dup-1.0.0.tar.gz"})
+      insert_discarded_job(Workers.Upload, %{key: "docs/dup-1.0.0.tar.gz"})
+
+      assert {:ok, 2} = AdminTasks.retry_oban_jobs()
+
+      assert Repo.aggregate(available_uploads(), :count) == 2
+    end
+
+    test "retries only the given worker" do
+      insert_discarded_job(Workers.Upload, %{key: "docs/filtered-1.0.0.tar.gz"})
+      search = insert_discarded_job(Workers.Search, %{key: "docs/filtered-1.0.0.tar.gz"})
+
+      assert {:ok, 1} = AdminTasks.retry_oban_jobs(worker: "Hexpm.Hexdocs.Workers.Upload")
+
+      assert Repo.aggregate(available_uploads(), :count) == 1
+      assert Repo.get!(Oban.Job, search.id).state == "discarded"
+    end
+
+    defp insert_discarded_job(worker, args) do
+      {:ok, job} = Oban.insert(worker.new(args))
+
+      {1, _} =
+        from(j in Oban.Job, where: j.id == ^job.id)
+        |> Repo.update_all(
+          set: [
+            state: "discarded",
+            attempt: job.max_attempts,
+            discarded_at: DateTime.utc_now()
+          ]
+        )
+
+      job
+    end
+
+    defp available_uploads do
+      from(j in Oban.Job,
+        where: j.worker == "Hexpm.Hexdocs.Workers.Upload" and j.state == "available"
+      )
+    end
+
+    defp discarded_uploads do
+      from(j in Oban.Job,
+        where: j.worker == "Hexpm.Hexdocs.Workers.Upload" and j.state == "discarded"
+      )
+    end
+  end
+
+  describe "send_email/3" do
+    test "sends a separate email to each recipient" do
+      assert {:ok, 2} =
+               AdminTasks.send_email(
+                 ["bob@example.com", "jane@example.com"],
+                 "Hex.pm - Service update",
+                 "First paragraph.\n\nSecond paragraph."
+               )
+
+      assert_email_sent(fn email ->
+        assert email.to == [{"", "bob@example.com"}]
+        assert email.subject == "Hex.pm - Service update"
+        assert email.text_body =~ "First paragraph."
+        assert email.text_body =~ "Second paragraph."
+        assert email.html_body =~ "Service update"
+        assert email.html_body =~ "<p"
+      end)
+
+      assert_email_sent(fn email -> assert email.to == [{"", "jane@example.com"}] end)
+    end
+
+    test "only sends once to duplicate recipients" do
+      assert {:ok, 1} =
+               AdminTasks.send_email(
+                 ["bob@example.com", "bob@example.com"],
+                 "Hex.pm - Service update",
+                 "Body"
+               )
+    end
+
+    test "escapes the body in the html email" do
+      assert {:ok, 1} =
+               AdminTasks.send_email(["bob@example.com"], "Subject", "<script>alert(1)</script>")
+
+      assert_email_sent(fn email ->
+        refute email.html_body =~ "<script>"
+        assert email.html_body =~ "&lt;script&gt;"
+      end)
+    end
+  end
+end

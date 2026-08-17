@@ -1,0 +1,108 @@
+defmodule Hexpm.Accounts.UserHandlesTest do
+  use Hexpm.DataCase, async: true
+
+  alias Hexpm.Accounts.UserHandles
+
+  describe "render/1" do
+    test "handles with https schema" do
+      user =
+        build(:user,
+          handles:
+            build(:user_handles,
+              twitter: "https://x.com/eric",
+              bluesky: "https://bsky.app/profile/eric.bsky.social",
+              github: "https://github.com/eric",
+              elixirforum: "https://elixirforum.com/u/eric",
+              freenode: "freenode",
+              slack: "slack",
+              url: "https://example.com"
+            )
+        )
+
+      assert UserHandles.render(user) ==
+               [
+                 {"X.com", "eric", "https://x.com/eric"},
+                 {"Bluesky", "eric.bsky.social", "https://bsky.app/profile/eric.bsky.social"},
+                 {"GitHub", "eric", "https://github.com/eric"},
+                 {"Elixir Forum", "eric", "https://elixirforum.com/u/eric"},
+                 {"Libera", "freenode", "irc://irc.libera.chat/elixir"},
+                 {"Slack", "slack", "https://elixir-slack.community"}
+               ]
+    end
+
+    test "handles with http schema" do
+      user =
+        build(:user,
+          handles:
+            build(:user_handles,
+              twitter: "http://x.com/eric",
+              bluesky: "http://bsky.app/profile/eric.bsky.social",
+              github: "http://github.com/eric",
+              elixirforum: "http://elixirforum.com/u/eric",
+              freenode: "freenode",
+              slack: "slack",
+              url: "https://example.com"
+            )
+        )
+
+      assert UserHandles.render(user) ==
+               [
+                 {"X.com", "eric", "https://x.com/eric"},
+                 {"Bluesky", "eric.bsky.social", "https://bsky.app/profile/eric.bsky.social"},
+                 {"GitHub", "eric", "https://github.com/eric"},
+                 {"Elixir Forum", "eric", "https://elixirforum.com/u/eric"},
+                 {"Libera", "freenode", "irc://irc.libera.chat/elixir"},
+                 {"Slack", "slack", "https://elixir-slack.community"}
+               ]
+    end
+
+    test "handles with without scheme" do
+      user =
+        build(:user,
+          handles:
+            build(:user_handles,
+              twitter: "x.com/eric",
+              bluesky: "bsky.app/profile/eric.bsky.social",
+              github: "github.com/eric",
+              elixirforum: "elixirforum.com/u/eric",
+              freenode: "freenode",
+              slack: "slack",
+              url: "https://example.com"
+            )
+        )
+
+      assert UserHandles.render(user) ==
+               [
+                 {"X.com", "eric", "https://x.com/eric"},
+                 {"Bluesky", "eric.bsky.social", "https://bsky.app/profile/eric.bsky.social"},
+                 {"GitHub", "eric", "https://github.com/eric"},
+                 {"Elixir Forum", "eric", "https://elixirforum.com/u/eric"},
+                 {"Libera", "freenode", "irc://irc.libera.chat/elixir"},
+                 {"Slack", "slack", "https://elixir-slack.community"}
+               ]
+    end
+
+    test "handles with legacy twitter.com URLs" do
+      user =
+        build(:user,
+          handles: build(:user_handles, twitter: "https://twitter.com/eric")
+        )
+
+      assert UserHandles.render(user) == [{"X.com", "eric", "https://x.com/eric"}]
+    end
+
+    test "handles with legacy twitter.com without scheme" do
+      user =
+        build(:user,
+          handles: build(:user_handles, twitter: "twitter.com/eric")
+        )
+
+      assert UserHandles.render(user) == [{"X.com", "eric", "https://x.com/eric"}]
+    end
+
+    test "handle with full URL" do
+      user = build(:user, handles: build(:user_handles, twitter: "https://example.com"))
+      assert UserHandles.render(user) == []
+    end
+  end
+end

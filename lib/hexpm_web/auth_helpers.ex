@@ -1,0 +1,398 @@
+defmodule HexpmWeb.AuthHelpers do
+  import Plug.Conn
+  import HexpmWeb.ControllerHelpers, only: [render_error: 3]
+
+  alias Hexpm.Accounts.{Auth, Organization, Organizations, User, TFA}
+  alias Hexpm.Permissions
+  alias Hexpm.Repository.{Package, Packages, PackageOwner, Repository}
+  alias Hexpm.OAuth.Token
+  alias HexpmWeb.Plugs.Attack
+
+  def authorize(conn, opts) do
+    user_or_organization = conn.assigns.current_user || conn.assigns.current_organization
+
+    if user_or_organization || opts[:authentication] != :required do
+      authorized(conn, user_or_organization, opts[:fun], opts)
+    else
+      error(conn, {:error, :missing})
+    end
+  end
+
+  defp authorized(conn, %User{service: true}, _funs, _opts) do
+    conn
+  end
+
+  defp authorized(conn, user_or_organization, funs, opts) do
+    domains = Keyword.get(opts, :domains, [])
+    auth_credential = conn.assigns.auth_credential
+    email = conn.assigns.email
+
+    cond do
+      not verified_user?(user_or_organization, email, opts) ->
+        error(conn, {:error, :unconfirmed})
+
+      user_or_organization && not verify_permissions?(conn, auth_credential, domains) ->
+        error(conn, {:error, :domain})
+
+      # TOTP validation for write operations with OAuth tokens
+      totp_error =
+          validate_totp_for_write_access(conn, user_or_organization, auth_credential, domains) ->
+        error(conn, totp_error)
+
+      funs ->
+        Enum.find_value(List.wrap(funs), fn fun ->
+          case apply_authorization_fun(fun, conn, user_or_organization) do
+            :ok -> nil
+            other -> error(conn, other)
+          end
+        end) || conn
+
+      true ->
+        conn
+    end
+  end
+
+  defp apply_authorization_fun({module, fun_name}, conn, user_or_organization) do
+    apply(module, fun_name, [conn, user_or_organization])
+  end
+
+  defp apply_authorization_fun({module, fun_name, opts}, conn, user_or_organization) do
+    apply(module, fun_name, [conn, user_or_organization, opts])
+  end
+
+  defp verified_user?(%User{}, email, opts) do
+    allow_unconfirmed = Keyword.get(opts, :allow_unconfirmed, false)
+    allow_unconfirmed || (email && email.verified)
+  end
+
+  defp verified_user?(%Organization{}, _email, _opts) do
+    true
+  end
+
+  defp verified_user?(nil, _email, _opts) do
+    true
+  end
+
+  defp verify_permissions?(_conn, _auth_credential = nil, _domains) do
+    true
+  end
+
+  defp verify_permissions?(_conn, _auth_credential, _domains = []) do
+    true
+  end
+
+  defp verify_permissions?(conn, auth_credential, domains) do
+    Enum.any?(domains, fn
+      {domain, resource} -> verify_permissions?(conn, auth_credential, domain, resource)
+      domain -> verify_permissions?(conn, auth_credential, domain, nil)
+    end)
+  end
+
+  defp verify_permissions?(conn, auth_credential, "package", nil) do
+    Permissions.verify_access?(auth_credential, "package", conn.assigns.package)
+  end
+
+  defp verify_permissions?(_conn, auth_credential, domain, resource) do
+    Permissions.verify_access?(auth_credential, domain, resource)
+  end
+
+  # TOTP validation for write operations
+  defp validate_totp_for_write_access(conn, %User{} = user, %Token{} = _token, domains) do
+    if requires_write_access?(domains) do
+      if not User.tfa_enabled?(user) do
+        {:error, :tfa_not_enabled}
+      else
+        validate_totp(conn, user)
+      end
+    else
+      nil
+    end
+  end
+
+  defp validate_totp_for_write_access(_conn, _user_or_org, _auth_credential, _domains) do
+    # Not an OAuth token, skip validation
+    nil
+  end
+
+  defp requires_write_access?(domains) do
+    Enum.any?(domains, fn
+      {"api", "write"} -> true
+      _ -> false
+    end)
+  end
+
+  defp validate_totp(conn, user) do
+    otp_code = get_req_header(conn, "x-hex-otp") |> List.first()
+
+    cond do
+      is_nil(otp_code) ->
+        {:error, :totp_required}
+
+      not TFA.token_valid?(user.tfa.secret, otp_code) ->
+        # Check rate limits
+        case check_totp_rate_limits(conn, user) do
+          :ok -> {:error, :invalid_totp}
+          {:rate_limited, _} -> {:error, :totp_rate_limited}
+        end
+
+      true ->
+        # Valid TOTP
+        nil
+    end
+  end
+
+  defp check_totp_rate_limits(conn, user) do
+    ip_result = Attack.tfa_ip_throttle(conn.remote_ip)
+    user_result = Attack.tfa_session_throttle(%{"uid" => user.id})
+
+    case {ip_result, user_result} do
+      {{:block, _}, _} -> {:rate_limited, :ip}
+      {_, {:block, _}} -> {:rate_limited, :user}
+      _ -> :ok
+    end
+  end
+
+  def error(conn, error) do
+    case error do
+      {:error, :missing} ->
+        unauthorized(conn, "missing authentication information")
+
+      {:error, :invalid} ->
+        unauthorized(conn, "invalid authentication information")
+
+      {:error, :password} ->
+        unauthorized(conn, "invalid username and password combination")
+
+      {:error, :key} ->
+        unauthorized(conn, "invalid API key")
+
+      {:error, :revoked_key} ->
+        unauthorized(conn, "API key revoked")
+
+      {:error, :domain} ->
+        unauthorized(conn, "key not authorized for this action")
+
+      {:error, :totp_required} ->
+        conn
+        |> put_resp_header("www-authenticate", ~s(Bearer realm="hex", error="totp_required"))
+        |> render_error(401,
+          message:
+            "Two-factor authentication required. Include X-Hex-OTP header with your TOTP code."
+        )
+
+      {:error, :invalid_totp} ->
+        conn
+        |> put_resp_header("www-authenticate", ~s(Bearer realm="hex", error="invalid_totp"))
+        |> render_error(401, message: "Invalid two-factor authentication code")
+
+      {:error, :totp_rate_limited} ->
+        render_error(conn, 429,
+          message: "Too many failed two-factor authentication attempts. Please try again later."
+        )
+
+      {:error, :tfa_not_enabled} ->
+        forbidden(conn, "Two-factor authentication must be enabled for API write access")
+
+      {:error, :unconfirmed} ->
+        forbidden(conn, "email not verified")
+
+      {:error, :auth} ->
+        forbidden(conn, "account not authorized for this action")
+
+      {:error, :auth, reason} ->
+        forbidden(conn, reason)
+
+      {:error, :not_found} ->
+        HexpmWeb.ControllerHelpers.not_found(conn)
+    end
+  end
+
+  def authenticate(conn) do
+    case get_req_header(conn, "authorization") do
+      ["Basic " <> credentials] ->
+        basic_auth(credentials)
+
+      ["Bearer " <> token] ->
+        oauth_token_auth(token, conn)
+
+      [key] ->
+        key_auth(key, conn)
+
+      _ ->
+        {:error, :missing}
+    end
+  end
+
+  defp basic_auth(credentials) do
+    with {:ok, decoded} <- Base.decode64(credentials),
+         [username_or_email, password] <- String.split(decoded, ":", parts: 2) do
+      case Auth.password_auth(username_or_email, password) do
+        {:ok, result} -> {:ok, result}
+        :error -> {:error, :password}
+      end
+    else
+      _ ->
+        {:error, :invalid}
+    end
+  end
+
+  defp oauth_token_auth(token, conn) do
+    case Auth.oauth_token_auth(token, usage_info(conn)) do
+      {:ok, result} -> {:ok, result}
+      :error -> {:error, :key}
+    end
+  end
+
+  defp key_auth(key, conn) do
+    case Auth.key_auth(key, usage_info(conn)) do
+      {:ok, result} -> {:ok, result}
+      :error -> {:error, :key}
+      :revoked -> {:error, :revoked_key}
+    end
+  end
+
+  defp usage_info(%{remote_ip: remote_ip} = conn) do
+    %{
+      ip: remote_ip,
+      used_at: DateTime.utc_now(),
+      user_agent: get_req_header(conn, "user-agent")
+    }
+  end
+
+  def unauthorized(conn, reason) do
+    conn
+    |> put_resp_header("www-authenticate", "Basic realm=hex")
+    |> render_error(401, message: reason)
+  end
+
+  def forbidden(conn, reason) do
+    render_error(conn, 403, message: reason)
+  end
+
+  def package_owner(conn, user_or_organization, opts \\ [])
+
+  def package_owner(%Plug.Conn{} = conn, user_or_organization, opts) do
+    package_owner(conn.assigns.repository, conn.assigns.package, user_or_organization, opts)
+  end
+
+  def package_owner(
+        %Repository{} = repository,
+        %Package{} = package,
+        %Organization{} = organization,
+        opts
+      ) do
+    owner_level = opts[:owner_level] || "maintainer"
+
+    cond do
+      repository.organization_id == organization.id -> :ok
+      Packages.owner_with_access?(package, organization.user, owner_level) -> :ok
+      repository.id == 1 -> {:error, :auth}
+      true -> {:error, :not_found}
+    end
+  end
+
+  def package_owner(%Repository{} = repository, %Package{} = package, %User{} = user, opts) do
+    cond do
+      Packages.owner_with_access?(package, user, opts[:owner_level] || "maintainer") -> :ok
+      repository.id == 1 -> {:error, :auth}
+      true -> {:error, :not_found}
+    end
+  end
+
+  def package_owner(%Repository{} = repository, %Package{}, nil, _opts) do
+    if repository.id == 1 do
+      {:error, :auth}
+    else
+      {:error, :not_found}
+    end
+  end
+
+  def package_owner(
+        %Repository{} = repository,
+        nil = _package,
+        %Organization{} = organization,
+        _opts
+      ) do
+    cond do
+      repository.id == 1 -> :ok
+      repository.organization_id == organization.id -> :ok
+      true -> {:error, :not_found}
+    end
+  end
+
+  def package_owner(%Repository{} = repository, nil = _package, %User{} = user, opts) do
+    expected_role = PackageOwner.level_to_organization_role(opts[:owner_level] || "maintainer")
+    actual_role = Organizations.get_role(repository.organization, user)
+
+    cond do
+      repository.id == 1 -> :ok
+      actual_role && actual_role in Organization.role_or_higher(expected_role) -> :ok
+      actual_role -> {:error, :auth}
+      true -> {:error, :not_found}
+    end
+  end
+
+  def package_owner(%Repository{} = repository, nil = _package, nil = _user, _opts) do
+    boolean_to_not_found(repository.id == 1)
+  end
+
+  def package_owner(nil = _repository, _package, _user, _opts) do
+    {:error, :not_found}
+  end
+
+  def organization_access(conn, user_or_organization, opts \\ [])
+
+  def organization_access(%Plug.Conn{} = conn, user_or_organization, opts) do
+    organization_access(conn.assigns.organization, user_or_organization, opts)
+  end
+
+  def organization_access(%Organization{id: 1}, _user_or_organization, opts) do
+    role = opts[:organization_role] || "read"
+    boolean_to_auth_error(role == "read")
+  end
+
+  def organization_access(nil = _organization, _user_or_organization, _opts) do
+    :ok
+  end
+
+  def organization_access(%Organization{} = organization, user_or_organization, opts) do
+    cond do
+      Organizations.access?(
+        organization,
+        user_or_organization,
+        opts[:organization_role] || "read"
+      ) ->
+        :ok
+
+      organization.id == 1 ->
+        {:error, :auth}
+
+      true ->
+        {:error, :not_found}
+    end
+  end
+
+  def organization_billing_active(conn, user_or_organization, opts \\ [])
+
+  def organization_billing_active(%Plug.Conn{} = conn, _user_or_organization, _opts) do
+    organization_billing_active(conn.assigns.organization, nil)
+  end
+
+  def organization_billing_active(%Organization{} = organization, _user_or_organization, _opts) do
+    if organization.id == 1 or Organization.billing_active?(organization) do
+      :ok
+    else
+      {:error, :auth, "organization has no active billing subscription"}
+    end
+  end
+
+  def organization_billing_active(nil = _organization, _user_or_organization, _opts) do
+    :ok
+  end
+
+  defp boolean_to_auth_error(true), do: :ok
+  defp boolean_to_auth_error(false), do: {:error, :auth}
+
+  defp boolean_to_not_found(true), do: :ok
+  defp boolean_to_not_found(false), do: {:error, :not_found}
+end

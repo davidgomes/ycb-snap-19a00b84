@@ -1,0 +1,188 @@
+defmodule HexpmWeb.Plugs do
+  import Plug.Conn, except: [read_body: 1]
+  import HexpmWeb.RequestHelpers, only: [build_usage_info: 1]
+
+  alias Hexpm.Accounts.Users
+  alias Hexpm.UserSessions
+  alias HexpmWeb.ControllerHelpers
+
+  def migrate_session(conn, _opts) do
+    if get_session(conn, HexpmWeb.Session.Transition.legacy_marker()) do
+      delete_session(conn, HexpmWeb.Session.Transition.legacy_marker())
+    else
+      conn
+    end
+  end
+
+  # Max filesize: 20MB
+  # Min upload speed: ~10kb/s
+  # Read 100kb every 10s
+  @read_body_opts [
+    length: 20 * 1024 * 1024,
+    read_length: 100_000,
+    read_timeout: 10_000
+  ]
+
+  def validate_url(conn, _opts) do
+    if String.contains?(conn.request_path <> conn.query_string, "%00") do
+      conn
+      |> ControllerHelpers.render_error(400)
+      |> halt()
+    else
+      conn
+    end
+  end
+
+  def fetch_body(conn, _opts) do
+    # Skip body reading if client sent Expect: 100-continue
+    # Body will be read after validation in handle_100_continue
+    case get_req_header(conn, "expect") do
+      ["100-continue"] ->
+        conn
+
+      _ ->
+        {conn, path} = read_body_to_file(conn)
+        put_in(conn.params["body"], path)
+    end
+  end
+
+  def read_body_to_file(conn) do
+    {:ok, path} = Plug.Upload.random_file("upload")
+
+    {:ok, {conn, _size}} =
+      File.open(path, [:write, :raw], fn fd ->
+        read_body_to_file_loop(conn, fd, 0)
+      end)
+
+    {conn, path}
+  end
+
+  defp read_body_to_file_loop(conn, fd, size) do
+    case read_body(conn, @read_body_opts) do
+      {:ok, body, conn} ->
+        :ok = IO.binwrite(fd, body)
+        {conn, size + byte_size(body)}
+
+      {:more, body, conn} ->
+        new_size = size + byte_size(body)
+
+        if new_size > @read_body_opts[:length] do
+          raise Plug.Parsers.RequestTooLargeError
+        end
+
+        :ok = IO.binwrite(fd, body)
+        read_body_to_file_loop(conn, fd, new_size)
+
+      {:error, :timeout} ->
+        raise Plug.TimeoutError
+
+      {:error, _} ->
+        raise Plug.BadRequestError
+    end
+  end
+
+  def user_agent(conn, opts) do
+    case get_req_header(conn, "user-agent") do
+      [value | _] ->
+        assign(conn, :user_agent, value)
+
+      [] ->
+        if Keyword.get(opts, :required, true) && Application.get_env(:hexpm, :user_agent_req) do
+          ControllerHelpers.render_error(conn, 400, message: "User-Agent header is required")
+        else
+          assign(conn, :user_agent, "missing")
+        end
+    end
+  end
+
+  def default_repository(conn, _opts) do
+    param_set? = Map.has_key?(conn.params, "repository")
+
+    case conn.path_info do
+      ["api", "packages"] -> conn
+      ["api", "publish"] when not param_set? -> put_in(conn.params["repository"], "hexpm")
+      ["api", "packages" | _] when not param_set? -> put_in(conn.params["repository"], "hexpm")
+      ["packages" | _] when not param_set? -> put_in(conn.params["repository"], "hexpm")
+      _ -> conn
+    end
+  end
+
+  def login(conn, _opts) do
+    conn = assign(conn, :current_organization, nil)
+
+    session_token = get_session(conn, "session_token")
+
+    user =
+      if session_token do
+        case Base.decode64(session_token) do
+          {:ok, decoded_token} ->
+            case UserSessions.get_browser_session_by_token(decoded_token) do
+              nil ->
+                nil
+
+              session ->
+                # Update last_use for browser sessions (throttled to once per 5 minutes)
+                should_update =
+                  case session.last_use do
+                    nil ->
+                      true
+
+                    %{used_at: last_used} ->
+                      DateTime.diff(DateTime.utc_now(), last_used, :minute) >= 5
+                  end
+
+                if should_update do
+                  usage_info = build_usage_info(conn)
+                  UserSessions.update_last_use(session, usage_info)
+                end
+
+                Users.get_by_id(session.user_id, [:emails, organizations: :repository])
+            end
+
+          _ ->
+            nil
+        end
+      else
+        nil
+      end
+
+    assign(conn, :current_user, user)
+  end
+
+  def disable_deactivated(conn, _opts) do
+    if conn.assigns.current_user && conn.assigns.current_user.deactivated_at do
+      conn
+      |> ControllerHelpers.render_error(400)
+      |> halt()
+    else
+      conn
+    end
+  end
+
+  def authenticate(conn, _opts) do
+    case HexpmWeb.AuthHelpers.authenticate(conn) do
+      {:ok,
+       %{
+         auth_credential: auth_credential,
+         user: user,
+         organization: organization,
+         email: email
+       }} ->
+        conn
+        |> assign(:auth_credential, auth_credential)
+        |> assign(:current_user, user)
+        |> assign(:current_organization, organization)
+        |> assign(:email, email)
+
+      {:error, :missing} ->
+        conn
+        |> assign(:auth_credential, nil)
+        |> assign(:current_user, nil)
+        |> assign(:current_organization, nil)
+        |> assign(:email, nil)
+
+      {:error, _} = error ->
+        HexpmWeb.AuthHelpers.error(conn, error)
+    end
+  end
+end

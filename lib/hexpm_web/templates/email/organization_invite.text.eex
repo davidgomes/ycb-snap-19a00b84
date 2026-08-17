@@ -1,0 +1,13 @@
+You have been added as a member to the <%= @organization %> organization.
+
+<%= OrganizationInvite.check_out_org(url(email_uri(), ~p"/dashboard/orgs/#{@organization}"), @username, :text) %>
+
+<%= OrganizationInvite.access_organization() %>
+
+<%= Common.for_mix_label() %>
+<%= OrganizationInvite.mix_code() %>
+
+<%= Common.for_rebar3_label() %>
+<%= OrganizationInvite.rebar_code() %>
+
+<%= OrganizationInvite.docs_link(url(email_uri(), ~p"/docs/private"), :text) %>
