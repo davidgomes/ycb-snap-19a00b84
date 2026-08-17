@@ -72,6 +72,10 @@ defmodule Paginator do
     * `:cursor_fields` - The fields with sorting direction used to determine the
     cursor. In most cases, this should be the same fields as the ones used for sorting in the query.
     When you use named bindings in your query they can also be provided.
+    Supported directions per field are `:asc`, `:asc_nulls_first`, `:asc_nulls_last`,
+    `:desc`, `:desc_nulls_first`, and `:desc_nulls_last`. `:asc` and `:desc` follow
+    PostgreSQL nulls defaults (`:asc_nulls_last` and `:desc_nulls_first`).
+    A nullable column cannot be the last cursor field.
     * `:fetch_cursor_value_fun` function of arity 2 to lookup cursor values on returned records.
     Defaults to `Paginator.default_fetch_cursor_value/2`
     * `:include_total_count` - Set this to true to return the total number of
@@ -85,6 +89,7 @@ defmodule Paginator do
     enfore a maximum. Defaults to `500`.
     * `:sort_direction` - The direction used for sorting. Defaults to `:asc`.
     It is preferred to set the sorting direction per field in `:cursor_fields`.
+    Accepts the same values as `:cursor_fields`.
     * `:total_count_limit` - Running count queries on tables with a large number
     of records is expensive so it is capped by default. Can be set to `:infinity`
     in order to count all the records. Defaults to `10,000`.
