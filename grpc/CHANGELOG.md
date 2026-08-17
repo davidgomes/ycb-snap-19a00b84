@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Enhancements
+
+  * `GRPC.Client.Connection` now publishes the set of healthy channels to an ETS table and performs the load-balancing pick per request directly against it, instead of caching a single channel in `persistent_term` and rotating it on a timer. This makes `:round_robin` genuinely balance across backends on every call and removes the `persistent_term` writes on the connection's hot path.
+
 ## v1.0.0 (2026-06-15)
 
 ### Enhancements
