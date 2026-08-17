@@ -4,4 +4,8 @@ defmodule Factory do
   def queue_factory(attrs) do
     Map.new(attrs)
   end
+
+  def job_factory(attrs) do
+    Map.new(attrs)
+  end
 end
