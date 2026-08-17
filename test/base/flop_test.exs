@@ -173,8 +173,7 @@ defmodule FlopTest do
     end
 
     test "requires limit for pagination" do
-      assert {:error, %Meta{} = meta} =
-               TestProviderWithoutLimit.validate(%{})
+      assert {:error, %Meta{} = meta} = TestProviderWithoutLimit.validate(%{})
 
       assert [{"can't be blank", _}] = meta.errors[:limit]
     end
@@ -331,6 +330,11 @@ defmodule FlopTest do
       flop = %Flop{order_by: [:owner_name, :age]}
       assert Flop.named_bindings(flop, Pet, order: false) == []
       assert Flop.named_bindings(flop, Pet, order: true) == [:owner]
+    end
+
+    test "returns used binding names with custom field order_by" do
+      flop = %Flop{order_by: [:owner_age_score]}
+      assert Flop.named_bindings(flop, MyApp.CustomFieldPet) == [:owner]
     end
 
     test "returns used binding names with order_by" do

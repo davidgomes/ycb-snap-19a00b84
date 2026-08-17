@@ -29,10 +29,16 @@ defmodule Flop.ValidationTest do
 
     @derive {Flop.Schema,
              filterable: [],
-             sortable: [:name, :full_name, :thing_count],
+             sortable: [:name, :full_name, :thing_count, :score],
              adapter_opts: [
                compound_fields: [full_name: [:family_name, :given_name]],
-               alias_fields: [:thing_count]
+               alias_fields: [:thing_count],
+               custom_fields: [
+                 score: [
+                   field_dynamic: {__MODULE__, :score_dynamic, []},
+                   ecto_type: :integer
+                 ]
+               ]
              ]}
 
     schema "things" do
@@ -764,12 +770,12 @@ defmodule Flop.ValidationTest do
       assert {:error, changeset} = validate(params, for: Thing)
 
       assert errors_on(changeset)[:order_by] == [
-               "cursor pagination is not supported for compound and alias fields"
+               "cursor pagination is not supported for compound, alias and custom fields"
              ]
     end
 
-    test "rejects an alias field as cursor order field" do
-      params = %{first: 2, after: @cursor, order_by: [:thing_count]}
+    test "rejects a custom field as cursor order field" do
+      params = %{first: 2, after: @cursor, order_by: [:score]}
       assert {:error, changeset} = validate(params, for: Thing)
       assert errors_on(changeset)[:order_by] != nil
     end
@@ -804,16 +810,24 @@ defmodule Flop.ValidationTest do
     end
 
     test "allows them for offset pagination" do
-      params = %{limit: 2, offset: 0, order_by: [:full_name, :thing_count]}
+      params = %{
+        limit: 2,
+        offset: 0,
+        order_by: [:full_name, :thing_count, :score]
+      }
 
-      assert {:ok, %Flop{order_by: [:full_name, :thing_count]}} =
+      assert {:ok, %Flop{order_by: [:full_name, :thing_count, :score]}} =
                validate(params, for: Thing)
     end
 
     test "allows them for page pagination" do
-      params = %{page: 1, page_size: 2, order_by: [:full_name, :thing_count]}
+      params = %{
+        page: 1,
+        page_size: 2,
+        order_by: [:full_name, :thing_count, :score]
+      }
 
-      assert {:ok, %Flop{order_by: [:full_name, :thing_count]}} =
+      assert {:ok, %Flop{order_by: [:full_name, :thing_count, :score]}} =
                validate(params, for: Thing)
     end
 

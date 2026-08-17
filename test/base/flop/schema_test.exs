@@ -388,17 +388,16 @@ defmodule Flop.SchemaTest do
              )
   end
 
-  test "raises error if custom field is added to sortable list" do
+  test "raises error if filterable custom field has no filter" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Parsley do
           @derive {
             Flop.Schema,
-            filterable: [],
-            sortable: [:inserted_at],
+            filterable: [:inserted_at],
+            sortable: [],
             custom_fields: [
               inserted_at: [
-                filter: {__MODULE__, :some_function, []},
                 ecto_type: :utc_datetime
               ]
             ]
@@ -407,6 +406,46 @@ defmodule Flop.SchemaTest do
         end
       end
 
-    assert error.message =~ "cannot sort by custom field"
+    assert error.message =~
+             "custom field without filter function marked as filterable"
+  end
+
+  test "does not raise if sortable custom field has a field_dynamic" do
+    defmodule Tarragon do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [
+            field_dynamic: {__MODULE__, :date_field, []},
+            ecto_type: :utc_datetime
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+  end
+
+  test "raises error if sortable custom field has no field_dynamic" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Chervil do
+          @derive {
+            Flop.Schema,
+            filterable: [],
+            sortable: [:inserted_at],
+            custom_fields: [
+              inserted_at: [
+                ecto_type: :utc_datetime
+              ]
+            ]
+          }
+          defstruct [:id, :inserted_at]
+        end
+      end
+
+    assert error.message =~
+             "custom field without field_dynamic function marked as sortable"
   end
 end
