@@ -273,7 +273,7 @@ defmodule GRPC.Client.Connection do
   def handle_cast(:resolve_now, state), do: {:noreply, state}
 
   @impl GenServer
-  def handle_call({:disconnect, %Channel{adapter: adapter} = channel), _from, state) do
+  def handle_call({:disconnect, %Channel{adapter: adapter} = channel}, _from, state) do
     if state.resolver_state && function_exported?(state.resolver, :shutdown, 1) do
       state.resolver.shutdown(state.resolver_state)
     end
