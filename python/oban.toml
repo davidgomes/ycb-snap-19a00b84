@@ -1,0 +1,10 @@
+# Oban configuration for the BadgeForge Python worker.
+#
+# This points at the same database as the Elixir app (see
+# config/dev.exs), since Oban for Python and Elixir share the same
+# `oban_jobs` table.
+
+dsn = "postgresql://postgres:postgres@localhost/badge_forge_dev"
+
+[queues]
+badges = 10

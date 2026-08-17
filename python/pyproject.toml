@@ -1,0 +1,11 @@
+[project]
+name = "badge-forge-worker"
+version = "0.1.0"
+description = "Python Oban worker for BadgeForge badge generation"
+requires-python = ">=3.12"
+dependencies = [
+    "oban>=0.6",
+]
+
+[tool.uv]
+package = true
