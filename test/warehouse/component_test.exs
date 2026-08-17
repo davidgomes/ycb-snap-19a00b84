@@ -53,4 +53,29 @@ defmodule Warehouse.ComponentTest do
     component = :component |> insert() |> supervise()
     assert :ok = Component.update_component_demand(component.id, 5)
   end
+
+  test "update_component_availability/0 updates sku demands for component" do
+    stub(Warehouse.MockEvents, :broadcast_component_quantities, fn _, _ -> :ok end)
+    stub(Warehouse.MockEvents, :broadcast_sku_quantities, fn _, _ -> :ok end)
+
+    sku = :sku |> insert() |> supervise()
+    component = insert(:component)
+    insert(:kit, component: component, sku: sku, quantity: 1)
+    supervise(component)
+
+    Component.update_component_demand(component.id, 5)
+    # Give async task time to complete
+    Process.sleep(50)
+
+    # Initially demand is on sku since available is 0
+    assert AdditiveMap.get(Component.get_sku_demands(), sku.id) == 5
+
+    # When parts are added and availability updated
+    insert_list(3, :part, sku: sku)
+    Sku.update_sku_availability(sku.id)
+    Process.sleep(50)
+
+    # sku_demands on component and sku should reflect new availability
+    assert AdditiveMap.get(Component.get_sku_demands(), sku.id) == 2
+  end
 end
