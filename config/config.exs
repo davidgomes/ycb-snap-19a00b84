@@ -61,6 +61,13 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+# Configure Oban
+config :free_oban_ui, Oban,
+  engine: Oban.Engines.Basic,
+  repo: FreeObanUi.Repo,
+  queues: [default: 10, mailers: 5],
+  plugins: [{Oban.Plugins.Pruner, max_age: 60 * 60 * 24}]
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
