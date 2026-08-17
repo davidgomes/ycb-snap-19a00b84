@@ -26,11 +26,15 @@ defmodule Prism do
 
         different_prism? and pointing_to_prism?
       end)
-      |> Enum.min_by(
-        fn %{x: x, y: y} -> (x - start.x) ** 2 + (y - start.y) ** 2 end,
-        &<=/2,
-        fn -> nil end
-      )
+      |> case do
+        [] ->
+          nil
+
+        candidates ->
+          Enum.min_by(candidates, fn %{x: x, y: y} ->
+            (x - start.x) ** 2 + (y - start.y) ** 2
+          end)
+      end
 
     case next_prism do
       nil ->
