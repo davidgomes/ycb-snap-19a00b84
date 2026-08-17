@@ -3,6 +3,11 @@
 
 #### Fixed
 
+- **`data_table` filter and columns menus stay in the page.** They
+  were native top-layer popovers, so `PetalPopover` kept chasing the
+  visual viewport on scroll and keyboard resize - a menu that should
+  sit next to its trigger drifted with the viewport instead. Both
+  now use the in-page popover, CSS-anchored to the button.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to
