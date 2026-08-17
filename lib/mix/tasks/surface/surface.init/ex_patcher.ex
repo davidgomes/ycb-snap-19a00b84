@@ -88,7 +88,7 @@ defmodule Mix.Tasks.Surface.Init.ExPatcher do
         {nil, :cannot_patch}
       end
 
-    %__MODULE__{patcher | zipper: zipper, node: node, result: result}
+    %{patcher | zipper: zipper, node: node, result: result}
   end
 
   def find_code(patcher, string) do
@@ -292,8 +292,8 @@ defmodule Mix.Tasks.Surface.Init.ExPatcher do
     end
   end
 
-  def set_result(patcher, status) do
-    %__MODULE__{patcher | result: status}
+  def set_result(%__MODULE__{} = patcher, status) do
+    %{patcher | result: status}
   end
 
   def append_code(patcher, text_to_append) do
@@ -391,7 +391,7 @@ defmodule Mix.Tasks.Surface.Init.ExPatcher do
     patcher
   end
 
-  def patch(patcher, opts, fun) do
+  def patch(%__MODULE__{} = patcher, opts, fun) do
     zipper = zipper(patcher)
 
     patch =
@@ -406,7 +406,7 @@ defmodule Mix.Tasks.Surface.Init.ExPatcher do
 
     updated_code = patcher |> code() |> Sourceror.patch_string([patch])
 
-    %__MODULE__{patcher | code: updated_code, result: :patched}
+    %{patcher | code: updated_code, result: :patched}
   end
 
   def code(%__MODULE__{code: code}) do
