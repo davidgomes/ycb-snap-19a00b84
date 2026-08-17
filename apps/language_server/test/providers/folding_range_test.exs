@@ -260,11 +260,7 @@ defmodule ElixirLS.LanguageServer.Providers.FoldingRangeTest do
     end
 
     defp fold_via_token_pairs(%{text: text} = context) do
-      ranges_result =
-        text
-        |> FoldingRange.convert_text_to_input()
-        |> FoldingRange.TokenPair.provide_ranges()
-
+      ranges_result = FoldingRange.provide(%{text: text})
       {:ok, Map.put(context, :ranges_result, ranges_result)}
     end
   end
@@ -373,11 +369,7 @@ defmodule ElixirLS.LanguageServer.Providers.FoldingRangeTest do
     end
 
     defp fold_via_special_tokens(%{text: text} = context) do
-      ranges_result =
-        text
-        |> FoldingRange.convert_text_to_input()
-        |> FoldingRange.SpecialToken.provide_ranges()
-
+      ranges_result = FoldingRange.provide(%{text: text})
       {:ok, Map.put(context, :ranges_result, ranges_result)}
     end
   end
