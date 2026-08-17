@@ -1,0 +1,11 @@
+/ebin
+/deps
+/doc/*
+erl_crash.dump
+*.ez
+*~
+*#
+.#*
+*.swp
+_build
+mix.lock
