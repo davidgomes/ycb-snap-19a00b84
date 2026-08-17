@@ -800,14 +800,14 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
 
   test "string escape" do
     query = "schema" |> where(foo: "'\\  ") |> select([], true)
-    assert all(query) == ~s[SELECT true FROM "schema" AS s0 WHERE (s0."foo" = '''\\\\  ')]
+    assert all(query) == ~s[SELECT true FROM "schema" AS s0 WHERE (s0."foo" = '\\'\\\\  ')]
 
     query = "schema" |> where(foo: "'") |> select([], true)
-    assert all(query) == ~s[SELECT true FROM "schema" AS s0 WHERE (s0."foo" = '''')]
+    assert all(query) == ~s[SELECT true FROM "schema" AS s0 WHERE (s0."foo" = '\\'')]
 
     value = "let's \\ escape"
     query = "schema" |> select([], fragment("?", constant(^value)))
-    assert all(query) == ~s[SELECT 'let''s \\\\ escape' FROM "schema" AS s0]
+    assert all(query) == ~s[SELECT 'let\\'s \\\\ escape' FROM "schema" AS s0]
   end
 
   test "quoted identifier escape" do
@@ -828,7 +828,7 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
   test "quoted identifier escape matches the byte-wise oracle for every byte pair" do
     value = for left <- 0..255, right <- 0..255, into: <<>>, do: <<left, right>>
 
-    for quoter <- [?", ?`] do
+    for quoter <- [?", ?`, ?'] do
       expected =
         for <<byte <- value>>, into: <<>> do
           if byte in [?\\, quoter], do: <<?\\, byte>>, else: <<byte>>
@@ -3088,7 +3088,7 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
        ]}
 
     assert execute_ddl(create) == [
-             ~s{CREATE TABLE "posts" ("user_id" UInt64 COMMENT 'user''s id') ENGINE=MergeTree}
+             ~s{CREATE TABLE "posts" ("user_id" UInt64 COMMENT 'user\\'s id') ENGINE=MergeTree}
            ]
   end
 
