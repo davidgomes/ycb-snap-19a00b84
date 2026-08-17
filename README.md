@@ -82,6 +82,8 @@ config :my_app, Oban,
   repo: MyApp.Repo,
   plugins: [
     {ObanChore.Plugin, otp_app: :my_app, pubsub_server: MyApp.PubSub},
+    # Or skip discovery and pass chores explicitly:
+    # {ObanChore.Plugin, chores: [MyApp.Chores.UserBackfill], pubsub_server: MyApp.PubSub},
     # ... other plugins
   ],
   queues: [default: 10]
