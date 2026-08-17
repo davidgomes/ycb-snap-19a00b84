@@ -1997,8 +1997,188 @@ defmodule AWS.Connect do
 
   ## Example:
 
+      get_evaluation_form_validation_request() :: %{
+        optional("EvaluationFormVersion") => integer()
+      }
+
+  """
+  @type get_evaluation_form_validation_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_evaluation_form_validation_response() :: %{
+        "EvaluationFormId" => String.t() | atom(),
+        "EvaluationFormVersion" => integer(),
+        "FailureReason" => String.t() | atom(),
+        "Findings" => list(evaluation_form_validation_finding()),
+        "StartedTime" => non_neg_integer(),
+        "Status" => list(any())
+      }
+
+  """
+  @type get_evaluation_form_validation_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      evaluation_form_validation_finding() :: %{
+        "Description" => String.t() | atom(),
+        "IssueCode" => String.t() | atom(),
+        "Items" => list(evaluation_form_validation_finding_item()),
+        "Severity" => list(any()),
+        "Suggestion" => String.t() | atom()
+      }
+
+  """
+  @type evaluation_form_validation_finding() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      evaluation_form_validation_finding_item() :: %{
+        "Property" => String.t() | atom(),
+        "RefId" => String.t() | atom()
+      }
+
+  """
+  @type evaluation_form_validation_finding_item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      start_evaluation_form_validation_request() :: %{
+        required("EvaluationFormVersion") => integer()
+      }
+
+  """
+  @type start_evaluation_form_validation_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      start_evaluation_form_validation_response() :: %{
+        "EvaluationFormArn" => String.t() | atom(),
+        "EvaluationFormId" => String.t() | atom(),
+        "EvaluationFormVersion" => integer()
+      }
+
+  """
+  @type start_evaluation_form_validation_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      contact_evaluation_attribute_value() :: %{
+        "StringValue" => String.t() | atom()
+      }
+
+  """
+  @type contact_evaluation_attribute_value() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      contact_evaluation_attribute_condition() :: %{
+        "AttributeKey" => list(any()),
+        "AttributeValue" => contact_evaluation_attribute_value(),
+        "ComparisonType" => list(any())
+      }
+
+  """
+  @type contact_evaluation_attribute_condition() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      contact_evaluation_attribute_and_condition() :: %{
+        "AttributeConditions" => list(contact_evaluation_attribute_condition()),
+        "TagConditions" => list(tag_condition())
+      }
+
+  """
+  @type contact_evaluation_attribute_and_condition() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      contact_evaluation_attribute_filter() :: %{
+        "AndCondition" => contact_evaluation_attribute_and_condition(),
+        "ContactEvaluationAttributeCondition" => contact_evaluation_attribute_condition(),
+        "OrConditions" => list(contact_evaluation_attribute_and_condition()),
+        "TagCondition" => tag_condition()
+      }
+
+  """
+  @type contact_evaluation_attribute_filter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      question_points_configuration() :: %{
+        "IsBonus" => boolean(),
+        "MaxPointValue" => integer(),
+        "MinPointValue" => integer()
+      }
+
+  """
+  @type question_points_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      question_option_points_configuration() :: %{
+        "IsBonus" => boolean(),
+        "PointValue" => integer()
+      }
+
+  """
+  @type question_option_points_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      evaluation_form_score_threshold() :: %{
+        "MaxScorePercentage" => float(),
+        "MinScorePercentage" => float(),
+        "PerformanceCategory" => list(any())
+      }
+
+  """
+  @type evaluation_form_score_threshold() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      evaluation_form_question_scoring_configuration() :: %{
+        "IsExcludedFromScoring" => boolean(),
+        "PointsConfiguration" => question_points_configuration(),
+        "ScoreThresholds" => list(evaluation_form_score_threshold())
+      }
+
+  """
+  @type evaluation_form_question_scoring_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
       evaluation_search_filter() :: %{
-        "AttributeFilter" => control_plane_attribute_filter()
+        "AttributeFilter" => control_plane_attribute_filter(),
+        "ContactEvaluationAttributeFilter" => contact_evaluation_attribute_filter()
       }
 
   """
@@ -2019,7 +2199,10 @@ defmodule AWS.Connect do
         "ContactId" => String.t() | atom(),
         "ContactParticipantId" => String.t() | atom(),
         "ContactParticipantRole" => list(any()),
+        "EarnedPoints" => integer(),
         "EvaluatorArn" => String.t() | atom(),
+        "MaxBasePoint" => integer(),
+        "PerformanceCategory" => list(any()),
         "ReviewId" => String.t() | atom(),
         "SamplingJobId" => String.t() | atom(),
         "ScoreAutomaticFail" => boolean(),
@@ -2167,6 +2350,7 @@ defmodule AWS.Connect do
         "QuestionType" => list(any()),
         "QuestionTypeProperties" => list(),
         "RefId" => String.t() | atom(),
+        "ScoringConfiguration" => evaluation_form_question_scoring_configuration(),
         "Title" => String.t() | atom(),
         "Weight" => float()
       }
@@ -2446,6 +2630,8 @@ defmodule AWS.Connect do
         "LanguageConfiguration" => evaluation_form_language_configuration(),
         "LastModifiedBy" => String.t() | atom(),
         "LastModifiedTime" => non_neg_integer(),
+        "LastValidationTime" => non_neg_integer(),
+        "LatestValidationStatus" => list(any()),
         "Locked" => boolean(),
         "ReviewConfiguration" => evaluation_review_configuration(),
         "ScoringStrategy" => evaluation_form_scoring_strategy(),
@@ -4070,7 +4256,11 @@ defmodule AWS.Connect do
   ## Example:
 
       evaluation_form_multi_select_question_option() :: %{
+        "AutomaticFail" => boolean(),
+        "AutomaticFailConfiguration" => automatic_fail_configuration(),
+        "PointsConfiguration" => question_option_points_configuration(),
         "RefId" => String.t() | atom(),
+        "Score" => integer(),
         "Text" => String.t() | atom()
       }
 
@@ -7286,8 +7476,11 @@ defmodule AWS.Connect do
       evaluation_score() :: %{
         "AppliedWeight" => float(),
         "AutomaticFail" => boolean(),
+        "EarnedPoints" => integer(),
+        "MaxBasePoint" => integer(),
         "NotApplicable" => boolean(),
-        "Percentage" => float()
+        "Percentage" => float(),
+        "PerformanceCategory" => list(any())
       }
 
   """
@@ -8987,6 +9180,7 @@ defmodule AWS.Connect do
         "AutomaticFailConfiguration" => automatic_fail_configuration(),
         "MaxValue" => integer(),
         "MinValue" => integer(),
+        "PointsConfiguration" => question_option_points_configuration(),
         "Score" => integer()
       }
 
@@ -10058,6 +10252,7 @@ defmodule AWS.Connect do
       evaluation_form_single_select_question_option() :: %{
         "AutomaticFail" => boolean(),
         "AutomaticFailConfiguration" => automatic_fail_configuration(),
+        "PointsConfiguration" => question_option_points_configuration(),
         "RefId" => String.t() | atom(),
         "Score" => integer(),
         "Text" => String.t() | atom()
@@ -11948,8 +12143,10 @@ defmodule AWS.Connect do
 
       evaluation_form_section() :: %{
         "Instructions" => String.t() | atom(),
+        "IsExcludedFromScoring" => boolean(),
         "Items" => list(list()),
         "RefId" => String.t() | atom(),
+        "ScoreThresholds" => list(evaluation_form_score_threshold()),
         "Title" => String.t() | atom(),
         "Weight" => float()
       }
@@ -13330,6 +13527,7 @@ defmodule AWS.Connect do
 
       evaluation_form_scoring_strategy() :: %{
         "Mode" => list(any()),
+        "ScoreThresholds" => list(evaluation_form_score_threshold()),
         "Status" => list(any())
       }
 
@@ -16799,6 +16997,12 @@ defmodule AWS.Connect do
           | resource_not_found_exception()
           | throttling_exception()
 
+  @type get_evaluation_form_validation_errors() ::
+          invalid_parameter_exception()
+          | internal_service_exception()
+          | resource_not_found_exception()
+          | throttling_exception()
+
   @type get_federation_token_errors() ::
           user_not_found_exception()
           | invalid_parameter_exception()
@@ -17681,6 +17885,14 @@ defmodule AWS.Connect do
           | idempotency_exception()
           | resource_not_found_exception()
           | access_denied_exception()
+          | throttling_exception()
+
+  @type start_evaluation_form_validation_errors() ::
+          service_quota_exceeded_exception()
+          | invalid_parameter_exception()
+          | internal_service_exception()
+          | resource_conflict_exception()
+          | resource_not_found_exception()
           | throttling_exception()
 
   @type start_outbound_chat_contact_errors() ::
@@ -25219,6 +25431,52 @@ defmodule AWS.Connect do
   end
 
   @doc """
+  Retrieves the status and results of a validation process started by
+  `StartEvaluationFormValidation`.
+
+  Returns the current execution status (`IN_PROGRESS`, `COMPLETED`, or
+  `FAILED`), the validated form version, and when completed, a list of findings
+  that identify structural issues and quality improvements for the evaluation
+  form, and may include suggested fixes. If the validation failed, a reason is
+  provided indicating the cause of the failure.
+  """
+  @spec get_evaluation_form_validation(
+          map(),
+          String.t() | atom(),
+          String.t() | atom(),
+          String.t() | atom() | nil,
+          list()
+        ) ::
+          {:ok, get_evaluation_form_validation_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_evaluation_form_validation_errors()}
+  def get_evaluation_form_validation(
+        %Client{} = client,
+        evaluation_form_id,
+        instance_id,
+        evaluation_form_version \\ nil,
+        options \\ []
+      ) do
+    url_path =
+      "/evaluation-forms/#{AWS.Util.encode_uri(instance_id)}/#{AWS.Util.encode_uri(evaluation_form_id)}/validation-results"
+
+    headers = []
+    query_params = []
+
+    query_params =
+      if !is_nil(evaluation_form_version) do
+        [{"version", evaluation_form_version} | query_params]
+      else
+        query_params
+      end
+
+    meta = metadata()
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
   Supports SAML sign-in for Connect Customer.
 
   Retrieves a token for federation. The token is for the Connect Customer user
@@ -30669,6 +30927,57 @@ defmodule AWS.Connect do
       client,
       meta,
       :put,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Starts an asynchronous validation process for an evaluation form version in
+  the specified Connect Customer instance.
+
+  The validation first performs structural checks on the form content (such as
+  verifying required fields, valid scoring configuration, and correct
+  conditional logic), then asynchronously analyzes questions configured for
+  generative AI evaluation against a set of best practices. Use
+  `GetEvaluationFormValidation` to retrieve the status and results once the
+  validation completes.
+  """
+  @spec start_evaluation_form_validation(
+          map(),
+          String.t() | atom(),
+          String.t() | atom(),
+          start_evaluation_form_validation_request(),
+          list()
+        ) ::
+          {:ok, start_evaluation_form_validation_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, start_evaluation_form_validation_errors()}
+  def start_evaluation_form_validation(
+        %Client{} = client,
+        evaluation_form_id,
+        instance_id,
+        input,
+        options \\ []
+      ) do
+    url_path =
+      "/evaluation-forms/#{AWS.Util.encode_uri(instance_id)}/#{AWS.Util.encode_uri(evaluation_form_id)}/validate"
+
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
       url_path,
       query_params,
       custom_headers ++ headers,

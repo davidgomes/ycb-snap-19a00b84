@@ -4287,6 +4287,134 @@ defmodule AWS.OpenSearch do
   """
   @type plugin_properties() :: %{(String.t() | atom()) => any()}
 
+  @typedoc """
+
+  ## Example:
+
+      workspace_configuration_input() :: %{
+        "name" => String.t() | atom(),
+        "workspaceType" => String.t() | atom()
+      }
+
+  """
+  @type workspace_configuration_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      attach_data_source_request() :: %{
+        optional("clientToken") => String.t() | atom(),
+        required("dataSourceArn") => String.t() | atom(),
+        optional("workspaceConfiguration") => workspace_configuration_input(),
+        optional("workspaceId") => String.t() | atom()
+      }
+
+  """
+  @type attach_data_source_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      attach_data_source_response() :: %{
+        "arn" => String.t() | atom(),
+        "attachmentId" => String.t() | atom(),
+        "dataSourceArn" => String.t() | atom(),
+        "id" => String.t() | atom(),
+        "status" => list(any())
+      }
+
+  """
+  @type attach_data_source_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      describe_data_source_attachment_request() :: %{
+        required("dataSourceArn") => String.t() | atom()
+      }
+
+  """
+  @type describe_data_source_attachment_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      describe_data_source_attachment_response() :: %{
+        "arn" => String.t() | atom(),
+        "attachmentId" => String.t() | atom(),
+        "dataSourceArn" => String.t() | atom(),
+        "id" => String.t() | atom(),
+        "status" => list(any())
+      }
+
+  """
+  @type describe_data_source_attachment_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      detach_data_source_request() :: %{
+        required("dataSourceArn") => String.t() | atom()
+      }
+
+  """
+  @type detach_data_source_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      detach_data_source_response() :: %{
+        "arn" => String.t() | atom(),
+        "dataSourceArn" => String.t() | atom(),
+        "id" => String.t() | atom()
+      }
+
+  """
+  @type detach_data_source_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      data_source_attachment_summary() :: %{
+        "attachmentId" => String.t() | atom(),
+        "dataSourceArn" => String.t() | atom(),
+        "status" => list(any())
+      }
+
+  """
+  @type data_source_attachment_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_data_source_attachments_request() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+
+  """
+  @type list_data_source_attachments_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_data_source_attachments_response() :: %{
+        "attachments" => list(data_source_attachment_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_data_source_attachments_response() :: %{(String.t() | atom()) => any()}
+
   @type accept_inbound_connection_errors() ::
           resource_not_found_exception()
           | limit_exceeded_exception()
@@ -4330,6 +4458,14 @@ defmodule AWS.OpenSearch do
           | resource_not_found_exception()
           | validation_exception()
           | disabled_operation_exception()
+
+  @type attach_data_source_errors() ::
+          access_denied_exception()
+          | conflict_exception()
+          | disabled_operation_exception()
+          | internal_exception()
+          | resource_not_found_exception()
+          | validation_exception()
 
   @type authorize_vpc_endpoint_access_errors() ::
           base_exception()
@@ -4469,6 +4605,13 @@ defmodule AWS.OpenSearch do
           | access_denied_exception()
           | disabled_operation_exception()
 
+  @type describe_data_source_attachment_errors() ::
+          access_denied_exception()
+          | disabled_operation_exception()
+          | internal_exception()
+          | resource_not_found_exception()
+          | validation_exception()
+
   @type describe_domain_errors() ::
           base_exception()
           | internal_exception()
@@ -4564,6 +4707,14 @@ defmodule AWS.OpenSearch do
           | internal_exception()
           | validation_exception()
           | disabled_operation_exception()
+
+  @type detach_data_source_errors() ::
+          access_denied_exception()
+          | conflict_exception()
+          | disabled_operation_exception()
+          | internal_exception()
+          | resource_not_found_exception()
+          | validation_exception()
 
   @type dissociate_package_errors() ::
           base_exception()
@@ -4668,6 +4819,13 @@ defmodule AWS.OpenSearch do
           | validation_exception()
           | access_denied_exception()
           | disabled_operation_exception()
+
+  @type list_data_source_attachments_errors() ::
+          access_denied_exception()
+          | disabled_operation_exception()
+          | internal_exception()
+          | resource_not_found_exception()
+          | validation_exception()
 
   @type list_data_sources_errors() ::
           dependency_failure_exception()
@@ -5098,6 +5256,45 @@ defmodule AWS.OpenSearch do
           | {:error, associate_packages_errors()}
   def associate_packages(%Client{} = client, input, options \\ []) do
     url_path = "/2021-01-01/packages/associateMultiple"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Attaches a data source to an OpenSearch application.
+
+  The data source can be an Amazon OpenSearch Service domain or an Amazon
+  OpenSearch Serverless collection. If both the application and data source are
+  in the `ACTIVE` state, the attachment completes immediately and returns a
+  status of `ATTACHED`. If either resource is not yet active, the operation
+  stores the request and returns a status of `PENDING`. A background process
+  then completes the attachment when both resources become active. Pending
+  attachments that are not completed within 24 hours are marked as `FAILED`.
+  This operation is idempotent. If a data source is already attached or pending
+  for the same application, the existing attachment is returned.
+  """
+  @spec attach_data_source(map(), String.t() | atom(), attach_data_source_request(), list()) ::
+          {:ok, attach_data_source_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, attach_data_source_errors()}
+  def attach_data_source(%Client{} = client, id, input, options \\ []) do
+    url_path = "/2021-01-01/opensearch/application/#{AWS.Util.encode_uri(id)}/attachDataSource"
     headers = []
     custom_headers = []
     query_params = []
@@ -5782,6 +5979,46 @@ defmodule AWS.OpenSearch do
   end
 
   @doc """
+  Returns the current status and details of a specific data source attachment
+  for an OpenSearch application.
+
+  Throws a `ResourceNotFoundException` if no attachment record exists for the
+  specified application and data source combination.
+  """
+  @spec describe_data_source_attachment(
+          map(),
+          String.t() | atom(),
+          describe_data_source_attachment_request(),
+          list()
+        ) ::
+          {:ok, describe_data_source_attachment_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, describe_data_source_attachment_errors()}
+  def describe_data_source_attachment(%Client{} = client, id, input, options \\ []) do
+    url_path =
+      "/2021-01-01/opensearch/application/#{AWS.Util.encode_uri(id)}/describeDataSourceAttachment"
+
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
   Describes the domain configuration for the specified Amazon OpenSearch Service
   domain,
   including the domain ID, domain service endpoint, and domain ARN.
@@ -6340,6 +6577,41 @@ defmodule AWS.OpenSearch do
   end
 
   @doc """
+  Removes a data source from an OpenSearch application.
+
+  The application must be in the `ACTIVE` state. This operation removes the data
+  source saved object from the application and deletes the attachment record.
+  Throws a `ConflictException` if the specified data source has a `PENDING`
+  attachment, and a `ResourceNotFoundException` if the data source is not
+  currently attached to the application.
+  """
+  @spec detach_data_source(map(), String.t() | atom(), detach_data_source_request(), list()) ::
+          {:ok, detach_data_source_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, detach_data_source_errors()}
+  def detach_data_source(%Client{} = client, id, input, options \\ []) do
+    url_path = "/2021-01-01/opensearch/application/#{AWS.Util.encode_uri(id)}/detachDataSource"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
   Removes a package from the specified Amazon OpenSearch Service domain.
 
   The package
@@ -6764,6 +7036,44 @@ defmodule AWS.OpenSearch do
     meta = metadata()
 
     Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Returns a paginated list of all data source attachments for an OpenSearch
+  application, including attachments in all states (`PENDING`, `ATTACHED`, and
+  `FAILED`).
+  """
+  @spec list_data_source_attachments(
+          map(),
+          String.t() | atom(),
+          list_data_source_attachments_request(),
+          list()
+        ) ::
+          {:ok, list_data_source_attachments_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_data_source_attachments_errors()}
+  def list_data_source_attachments(%Client{} = client, id, input, options \\ []) do
+    url_path =
+      "/2021-01-01/opensearch/application/#{AWS.Util.encode_uri(id)}/listDataSourceAttachments"
+
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
   end
 
   @doc """
