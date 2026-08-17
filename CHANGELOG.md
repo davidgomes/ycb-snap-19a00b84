@@ -3,6 +3,23 @@
 
 #### Added
 
+- **`<.data_table>` row selection - tri-state header, morphing toolbar
+  (4.12 data table, milestone 3).** `selectable` adds a checkbox column:
+  a per-row checkbox plus a tri-state "select all" header checkbox
+  (unchecked/checked/indeterminate for none/all/some of the *current
+  page* selected) - the indeterminate bit is DOM-only, so the new
+  `PetalCheckboxIndeterminate` hook syncs it from a server-rendered
+  `data-indeterminate`. The toolbar morphs into a bulk-actions bar once
+  anything is selected (a count, a clear button, and the new
+  `:bulk_actions` slot, `:let` receiving the selected `MapSet`) -
+  both toolbars stay mounted and cross-fade via CSS so nothing pops.
+  Selection is local UI state owned by the caller, never URL state:
+  `selected` (a `MapSet`/enumerable of ids) is controlled, `row_id`
+  extracts a row's id (defaults to `row.id`), and `on_select` speaks
+  the tiny new `DataTable.Selection` grammar (`toggle`/`toggle_page`/
+  `clear`) - decoupled from `path`/`on_change` so it works in both
+  wiring modes. `Selection.handle_op/2` makes the LiveView handler a
+  one-liner, same ergonomics as `State.handle_op/3`.
 - **`<.data_table>` - the component core (4.12 data table, milestone 1).**
   Composed around `<.table>`, driven entirely by `DataTable.State`:
   `:col` slots (field, label, sortable, align), sortable headers with

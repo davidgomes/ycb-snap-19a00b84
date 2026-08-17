@@ -4786,6 +4786,22 @@ export const PetalDataTable = {
   },
 };
 
+// Sets the DOM-only `indeterminate` property from a data attribute the
+// server renders as an explicit "true"/"false" string (indeterminate has
+// no HTML attribute, only a JS property) - the data_table tri-state
+// "select all" header checkbox.
+export const PetalCheckboxIndeterminate = {
+  mounted() {
+    this.sync();
+  },
+  updated() {
+    this.sync();
+  },
+  sync() {
+    this.el.indeterminate = this.el.dataset.indeterminate === "true";
+  },
+};
+
 export default {
   PetalChart,
   PetalColorScheme,
@@ -4816,4 +4832,5 @@ export default {
   PetalCommandDialog,
   PetalComboBox,
   PetalDataTable,
+  PetalCheckboxIndeterminate,
 };

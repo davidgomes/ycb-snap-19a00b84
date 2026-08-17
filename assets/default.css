@@ -2592,8 +2592,32 @@
   .pc-data-table {
     @apply min-w-0 max-w-full;
   }
+  /* Both the default toolbar and the bulk-selection bar sit in the same
+     grid cell, always mounted - toggling opacity/translate (not adding
+     or removing nodes) is what lets the swap between them "morph"
+     instead of pop. */
   .pc-data-table__toolbar {
-    @apply mb-3 flex flex-wrap items-center gap-2;
+    @apply mb-3 grid;
+  }
+  .pc-data-table__bulk-bar,
+  .pc-data-table__toolbar-default {
+    @apply col-start-1 row-start-1 flex flex-wrap items-center gap-2 transition-all duration-150 ease-out;
+  }
+  .pc-data-table__bulk-bar--hidden,
+  .pc-data-table__toolbar-default--hidden {
+    @apply pointer-events-none -translate-y-1 opacity-0;
+  }
+  .pc-data-table__bulk-count {
+    @apply text-sm font-medium text-gray-700 dark:text-gray-200;
+  }
+  .pc-data-table__bulk-actions {
+    @apply ml-2 flex flex-wrap items-center gap-2;
+  }
+  .pc-data-table__select-th {
+    @apply w-px;
+  }
+  .pc-data-table__select-checkbox {
+    @apply align-middle;
   }
   .pc-data-table__scroll {
     @apply overflow-x-auto;

@@ -374,4 +374,163 @@ defmodule PetalComponents.DataTableTest do
       """)
     end
   end
+
+  describe "selectable" do
+    @select_rows [%{id: 1, name: "Amy"}, %{id: 2, name: "Bea"}]
+
+    test "raises when selectable without on_select" do
+      assigns = base(%{rows: @select_rows, state: %State{total: 2}})
+
+      assert_raise ArgumentError, ~r/on_select/, fn ->
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+      end
+    end
+
+    test "renders a checkbox per row plus a tri-state select-all header, none checked by default" do
+      assigns = base(%{rows: @select_rows, state: %State{total: 2}})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} selectable on_select="select">
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert count_substring(html, "pc-data-table__select-checkbox") == 3
+      assert html =~ ~s(aria-label="Select all rows on this page")
+      assert html =~ ~s(aria-label="Select row")
+      assert html =~ "PetalCheckboxIndeterminate"
+      assert html =~ ~s(data-indeterminate="false")
+      refute html =~ " checked"
+    end
+
+    test "a fully-selected page checks every box; a partial selection reads as indeterminate" do
+      assigns = base(%{rows: @select_rows, state: %State{total: 2}, selected: ["1", "2"]})
+
+      all_html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          path={@path}
+          selectable
+          on_select="select"
+          selected={@selected}
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      # header + both rows
+      assert count_substring(all_html, " checked") == 3
+      assert all_html =~ ~s(data-indeterminate="false")
+
+      # ids can be any type - selection compares them as strings
+      assigns = base(%{rows: @select_rows, state: %State{total: 2}, selected: MapSet.new([1])})
+
+      partial_html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          path={@path}
+          selectable
+          on_select="select"
+          selected={@selected}
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert partial_html =~ ~s(data-indeterminate="true")
+      assert count_substring(partial_html, " checked") == 1
+    end
+
+    test "row checkboxes push the toggle op with the row's id" do
+      assigns = base(%{rows: @select_rows, state: %State{total: 2}})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} selectable on_select="select">
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert html =~ "toggle"
+      assert html =~ "select"
+    end
+
+    test "the toolbar morphs into a bulk-selection bar once rows are selected" do
+      assigns = base(%{rows: @select_rows, state: %State{total: 2}})
+
+      empty_html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} selectable on_select="select">
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert empty_html =~ "pc-data-table__bulk-bar--hidden"
+      refute empty_html =~ "pc-data-table__toolbar-default--hidden"
+
+      assigns =
+        base(%{rows: @select_rows, state: %State{total: 2}, selected: MapSet.new(["1"])})
+
+      selected_html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          path={@path}
+          selectable
+          on_select="select"
+          selected={@selected}
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+          <:bulk_actions :let={ids}>
+            <button type="button">Delete {MapSet.size(ids)}</button>
+          </:bulk_actions>
+        </.data_table>
+        """)
+
+      refute selected_html =~ "pc-data-table__bulk-bar--hidden"
+      assert selected_html =~ "pc-data-table__toolbar-default--hidden"
+      assert selected_html =~ "1 selected"
+      assert selected_html =~ "Delete 1"
+      assert selected_html =~ ~s(aria-label="Clear selection")
+      assert selected_html =~ "toggle_page"
+    end
+
+    test "a custom row_id function drives selection instead of the row's :id" do
+      rows = [%{slug: "amy", name: "Amy"}, %{slug: "bea", name: "Bea"}]
+
+      assigns =
+        base(%{rows: rows, state: %State{total: 2}, selected: MapSet.new(["amy"])})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          path={@path}
+          selectable
+          on_select="select"
+          row_id={& &1.slug}
+          selected={@selected}
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert count_substring(html, " checked") == 1
+    end
+  end
 end

@@ -48,6 +48,31 @@ defmodule PetalComponents.Showcase.DataTable do
     """
   end
 
+  example :selectable, "Row selection - tri-state header, morphing toolbar",
+    description:
+      "selectable adds a checkbox column with a tri-state select-all header (unchecked/checked/indeterminate for none/all/some of the page selected). Selecting anything morphs the toolbar into a bulk-actions bar - a count, a clear button, and the :bulk_actions slot. Selection is local UI state (selected/row_id/on_select), decoupled from path/on_change." do
+    ~H"""
+    <% state = %State{page: 1, page_size: 5} %>
+    <% {rows, state} = Engine.List.run(PetalComponents.Showcase.DataTable.sample_rows(), state) %>
+    <.data_table
+      id="sx-dt-selectable"
+      rows={rows}
+      state={state}
+      path="#"
+      selectable
+      on_select="select"
+      selected={MapSet.new(["1", "3"])}
+    >
+      <:col :let={row} field={:name}>{row.name}</:col>
+      <:col :let={row} field={:email}>{row.email}</:col>
+      <:col :let={row} field={:amount} align="right">${row.amount}</:col>
+      <:bulk_actions :let={ids}>
+        <.button size="sm" variant="outline" color="danger">Delete {MapSet.size(ids)}</.button>
+      </:bulk_actions>
+    </.data_table>
+    """
+  end
+
   example :empty, "The filters-aware empty state",
     description:
       "An empty result set with active filters says so and offers the way out - a clear-filters patch link in link mode, the op-grammar event in event mode. Without filters it is a plain no-results line. Override either with the :empty slot." do

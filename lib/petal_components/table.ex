@@ -54,7 +54,10 @@ defmodule PetalComponents.Table do
     """
 
   slot :col do
-    attr :label, :string
+    attr :label, :any,
+      doc:
+        "header cell content - a string, or pre-rendered HEEx for custom headers (e.g. a selection checkbox)"
+
     attr :class, :any
     attr :row_class, :any
     attr :sortable, :boolean, doc: "render the header as a sort button"
