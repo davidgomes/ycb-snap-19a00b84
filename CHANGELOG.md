@@ -77,6 +77,22 @@ The queue detail page adds status badges for paused, partial, and terminating st
 pause/resume, stop, and edit buttons in the header. Partitioning controls are expanded with meta
 options and burst mode configuration.
 
+## v2.12.5 - 2026-05-26
+
+### Enhancements
+
+- [Jobs] Display awaitable signals in the job details page
+
+  Add a section that decodes and displays signal payloads sent via
+  `Oban.Pro.Worker.signal/2`. While a job is parked waiting, the section
+  shows "Awaiting Signal" with the deadline. Once a signal arrives, it
+  switches to "Received Signal".
+
+- [Resolver] Add `format_signal/2` resolver callback
+
+  This allows customizing the decoded output, mirroring what's available
+  with `format_recorded/2`.
+
 ## v2.12.4 - 2026-05-11
 
 ### Changes
