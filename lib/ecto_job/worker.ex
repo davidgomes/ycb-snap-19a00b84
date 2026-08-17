@@ -74,8 +74,11 @@ defmodule EctoJob.Worker do
   defp notify_completed(_repo, _job = %{notify: nil}), do: :ok
 
   defp notify_completed(repo, _job = %queue{notify: payload}) do
-    topic = queue.__schema__(:source) <> ".completed"
-    repo.query("SELECT pg_notify($1, $2)", [topic, payload])
+    if repo.__adapter__() == Ecto.Adapters.Postgres do
+      topic = queue.__schema__(:source) <> ".completed"
+      repo.query("SELECT pg_notify($1, $2)", [topic, payload])
+    end
+
     :ok
   end
 end
