@@ -65,6 +65,7 @@ defmodule ObanEvents do
 
   Using this module provides:
   - `emit/2` - Dispatch events to handlers via Oban jobs
+  - `emit/3` - Dispatch events with additional caller-supplied metadata
   - `get_handlers!/1` - Get handlers for an event
   - `all_events/0` - List all registered events
   - `registered?/1` - Check if an event exists
@@ -96,6 +97,15 @@ defmodule ObanEvents do
   Returns `{:ok, jobs}` on success. Raises `ArgumentError` if event is not registered.
   """
   @callback emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+
+  @doc """
+  Emit an event with additional caller-supplied metadata.
+
+  Behaves like `emit/2`, but attaches `metadata` (e.g. `:source`,
+  `:correlation_id`) to the event. See `ObanEvents.Event` for details on how
+  metadata is stored alongside each job.
+  """
+  @callback emit(atom(), map(), map()) :: {:ok, [Oban.Job.t()]}
 
   @doc """
   Get all handler modules registered for a given event.
@@ -133,6 +143,7 @@ defmodule ObanEvents do
   defmacro __before_compile__(_env) do
     quote do
       alias ObanEvents.DispatchWorker
+      alias ObanEvents.Event
 
       @doc """
       Emit an event.
@@ -174,22 +185,48 @@ defmodule ObanEvents do
 
       Note: Handlers always receive data with string keys, regardless of how you emit.
 
+      Each emitted event is also tagged with additional metadata (a unique
+      event id and emission timestamp) stored under the job's `"metadata"`
+      key. See `ObanEvents.Event` for details, and `emit/3` to attach your
+      own custom metadata (e.g. `:source`, `:correlation_id`).
+
       ## Errors
 
       Raises `ArgumentError` if the event is not registered.
       """
       @spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
       def emit(event_name, data) when is_atom(event_name) and is_map(data) do
+        emit(event_name, data, %{})
+      end
+
+      @doc """
+      Emit an event with additional caller-supplied metadata.
+
+      Behaves exactly like `emit/2`, but the given `metadata` map is merged
+      into the event's metadata (alongside the auto-generated event id and
+      emission timestamp) and stored on the resulting Oban job(s).
+
+      ## Examples
+
+          #{inspect(__MODULE__)}.emit(:user_created, %{user_id: user.id}, %{
+            source: "signup_form",
+            correlation_id: correlation_id
+          })
+
+      ## Errors
+
+      Raises `ArgumentError` if the event is not registered.
+      """
+      @spec emit(atom(), map(), map()) :: {:ok, [Oban.Job.t()]}
+      def emit(event_name, data, metadata)
+          when is_atom(event_name) and is_map(data) and is_map(metadata) do
         handlers = get_handlers!(event_name)
+        event = Event.new(event_name, data, metadata)
 
         jobs =
           Enum.map(handlers, fn handler_module ->
             DispatchWorker.new(
-              %{
-                event: Atom.to_string(event_name),
-                handler: Atom.to_string(handler_module),
-                data: data
-              },
+              Event.to_job_args(event, handler_module),
               queue: @oban_queue,
               max_attempts: @oban_max_attempts,
               priority: @oban_priority

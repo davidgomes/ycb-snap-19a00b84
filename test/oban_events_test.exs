@@ -63,6 +63,21 @@ defmodule ObanEventsTest do
       assert job.args["event"] == "investment_status_changed"
       assert job.args["handler"] == "Elixir.ObanEventsTest.TestHandler"
       assert job.args["data"] == event_data
+
+      # Each emitted event carries additional metadata (event id + timestamp)
+      assert is_binary(job.args["metadata"]["event_id"])
+      assert is_binary(job.args["metadata"]["emitted_at"])
+    end
+
+    test "emit/3 attaches caller-supplied metadata alongside event_id and emitted_at" do
+      assert {:ok, jobs} =
+               TestEventBus.emit(:investment_created, %{"investment_id" => "abc"}, %{
+                 "source" => "import_job"
+               })
+
+      [job] = jobs
+      assert job.args["metadata"]["source"] == "import_job"
+      assert is_binary(job.args["metadata"]["event_id"])
     end
 
     test "creates multiple jobs when multiple handlers are registered" do

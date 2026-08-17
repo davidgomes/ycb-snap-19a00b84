@@ -13,6 +13,10 @@ defmodule ObanEvents.DispatchWorker do
   - `event`: String representation of the event name
   - `handler`: String representation of the handler module
   - `data`: Map of event-specific data
+  - `metadata`: Optional map of additional event metadata (e.g. `event_id`,
+    `emitted_at`, and any caller-supplied metadata). See `ObanEvents.Event`.
+    Not passed to the handler; included for observability only. Absent on
+    jobs enqueued before this field was introduced.
 
   ## Configuration
 
@@ -32,14 +36,19 @@ defmodule ObanEvents.DispatchWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{
-        args: %{"event" => event_name_string, "handler" => handler_module_string, "data" => data}
+        args:
+          %{"event" => event_name_string, "handler" => handler_module_string, "data" => data} =
+            args
       }) do
     # Safely convert strings back to atoms
     # These atoms should already exist since they were created during emit
     event = String.to_existing_atom(event_name_string)
     handler = String.to_existing_atom(handler_module_string)
+    metadata = Map.get(args, "metadata", %{})
 
-    Logger.info("Processing event: #{event} with handler: #{inspect(handler)}")
+    Logger.info(
+      "Processing event: #{event} with handler: #{inspect(handler)}#{metadata_log(metadata)}"
+    )
 
     case handler.handle_event(event, data) do
       :ok ->
@@ -79,4 +88,7 @@ defmodule ObanEvents.DispatchWorker do
 
     {:error, "Invalid job arguments: missing event, handler, or data"}
   end
+
+  defp metadata_log(metadata) when map_size(metadata) == 0, do: ""
+  defp metadata_log(metadata), do: ", metadata: #{inspect(metadata)}"
 end
