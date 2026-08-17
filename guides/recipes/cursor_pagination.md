@@ -109,7 +109,8 @@ of replacing it. Replacing the order could drop the field that made it unique.
 
 ## Nullable fields
 
-Ordering by a nullable column loses the rows where it is `NULL`.
+Ordering by a nullable column with plain `:asc` or `:desc` loses the rows
+where it is `NULL`.
 
 ```elixir
 %{first: 2, order_by: [:age, :id]}
@@ -126,9 +127,25 @@ sorts them last, but the cursor comparison is `age > 7`, and no comparison with
 `NULL` is ever true. A second order field does not help, because the `NULL` is
 in the first one.
 
-Until Flop builds null-aware predicates, order by a column that has no `NULL`,
-or sort on a computed field that substitutes a value, as in the [computed fields
-recipe](computed_and_embedded_fields.md):
+Where `NULL` sorts is up to the database for `:asc` and `:desc`, and it isn't
+the same on every adapter, so Flop cannot build a correct cursor comparison for
+them. Use `:asc_nulls_first`, `:asc_nulls_last`, `:desc_nulls_first`, or
+`:desc_nulls_last` instead, which name the position explicitly. Flop's cursor
+comparison then accounts for `NULL` on both sides: rows where the column is
+`NULL`, and a cursor taken from a row where the column was `NULL`.
+
+```elixir
+%{first: 2, order_by: [:age, :id], order_directions: [:asc_nulls_last, :asc]}
+```
+
+| page | rows |
+|---|---|
+| 1 | Bo 1, Ada 3 |
+| 2 | Ada 5, Ada 7 |
+| 3 | Cy, Dee |
+
+Alternatively, sort on a computed field that substitutes a value, as in the
+[computed fields recipe](computed_and_embedded_fields.md):
 
 ```sql
 SELECT coalesce(age, -1) AS age_sortable

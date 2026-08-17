@@ -2091,6 +2091,45 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       end
     end
 
+    test "paginates over a nullable field with nulls_first/nulls_last directions" do
+      ada_3 = insert(:pet, name: "Ada", age: 3)
+      ada_5 = insert(:pet, name: "Ada", age: 5)
+      ada_7 = insert(:pet, name: "Ada", age: 7)
+      bo = insert(:pet, name: "Bo", age: 1)
+      cy = insert(:pet, name: "Cy", age: nil)
+      dee = insert(:pet, name: "Dee", age: nil)
+
+      for {direction, expected} <- [
+            {:asc_nulls_first, [cy, dee, bo, ada_3, ada_5, ada_7]},
+            {:asc_nulls_last, [bo, ada_3, ada_5, ada_7, cy, dee]},
+            {:desc_nulls_first, [cy, dee, ada_7, ada_5, ada_3, bo]},
+            {:desc_nulls_last, [ada_7, ada_5, ada_3, bo, cy, dee]}
+          ] do
+        flop = %Flop{
+          first: 2,
+          order_by: [:age, :id],
+          order_directions: [direction, :asc]
+        }
+
+        {pets, last_cursor} =
+          Enum.reduce(1..3, {[], nil}, fn _, {acc, cursor} ->
+            {:ok, {page, %Meta{end_cursor: end_cursor}}} =
+              Flop.validate_and_run(Pet, %{flop | after: cursor}, for: Pet)
+
+            {acc ++ page, end_cursor}
+          end)
+
+        assert pets == expected, "#{direction} returned the wrong order"
+
+        assert {:ok, {[], %Meta{has_next_page?: false}}} =
+                 Flop.validate_and_run(
+                   Pet,
+                   %{flop | after: last_cursor},
+                   for: Pet
+                 )
+      end
+    end
+
     test "cursor value function can be overridden" do
       insert_list(4, :pet)
       query = select(Pet, [p], {p, %{other: :data}})
