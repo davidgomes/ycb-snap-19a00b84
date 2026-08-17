@@ -5,6 +5,11 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   When using unique constraints, you should typically include all non-final states:
   `:available`, `:scheduled`, `:executing`, and `:retryable`.
 
+  Workers using one of Oban's named state groups (`:all`, `:incomplete`, `:scheduled`,
+  or `:successful`) are not flagged, since those groups are maintained by Oban and
+  already cover the appropriate states. See `Oban.Job.unique_states/1` and the
+  [Unique Jobs guide](https://hexdocs.pm/oban/unique_jobs.html) for details.
+
   Missing states means duplicate jobs could be enqueued when existing jobs are
   in the missing state.
 
@@ -15,11 +20,15 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
 
   Good - includes all non-final states:
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  Good - using a named group:
+      unique: [fields: [:args], states: :incomplete]
   """
 
   use ObanDoctor.Check, category: :worker
 
   @recommended_states [:available, :scheduled, :executing, :retryable]
+  @named_state_groups [:all, :incomplete, :scheduled, :successful]
 
   @impl true
   def id, do: :uniqueness_missing_states
@@ -51,8 +60,10 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   defp missing_recommended_states?(%{unique: unique}) do
     states = Keyword.get(unique, :states, [])
 
-    # Don't flag if they're using :all group (that's caught by another check)
-    if uses_all_group?(states) do
+    # Don't flag named state groups (:all, :incomplete, :scheduled, :successful) -
+    # they're maintained by Oban and intentionally cover the appropriate states.
+    # :all is caught by the StateGroupUsage check.
+    if uses_named_group?(states) do
       false
     else
       state_list = normalize_states(states)
@@ -61,10 +72,10 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
     end
   end
 
-  defp uses_all_group?(:all), do: true
-  defp uses_all_group?([:all]), do: true
-  defp uses_all_group?(states) when is_list(states), do: :all in states
-  defp uses_all_group?(_), do: false
+  defp uses_named_group?(group) when group in @named_state_groups, do: true
+  defp uses_named_group?([group]) when group in @named_state_groups, do: true
+  defp uses_named_group?(states) when is_list(states), do: :all in states
+  defp uses_named_group?(_), do: false
 
   defp normalize_states(states) when is_list(states), do: states
   defp normalize_states(_), do: []

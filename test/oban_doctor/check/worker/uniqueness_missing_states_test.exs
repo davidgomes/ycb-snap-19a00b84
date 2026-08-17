@@ -109,6 +109,103 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       assert issues == []
     end
 
+    test "does not flag workers using the :incomplete named state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.IncompleteStatesWorker,
+          file: "lib/my_app/workers/incomplete_states_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :incomplete],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = UniquenessMissingStates.run(context)
+
+      assert issues == []
+    end
+
+    test "does not flag workers using the :scheduled named state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.ScheduledGroupWorker,
+          file: "lib/my_app/workers/scheduled_group_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :scheduled],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = UniquenessMissingStates.run(context)
+
+      assert issues == []
+    end
+
+    test "does not flag workers using [:scheduled] as a shorthand for the named group" do
+      workers = [
+        %{
+          module: MyApp.Workers.ScheduledListWorker,
+          file: "lib/my_app/workers/scheduled_list_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: [:scheduled]],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = UniquenessMissingStates.run(context)
+
+      assert issues == []
+    end
+
+    test "does not flag workers using the :successful named state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.SuccessfulGroupWorker,
+          file: "lib/my_app/workers/successful_group_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :successful],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = UniquenessMissingStates.run(context)
+
+      assert issues == []
+    end
+
+    test "still flags explicit lists missing :retryable even though they include :scheduled" do
+      workers = [
+        %{
+          module: MyApp.Workers.AlmostCompleteWorker,
+          file: "lib/my_app/workers/almost_complete_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: [:available, :scheduled, :executing]],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = UniquenessMissingStates.run(context)
+
+      assert length(issues) == 1
+      [issue] = issues
+      assert issue.meta.missing_states == [:retryable]
+    end
+
     test "detects workers missing only some states" do
       workers = [
         %{

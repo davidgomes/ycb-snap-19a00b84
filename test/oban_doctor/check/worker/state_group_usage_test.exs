@@ -85,6 +85,63 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsageTest do
       assert issues == []
     end
 
+    test "returns no issues when worker uses the :incomplete named state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.IncompleteGroupWorker,
+          file: "lib/my_app/workers/incomplete_group_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :incomplete],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = StateGroupUsage.run(context)
+
+      assert issues == []
+    end
+
+    test "returns no issues when worker uses the :successful named state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.SuccessfulGroupWorker,
+          file: "lib/my_app/workers/successful_group_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :successful],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = StateGroupUsage.run(context)
+
+      assert issues == []
+    end
+
+    test "returns no issues when worker uses the :scheduled named state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.ScheduledGroupWorker,
+          file: "lib/my_app/workers/scheduled_group_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :scheduled],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = StateGroupUsage.run(context)
+
+      assert issues == []
+    end
+
     test "returns no issues when worker has no unique config" do
       workers = [
         %{
