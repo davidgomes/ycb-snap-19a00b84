@@ -161,6 +161,13 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
     """
   end
 
+  # Wraps the value in single quotes, so it is treated as a single shell
+  # argument regardless of special characters, escaping any single quotes
+  # it contains.
+  defp shell_escape(string) do
+    "'" <> String.replace(string, "'", "'\\''") <> "'"
+  end
+
   defp value_preview(string) do
     preview_length = 10
     length = String.length(string)
@@ -212,7 +219,8 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
   end
 
   defp docker_instructions(image, env) do
-    envs = Enum.map_join(env, "\n", fn {key, value} -> ~s/  -e #{key}="#{value}" \\/ end)
+    envs =
+      Enum.map_join(env, "\n", fn {key, value} -> "  -e #{key}=#{shell_escape(value)} \\" end)
 
     """
     docker run -p 8080:8080 -p 8081:8081 --pull always \\
@@ -222,7 +230,7 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
   end
 
   defp fly_instructions(image, env, hub_name, deployment_group_name) do
-    envs = Enum.map_join(env, " \\\n", fn {key, value} -> ~s/  #{key}="#{value}"/ end)
+    envs = Enum.map_join(env, " \\\n", fn {key, value} -> "  #{key}=#{shell_escape(value)}" end)
 
     example_dir =
       "lb-server-#{hub_name}-#{deployment_group_name}"
