@@ -71,6 +71,17 @@ defmodule ObanChoreWeb.DashboardLive do
               >
                 New Execution
               </button>
+              <button
+                phx-click="select_tab"
+                phx-value-tab="history"
+                data-role="history-tab"
+                class={[
+                  "oc-tab-item",
+                  if(@selected_tab == :history, do: "oc-tab-item--active", else: "")
+                ]}
+              >
+                History
+              </button>
               <%= for job_id <- Map.get(@chore_jobs, @selected_chore_module, []), job = @jobs[job_id] do %>
                 <button
                   phx-click="select_tab"
@@ -111,6 +122,12 @@ defmodule ObanChoreWeb.DashboardLive do
                   id={chore_item.module}
                   chore={chore_item}
                   selected={@selected_chore_module == chore_item.module and @selected_tab == :new}
+                />
+                <.live_component
+                  module={ObanChoreWeb.HistoryComponent}
+                  id={"history-#{chore_item.module}"}
+                  chore={chore_item}
+                  selected={@selected_chore_module == chore_item.module and @selected_tab == :history}
                 />
               <% end %>
 
@@ -227,8 +244,50 @@ defmodule ObanChoreWeb.DashboardLive do
   end
 
   @impl true
+  def handle_event("select_tab", %{"tab" => "history"}, socket) do
+    {:noreply, assign(socket, selected_tab: :history)}
+  end
+
+  @impl true
   def handle_event("select_tab", %{"tab" => "job_" <> id_str}, socket) do
     id = String.to_integer(id_str)
+    {:noreply, assign(socket, selected_tab: {:job, id})}
+  end
+
+  @impl true
+  def handle_event("view_job", %{"id" => id_str}, socket) do
+    id = if is_integer(id_str), do: id_str, else: String.to_integer(id_str)
+
+    socket =
+      if Map.has_key?(socket.assigns.jobs, id) do
+        socket
+      else
+        case ObanChore.get_job(id) do
+          nil ->
+            socket
+
+          job ->
+            new_jobs = Map.put(socket.assigns.jobs, job.id, job)
+
+            worker_module =
+              Enum.find_value(socket.assigns.chores, fn chore ->
+                c_str = to_string(chore.module) |> String.trim_leading("Elixir.")
+                if c_str == job.worker, do: chore.module, else: nil
+              end) || socket.assigns.selected_chore_module
+
+            new_chore_jobs =
+              if worker_module do
+                Map.update(socket.assigns.chore_jobs, worker_module, [job.id], fn job_ids ->
+                  if job.id in job_ids, do: job_ids, else: [job.id | job_ids]
+                end)
+              else
+                socket.assigns.chore_jobs
+              end
+
+            assign(socket, jobs: new_jobs, chore_jobs: new_chore_jobs)
+        end
+      end
+
     {:noreply, assign(socket, selected_tab: {:job, id})}
   end
 

@@ -417,6 +417,122 @@ defmodule ObanChoreWeb.CoreComponents do
     end
   end
 
+  @doc """
+  Renders a badge representing an Oban job's state.
+  """
+  attr(:state, :any, required: true)
+
+  def state_badge(assigns) do
+    ~H"""
+    <span class="oc-badge" style={state_style(@state)}>
+      <%= String.capitalize(to_string(@state)) %>
+    </span>
+    """
+  end
+
+  @doc """
+  Returns inline style string for job state badge.
+  """
+  def state_style(state) do
+    case state do
+      :executing ->
+        "background-color: var(--oc-blue-50); color: var(--oc-blue-700); box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.1);"
+
+      :available ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+
+      :scheduled ->
+        "background-color: var(--oc-amber-50); color: var(--oc-amber-800); box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.2);"
+
+      :completed ->
+        "background-color: var(--oc-emerald-50); color: var(--oc-emerald-800); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.2);"
+
+      :discarded ->
+        "background-color: var(--oc-rose-50); color: var(--oc-rose-900); box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.1);"
+
+      :cancelled ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+
+      :retryable ->
+        "background-color: var(--oc-amber-50); color: var(--oc-amber-800); box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.2);"
+
+      _ ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+    end
+  end
+
+  @doc """
+  Formats relative time or datetime for display.
+  """
+  def format_relative_time(nil, _now), do: "-"
+  def format_relative_time(nil), do: "-"
+
+  def format_relative_time(dt, now \\ nil) do
+    target_dt = to_datetime(dt)
+    now_dt = to_datetime(now || DateTime.utc_now())
+
+    diff = DateTime.diff(now_dt, target_dt)
+
+    cond do
+      diff < 5 ->
+        "just now"
+
+      diff < 60 ->
+        "#{diff}s ago"
+
+      diff < 3600 ->
+        min = div(diff, 60)
+        "#{min}m ago"
+
+      diff < 86400 ->
+        hours = div(diff, 3600)
+        "#{hours}h ago"
+
+      true ->
+        days = div(diff, 86400)
+        "#{days}d ago"
+    end
+  end
+
+  @doc """
+  Formats execution duration between attempted_at and completed_at/cancelled_at/discarded_at.
+  """
+  def format_duration(%Oban.Job{} = job) do
+    start_time = job.attempted_at
+    end_time = job.completed_at || job.cancelled_at || job.discarded_at
+
+    case {start_time, end_time} do
+      {nil, _} ->
+        "-"
+
+      {_, nil} ->
+        "-"
+
+      {start_dt, end_dt} ->
+        diff_seconds = DateTime.diff(to_datetime(end_dt), to_datetime(start_dt))
+
+        cond do
+          diff_seconds < 1 ->
+            "< 1s"
+
+          diff_seconds < 60 ->
+            "#{diff_seconds}s"
+
+          diff_seconds < 3600 ->
+            min = div(diff_seconds, 60)
+            sec = rem(diff_seconds, 60)
+            "#{min}m #{sec}s"
+
+          true ->
+            hours = div(diff_seconds, 3600)
+            min = div(rem(diff_seconds, 3600), 60)
+            "#{hours}h #{min}m"
+        end
+    end
+  end
+
+  def format_duration(_), do: "-"
+
   defp to_datetime(%DateTime{} = dt), do: dt
   defp to_datetime(%NaiveDateTime{} = ndt), do: DateTime.from_naive!(ndt, "Etc/UTC")
   defp to_datetime(nil), do: DateTime.utc_now()

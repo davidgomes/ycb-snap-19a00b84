@@ -311,4 +311,154 @@ defmodule ObanChoreWeb.DashboardLiveTest do
                "No chore selected"
     end
   end
+
+  describe "history" do
+    test "shows empty history state when no previous jobs exist" do
+      conn = build_conn()
+      {:ok, view, _html} = live(conn, "/ops/chores")
+
+      chore_module = to_string(DashboardTestChore)
+
+      view
+      |> element("button[data-role=chore-select][data-chore-module=\"#{chore_module}\"]")
+      |> render_click()
+
+      # Click History tab
+      view
+      |> element("button[data-role=history-tab]")
+      |> render_click()
+
+      assert has_element?(element(view, ~s(div[data-role="chore-history"])))
+      assert render(view) =~ "No previous runs found for this chore."
+    end
+
+    test "displays previous jobs in history table and navigates to details" do
+      # Insert completed and discarded jobs
+      completed_job =
+        DashboardTestChore.new(%{username: "alice", admin: true})
+        |> ObanChore.TestRepo.insert!()
+
+      discarded_job =
+        DashboardTestChore.new(%{username: "bob", admin: false})
+        |> ObanChore.TestRepo.insert!()
+
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      ObanChore.TestRepo.update_all(
+        Oban.Job,
+        set: [
+          state: "completed",
+          attempted_at: DateTime.add(now, -60, :second),
+          completed_at: now
+        ]
+      )
+
+      # Update discarded job specifically
+      ObanChore.TestRepo.get!(Oban.Job, discarded_job.id)
+      |> Ecto.Changeset.change(%{
+        state: "discarded",
+        attempted_at: DateTime.add(now, -120, :second),
+        discarded_at: DateTime.add(now, -115, :second)
+      })
+      |> ObanChore.TestRepo.update!()
+
+      conn = build_conn()
+      {:ok, view, _html} = live(conn, "/ops/chores")
+
+      chore_module = to_string(DashboardTestChore)
+
+      # Select chore
+      view
+      |> element("button[data-role=chore-select][data-chore-module=\"#{chore_module}\"]")
+      |> render_click()
+
+      # Switch to history tab
+      view
+      |> element("button[data-role=history-tab]")
+      |> render_click()
+
+      assert has_element?(element(view, ~s(table[data-role="history-table"])))
+      assert has_element?(element(view, ~s(tr[data-role="history-row"][data-job-id="#{completed_job.id}"])))
+      assert has_element?(element(view, ~s(tr[data-role="history-row"][data-job-id="#{discarded_job.id}"])))
+
+      # Check arguments and state display
+      html = render(view)
+      assert html =~ "Completed"
+      assert html =~ "Discarded"
+      assert html =~ "alice"
+      assert html =~ "bob"
+
+      # Click "View Details" on completed job
+      view
+      |> element(~s(button[data-role="view-job"][data-job-id="#{completed_job.id}"]))
+      |> render_click()
+
+      # Verify job tab is opened and job details are shown
+      assert has_element?(element(view, ~s(button[data-role="job-tab"][data-job-id="#{completed_job.id}"])))
+      assert has_element?(element(view, ~s(div[data-role="job-details"][data-job-id="#{completed_job.id}"])))
+    end
+
+    test "allows sorting previous runs by columns" do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      # Insert two jobs
+      job1 =
+        DashboardTestChore.new(%{username: "first"})
+        |> ObanChore.TestRepo.insert!()
+
+      job2 =
+        DashboardTestChore.new(%{username: "second"})
+        |> ObanChore.TestRepo.insert!()
+
+      ObanChore.TestRepo.get!(Oban.Job, job1.id)
+      |> Ecto.Changeset.change(%{
+        state: "completed",
+        attempted_at: DateTime.add(now, -300, :second),
+        completed_at: DateTime.add(now, -290, :second)
+      })
+      |> ObanChore.TestRepo.update!()
+
+      ObanChore.TestRepo.get!(Oban.Job, job2.id)
+      |> Ecto.Changeset.change(%{
+        state: "completed",
+        attempted_at: DateTime.add(now, -60, :second),
+        completed_at: now
+      })
+      |> ObanChore.TestRepo.update!()
+
+      conn = build_conn()
+      {:ok, view, _html} = live(conn, "/ops/chores")
+
+      chore_module = to_string(DashboardTestChore)
+
+      view
+      |> element("button[data-role=chore-select][data-chore-module=\"#{chore_module}\"]")
+      |> render_click()
+
+      view
+      |> element("button[data-role=history-tab]")
+      |> render_click()
+
+      # Sort by id ascending
+      view
+      |> element(~s(th[phx-value-by="id"]))
+      |> render_click()
+
+      # Verify both rows present
+      assert has_element?(element(view, ~s(tr[data-job-id="#{job1.id}"])))
+      assert has_element?(element(view, ~s(tr[data-job-id="#{job2.id}"])))
+
+      # Sort by attempted_at
+      view
+      |> element(~s(th[phx-value-by="attempted_at"]))
+      |> render_click()
+
+      # Refresh button works
+      view
+      |> element(~s(button[data-role="refresh-history"]))
+      |> render_click()
+
+      assert has_element?(element(view, ~s(table[data-role="history-table"])))
+    end
+  end
 end
