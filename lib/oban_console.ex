@@ -12,6 +12,5 @@ defmodule Oban.Console do
       :world
 
   """
-  def list_queues() do
-  end
+  defdelegate list_queues(), to: Oban.Console.Queues, as: :list
 end

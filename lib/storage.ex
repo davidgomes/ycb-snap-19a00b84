@@ -2,12 +2,35 @@ defmodule Oban.Console.Storage do
   def get_last_jobs_opts() do
     case get_env("OBAN_CONSOLE_JOBS_LAST_OPTS") do
       nil -> []
-      value -> value |> Jason.decode!(keys: :atoms) |> Map.to_list()
+      value -> decode_last_jobs_opts(value)
+    end
+  end
+
+  defp decode_last_jobs_opts(value) do
+    map = Jason.decode!(value, keys: :atoms)
+
+    case Map.get(map, :_order) do
+      keys when is_list(keys) ->
+        Enum.map(keys, fn k ->
+          atom_k = String.to_existing_atom(k)
+          {atom_k, Map.get(map, atom_k)}
+        end)
+
+      _ ->
+        Map.to_list(map)
     end
   end
 
   def set_last_jobs_opts(opts) do
-    System.put_env("OBAN_CONSOLE_JOBS_LAST_OPTS", opts |> Map.new() |> Jason.encode!())
+    keys = Keyword.keys(opts) |> Enum.map(&to_string/1)
+
+    payload =
+      opts
+      |> Map.new()
+      |> Map.put(:_order, keys)
+      |> Jason.encode!()
+
+    System.put_env("OBAN_CONSOLE_JOBS_LAST_OPTS", payload)
   end
 
   def get_last_jobs_ids() do
