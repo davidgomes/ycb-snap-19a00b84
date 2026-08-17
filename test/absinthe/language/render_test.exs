@@ -34,6 +34,25 @@ defmodule Absinthe.Language.RenderTest do
       """)
     end
 
+    test "for operation and fragment descriptions" do
+      assert_rendered("""
+      "Looks up profile information"
+      query FragmentTyping {
+        profiles(handles: ["zuck", "cocacola"]) {
+          handle
+          ...userFragment
+        }
+      }
+
+      "Friend count for a user"
+      fragment userFragment on User {
+        friends {
+          count
+        }
+      }
+      """)
+    end
+
     test "for inline fragment with type query" do
       assert_rendered("""
       query inlineFragmentTyping {

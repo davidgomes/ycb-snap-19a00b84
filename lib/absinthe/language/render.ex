@@ -32,6 +32,7 @@ defmodule Absinthe.Language.Render do
         block(render_list(op.selection_set.selections))
       )
     end
+    |> description(op.description)
   end
 
   defp render(%Absinthe.Language.Field{} = field) do
@@ -133,6 +134,7 @@ defmodule Absinthe.Language.Render do
       directives(fragment.directives)
     ])
     |> block(render_list(fragment.selection_set.selections))
+    |> description(fragment.description)
   end
 
   # Schema

@@ -34,6 +34,9 @@ Definition -> OperationDefinition : '$1'.
 Definition -> Fragment : '$1'.
 Definition -> TypeDefinition : '$1'.
 
+Definition -> DescriptionDefinition OperationDefinition : put_description('$2', '$1').
+Definition -> DescriptionDefinition Fragment : put_description('$2', '$1').
+
 OperationType -> 'query' : '$1'.
 OperationType -> 'mutation' : '$1'.
 OperationType -> 'subscription' : '$1'.
