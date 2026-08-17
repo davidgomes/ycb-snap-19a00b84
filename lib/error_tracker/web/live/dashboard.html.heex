@@ -1,0 +1,111 @@
+<.form
+  for={@search_form}
+  id="search"
+  class="mb-4 text-black grid md:grid-cols-4 grid-cols-2 gap-2"
+  phx-change="search"
+>
+  <input
+    name={@search_form[:reason].name}
+    value={@search_form[:reason].value}
+    type="text"
+    placeholder="Error"
+    class="border text-sm rounded-lg block p-2.5 bg-gray-700 border-gray-600 placeholder-gray-400 text-white focus:ring-blue-500 focus:border-blue-500"
+    phx-debounce
+  />
+  <input
+    name={@search_form[:source_line].name}
+    value={@search_form[:source_line].value}
+    type="text"
+    placeholder="Source line"
+    class="border text-sm rounded-lg block p-2.5 bg-gray-700 border-gray-600 placeholder-gray-400 text-white focus:ring-blue-500 focus:border-blue-500"
+    phx-debounce
+  />
+  <input
+    name={@search_form[:source_function].name}
+    value={@search_form[:source_function].value}
+    type="text"
+    placeholder="Source function"
+    class="border text-sm rounded-lg block p-2.5 bg-gray-700 border-gray-600 placeholder-gray-400 text-white focus:ring-blue-500 focus:border-blue-500"
+    phx-debounce
+  />
+  <select
+    name={@search_form[:status].name}
+    class="border text-sm rounded-lg block p-2.5 bg-gray-700 border-gray-600 placeholder-gray-400 text-white focus:ring-blue-500 focus:border-blue-500"
+  >
+    <option value="" selected={@search_form[:status].value == ""}>All</option>
+    <option value="unresolved" selected={@search_form[:status].value == "unresolved"}>
+      Unresolved
+    </option>
+    <option value="resolved" selected={@search_form[:status].value == "resolved"}>
+      Resolved
+    </option>
+  </select>
+</.form>
+
+<div class="relative overflow-x-auto shadow-md sm:rounded-lg ring-1 ring-gray-900">
+  <table class="w-full text-sm text-left rtl:text-right text-gray-400 table-fixed">
+    <thead class="text-xs uppercase bg-gray-900">
+      <tr>
+        <th scope="col" class="px-4 pr-2 w-72">Error</th>
+        <th scope="col" class="px-4 py-3 w-72">Occurrences</th>
+        <th scope="col" class="px-4 py-3 w-28">Status</th>
+        <th scope="col" class="px-4 py-3 w-28"></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td :if={@errors == []} colspan="4" class="text-center py-8 font-extralight">
+          No errors to show 🎉
+        </td>
+      </tr>
+      <tr
+        :for={error <- @errors}
+        class="border-b bg-gray-400/10 border-y border-gray-900 hover:bg-gray-800/60 last-of-type:border-b-0"
+      >
+        <td scope="row" class="px-4 py-4 font-medium text-white relative">
+          <.link navigate={error_path(@socket, error)} class="absolute inset-1">
+            <span class="sr-only">(<%= sanitize_module(error.kind) %>) <%= error.reason %></span>
+          </.link>
+          <p class="whitespace-nowrap text-ellipsis overflow-hidden">
+            (<%= sanitize_module(error.kind) %>) <%= error.reason %>
+          </p>
+          <p
+            :if={ErrorTracker.Error.has_source_info?(error)}
+            class="whitespace-nowrap text-ellipsis overflow-hidden font-normal text-gray-400"
+          >
+            <%= sanitize_module(error.source_function) %>
+            <br />
+            <%= error.source_line %>
+          </p>
+        </td>
+        <td class="px-4 py-4">
+          <p>Last: <%= format_datetime(error.last_occurrence_at) %></p>
+          <p>Total: <%= @occurrences[error.id] %></p>
+        </td>
+        <td class="px-4 py-4">
+          <.badge :if={error.status == :resolved} color={:green}>Resolved</.badge>
+          <.badge :if={error.status == :unresolved} color={:red}>Unresolved</.badge>
+        </td>
+        <td class="px-4 py-4 text-center">
+          <.button
+            :if={error.status == :unresolved}
+            phx-click="resolve"
+            phx-value-error_id={error.id}
+          >
+            Resolve
+          </.button>
+
+          <.button
+            :if={error.status == :resolved}
+            phx-click="unresolve"
+            phx-value-error_id={error.id}
+          >
+            Unresolve
+          </.button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<.pagination page={@page} total_pages={@total_pages} />
