@@ -96,6 +96,7 @@ defmodule ObanEvents do
   Returns `{:ok, jobs}` on success. Raises `ArgumentError` if event is not registered.
   """
   @callback emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+  @callback emit(atom(), map(), map()) :: {:ok, [Oban.Job.t()]}
 
   @doc """
   Get all handler modules registered for a given event.
@@ -174,13 +175,29 @@ defmodule ObanEvents do
 
       Note: Handlers always receive data with string keys, regardless of how you emit.
 
+      ## Metadata
+
+      An optional `metadata` map may be supplied as a third argument. It's
+      attached to the generated `ObanEvents.Event` and included in each
+      job's args under the `"metadata"` key, alongside an auto-generated
+      `:id` and `:emitted_at` timestamp. This is useful for tracing an
+      event's origin (e.g. `%{source: "api", actor_id: user.id}`) without
+      mixing it into the event's `data` payload.
+
       ## Errors
 
       Raises `ArgumentError` if the event is not registered.
       """
       @spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
       def emit(event_name, data) when is_atom(event_name) and is_map(data) do
+        emit(event_name, data, %{})
+      end
+
+      @spec emit(atom(), map(), map()) :: {:ok, [Oban.Job.t()]}
+      def emit(event_name, data, metadata)
+          when is_atom(event_name) and is_map(data) and is_map(metadata) do
         handlers = get_handlers!(event_name)
+        event = ObanEvents.Event.new(event_name, data, metadata)
 
         jobs =
           Enum.map(handlers, fn handler_module ->
@@ -188,7 +205,12 @@ defmodule ObanEvents do
               %{
                 event: Atom.to_string(event_name),
                 handler: Atom.to_string(handler_module),
-                data: data
+                data: data,
+                metadata: %{
+                  "id" => event.id,
+                  "emitted_at" => DateTime.to_iso8601(event.emitted_at),
+                  "context" => event.metadata
+                }
               },
               queue: @oban_queue,
               max_attempts: @oban_max_attempts,

@@ -32,14 +32,18 @@ defmodule ObanEvents.DispatchWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{
-        args: %{"event" => event_name_string, "handler" => handler_module_string, "data" => data}
+        args: %{"event" => event_name_string, "handler" => handler_module_string, "data" => data} =
+          args
       }) do
     # Safely convert strings back to atoms
     # These atoms should already exist since they were created during emit
     event = String.to_existing_atom(event_name_string)
     handler = String.to_existing_atom(handler_module_string)
+    metadata = Map.get(args, "metadata", %{})
 
-    Logger.info("Processing event: #{event} with handler: #{inspect(handler)}")
+    Logger.info(
+      "Processing event: #{event} with handler: #{inspect(handler)}, metadata: #{inspect(metadata)}"
+    )
 
     case handler.handle_event(event, data) do
       :ok ->

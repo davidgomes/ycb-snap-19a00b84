@@ -177,6 +177,31 @@ MyApp.Events.registered?(:user_created)
 # => true
 ```
 
+### `emit/3` and Event Metadata
+
+`emit/2` accepts an optional third argument: a `metadata` map for
+caller-supplied context (e.g. who/what triggered the event). This is kept
+separate from `data` so handlers don't need to filter it out, and it's
+attached alongside an auto-generated event `id` and `emitted_at` timestamp.
+
+```elixir
+@spec emit(atom(), map(), map()) :: {:ok, [Oban.Job.t()]}
+
+MyApp.Events.emit(
+  :user_created,
+  %{user_id: user.id, email: user.email},
+  %{source: "signup_form", actor_id: current_user.id}
+)
+```
+
+Internally, this builds an `ObanEvents.Event` struct (see
+`ObanEvents.Event`) with fields `:name`, `:data`, `:id`, `:emitted_at`, and
+`:metadata`. Each dispatched job's args include a `"metadata"` map with:
+
+- `"id"` - Unique identifier for this emission (UUID)
+- `"emitted_at"` - ISO 8601 timestamp of when the event was created
+- `"context"` - The caller-supplied metadata map (empty if omitted)
+
 ## Handler Implementation
 
 Handlers must implement the `handle_event/2` callback:
@@ -376,6 +401,37 @@ test "emits user_created event" do
     }
   )
 end
+```
+
+### Testing Helpers (`ObanEvents.Testing`)
+
+`ObanEvents.Testing` provides `assert_event_emitted/3` and
+`refute_event_emitted/3` helpers that wrap `Oban.Testing` and know the
+`ObanEvents.DispatchWorker` job shape, so you don't have to hand-write the
+worker/args matcher yourself:
+
+```elixir
+use Oban.Testing, repo: MyApp.Repo
+import ObanEvents.Testing
+
+test "emits user_created event" do
+  {:ok, user} = Accounts.create_user(%{email: "test@example.com"})
+
+  assert_event_emitted(:user_created, %{"user_id" => user.id})
+
+  # Optionally restrict to a specific handler
+  assert_event_emitted(:user_created, %{"user_id" => user.id}, handler: MyApp.EmailHandler)
+
+  # Assert an event was NOT emitted
+  refute_event_emitted(:user_deleted)
+end
+```
+
+`event_args/3` builds the same args map for use directly with
+`Oban.Testing`'s own matchers:
+
+```elixir
+assert_enqueued(worker: ObanEvents.DispatchWorker, args: event_args(:user_created))
 ```
 
 ### Testing Handlers
