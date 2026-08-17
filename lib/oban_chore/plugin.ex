@@ -10,7 +10,9 @@ defmodule ObanChore.Plugin do
   ## Options
 
     * `:otp_app` - An atom or list of atoms representing the OTP application(s) to search for chores.
-      If not provided, all loaded applications will be searched.
+    * `:chores` - A list of chore modules to register instead of scanning an OTP application.
+      Useful in tests and when you want an explicit allow-list. Mutually exclusive with `:otp_app`.
+      One of `:otp_app` or `:chores` is required.
     * `:pubsub_server` - (Required) The name of your application's Phoenix PubSub server.
 
   ## Examples
@@ -22,6 +24,9 @@ defmodule ObanChore.Plugin do
     plugins: [
       {ObanChore.Plugin, otp_app: :my_app, pubsub_server: MyApp.PubSub}
     ]
+
+  # Or pass an explicit list of chore modules (handy in tests):
+  {ObanChore.Plugin, chores: [MyApp.Chores.UserBackfill], pubsub_server: MyApp.PubSub}
   ```
   """
   @behaviour Oban.Plugin
@@ -31,9 +36,53 @@ defmodule ObanChore.Plugin do
 
   @impl Oban.Plugin
   def validate(opts) do
-    with :ok <- validate_otp_app(opts),
+    with :ok <- validate_exclusive_and_required_opts(opts),
+         :ok <- validate_chores(opts),
+         :ok <- validate_otp_app(opts),
          :ok <- validate_pubsub_server(opts) do
       :ok
+    end
+  end
+
+  defp validate_exclusive_and_required_opts(opts) do
+    case {opts[:otp_app], opts[:chores]} do
+      {otp, chores} when not is_nil(otp) and not is_nil(chores) ->
+        {:error, "cannot set both :otp_app and :chores options"}
+
+      {nil, nil} ->
+        {:error, "must set either :otp_app or :chores option"}
+
+      _ ->
+        :ok
+    end
+  end
+
+  defp validate_chores(opts) do
+    case Keyword.get(opts, :chores) do
+      nil ->
+        :ok
+
+      chores when is_list(chores) ->
+        cond do
+          not Enum.all?(chores, &is_atom/1) ->
+            {:error, "all chores elements must be modules (atoms)"}
+
+          true ->
+            invalid =
+              Enum.filter(chores, fn module ->
+                not (match?({:module, _}, Code.ensure_compiled(module)) and
+                       function_exported?(module, :__chore_info__, 0))
+              end)
+
+            if invalid == [] do
+              :ok
+            else
+              {:error, "the following modules are not chores: #{inspect(invalid)}"}
+            end
+        end
+
+      _ ->
+        {:error, "chores must be a list of modules (atoms)"}
     end
   end
 
@@ -202,29 +251,33 @@ defmodule ObanChore.Plugin do
 
   # TODO: Improve the discovery
   defp discover_chores(opts) do
-    apps =
-      case Keyword.get(opts, :otp_app) do
-        nil ->
-          Application.loaded_applications()
-          |> Enum.map(fn {app, _desc, _vsn} -> app end)
+    case Keyword.get(opts, :chores) do
+      chores when is_list(chores) ->
+        chores
+        |> Enum.map(fn module -> module.__chore_info__() end)
 
-        app when is_atom(app) ->
-          [app]
+      nil ->
+        apps =
+          case Keyword.get(opts, :otp_app) do
+            app when is_atom(app) ->
+              [app]
 
-        apps when is_list(apps) ->
-          apps
-      end
+            apps when is_list(apps) ->
+              apps
+          end
 
-    apps
-    |> Enum.flat_map(fn app ->
-      case :application.get_key(app, :modules) do
-        {:ok, modules} -> modules
-        _ -> []
-      end
-    end)
-    |> Enum.filter(fn module ->
-      Code.ensure_loaded?(module) and function_exported?(module, :__chore_info__, 0)
-    end)
-    |> Enum.map(fn module -> module.__chore_info__() end)
+        apps
+        |> Enum.flat_map(fn app ->
+          case :application.get_key(app, :modules) do
+            {:ok, modules} -> modules
+            _ -> []
+          end
+        end)
+        |> Enum.filter(fn module ->
+          match?({:module, _}, Code.ensure_compiled(module)) and
+            function_exported?(module, :__chore_info__, 0)
+        end)
+        |> Enum.map(fn module -> module.__chore_info__() end)
+    end
   end
 end

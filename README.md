@@ -87,6 +87,12 @@ config :my_app, Oban,
   queues: [default: 10]
 ```
 
+You can also pass an explicit list of chore modules with `:chores` instead of scanning an OTP app. This is useful in tests and when you want a strict allow-list. `:otp_app` and `:chores` are mutually exclusive; one of them is required:
+
+```elixir
+{ObanChore.Plugin, chores: [MyApp.Chores.UserBackfill], pubsub_server: MyApp.PubSub}
+```
+
 
 ### 4. Define a Chore
 
