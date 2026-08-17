@@ -9,6 +9,7 @@ A lightweight, persistent event bus for Elixir applications built on top of [Oba
 - ⚡ **Async** - Non-blocking execution of handlers
 - 🔗 **Transactional** - Works within database transactions for atomicity
 - 📊 **Observable** - Track event processing via Oban Web UI
+- 🧭 **Traceable** - Every emission carries a unique event id, timestamp, and optional custom metadata
 - ✅ **Type-safe** - Compile-time validation of events
 - 🎯 **Decoupled** - Event emitters don't know about handlers
 
@@ -95,6 +96,24 @@ defmodule MyApp.Accounts do
 end
 ```
 
+### 4. Add Metadata (Optional)
+
+Pass a third argument to `emit/3` to attach additional metadata (e.g. who
+triggered the event, or where it came from) without mixing it into the
+event's `data`:
+
+```elixir
+Events.emit(:user_created, %{user_id: user.id, email: user.email}, %{
+  actor_id: current_user.id,
+  source: "admin_panel"
+})
+```
+
+Every job created for the emission also gets a unique event id and an
+`emitted_at` timestamp automatically, so jobs for different handlers of the
+same event can be correlated. See [`ObanEvents.Event`](#obaneventsevent) for
+details.
+
 ## How It Works
 
 ```mermaid
@@ -133,15 +152,18 @@ end
 
 Your event bus module provides these functions:
 
-### `emit/2`
+### `emit/2` and `emit/3`
 
-Emit an event to all registered handlers.
+Emit an event to all registered handlers, optionally with additional metadata.
 
 ```elixir
-@spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+@spec emit(atom(), map(), map()) :: {:ok, [Oban.Job.t()]}
 
 # Raises ArgumentError if event is not registered
 MyApp.Events.emit(:user_created, %{user_id: 123, email: "user@example.com"})
+
+# With metadata for tracing/auditing
+MyApp.Events.emit(:user_created, %{user_id: 123}, %{actor_id: 456, source: "signup_form"})
 ```
 
 ### `get_handlers!/1`
@@ -176,6 +198,34 @@ Check if an event is registered.
 MyApp.Events.registered?(:user_created)
 # => true
 ```
+
+## ObanEvents.Event
+
+Every call to `emit/2` or `emit/3` builds an `%ObanEvents.Event{}` per
+handler internally, then serializes it into the job's args. In addition to
+`event`/`handler`/`data`, jobs enqueued by `ObanEvents.DispatchWorker` carry:
+
+- `event_id` - a unique id shared by every handler's job for a single `emit`
+  call, useful for correlating related jobs in logs or the Oban Web UI
+- `emitted_at` - an ISO 8601 timestamp of when the event was emitted
+- `metadata` - the optional map passed as the third argument to `emit/3`
+  (defaults to `%{}`)
+
+```elixir
+%{
+  "event" => "user_created",
+  "handler" => "Elixir.MyApp.EmailHandler",
+  "data" => %{"user_id" => 123},
+  "metadata" => %{"actor_id" => 456, "source" => "signup_form"},
+  "event_id" => "3f9c1a2b...",
+  "emitted_at" => "2024-01-15T10:30:00Z"
+}
+```
+
+Handlers are unaffected by this - `handle_event/2` still only receives the
+event name and `data`. The extra fields exist for observability and tracing,
+and are useful when querying the `oban_jobs` table or asserting on emitted
+events in tests (see [Testing](#testing) below).
 
 ## Handler Implementation
 
@@ -376,6 +426,34 @@ test "emits user_created event" do
     }
   )
 end
+```
+
+`ObanEvents.Testing` provides helpers that reduce this boilerplate:
+
+```elixir
+use Oban.Testing, repo: MyApp.Repo
+import ObanEvents.Testing
+
+test "emits user_created event" do
+  {:ok, user} = Accounts.create_user(%{email: "test@example.com"})
+
+  assert_event_emitted(:user_created, MyApp.EmailHandler, %{"user_id" => user.id})
+end
+```
+
+`assert_event_emitted/2,3` matches on `event`/`handler`/`data` only, so it
+still passes regardless of any `metadata` the event was emitted with. It's
+built on `Oban.Testing.assert_enqueued/1`, so it requires a real, running
+Ecto repo and an Oban instance in `:manual` testing mode (`:inline` mode
+never persists jobs, so there's nothing to assert on afterwards).
+
+`event_args/3` builds the same args map without asserting, which is handy for
+`Oban.Testing.perform_job/2` or custom matches:
+
+```elixir
+import ObanEvents.Testing
+
+perform_job(ObanEvents.DispatchWorker, event_args(:user_created, MyApp.EmailHandler, %{"user_id" => 1}))
 ```
 
 ### Testing Handlers
