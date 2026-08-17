@@ -550,9 +550,6 @@ defmodule Phoenix.LiveView.UploadConfig do
     too_many? = too_many_files?(new_conf)
 
     cond do
-      too_many? && new_conf.auto_upload? ->
-        {:ok, put_error(new_conf, new_conf.ref, @too_many_files)}
-
       too_many? ->
         {:error, put_error(new_conf, new_conf.ref, @too_many_files)}
 

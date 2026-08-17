@@ -333,6 +333,20 @@ defmodule Phoenix.LiveView.UploadConfigTest do
       assert avatar.errors == [{avatar.ref, :too_many_files}]
     end
 
+    test "returns error when greater than max_entries are provided with auto_upload" do
+      socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any, auto_upload: true)
+
+      entry = build_client_entry(:avatar)
+
+      assert {:error, avatar} =
+               UploadConfig.put_entries(socket.assigns.uploads.avatar, [
+                 build_client_entry(:avatar),
+                 entry
+               ])
+
+      assert avatar.errors == [{avatar.ref, :too_many_files}]
+    end
+
     test "returns error when entry with greater than max_file_size provided" do
       socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any)
       entry = build_client_entry(:avatar, %{"size" => 8_000_001})

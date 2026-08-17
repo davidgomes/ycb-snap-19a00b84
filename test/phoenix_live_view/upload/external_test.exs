@@ -147,8 +147,8 @@ defmodule Phoenix.LiveView.UploadExternalTest do
     assert html =~ "foo1.jpeg:0%"
     assert html =~ "foo2.jpeg:0%"
 
-    assert render_upload(avatar, "foo1.jpeg", 1) =~ "foo1.jpeg:1%"
-    assert {:error, :not_allowed} = render_upload(avatar, "foo2.jpeg", 1)
+    assert {:error, [[_ref, :too_many_files]]} = render_upload(avatar, "foo1.jpeg", 1)
+    assert {:error, [[_ref, :too_many_files]]} = render_upload(avatar, "foo2.jpeg", 1)
   end
 
   @tag allow: [
