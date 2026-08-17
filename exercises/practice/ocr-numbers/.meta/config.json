@@ -1,0 +1,26 @@
+{
+  "authors": [],
+  "contributors": [
+    "amencarini",
+    "angelikatyborska",
+    "ChristianTovar",
+    "Cohen-Carlisle",
+    "devonestes",
+    "neenjaw",
+    "sotojuan"
+  ],
+  "files": {
+    "solution": [
+      "lib/ocr_numbers.ex"
+    ],
+    "test": [
+      "test/ocr_numbers_test.exs"
+    ],
+    "example": [
+      ".meta/example.ex"
+    ]
+  },
+  "blurb": "Given a 3 x 4 grid of pipes, underscores, and spaces, determine which number is represented, or whether it is garbled.",
+  "source": "Inspired by the Bank OCR kata",
+  "source_url": "https://codingdojo.org/kata/BankOCR/"
+}

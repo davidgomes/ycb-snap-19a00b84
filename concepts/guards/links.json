@@ -1,0 +1,10 @@
+[
+  {
+    "url": "https://hexdocs.pm/elixir/patterns-and-guards.html#guards",
+    "description": "Guards"
+  },
+  {
+    "url": "https://hexdocs.pm/elixir/Kernel.html#guards",
+    "description": "List of guards"
+  }
+]

@@ -1,0 +1,23 @@
+{
+  "authors": [
+    "britto"
+  ],
+  "contributors": [
+    "angelikatyborska",
+    "Cohen-Carlisle",
+    "devonestes",
+    "neenjaw"
+  ],
+  "files": {
+    "solution": [
+      "lib/alphametics.ex"
+    ],
+    "test": [
+      "test/alphametics_test.exs"
+    ],
+    "example": [
+      ".meta/example.ex"
+    ]
+  },
+  "blurb": "Given an alphametics puzzle, find the correct solution."
+}

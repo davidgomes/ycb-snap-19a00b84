@@ -1,0 +1,14 @@
+[
+  {
+    "url": "https://hexdocs.pm/elixir/case-cond-and-if.html#if",
+    "description": "Getting Started: `if`"
+  },
+  {
+    "url": "https://hexdocs.pm/elixir/basic-types.html#booleans-and-nil",
+    "description": "Getting Started: Booleans"
+  },
+  {
+    "url": "https://hexdocs.pm/elixir/Kernel.html#if/2",
+    "description": "Documentation: `if/2`"
+  }
+]

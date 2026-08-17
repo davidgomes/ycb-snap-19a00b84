@@ -1,0 +1,18 @@
+[
+  {
+    "url": "https://hexdocs.pm/elixir/genservers.html",
+    "description": "Getting Started - GenServer"
+  },
+  {
+    "url": "https://hexdocs.pm/elixir/GenServer.html",
+    "description": "Documentation - Genserver"
+  },
+  {
+    "url": "https://elixirschool.com/en/lessons/advanced/otp_concurrency",
+    "description": "Elixir School - OTP Concurrency"
+  },
+  {
+    "url": "https://en.wikipedia.org/wiki/Actor_model",
+    "description": "Actor model"
+  }
+]

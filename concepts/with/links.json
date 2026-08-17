@@ -1,0 +1,18 @@
+[
+  {
+    "url": "https://hexdocs.pm/elixir/docs-tests-and-with.html#with",
+    "description": "Getting Started guide - With"
+  },
+  {
+    "url": "https://elixirschool.com/en/lessons/basics/control_structures#with-3",
+    "description": "Elixir School - With"
+  },
+  {
+    "url": "https://hexdocs.pm/elixir/Kernel.SpecialForms.html#with/1",
+    "description": "Kernel.SpecialForms.with/1"
+  },
+  {
+    "url": "https://hexdocs.pm/elixir/main/code-anti-patterns.html#complex-else-clauses-in-with",
+    "description": "Anti-pattern: complex else clauses in with"
+  }
+]
