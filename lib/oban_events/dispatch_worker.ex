@@ -13,6 +13,11 @@ defmodule ObanEvents.DispatchWorker do
   - `event`: String representation of the event name
   - `handler`: String representation of the handler module
   - `data`: Map of event-specific data
+  - `metadata`: Map of additional context supplied when the event was emitted
+    (e.g. `actor_id`, `correlation_id`, `source`); see `ObanEvents.Event`
+  - `event_id`: Unique id shared by every handler's job for a given `emit/2`
+    or `emit/3` call, useful for correlating related jobs
+  - `emitted_at`: ISO 8601 timestamp of when the event was emitted
 
   ## Configuration
 

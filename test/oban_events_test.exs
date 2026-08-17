@@ -101,6 +101,41 @@ defmodule ObanEventsTest do
     end
   end
 
+  describe "emit/3 with metadata" do
+    test "stamps jobs with the given metadata, an event id, and emitted_at" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{"investment_id" => "abc"}, %{
+                 actor_id: 7,
+                 source: "admin_panel"
+               })
+
+      assert job.args["data"] == %{"investment_id" => "abc"}
+      assert job.args["metadata"] == %{"actor_id" => 7, "source" => "admin_panel"}
+      assert is_binary(job.args["event_id"])
+      assert is_binary(job.args["emitted_at"])
+    end
+
+    test "defaults metadata to an empty map when omitted" do
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{"investment_id" => "abc"})
+
+      assert job.args["metadata"] == %{}
+    end
+
+    test "gives every handler job the same event id, but each job is independently tracked" do
+      assert {:ok, jobs} = TestEventBus.emit(:investment_status_changed, %{"a" => 1})
+
+      event_ids = jobs |> Enum.map(& &1.args["event_id"]) |> Enum.uniq()
+
+      assert length(event_ids) == 1
+    end
+
+    test "requires metadata to be a map" do
+      assert_raise FunctionClauseError, fn ->
+        TestEventBus.emit(:investment_created, %{}, "not a map")
+      end
+    end
+  end
+
   describe "configuration" do
     test "uses default configuration when not specified" do
       assert {:ok, jobs} = TestEventBus.emit(:investment_created, %{"test" => "data"})
