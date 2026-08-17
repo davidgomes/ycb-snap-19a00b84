@@ -9,7 +9,7 @@ defmodule Newsletter.Emails do
     |> to({user.name, user.email})
     |> from({@sender_name, @sender_email})
     |> subject("Welcome to the DockYard Academy Newsletter")
-    |> html_body("<h1>Hello #{user.name}</h1>")
-    |> text_body("Hello #{user.name}")
+    |> html_body("Hello #{user.name}, welcome to the DockYard Academy Newsletter")
+    |> text_body("Hello #{user.name}\n, welcome to the DockYard Academy Newsletter")
   end
 end
