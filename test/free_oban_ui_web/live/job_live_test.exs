@@ -15,10 +15,12 @@ defmodule FreeObanUiWeb.JobLiveTest do
       SampleWorker.new(%{name: "available-job"})
       |> Oban.insert()
 
-    {:ok, completed} =
-      SampleWorker.new(%{name: "completed-job"})
-      |> Ecto.Changeset.put_change(:state, "completed")
-      |> Oban.insert()
+    {:ok, completed} = SampleWorker.new(%{name: "completed-job"}) |> Oban.insert()
+
+    completed =
+      completed
+      |> Ecto.Changeset.change(%{state: "completed"})
+      |> FreeObanUi.Repo.update!()
 
     {:ok, view, html} = live(conn, ~p"/jobs")
 
