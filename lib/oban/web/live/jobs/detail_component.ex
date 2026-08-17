@@ -59,6 +59,7 @@ defmodule Oban.Web.Jobs.DetailComponent do
         </button>
 
         <div class="flex space-x-3">
+          <Core.status_badge :if={@job.meta["awaiting"]} icon="bolt_circle" label="Awaiting" />
           <Core.status_badge :if={@job.meta["batch"]} icon="square_2x2" label="Batch" />
           <Core.status_badge :if={@job.meta["workflow"]} icon="rectangle_group" label="Workflow" />
           <Core.status_badge :if={@job.meta["chunk"]} icon="user_group" label="Chunk" />
