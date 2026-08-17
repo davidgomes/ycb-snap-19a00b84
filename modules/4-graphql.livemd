@@ -1,0 +1,211 @@
+# ESCT: Part 4 - GraphQL Security
+
+```elixir
+Mix.install([
+  {:grading_client, path: "#{__DIR__}/grading_client"}
+])
+
+:ok
+```
+
+## Introduction
+
+GraphQL is a query language used to interact with and retrieve data from an application's data sources. Its structure is designed for flexible and precise queries that efficiently interact with complex, highly nested data sets. Using GraphQL, information is retrieved by stepping through data as if it were arranged as a group of connected nodes instead of a strictly hierarchical set up. Think more of a labyrinth than a tree.
+
+Since GraphQL can be implemented as a component of an application's API, there are security issues common to all APIs present, as well as concerns related to characteristics of the query language itself. This module will highlight several security issues associated with GraphQL and recommendations for how to address them.
+
+## Table of Contents
+
+* [Disabling Introspection](#disabling-introspection)
+* [Error Disclosure](#error-disclosure)
+* [Resource Exhaustion](#resource-exhaustion)
+* [Cost Theory](#cost-theory)
+
+## Disabling Introspection
+
+### Description
+
+Introspection queries are a way of enumerating a particular GraphQL implementation to discover details about the queries supported, data types available, and other information. This includes mutation names, fields specific to an organization or dataset, query parameters, and types of objects in the data source. Obtaining this information can help a user, including a malicious one, deduce and discover specifics about the data being stored.
+
+If you are familiar with databases, this is similar to gathering info on the [database schema](https://en.wikipedia.org/wiki/Database_schema) that includes information about table names, fields, database, structure etc.
+
+Malicious actors in their information gathering/reconnaissance efforts can leverage this information as they look for ways to attack your application and construct malicious queries and requests to expose and compromise data.
+
+Excessive Data Exposure is number 3 on OWASP's API Security Top 2019 and APIs with this issue return too much and/or sensitive information in response to incoming requests and queries. Although it provides a useful function for GraphQL developers, the information returned by introspection can help facilitate attack.
+
+### Prevention
+
+The less an attacker can learn about your system or application, the more difficult (though, of course, not impossible given time and resources) it will be to identify vulnerabilities and craft exploits that could result in a successful compromise.
+
+Taking every opportunity to add a layer of difficulty (see defense in depth section in Module 3) for malicious actors is one aspect of securing data and applications.
+
+Imagine trying to surprise a friend who lives in another part of the country with a complete home makeover. You've never been to their place but imagine trying to make arrangements, in secret, without having a map to their city, knowing their address, having access to a website with a street view, or having the floorplans. What if they live on the 30th floor of an apartment building, there's no street parking, and they have 4 large pet dragons?
+
+Since introspection queries provide the floorplans to your data, one step in making an attacker's job more difficult is to, if an evaluation of your application development processes determines it is not needed, disable introspection. If it is not possible to completely disable introspection, the next best defense is to limit access, by following least privilege, or implement other controls to limit exposure. Please see references for more details.
+
+### <span style="color:blue;">Example</span>
+
+[Vigil](https://github.com/podium/vigil) is an elixir package that when added to your application's dependencies, can intercept incoming GraphQL introspection requests and return an error/forbidden message to the client, instead of information about the schema.
+
+It can also intercept responses to ensure no schema data is being leaked in any error messages shown to the client.
+
+### Resources
+
+1. https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/12-API_Testing/99-Testing_GraphQL, [webarchive](https://web.archive.org/web/20250130173002/https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/12-API_Testing/99-Testing_GraphQL)
+2. https://cybervelia.com/?p=736, [webarchive](https://web.archive.org/web/20240519073536/https://cybervelia.com/?p=736)
+3. https://github.com/podium/vigil
+
+### <span style="color:red;">Quiz</span>
+
+**Which of the OWASP API Security Top 10 2019 issues does disabling introspection queries address?**
+
+<!-- livebook:{"attrs":"eyJzb3VyY2UiOiIjIEdSQVBIUUw6MVxuXG5pbnB1dCA9IEtpbm8uSW5wdXQuc2VsZWN0KFwiQ2hvb3NlIHlvdXIgYW5zd2VyXCIsIFtcbiAgYTogXCJBUEk2XzIwMTlfTWFzc19Bc3NpZ25tZW50XCIsIFxuICBiOiBcIkFQSTEwXzIwMTlfSW5zdWZmaWNpZW50X0xvZ2dpbmdfTW9uaXRvcmluZ1wiLCBcbiAgYzogXCJBUEkzXzIwMTlfRXhjZXNzaXZlX0RhdGFfRXhwb3N1cmVcIixcbiAgZDogXCJBUEk0XzIwMTlfTGFja19vZl9SZXNvdXJjZXNfUmF0ZV9MaW1pdGluZ1wiXG5dKVxuXG5LaW5vLnJlbmRlcihpbnB1dClcblxuS2luby5JbnB1dC5yZWFkKGlucHV0KSJ9","chunks":null,"kind":"Elixir.GradingClient.GradedCell","livebook_object":"smart_cell"} -->
+
+```elixir
+result =
+  (
+    input =
+      Kino.Input.select("Choose your answer",
+        a: "API6_2019_Mass_Assignment",
+        b: "API10_2019_Insufficient_Logging_Monitoring",
+        c: "API3_2019_Excessive_Data_Exposure",
+        d: "API4_2019_Lack_of_Resources_Rate_Limiting"
+      )
+
+    Kino.render(input)
+    Kino.Input.read(input)
+  )
+
+[module_id, question_id] =
+  "# GRAPHQL:1\n\ninput = Kino.Input.select(\"Choose your answer\", [\n  a: \"API6_2019_Mass_Assignment\", \n  b: \"API10_2019_Insufficient_Logging_Monitoring\", \n  c: \"API3_2019_Excessive_Data_Exposure\",\n  d: \"API4_2019_Lack_of_Resources_Rate_Limiting\"\n])\n\nKino.render(input)\n\nKino.Input.read(input)"
+  |> String.split("\n", parts: 2)
+  |> hd()
+  |> String.trim_leading("#")
+  |> String.split(":", parts: 2)
+
+module_id =
+  case %{"ESCT" => ESCT, "GRAPHQL" => GRAPHQL, "OWASP" => OWASP}[String.trim(module_id)] do
+    nil -> raise "invalid module id: #{module_id}"
+    module_id -> module_id
+  end
+
+question_id =
+  case Integer.parse(String.trim(question_id)) do
+    {id, ""} -> id
+    _ -> raise "invalid question id: #{question_id}"
+  end
+
+case GradingClient.check_answer(module_id, question_id, result) do
+  :correct ->
+    IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
+
+  {:incorrect, help_text} when is_binary(help_text) ->
+    IO.puts([IO.ANSI.red(), "Incorrect: ", IO.ANSI.reset(), help_text])
+
+  _ ->
+    IO.puts([IO.ANSI.red(), "Incorrect.", IO.ANSI.reset()])
+end
+```
+
+## Error Disclosure
+
+### Description
+
+When an application responds with overly verbose error messages, it runs the risk of providing vital information to an attacker seeking to exploit the service. It is a best practice to limit the amount of meaningful information that gets sent back to any user in the event there is an issue with a service, or other application component, including APIs.
+
+Within the context of a GraphQL implementation, when errors occur, the server could send error messages that reveal internal details, application configurations, or data which could be used to further an attack on the application.
+
+### Prevention
+
+Any errors disclosed from the server and displayed to the user should be limited- boring is good when it comes to error messages displayed to users!
+
+OWASP recommends explicitly defining and enforcing all API response payload schemas including error messages; one might be able to accomplish this in an Elixir GraphQL context through the use of [Absinthe.Middleware](https://hexdocs.pm/absinthe/Absinthe.Middleware.html).
+
+### <span style="color:red;">Quiz</span>
+
+**Select the best example of a “good” error message, from the perspective of developer who is writing code that is intended to inform a user (who may or may not be a malicious actor) that the action they have attempted was unsuccessful:**
+
+<!-- livebook:{"attrs":"eyJzb3VyY2UiOiIjIEdSQVBIUUw6MlxuXG4jIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS1cbiMgT3B0aW9uIDFcbiNcbiMgSFRUUC8yIDQwMSBVbmF1dGhvcml6ZWRcbiMgRGF0ZTogVHVlcywgMTYgQXVnIDIwMjIgMjE6MDY6NDIgR01UXG4jIOKAplxuIyB7XG4jIFx04oCcZXJyb3LigJ064oCddG9rZW4gZXhwaXJlZOKAnVxuIyB7XG4jIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS1cbiMgT3B0aW9uIDJcbiNcbiMgSFRUUC8yIDIwMCBPS1xuIyBEYXRlOiBUdWVzLCAxNiBBdWcgMjAyMSAyMjowNjo0MiBHTVRcbiMg4oCmXG4jIHtcbiMgXHTigJxlcnJvcnPigJ06W1xuIyBcdFx0e1xuIyBcdFx0XHTigJxsb2NhdGlvbnPigJ06W1xuIyBcdFx0XHR7XG4jIFx0XHRcdFx04oCcY29sdW1u4oCdOjIsXG4jIFx0XHRcdFx0OmxpbmXigJ06MlxuIyBcdFx0XHR9XG4jIFx0XHRcdF0sXG4jIFx0XHRcdOKAnG1lc3NhZ2XigJ06IOKAnFBhcnNpbmcgZmFpbGVkIGF0XG4jIFx0XHR9XG4jIFx0XVxuIyB9XG4jIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tXG4jIE9wdGlvbiAzXG4jXG4jIEhUVFAvMiAyMDAgT0tcbiMgRGF0ZTogVHVlcywgMTYgQXVnIDIwMjIgMjE6MDY6NDIgR01UXG4jIOKAplxuIyB7XG4jIFx04oCcZXJyb3LigJ064oCdSUQgdG9rZW4gZm9yIHVzZXIgNTVlNGNiMDcgYXQgb3JnIDEyMzQgZXhwaXJlZOKAnVxuIyB7XG4jIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLVxuIyBPcHRpb24gNFxuI1xuIyBIVFRQLzIgNDA0IEZpbGUgTm90IEZvdW5kXG4jIERhdGU6IFR1ZXMsIDE2IEF1ZyAyMDIyIDIxOjA2OjQyIEdNVFxuIyDigKZcbiMge1xuIyBcdOKAnGVycm9y4oCdOuKAnS93d3cvaG9tZS9maWxlLnR4dCBub3QgZm91bmQg4oCdXG4jIHtcbiMgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tXG5cbmlucHV0ID0gS2luby5JbnB1dC5zZWxlY3QoXCJDaG9vc2UgeW91ciBhbnN3ZXJcIiwgW1xuICBub25lOiBcIlwiLFxuICBhOiBcIk9wdGlvbiAxXCIsIFxuICBiOiBcIk9wdGlvbiAyXCIsIFxuICBjOiBcIk9wdGlvbiAzXCIsXG4gIGQ6IFwiT3B0aW9uIDRcIlxuXSwgZGVmYXVsdDogOm5vbmUpXG5cbktpbm8ucmVuZGVyKGlucHV0KVxuXG5LaW5vLklucHV0LnJlYWQoaW5wdXQpIn0","chunks":null,"kind":"Elixir.GradingClient.GradedCell","livebook_object":"smart_cell"} -->
+
+```elixir
+result =
+  (
+    input =
+      Kino.Input.select(
+        "Choose your answer",
+        [none: "", a: "Option 1", b: "Option 2", c: "Option 3", d: "Option 4"],
+        default: :none
+      )
+
+    Kino.render(input)
+    Kino.Input.read(input)
+  )
+
+[module_id, question_id] =
+  "# GRAPHQL:2\n\n# -------------------------------------------------------------\n# Option 1\n#\n# HTTP/2 401 Unauthorized\n# Date: Tues, 16 Aug 2022 21:06:42 GMT\n# …\n# {\n# \t“error”:”token expired”\n# {\n# -------------------------------------------------------------\n# Option 2\n#\n# HTTP/2 200 OK\n# Date: Tues, 16 Aug 2021 22:06:42 GMT\n# …\n# {\n# \t“errors”:[\n# \t\t{\n# \t\t\t“locations”:[\n# \t\t\t{\n# \t\t\t\t“column”:2,\n# \t\t\t\t:line”:2\n# \t\t\t}\n# \t\t\t],\n# \t\t\t“message”: “Parsing failed at\n# \t\t}\n# \t]\n# }\n# --------------------------------------------------------------\n# Option 3\n#\n# HTTP/2 200 OK\n# Date: Tues, 16 Aug 2022 21:06:42 GMT\n# …\n# {\n# \t“error”:”ID token for user 55e4cb07 at org 1234 expired”\n# {\n# ---------------------------------------------------------------\n# Option 4\n#\n# HTTP/2 404 File Not Found\n# Date: Tues, 16 Aug 2022 21:06:42 GMT\n# …\n# {\n# \t“error”:”/www/home/file.txt not found ”\n# {\n# ---------------------------------------------------------------\n\ninput = Kino.Input.select(\"Choose your answer\", [\n  none: \"\",\n  a: \"Option 1\", \n  b: \"Option 2\", \n  c: \"Option 3\",\n  d: \"Option 4\"\n], default: :none)\n\nKino.render(input)\n\nKino.Input.read(input)"
+  |> String.split("\n", parts: 2)
+  |> hd()
+  |> String.trim_leading("#")
+  |> String.split(":", parts: 2)
+
+module_id =
+  case %{"ESCT" => ESCT, "GRAPHQL" => GRAPHQL, "OWASP" => OWASP}[String.trim(module_id)] do
+    nil -> raise "invalid module id: #{module_id}"
+    module_id -> module_id
+  end
+
+question_id =
+  case Integer.parse(String.trim(question_id)) do
+    {id, ""} -> id
+    _ -> raise "invalid question id: #{question_id}"
+  end
+
+case GradingClient.check_answer(module_id, question_id, result) do
+  :correct ->
+    IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
+
+  {:incorrect, help_text} when is_binary(help_text) ->
+    IO.puts([IO.ANSI.red(), "Incorrect: ", IO.ANSI.reset(), help_text])
+
+  _ ->
+    IO.puts([IO.ANSI.red(), "Incorrect.", IO.ANSI.reset()])
+end
+```
+
+### Resources
+
+1. https://github.com/OWASP/API-Security/blob/master/2019/en/src/0xa7-security-misconfiguration.md
+2. https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/12-API_Testing/01-Testing_GraphQL
+3. https://cheatsheetseries.owasp.org/cheatsheets/GraphQL_Cheat_Sheet.html
+
+## Resource Exhaustion
+
+### Description
+
+When building an application, it is necessary to manage the access and use of all relevant internal and external resources involved in the context of the application. This will help ensure the continued availability of the application and its functionality for all legitimate users and entities.
+
+Resource exhaustion occurs when memory, processes handling application requests, network traffic transmissions, server capacity, storage, and other host operating system or device limitations are exceeded while an application is running. When resource allocation is not well managed, applications become vulnerable to negative impacts in performance, unintentional service failures, and denial of service attacks, in which a malicious actor takes advantage of resource limitations to intentionally overwhelm and crash a system.
+
+Resource exhaustion can occur inadvertently through legitimate use or could be triggered intentionally in a DoS attack by a malicious actor who sends a large number or resource intensive requests to overload the application.
+
+The structure of GraphQL queries make it particularly susceptible to this type of attack as they can be crafted to perform long running and extensive operations, depending on the data being queried.
+
+In addition to strategies like rate limiting to protect APIs in general, another approach to protecting GraphQL from resource exhaustion involves anticipating the cost of a query and allocating resources based on known available capacity. The next section introduces this approach.
+
+## Cost Theory
+
+### Description
+
+Resource intensive queries, like those where a GraphQL query tries to traverse and then return a significant amount of highly nested data can cause a server/service to expend a significant amount of its processing power and other resources. These high cost queries can render a server and therefore the application useless.
+
+One approach for implementing validation on incoming queries to determine their "cost" in terms of the resources the use. Queries are defined by how much load they place on the server/service processing the request, allowing developers to plan for how best to manage resources. This is a little like making a budget.
+
+This approach also helps implement rate limiting by establishing a query cost based on the type, operation, and expected performance of each unique GraphQL request for data, and by anticipating the load on the server.
+
+### Resources
+
+1. https://shopify.engineering/rate-limiting-graphql-apis-calculating-query-complexity
+
+<!-- livebook:{"break_markdown":true} -->
+
+[**<- Previous Module: Secure SDLC Concepts**](./3-ssdlc.livemd) || [**Next Module: Elixir Security ->**](./5-elixir.livemd)
