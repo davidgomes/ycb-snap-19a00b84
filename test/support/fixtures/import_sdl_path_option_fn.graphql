@@ -1,0 +1,12 @@
+"A submitted post"
+type Post {
+  title: String!
+  upcasedTitle: String!
+  body: String!
+  """
+  The post author
+  (is a user)
+  """
+  author: User!
+  comments: [Comment]!
+}
