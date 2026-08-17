@@ -29,6 +29,31 @@ defmodule BroadwayDashboard.MetricsTest do
     assert payload.pipeline == broadway
   end
 
+  test "subscribe a process to a pipeline named using :via" do
+    broadway = start_linked_dummy_pipeline(via_name("metrics_via"))
+    server_name = Metrics.server_name(broadway)
+
+    me = self()
+
+    proc =
+      spawn_link(fn ->
+        receive do
+          {:update_pipeline, payload} ->
+            send(me, {:refreshed, payload})
+        end
+      end)
+
+    {:ok, _} =
+      start_supervised({Metrics, [pipeline: broadway, name: server_name]}, id: server_name)
+
+    assert {:ok, _payload} = Metrics.listen(node(), proc, broadway)
+
+    send(server_name, :refresh)
+
+    assert_receive {:refreshed, payload}
+    assert payload.pipeline == broadway
+  end
+
   test "returns error if pipeline is not running" do
     broadway = new_unique_name()
 
