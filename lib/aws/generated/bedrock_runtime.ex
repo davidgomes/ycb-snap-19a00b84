@@ -1074,6 +1074,258 @@ defmodule AWS.BedrockRuntime do
 
   ## Example:
 
+      guardrail_checks_content_filter_category_config() :: %{
+        required("category") => String.t() | atom()
+      }
+
+  """
+  @type guardrail_checks_content_filter_category_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_content_filter_config() :: %{
+        required("categories") => list(guardrail_checks_content_filter_category_config())
+      }
+
+  """
+  @type guardrail_checks_content_filter_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_content_filter_result_entry() :: %{
+        "category" => String.t() | atom(),
+        "severityScore" => float()
+      }
+
+  """
+  @type guardrail_checks_content_filter_result_entry() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_content_filter_result() :: %{
+        "results" => list(guardrail_checks_content_filter_result_entry())
+      }
+
+  """
+  @type guardrail_checks_content_filter_result() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_content_filter_usage() :: %{
+        "textUnits" => integer()
+      }
+
+  """
+  @type guardrail_checks_content_filter_usage() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_prompt_attack_category_config() :: %{
+        required("category") => String.t() | atom()
+      }
+
+  """
+  @type guardrail_checks_prompt_attack_category_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_prompt_attack_config() :: %{
+        required("categories") => list(guardrail_checks_prompt_attack_category_config())
+      }
+
+  """
+  @type guardrail_checks_prompt_attack_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_prompt_attack_result_entry() :: %{
+        "category" => String.t() | atom(),
+        "severityScore" => float()
+      }
+
+  """
+  @type guardrail_checks_prompt_attack_result_entry() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_prompt_attack_result() :: %{
+        "results" => list(guardrail_checks_prompt_attack_result_entry())
+      }
+
+  """
+  @type guardrail_checks_prompt_attack_result() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_prompt_attack_usage() :: %{
+        "textUnits" => integer()
+      }
+
+  """
+  @type guardrail_checks_prompt_attack_usage() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_sensitive_information_entity_config() :: %{
+        required("type") => String.t() | atom()
+      }
+
+  """
+  @type guardrail_checks_sensitive_information_entity_config() :: %{
+    (String.t() | atom()) => any()
+  }
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_sensitive_information_config() :: %{
+        required("entities") => list(guardrail_checks_sensitive_information_entity_config())
+      }
+
+  """
+  @type guardrail_checks_sensitive_information_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_sensitive_information_result_entry() :: %{
+        "beginOffset" => integer(),
+        "confidenceScore" => float(),
+        "contentIndex" => integer(),
+        "endOffset" => integer(),
+        "messageIndex" => integer(),
+        "type" => String.t() | atom()
+      }
+
+  """
+  @type guardrail_checks_sensitive_information_result_entry() :: %{
+    (String.t() | atom()) => any()
+  }
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_sensitive_information_result() :: %{
+        "results" => list(guardrail_checks_sensitive_information_result_entry()),
+        "truncated" => boolean()
+      }
+
+  """
+  @type guardrail_checks_sensitive_information_result() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_sensitive_information_usage() :: %{
+        "textUnits" => integer()
+      }
+
+  """
+  @type guardrail_checks_sensitive_information_usage() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_config() :: %{
+        optional("contentFilter") => guardrail_checks_content_filter_config(),
+        optional("promptAttack") => guardrail_checks_prompt_attack_config(),
+        optional("sensitiveInformation") => guardrail_checks_sensitive_information_config()
+      }
+
+  """
+  @type guardrail_checks_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_message() :: %{
+        required("content") => list(list()),
+        required("role") => String.t() | atom()
+      }
+
+  """
+  @type guardrail_checks_message() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_results() :: %{
+        "contentFilter" => guardrail_checks_content_filter_result(),
+        "promptAttack" => guardrail_checks_prompt_attack_result(),
+        "sensitiveInformation" => guardrail_checks_sensitive_information_result()
+      }
+
+  """
+  @type guardrail_checks_results() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_checks_usage_results() :: %{
+        "contentFilter" => guardrail_checks_content_filter_usage(),
+        "promptAttack" => guardrail_checks_prompt_attack_usage(),
+        "sensitiveInformation" => guardrail_checks_sensitive_information_usage()
+      }
+
+  """
+  @type guardrail_checks_usage_results() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invoke_guardrail_checks_response() :: %{
+        "results" => guardrail_checks_results(),
+        "usage" => guardrail_checks_usage_results()
+      }
+
+  """
+  @type invoke_guardrail_checks_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invoke_guardrail_checks_request() :: %{
+        required("checks") => guardrail_checks_config(),
+        required("messages") => list(guardrail_checks_message())
+      }
+
+  """
+  @type invoke_guardrail_checks_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
       guardrail_text_characters_coverage() :: %{
         "guarded" => integer(),
         "total" => integer()
@@ -1828,6 +2080,13 @@ defmodule AWS.BedrockRuntime do
           | throttling_exception()
           | service_unavailable_exception()
 
+  @type invoke_guardrail_checks_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+          | service_unavailable_exception()
+
   def metadata do
     %{
       api_version: "2023-09-30",
@@ -1872,6 +2131,38 @@ defmodule AWS.BedrockRuntime do
     url_path =
       "/guardrail/#{AWS.Util.encode_uri(guardrail_identifier)}/version/#{AWS.Util.encode_uri(guardrail_version)}/apply"
 
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Evaluates messages against inline guardrail checks.
+
+  You specify the check configurations directly in the request, and Amazon
+  Bedrock returns per-check results with severity or confidence scores.
+  """
+  @spec invoke_guardrail_checks(map(), invoke_guardrail_checks_request(), list()) ::
+          {:ok, invoke_guardrail_checks_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, invoke_guardrail_checks_errors()}
+  def invoke_guardrail_checks(%Client{} = client, input, options \\ []) do
+    url_path = "/guardrail-checks/invoke"
     headers = []
     custom_headers = []
     query_params = []

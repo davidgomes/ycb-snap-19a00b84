@@ -340,11 +340,52 @@ defmodule AWS.Mgn do
       launched_instance() :: %{
         "ec2InstanceID" => String.t() | atom(),
         "firstBoot" => String.t() | atom(),
-        "jobID" => String.t() | atom()
+        "jobID" => String.t() | atom(),
+        "lastKnownChecks" => list(last_known_check()),
+        "lastKnownFsxChecksStatus" => list(any())
       }
 
   """
   @type launched_instance() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      last_known_check() :: %{
+        "checkedAt" => non_neg_integer(),
+        "error" => String.t() | atom(),
+        "name" => String.t() | atom(),
+        "status" => list(any()),
+        "type" => list(any())
+      }
+
+  """
+  @type last_known_check() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      fsx_ontap_configuration() :: %{
+        required("credentialsSecretArn") => String.t() | atom(),
+        required("storageVirtualMachineId") => String.t() | atom()
+      }
+
+  """
+  @type fsx_ontap_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      storage_configuration() :: %{
+        optional("fsxOntapConfiguration") => fsx_ontap_configuration(),
+        required("storageType") => list(any())
+      }
+
+  """
+  @type storage_configuration() :: %{(String.t() | atom()) => any()}
 
   @typedoc """
 
@@ -1209,6 +1250,7 @@ defmodule AWS.Mgn do
       create_replication_configuration_template_request() :: %{
         optional("ebsEncryptionKeyArn") => String.t() | atom(),
         optional("internetProtocol") => String.t() | atom(),
+        optional("storageConfiguration") => storage_configuration(),
         optional("storeSnapshotOnLocalZone") => [boolean()],
         optional("tags") => map(),
         optional("useFipsEndpoint") => [boolean()],
@@ -1420,6 +1462,7 @@ defmodule AWS.Mgn do
         optional("replicationServersSecurityGroupsIDs") => list(String.t() | atom()),
         optional("stagingAreaSubnetId") => String.t() | atom(),
         optional("stagingAreaTags") => map(),
+        optional("storageConfiguration") => storage_configuration(),
         optional("storeSnapshotOnLocalZone") => [boolean()],
         optional("useDedicatedReplicationServer") => [boolean()],
         optional("useFipsEndpoint") => [boolean()],
@@ -1888,6 +1931,7 @@ defmodule AWS.Mgn do
         optional("replicationServersSecurityGroupsIDs") => list(String.t() | atom()),
         optional("stagingAreaSubnetId") => String.t() | atom(),
         optional("stagingAreaTags") => map(),
+        optional("storageConfiguration") => storage_configuration(),
         optional("storeSnapshotOnLocalZone") => [boolean()],
         optional("useDedicatedReplicationServer") => [boolean()],
         optional("useFipsEndpoint") => [boolean()],
@@ -2409,6 +2453,7 @@ defmodule AWS.Mgn do
         optional("replicationServersSecurityGroupsIDs") => list(String.t() | atom()),
         optional("stagingAreaSubnetId") => String.t() | atom(),
         optional("stagingAreaTags") => map(),
+        optional("storageConfiguration") => storage_configuration(),
         optional("storeSnapshotOnLocalZone") => [boolean()],
         optional("tags") => map(),
         optional("useDedicatedReplicationServer") => [boolean()],
@@ -3182,6 +3227,9 @@ defmodule AWS.Mgn do
       update_source_server_request() :: %{
         optional("accountID") => String.t() | atom(),
         optional("connectorAction") => source_server_connector_action(),
+        optional("fqdnForActionFramework") => String.t() | atom(),
+        optional("platform") => String.t() | atom(),
+        optional("userProvidedID") => String.t() | atom(),
         required("sourceServerID") => String.t() | atom()
       }
 

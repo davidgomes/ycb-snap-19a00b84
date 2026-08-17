@@ -3910,6 +3910,19 @@ defmodule AWS.DataZone do
 
   ## Example:
 
+      delete_lineage_event_output() :: %{
+        "domainId" => String.t() | atom(),
+        "id" => String.t() | atom(),
+        "processingStatus" => list(any())
+      }
+
+  """
+  @type delete_lineage_event_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
       delete_glossary_input() :: %{}
 
   """
@@ -10323,6 +10336,13 @@ defmodule AWS.DataZone do
           | access_denied_exception()
           | throttling_exception()
 
+  @type delete_lineage_event_errors() ::
+          access_denied_exception()
+          | internal_server_exception()
+          | resource_not_found_exception()
+          | throttling_exception()
+          | validation_exception()
+
   @type get_lineage_event_errors() ::
           resource_not_found_exception()
           | internal_server_exception()
@@ -14642,6 +14662,49 @@ defmodule AWS.DataZone do
     meta = metadata()
 
     Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Deletes the specified lineage event.
+  """
+  @spec delete_lineage_event(
+          map(),
+          String.t() | atom(),
+          String.t() | atom(),
+          map(),
+          list()
+        ) ::
+          {:ok, delete_lineage_event_output(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_lineage_event_errors()}
+  def delete_lineage_event(
+        %Client{} = client,
+        domain_identifier,
+        identifier,
+        input,
+        options \\ []
+      ) do
+    url_path =
+      "/v2/domains/#{AWS.Util.encode_uri(domain_identifier)}/lineage/events/#{AWS.Util.encode_uri(identifier)}"
+
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :delete,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
   end
 
   @doc """
