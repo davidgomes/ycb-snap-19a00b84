@@ -1,0 +1,176 @@
+defmodule HexpmWeb.DocsController do
+  use HexpmWeb, :controller
+
+  alias Hexpm.Accounts.SSO
+
+  def index(conn, _params) do
+    redirect(conn, to: ~p"/docs/usage")
+  end
+
+  def usage(conn, _params) do
+    render(
+      conn,
+      "layout.html",
+      view: "usage.html",
+      view_name: :usage,
+      title: "Mix usage",
+      container: "flex-1 flex flex-col"
+    )
+  end
+
+  def publish(conn, _params) do
+    render(
+      conn,
+      "layout.html",
+      view: "publish.html",
+      view_name: :publish,
+      title: "Mix publish package",
+      container: "flex-1 flex flex-col"
+    )
+  end
+
+  def tasks(conn, _params) do
+    redirect(conn, external: "https://hex.hexdocs.pm")
+  end
+
+  def gleam_usage(conn, _params) do
+    render(
+      conn,
+      "layout.html",
+      view: "gleam_usage.html",
+      view_name: :gleam_usage,
+      title: "Gleam usage",
+      container: "flex-1 flex flex-col"
+    )
+  end
+
+  def rebar3_usage(conn, _params) do
+    render(
+      conn,
+      "layout.html",
+      view: "rebar3_usage.html",
+      view_name: :rebar3_usage,
+      title: "Rebar3 usage",
+      container: "flex-1 flex flex-col"
+    )
+  end
+
+  def rebar3_publish(conn, _params) do
+    render(
+      conn,
+      "layout.html",
+      view: "rebar3_publish.html",
+      view_name: :rebar3_publish,
+      title: "Rebar3 publish package",
+      container: "flex-1 flex flex-col"
+    )
+  end
+
+  def rebar3_private(conn, _params) do
+    render(
+      conn,
+      "layout.html",
+      view: "rebar3_private.html",
+      view_name: :rebar3_private,
+      title: "Rebar3 private packages",
+      container: "flex-1 flex flex-col"
+    )
+  end
+
+  def rebar3_tasks(conn, _params) do
+    url = "https://rebar3.org/docs/package_management/hex_package_management/"
+    redirect(conn, external: url)
+  end
+
+  def private(conn, _params) do
+    render(
+      conn,
+      "layout.html",
+      view: "private.html",
+      view_name: :private,
+      title: "Private packages",
+      container: "flex-1 flex flex-col"
+    )
+  end
+
+  def dependency_policies(conn, _params) do
+    render(
+      conn,
+      "layout.html",
+      view: "dependency_policies.html",
+      view_name: :dependency_policies,
+      title: "Dependency policies and cooldowns",
+      container: "flex-1 flex flex-col"
+    )
+  end
+
+  def organization_sso(conn, _params) do
+    if SSO.available?() do
+      render(
+        conn,
+        "layout.html",
+        view: "organization_sso.html",
+        view_name: :organization_sso,
+        title: "Organization single sign-on",
+        container: "flex-1 flex flex-col"
+      )
+    else
+      not_found(conn)
+    end
+  end
+
+  def coc(conn, _params) do
+    render(
+      conn,
+      "layout.html",
+      view: "coc.html",
+      view_name: :coc,
+      title: "Code of Conduct",
+      container: "flex-1 flex flex-col"
+    )
+  end
+
+  def faq(conn, _params) do
+    render(
+      conn,
+      "layout.html",
+      view: "faq.html",
+      view_name: :faq,
+      title: "FAQ",
+      container: "flex-1 flex flex-col"
+    )
+  end
+
+  def mirrors(conn, _params) do
+    render(
+      conn,
+      "layout.html",
+      view: "mirrors.html",
+      view_name: :mirrors,
+      title: "Mirrors",
+      container: "flex-1 flex flex-col"
+    )
+  end
+
+  def public_keys(conn, _params) do
+    render(
+      conn,
+      "layout.html",
+      view: "public_keys.html",
+      view_name: :public_keys,
+      title: "Public keys",
+      container: "flex-1 flex flex-col"
+    )
+  end
+
+  def self_hosting(conn, _params) do
+    render(
+      conn,
+      "layout.html",
+      view: "self_hosting.html",
+      view_name: :self_hosting,
+      title: "Self-hosting",
+      container: "flex-1 flex flex-col"
+    )
+  end
+end

@@ -1,0 +1,87 @@
+defmodule Hexpm.ShortURLs.ShortURLTest do
+  use Hexpm.DataCase, async: true
+  alias Hexpm.ShortURLs.ShortURL
+
+  describe "changeset/1" do
+    test "with correct params, creates a new short url" do
+      params = %{"url" => "https://diff.hex.pm?diff[]=ecto:3.0.1:3.0.4"}
+      assert %{valid?: true, changes: changes} = ShortURL.changeset(params)
+      assert String.length(changes.short_code) == 5
+    end
+
+    test "valid when redirecting to hex.pm" do
+      params = %{"url" => "https://hex.pm"}
+      assert %{valid?: true} = ShortURL.changeset(params)
+    end
+
+    test "valid when redirecting to a complex subdomain on hex.pm" do
+      params = %{"url" => "https://www.links.hex.pm"}
+      assert %{valid?: true} = ShortURL.changeset(params)
+    end
+
+    test "validate redirecting to hexdocs.pm" do
+      assert %{valid?: true} = ShortURL.changeset(%{"url" => "https://hexdocs.pm"})
+      assert %{valid?: true} = ShortURL.changeset(%{"url" => "https://hexdocs.pm/"})
+      assert %{valid?: true} = ShortURL.changeset(%{"url" => "https://hexdocs.pm/?foo"})
+      assert %{valid?: true} = ShortURL.changeset(%{"url" => "https://hexdocs.pm/#foo"})
+
+      assert %{valid?: false} = ShortURL.changeset(%{"url" => "https://hexdocs.pm/foo"})
+    end
+
+    test "validate redirecting to a *.hexdocs.pm subdomain" do
+      assert %{valid?: true} = ShortURL.changeset(%{"url" => "https://phoenix.hexdocs.pm"})
+      assert %{valid?: true} = ShortURL.changeset(%{"url" => "https://phoenix.hexdocs.pm/"})
+
+      assert %{valid?: true} =
+               ShortURL.changeset(%{"url" => "https://phoenix.hexdocs.pm/1.7.0/Phoenix.html"})
+
+      assert %{valid?: true} =
+               ShortURL.changeset(%{"url" => "https://acme.staging.hexdocs.pm/some/page"})
+    end
+
+    test "validate redirecting to a *.hexorgs.pm subdomain" do
+      assert %{valid?: true} = ShortURL.changeset(%{"url" => "https://acme.hexorgs.pm"})
+      assert %{valid?: true} = ShortURL.changeset(%{"url" => "https://acme.hexorgs.pm/"})
+
+      assert %{valid?: true} =
+               ShortURL.changeset(%{"url" => "https://acme.hexorgs.pm/some_package/readme.html"})
+
+      assert %{valid?: true} =
+               ShortURL.changeset(%{"url" => "https://acme.staging.hexorgs.pm/pkg/page"})
+    end
+
+    test "with incorrect params" do
+      assert %{valid?: false, errors: errors} = ShortURL.changeset(%{foo: 420})
+      assert errors == [{:url, {"can't be blank", [validation: :required]}}]
+    end
+
+    test "rejects javascript: scheme" do
+      assert %{valid?: false, errors: errors} =
+               ShortURL.changeset(%{url: "javascript://hex.pm/%0Aalert(1)"})
+
+      assert errors == [url: {"must use http or https scheme", []}]
+    end
+
+    test "rejects non-http schemes" do
+      assert %{valid?: false} = ShortURL.changeset(%{url: "ftp://hex.pm/foo"})
+      assert %{valid?: false} = ShortURL.changeset(%{url: "data://hex.pm/foo"})
+    end
+
+    test "rejects URLs without a host" do
+      assert %{valid?: false, errors: errors} = ShortURL.changeset(%{url: "https:/packages/ecto"})
+      assert errors == [url: {"must include a host", []}]
+    end
+
+    test "where host is not on hex.pm" do
+      assert %{valid?: false, errors: errors} =
+               ShortURL.changeset(%{url: "https://supersimple.org?spoof=hex.pm"})
+
+      assert errors ==
+               [
+                 url:
+                   {"domain must match hex.pm, *.hex.pm, hexdocs.pm, *.hexdocs.pm, or *.hexorgs.pm",
+                    []}
+               ]
+    end
+  end
+end

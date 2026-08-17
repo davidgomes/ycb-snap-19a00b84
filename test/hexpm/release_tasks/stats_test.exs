@@ -1,0 +1,209 @@
+defmodule Hexpm.ReleaseTasks.StatsTest do
+  use Hexpm.DataCase
+  use Oban.Testing, repo: Hexpm.RepoBase
+
+  alias Hexpm.CronMonitor.SentryMock
+  alias Hexpm.Repository.Download
+  alias Hexpm.Store
+  alias Hexpm.ReleaseTasks.Stats
+
+  setup :verify_on_exit!
+
+  setup do
+    repository1 = insert(:repository)
+    [package1, package2, package3] = insert_list(3, :package)
+    package4 = insert(:package, repository_id: repository1.id)
+    insert(:release, package: package1, version: "0.0.1")
+    insert(:release, package: package1, version: "0.0.2")
+    insert(:release, package: package1, version: "0.1.0")
+    insert(:release, package: package2, version: "0.0.1")
+    insert(:release, package: package2, version: "0.0.2")
+    insert(:release, package: package2, version: "0.0.3-rc.1")
+    insert(:release, package: package3, version: "0.0.1")
+    insert(:release, package: package4, version: "0.0.1")
+
+    %{
+      repository1: repository1,
+      package1: package1,
+      package2: package2,
+      package3: package3,
+      package4: package4
+    }
+  end
+
+  test "parse_line/1" do
+    assert Stats.parse_line(
+             ~s{<134>2014-02-06T04:32:22Z cache-ams4138 S3Logging[216674]: 192.168.1.0 "Sat, 06 Feb 2014 04:32:22 GMT" "GET /tarballs/foo-0.0.1.tar" 200 "User-Agent"}
+           ) == {"hexpm", "foo", "0.0.1"}
+
+    assert Stats.parse_line(
+             ~s{<134>2025-09-09T21:05:03Z cache-bma-essb1270021 logging_gcs[226941]: 98.128.175.50 [09/Sep/2025:21:05:03 +0000] "GET /tarballs/bar-0.1.0.tar" 200 "curl/8.7.1" 0}
+           ) == {"hexpm", "bar", "0.1.0"}
+  end
+
+  test "counts all downloads", %{
+    repository1: repository1,
+    package1: package1,
+    package2: package2,
+    package4: package4
+  } do
+    logfile1 =
+      read_log(
+        "fastly_logs_1.txt",
+        repository1: repository1.name,
+        package1: package1.name,
+        package2: package2.name,
+        package4: package4.name
+      )
+      |> :zlib.gzip()
+
+    logfile2 =
+      read_log(
+        "fastly_logs_2.txt",
+        repository1: repository1.name,
+        package1: package1.name,
+        package2: package2.name,
+        package4: package4.name
+      )
+      |> :zlib.gzip()
+
+    Store.put(
+      :logs_bucket,
+      "fastly_hex/2013-11-01T14:00:00.000-tzletcEGGiI7atIAAAAA.log.gz",
+      logfile1,
+      []
+    )
+
+    Store.put(
+      :logs_bucket,
+      "fastly_hex/2013-11-01T15:00:00.000-tzletcEGGiI7atIAAAAA.log.gz",
+      logfile2,
+      []
+    )
+
+    expect_monitor(:ok)
+    assert :ok = perform_job(Stats, %{"date" => "2013-11-01"})
+    assert :ok = Stats.run(~D[2013-11-01])
+
+    rel1 = Repo.get_by!(assoc(package1, :releases), version: "0.0.1")
+    rel2 = Repo.get_by!(assoc(package1, :releases), version: "0.0.2")
+    rel3 = Repo.get_by!(assoc(package2, :releases), version: "0.0.2")
+    rel4 = Repo.get_by!(assoc(package2, :releases), version: "0.0.3-rc.1")
+    rel5 = Repo.get_by!(assoc(package4, :releases), version: "0.0.1")
+
+    downloads = Hexpm.Repo.all(Download)
+    assert length(downloads) == 4
+
+    assert Enum.find(downloads, &(&1.release_id == rel1.id)).downloads == 6
+    assert Enum.find(downloads, &(&1.release_id == rel2.id)).downloads == 3
+    assert Enum.find(downloads, &(&1.release_id == rel3.id)).downloads == 1
+    assert Enum.find(downloads, &(&1.release_id == rel5.id)).downloads == 1
+    refute Enum.find(downloads, &(&1.release_id == rel4.id))
+  end
+
+  test "scheduled jobs process the previous UTC date", %{package1: package1} do
+    release = Repo.get_by!(assoc(package1, :releases), version: "0.0.1")
+
+    target =
+      insert(:download,
+        package: package1,
+        release: release,
+        day: ~D[2013-11-01],
+        downloads: 10
+      )
+
+    other =
+      insert(:download,
+        package: package1,
+        release: release,
+        day: ~D[2013-11-02],
+        downloads: 20
+      )
+
+    expect_monitor(:ok)
+
+    assert :ok =
+             perform_job(Stats, %{},
+               scheduled_at: DateTime.new!(~D[2013-11-02], ~T[01:00:00], "Etc/UTC")
+             )
+
+    refute Repo.get(Download, target.id)
+    assert Repo.get(Download, other.id)
+  end
+
+  test "invalid dates cancel without retrying" do
+    assert {:cancel, {:invalid_date, "not-a-date"}} =
+             perform_job(Stats, %{"date" => "not-a-date"})
+  end
+
+  @tag :capture_log
+  test "processing failures propagate for Oban retries and report an error check-in" do
+    Store.put(
+      :logs_bucket,
+      "fastly_hex/2013-11-01T14:00:00.000-invalid.log.gz",
+      "not gzip data",
+      []
+    )
+
+    expect_monitor(:error)
+
+    assert_raise Oban.CrashError, fn ->
+      perform_job(Stats, %{},
+        scheduled_at: DateTime.new!(~D[2013-11-02], ~T[01:00:00], "Etc/UTC")
+      )
+    end
+  end
+
+  defp expect_monitor(final_status) do
+    app_env(:hexpm, :sentry_impl, SentryMock)
+
+    expect(SentryMock, :capture_check_in, fn opts ->
+      assert opts[:status] == :in_progress
+      assert opts[:monitor_slug] == "hexpm-stats"
+
+      assert opts[:monitor_config] == [
+               schedule: [type: :crontab, value: "0 1 * * *"],
+               timezone: "Etc/UTC"
+             ]
+
+      {:ok, "check-in-id"}
+    end)
+
+    expect(SentryMock, :capture_check_in, fn opts ->
+      assert opts == [
+               check_in_id: "check-in-id",
+               status: final_status,
+               monitor_slug: "hexpm-stats"
+             ]
+
+      :ignored
+    end)
+  end
+
+  describe "vacuum_downloads/0" do
+    # The sandboxed tests above run with skip_maintenance_vacuum on, because
+    # VACUUM cannot run inside the transaction wrapping them. This one goes
+    # unboxed on a real connection so the statement is genuinely issued.
+    test "runs against a real connection" do
+      app_env(:hexpm, :skip_maintenance_vacuum, false)
+
+      task = Hexpm.ConcurrencyCase.unboxed_task(fn -> Stats.vacuum_downloads() end)
+
+      assert Task.await(task, 15_000) == :ok
+    end
+
+    test "issues no statement when disabled" do
+      app_env(:hexpm, :skip_maintenance_vacuum, true)
+
+      queries = capture_queries(fn -> assert Stats.vacuum_downloads() == :ok end)
+
+      refute Enum.any?(queries, &(&1 =~ "VACUUM"))
+    end
+  end
+
+  defp read_log(path, replaces) do
+    Enum.reduce(replaces, read_fixture(path), fn {key, value}, file ->
+      String.replace(file, "{#{key}}", value)
+    end)
+  end
+end

@@ -1,0 +1,164 @@
+defmodule HexpmWeb.ConnCase do
+  @moduledoc """
+  This module defines the test case to be used by
+  tests that require setting up a connection.
+
+  Such tests rely on `Phoenix.ConnTest` and also
+  imports other functionality to make it easier
+  to build and query models.
+
+  Finally, if the test case interacts with the database,
+  it cannot be async. For this reason, every test runs
+  inside a transaction which is reset at the beginning
+  of the test unless the test case is marked as async.
+  """
+
+  use ExUnit.CaseTemplate
+
+  using do
+    quote do
+      # Import conveniences for testing with connections
+      alias Hexpm.{Fake, Repo}
+      alias HexpmWeb.Router.Helpers, as: Routes
+
+      import Ecto
+      import Ecto.Query, only: [from: 2]
+      import Plug.Conn
+      import Phoenix.ConnTest
+      import Mox
+      import Hexpm.{Factory, TestHelpers}
+      import unquote(__MODULE__)
+
+      # The default endpoint for testing
+      @endpoint HexpmWeb.Endpoint
+
+      use HexpmWeb, :verified_routes
+    end
+  end
+
+  setup do
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Hexpm.RepoBase)
+    Hexpm.Store.Memory.checkout()
+
+    # Safe default for the shared audit-log card (rendered on the audit-log and
+    # organization audit-log pages), which calls Hexpm.Geo.lookup_country/1.
+    # Tests that assert on resolved locations override this stub.
+    Mox.stub(Hexpm.Geo.Mock, :lookup_country, fn _ip -> nil end)
+
+    :ok
+  end
+
+  @spec test_login(Plug.Conn.t(), Hexpm.Accounts.User.t(), keyword()) :: Plug.Conn.t()
+  def test_login(conn, user, opts \\ []) do
+    alias Hexpm.UserSessions
+
+    sudo = Keyword.get(opts, :sudo, true)
+    sudo_at = Keyword.get(opts, :sudo_at)
+    audit_data = test_audit_data(user)
+
+    {:ok, _session, session_token} =
+      UserSessions.create_browser_session(user, name: "Test Browser Session", audit: audit_data)
+
+    session_data = %{"session_token" => Base.encode64(session_token)}
+
+    session_data =
+      cond do
+        sudo_at ->
+          Map.put(session_data, "sudo_authenticated_at", NaiveDateTime.to_iso8601(sudo_at))
+
+        sudo ->
+          Map.put(
+            session_data,
+            "sudo_authenticated_at",
+            NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601()
+          )
+
+        true ->
+          session_data
+      end
+
+    Plug.Test.init_test_session(conn, session_data)
+  end
+
+  def test_audit_data(user) do
+    %{
+      user: user,
+      auth_credential: nil,
+      user_agent: "TEST",
+      remote_ip: "127.0.0.1"
+    }
+  end
+
+  def json_post(conn, path, params) do
+    conn
+    |> Plug.Conn.put_req_header("content-type", "application/json")
+    |> Phoenix.ConnTest.dispatch(HexpmWeb.Endpoint, :post, path, JSON.encode!(params))
+  end
+
+  def mock_captcha_success(_context \\ %{}) do
+    mock_captcha(true)
+    :ok
+  end
+
+  def mock_captcha_failure(_context \\ %{}) do
+    mock_captcha(false)
+    :ok
+  end
+
+  def mock_captcha(success) do
+    Mox.expect(
+      Hexpm.HTTP.Mock,
+      :post,
+      fn "https://hcaptcha.com/siteverify", headers, params ->
+        assert headers == [{"content-type", "application/x-www-form-urlencoded"}]
+        assert params == %{response: "captcha", secret: "secret"}
+        {:ok, 200, [{"content-type", "application/json"}], %{"success" => success}}
+      end
+    )
+  end
+
+  def mock_github_auth_success(conn, uid, email, opts \\ []) do
+    name = Keyword.get(opts, :name, "Test User")
+    nickname = Keyword.get(opts, :nickname, "testuser")
+
+    auth = %Ueberauth.Auth{
+      provider: :github,
+      uid: uid,
+      info: %Ueberauth.Auth.Info{
+        email: email,
+        name: name,
+        nickname: nickname
+      },
+      credentials: %Ueberauth.Auth.Credentials{},
+      extra: %Ueberauth.Auth.Extra{}
+    }
+
+    conn
+    |> Plug.Test.init_test_session(%{})
+    |> Phoenix.Controller.fetch_flash()
+    |> Plug.Conn.fetch_query_params()
+    |> Plug.Conn.assign(:ueberauth_auth, auth)
+    |> Plug.Conn.assign(:current_user, nil)
+    |> Plug.Conn.assign(:current_organization, nil)
+    |> Plug.Conn.assign(:user_agent, "TEST")
+  end
+
+  def mock_github_auth_failure(conn) do
+    failure = %Ueberauth.Failure{
+      errors: [
+        %Ueberauth.Failure.Error{
+          message: "Authentication failed",
+          message_key: "auth_failed"
+        }
+      ],
+      provider: :github,
+      strategy: Ueberauth.Strategy.Github
+    }
+
+    conn
+    |> Plug.Test.init_test_session(%{})
+    |> Phoenix.Controller.fetch_flash()
+    |> Plug.Conn.fetch_query_params()
+    |> Plug.Conn.assign(:ueberauth_failure, failure)
+  end
+end

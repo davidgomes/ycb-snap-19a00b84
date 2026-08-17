@@ -1,0 +1,310 @@
+defmodule Hexpm.Accounts.User do
+  use Hexpm.Schema
+
+  @derive {HexpmWeb.Stale, assocs: [:emails, :owned_packages, :organizations, :keys]}
+  @derive {Phoenix.Param, key: :username}
+
+  alias Hexpm.Accounts.{OptionalEmails, RecoveryCode, TFA, UserProvider}
+
+  schema "users" do
+    field :username, :string
+    field :full_name, :string
+    field :password, :string
+    field :service, :boolean, default: false
+    field :deactivated_at, :utc_datetime_usec
+    field :role, :string, default: "basic"
+    field :optional_emails, :map
+    timestamps()
+
+    embeds_one :handles, UserHandles, on_replace: :delete
+    embeds_one :tfa, TFA, on_replace: :delete
+
+    belongs_to :organization, Organization
+    has_many :emails, Email
+    has_many :package_owners, PackageOwner
+    has_many :owned_packages, through: [:package_owners, :package]
+    has_many :organization_users, OrganizationUser
+    has_many :organizations, through: [:organization_users, :organization]
+    has_many :keys, Key
+    has_many :audit_logs, AuditLog
+    has_many :account_deletion_requests, AccountDeletionRequest
+    has_many :password_resets, PasswordReset
+    has_many :organization_sso_identities, Hexpm.Accounts.SSO.Identity
+    has_many :user_providers, UserProvider
+  end
+
+  @username_regex ~r"^[a-z0-9_\-\.]+$"
+  @username_reject_regex ~r"(?!kneergo)$"
+  @reserved_names ~w(me hex hexpm elixir erlang otp)
+  @possible_roles ~w(basic mod)
+
+  def build(params, confirmed? \\ not Application.get_env(:hexpm, :user_confirm)) do
+    cast(%User{}, params, ~w(username full_name password)a)
+    |> validate_required(~w(username)a)
+    |> cast_assoc(:emails, required: true, with: &Email.changeset(&1, :first, &2, confirmed?))
+    |> cast_embed(:tfa)
+    |> update_change(:username, &String.downcase/1)
+    |> validate_length(:username, min: 3)
+    |> validate_format(:username, @username_regex)
+    |> validate_format(:username, @username_reject_regex)
+    |> validate_exclusion(:username, @reserved_names)
+    |> unique_constraint(:username, name: "users_username_idx")
+    |> validate_username_not_reserved()
+    |> ensure_optional_email_preferences()
+    |> validate_password()
+  end
+
+  defp validate_username_not_reserved(changeset) do
+    prepare_changes(changeset, fn changeset ->
+      username = get_field(changeset, :username)
+
+      if username && changeset.repo.exists?(ReservedUsername.by_name(username)) do
+        add_error(changeset, :username, "has already been taken")
+      else
+        changeset
+      end
+    end)
+  end
+
+  defp validate_password(changeset) do
+    password = get_change(changeset, :password)
+
+    if password do
+      changeset
+      |> validate_length(:password, min: 8)
+      |> validate_confirmation(:password, message: "does not match password")
+      |> update_change(:password, &Auth.gen_password/1)
+    else
+      changeset
+    end
+  end
+
+  def build_from_oauth(
+        username,
+        full_name,
+        email,
+        confirmed? \\ not Application.get_env(:hexpm, :user_confirm)
+      ) do
+    params = %{
+      "username" => username,
+      "full_name" => full_name,
+      "emails" => [%{"email" => email}]
+    }
+
+    build(params, confirmed?)
+  end
+
+  def build_organization(organization) do
+    change(%User{username: organization.name, organization_id: organization.id}, %{})
+    |> update_change(:username, &String.downcase/1)
+    |> validate_length(:username, min: 3)
+    |> validate_format(:username, @username_regex)
+    |> validate_exclusion(:username, @reserved_names)
+    |> unique_constraint(:username, name: "users_username_idx")
+    |> validate_username_not_reserved()
+  end
+
+  def to_organization(user, organization) do
+    change(user, %{password: nil, organization_id: organization.id})
+  end
+
+  def update_profile(user, params) do
+    cast(user, params, ~w(full_name)a)
+    |> cast_embed(:handles)
+  end
+
+  def update_password_no_check(user, params) do
+    cast(user, params, ~w(password)a)
+    |> validate_required(~w(password)a)
+    |> validate_length(:password, min: 8)
+    |> validate_confirmation(:password, message: "does not match password")
+    |> update_change(:password, &Auth.gen_password/1)
+  end
+
+  def update_password(user, params) do
+    password = user.password
+    user = %{user | password: nil}
+
+    cast(user, params, ~w(password)a)
+    |> validate_required(~w(password)a)
+    |> validate_length(:password, min: 8)
+    |> validate_password(:password, password)
+    |> validate_confirmation(:password, message: "does not match password")
+    |> update_change(:password, &Auth.gen_password/1)
+  end
+
+  def can_reset_password?(user, key) do
+    primary_email = email(user, :primary)
+
+    Enum.any?(user.password_resets, fn reset ->
+      PasswordReset.can_reset?(reset, primary_email, key)
+    end)
+  end
+
+  def set_role(user, params) do
+    cast(user, params, ~w(role)a)
+    |> validate_required(~w(role)a)
+    |> validate_inclusion(:role, @possible_roles)
+  end
+
+  def email(user, :primary), do: user.emails |> Enum.find(& &1.primary) |> email()
+  def email(user, :public), do: user.emails |> Enum.find(& &1.public) |> email()
+  def email(user, :gravatar), do: user.emails |> Enum.find(& &1.gravatar) |> email()
+
+  defp email(nil), do: nil
+  defp email(email), do: email.email
+
+  def get(username_or_email, preload \\ []) do
+    if email?(username_or_email) do
+      from(
+        u in Hexpm.Accounts.User,
+        join: e in assoc(u, :emails),
+        where: e.email == ^username_or_email and e.verified,
+        preload: ^preload
+      )
+    else
+      by_username(username_or_email, preload)
+    end
+  end
+
+  def public_get(username_or_email, preload \\ []) do
+    if email?(username_or_email) do
+      from(
+        u in Hexpm.Accounts.User,
+        join: e in assoc(u, :emails),
+        where: e.email == ^username_or_email and e.verified and e.public,
+        preload: ^preload
+      )
+    else
+      by_username(username_or_email, preload)
+    end
+  end
+
+  defp by_username(username, preload) do
+    from(
+      u in Hexpm.Accounts.User,
+      where: u.username == ^username,
+      preload: ^preload
+    )
+  end
+
+  defp email?(username_or_email), do: String.contains?(username_or_email, "@")
+
+  def get_by_role(role, preload \\ []) do
+    from(
+      u in Hexpm.Accounts.User,
+      where: u.role == ^role,
+      preload: ^preload
+    )
+  end
+
+  def verify_permissions(%User{}, "api", _resource) do
+    {:ok, nil}
+  end
+
+  def verify_permissions(%User{}, "repositories", nil) do
+    {:ok, nil}
+  end
+
+  def verify_permissions(%User{} = user, "package", name) do
+    [organization, package] = String.split(name, "/", parts: 2)
+    package = Packages.get(organization, package)
+
+    if package && Packages.owner_with_access?(package, user) do
+      {:ok, package}
+    else
+      :error
+    end
+  end
+
+  def verify_permissions(%User{} = user, domain, name) when domain in ["repository", "docs"] do
+    organization = Organizations.get(name)
+
+    if organization && Organizations.access?(organization, user, "read") do
+      {:ok, organization}
+    else
+      :error
+    end
+  end
+
+  def organization?(user), do: user.organization_id != nil
+
+  def tfa_enabled?(%{tfa: %{secret: secret}}) when is_binary(secret), do: true
+  def tfa_enabled?(_), do: false
+
+  def update_tfa(user, changes) do
+    current_tfa = user.tfa || %{}
+    put_embed(change(user, %{}), :tfa, Map.merge(current_tfa, changes))
+  end
+
+  def clear_tfa(user) do
+    put_embed(change(user, %{}), :tfa, nil)
+  end
+
+  def recovery_code_used(user, code) do
+    codes = Enum.map(user.tfa.recovery_codes, &use_recovery_code(&1, code))
+    update_tfa(user, %{recovery_codes: codes})
+  end
+
+  def rotate_recovery_codes(user) do
+    codes = Hexpm.Accounts.RecoveryCode.generate_set()
+    update_tfa(user, %{recovery_codes: codes})
+  end
+
+  defp use_recovery_code(%RecoveryCode{code: code_str}, %RecoveryCode{code: code_str} = code) do
+    %{code | used_at: DateTime.utc_now()}
+  end
+
+  defp use_recovery_code(code, _other), do: code
+
+  def has_role?(user, role) do
+    user != nil and user.role == role
+  end
+
+  def has_password?(user), do: user.password != nil
+
+  def can_remove_password?(user) do
+    Hexpm.Accounts.UserProviders.has_provider?(user, "github")
+  end
+
+  def can_remove_provider?(user, _provider) do
+    has_password?(user)
+  end
+
+  def add_password(user, params) do
+    cast(user, params, ~w(password)a)
+    |> validate_required(~w(password)a)
+    |> validate_length(:password, min: 8)
+    |> validate_confirmation(:password, message: "does not match password")
+    |> update_change(:password, &Auth.gen_password/1)
+  end
+
+  def remove_password(user) do
+    change(user, %{password: nil})
+  end
+
+  defp ensure_optional_email_preferences(changeset) do
+    if get_field(changeset, :optional_emails) do
+      changeset
+    else
+      put_change(changeset, :optional_emails, OptionalEmails.default_preferences())
+    end
+  end
+
+  def optional_emails_changeset(user, optional_emails) do
+    change(user, %{optional_emails: optional_emails})
+    |> validate_optional_email_preferences()
+  end
+
+  defp validate_optional_email_preferences(changeset) do
+    preferences = get_field(changeset, :optional_emails)
+
+    case OptionalEmails.validate_preferences_map(preferences) do
+      {:ok, normalized} ->
+        put_change(changeset, :optional_emails, normalized)
+
+      :error ->
+        add_error(changeset, :optional_emails, "contains invalid preferences")
+    end
+  end
+end

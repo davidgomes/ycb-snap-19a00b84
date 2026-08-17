@@ -1,0 +1,72 @@
+defmodule Hexpm.Store do
+  defp impl_bucket(atom) when is_atom(atom) do
+    impl_bucket(Application.get_env(:hexpm, atom))
+  end
+
+  defp impl_bucket({impl, bucket}) when is_atom(impl) do
+    {impl, bucket}
+  end
+
+  defp impl_bucket(bucket) when is_binary(bucket) do
+    case String.split(bucket, ",", parts: 2) do
+      ["local", bucket] -> {Hexpm.Store.Local, bucket}
+      ["s3", bucket] -> {Hexpm.Store.S3, bucket}
+      ["gcs", bucket] -> {Hexpm.Store.GCS, bucket}
+    end
+  end
+
+  def list(bucket, prefix) do
+    {impl, bucket} = impl_bucket(bucket)
+    impl.list(bucket, prefix)
+  end
+
+  def get(bucket, key, opts \\ []) do
+    {impl, bucket} = impl_bucket(bucket)
+    impl.get(bucket, key, opts)
+  end
+
+  def size(bucket, key) do
+    {impl, bucket} = impl_bucket(bucket)
+    impl.size(bucket, key)
+  end
+
+  def fetch(bucket, key, opts \\ []) do
+    {impl, bucket} = impl_bucket(bucket)
+
+    try do
+      case impl.get(bucket, key, opts) do
+        nil -> :not_found
+        body when is_binary(body) -> {:ok, body}
+      end
+    rescue
+      exception -> {:error, {exception, __STACKTRACE__}}
+    catch
+      kind, reason -> {:error, {kind, reason}}
+    end
+  end
+
+  def get_to_file(bucket, key, destination, opts \\ []) do
+    {impl, bucket} = impl_bucket(bucket)
+    impl.get_to_file(bucket, key, destination, opts)
+  end
+
+  def put(bucket, key, body, opts \\ []) do
+    {impl, bucket} = impl_bucket(bucket)
+    impl.put(bucket, key, body, opts)
+  end
+
+  def put_file(bucket, key, path, opts \\ []) do
+    {impl, bucket} = impl_bucket(bucket)
+    impl.put_file(bucket, key, path, opts)
+  end
+
+  def delete(bucket, key) do
+    {impl, bucket} = impl_bucket(bucket)
+    impl.delete(bucket, key)
+  end
+
+  def delete_many(bucket, keys) do
+    {impl, bucket} = impl_bucket(bucket)
+    impl.delete_many(bucket, keys)
+  end
+end

@@ -1,0 +1,634 @@
+defmodule HexpmWeb.ControllerHelpers do
+  use HexpmWeb, :verified_routes
+
+  import Plug.Conn
+  import Phoenix.Controller
+
+  alias Hexpm.Accounts.{Auth, Organizations}
+  alias Hexpm.UserSessions
+  alias Hexpm.Repository.{Packages, Releases, Repositories}
+
+  @max_cache_age 60
+
+  # TODO: check privacy settings
+  def cache(conn, control, vary) do
+    conn
+    |> maybe_put_resp_header("cache-control", parse_control(control))
+    |> maybe_put_resp_header("vary", parse_vary(vary))
+  end
+
+  def api_cache(conn, privacy) do
+    control = [logged_in_privacy(conn, privacy), "max-age": @max_cache_age]
+    vary = ["accept", "accept-encoding"]
+    cache(conn, control, vary)
+  end
+
+  def permanent_redirect(conn, path, query_string \\ nil) do
+    query_string = if is_nil(query_string), do: conn.query_string, else: query_string
+    query = if query_string == "", do: "", else: "?#{query_string}"
+
+    conn
+    |> put_status(:moved_permanently)
+    |> redirect(external: HexpmWeb.Endpoint.url() <> path <> query)
+  end
+
+  defp logged_in_privacy(conn, :logged_in) do
+    if conn.assigns.current_user, do: :private, else: :public
+  end
+
+  defp logged_in_privacy(_conn, other) do
+    other
+  end
+
+  defp parse_vary(nil), do: nil
+  defp parse_vary(vary), do: Enum.map_join(vary, ", ", &"#{&1}")
+
+  defp parse_control(nil), do: nil
+
+  defp parse_control(control) do
+    Enum.map_join(control, ", ", fn
+      atom when is_atom(atom) -> "#{atom}"
+      {key, value} -> "#{key}=#{value}"
+    end)
+  end
+
+  defp maybe_put_resp_header(conn, _header, nil), do: conn
+  defp maybe_put_resp_header(conn, header, value), do: put_resp_header(conn, header, value)
+
+  def render_error(conn, status, assigns \\ []) do
+    assigns =
+      assigns
+      |> Map.new()
+      |> Map.put_new(:error, true)
+      |> Map.put_new(:status, status)
+
+    conn
+    |> put_status(status)
+    |> put_view(HexpmWeb.ErrorView)
+    |> render(:"#{status}", assigns)
+    |> halt()
+  end
+
+  def validation_failed(conn, %Ecto.Changeset{} = changeset) do
+    errors = translate_errors(changeset)
+    render_error(conn, 422, errors: errors)
+  end
+
+  def validation_failed(conn, errors) do
+    render_error(conn, 422, errors: errors)
+  end
+
+  def translate_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
+      case {message, Keyword.fetch(opts, :type)} do
+        {"is invalid", {:ok, type}} -> type_error(type)
+        _ -> interpolate_errors(message, opts)
+      end
+    end)
+    |> normalize_errors()
+  end
+
+  defp interpolate_errors(message, opts) do
+    Enum.reduce(opts, message, fn {key, value}, message ->
+      pattern = "%{#{key}}"
+
+      if String.contains?(message, pattern) do
+        if String.Chars.impl_for(value) do
+          String.replace(message, pattern, to_string(value))
+        else
+          raise "Unable to translate error: #{inspect({message, opts})}"
+        end
+      else
+        message
+      end
+    end)
+  end
+
+  defp type_error(type), do: "expected type #{pretty_type(type)}"
+
+  defp pretty_type({:array, type}), do: "list(#{pretty_type(type)})"
+  defp pretty_type({:map, type}), do: "map(#{pretty_type(type)})"
+  defp pretty_type(type), do: type |> inspect() |> String.trim_leading(":")
+
+  # Since Changeset.traverse_errors returns `{field: [err], ...}`
+  # but Hex client expects `{field: err1, ...}` we normalize to the latter.
+  defp normalize_errors(errors) do
+    Enum.flat_map(errors, &normalize_key_value/1)
+    |> Map.new()
+  end
+
+  defp normalize_key_value({key, value}) do
+    case value do
+      _ when value == %{} ->
+        []
+
+      [%{} | _] = value ->
+        value = Enum.reduce(value, %{}, &Map.merge(&2, normalize_errors(&1)))
+        [{key, value}]
+
+      [] ->
+        []
+
+      value when is_map(value) ->
+        [{key, normalize_errors(value)}]
+
+      [value | _] ->
+        [{key, value}]
+    end
+  end
+
+  def not_found(conn) do
+    render_error(conn, 404)
+  end
+
+  def when_stale(conn, entities, opts \\ [], fun) do
+    etag = etag(entities)
+    modified = if Keyword.get(opts, :modified, true), do: last_modified(entities)
+
+    conn =
+      conn
+      |> put_etag(etag)
+      |> put_last_modified(modified)
+
+    if fresh?(conn, etag: etag, modified: modified) do
+      send_resp(conn, 304, "")
+    else
+      fun.(conn)
+    end
+  end
+
+  defp put_etag(conn, nil) do
+    conn
+  end
+
+  defp put_etag(conn, etag) do
+    put_resp_header(conn, "etag", etag)
+  end
+
+  defp put_last_modified(conn, nil) do
+    conn
+  end
+
+  defp put_last_modified(conn, modified) do
+    put_resp_header(conn, "last-modified", List.to_string(:httpd_util.rfc1123_date(modified)))
+  end
+
+  defp fresh?(conn, opts) do
+    not expired?(conn, opts)
+  end
+
+  defp expired?(conn, opts) do
+    modified_since = List.first(get_req_header(conn, "if-modified-since"))
+    none_match = List.first(get_req_header(conn, "if-none-match"))
+
+    if modified_since || none_match do
+      modified_since?(modified_since, opts[:modified]) or none_match?(none_match, opts[:etag])
+    else
+      true
+    end
+  end
+
+  defp modified_since?(header, last_modified) do
+    if header && last_modified do
+      modified_since = :httpd_util.convert_request_date(String.to_charlist(header))
+      modified_since = :calendar.datetime_to_gregorian_seconds(modified_since)
+      last_modified = :calendar.datetime_to_gregorian_seconds(last_modified)
+      last_modified > modified_since
+    else
+      false
+    end
+  end
+
+  defp none_match?(none_match, etag) do
+    if none_match && etag do
+      none_match = Plug.Conn.Utils.list(none_match)
+      etag not in none_match and "*" not in none_match
+    else
+      false
+    end
+  end
+
+  defp etag(schemas) do
+    binary =
+      schemas
+      |> List.wrap()
+      |> Enum.map(&HexpmWeb.Stale.etag/1)
+      |> List.flatten()
+      |> :erlang.term_to_binary()
+
+    :crypto.hash(:md5, binary)
+    |> Base.encode16(case: :lower)
+  end
+
+  def last_modified(schemas) do
+    schemas
+    |> List.wrap()
+    |> Enum.map(&HexpmWeb.Stale.last_modified/1)
+    |> List.flatten()
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map(&time_to_erl/1)
+    |> Enum.max()
+  end
+
+  defp time_to_erl(%NaiveDateTime{} = datetime), do: NaiveDateTime.to_erl(datetime)
+  defp time_to_erl(%DateTime{} = datetime), do: NaiveDateTime.to_erl(datetime)
+  defp time_to_erl(%Date{} = date), do: {Date.to_erl(date), {0, 0, 0}}
+
+  def fetch_repository(conn, _opts) do
+    if param = conn.params["repository"] do
+      if repository = Repositories.get(param, [:organization]) do
+        conn
+        |> assign(:repository, repository)
+        |> assign(:organization, repository.organization)
+      else
+        conn
+        |> not_found()
+        |> halt()
+      end
+    else
+      conn
+      |> assign(:repository, nil)
+      |> assign(:organization, nil)
+    end
+  end
+
+  def fetch_organization(conn, _opts) do
+    if param = conn.params["organization"] do
+      if organization = Organizations.get(param) do
+        assign(conn, :organization, organization)
+      else
+        conn
+        |> not_found()
+        |> halt()
+      end
+    else
+      assign(conn, :organization, nil)
+    end
+  end
+
+  def maybe_fetch_package(conn, _opts) do
+    repository = Repositories.get(conn.params["repository"], [:organization])
+    package = repository && conn.params["name"] && Packages.get(repository, conn.params["name"])
+
+    conn
+    |> assign(:repository, repository)
+    |> assign(:package, package)
+    |> assign(:organization, repository && repository.organization)
+  end
+
+  def fetch_release(conn, _opts) do
+    case Version.parse(conn.params["version"]) do
+      {:ok, version} ->
+        repository = Repositories.get(conn.params["repository"], [:organization])
+        package = repository && Packages.get(repository, conn.params["name"])
+        release = package && Releases.get(package, version)
+
+        if release do
+          conn
+          |> assign(:repository, repository)
+          |> assign(:package, package)
+          |> assign(:release, release)
+          |> assign(:organization, repository && repository.organization)
+        else
+          conn
+          |> not_found()
+          |> halt()
+        end
+
+      :error ->
+        render_error(conn, 400, message: "invalid version: #{conn.params["version"]}")
+    end
+  end
+
+  def maybe_fetch_release(conn, _opts) do
+    case Version.parse(conn.params["version"]) do
+      {:ok, version} ->
+        repository = Repositories.get(conn.params["repository"], [:organization])
+        package = repository && Packages.get(repository, conn.params["name"])
+        release = package && Releases.get(package, version)
+
+        conn
+        |> assign(:repository, repository)
+        |> assign(:package, package)
+        |> assign(:release, release)
+        |> assign(:organization, repository && repository.organization)
+
+      :error ->
+        render_error(conn, 400, message: "invalid version: #{conn.params["version"]}")
+    end
+  end
+
+  def required_params(conn, required_param_names) do
+    remaining = required_param_names -- Map.keys(conn.params)
+
+    if remaining == [] do
+      conn
+    else
+      names = Enum.map_join(remaining, ", ", &inspect/1)
+      message = "missing required parameters: #{names}"
+      render_error(conn, 400, message: message)
+    end
+  end
+
+  def audit_data(conn) do
+    user_or_organization = conn.assigns.current_user || conn.assigns.current_organization
+
+    %{
+      user: user_or_organization,
+      auth_credential: Map.get(conn.assigns, :auth_credential),
+      user_agent: conn.assigns.user_agent,
+      remote_ip: HexpmWeb.RequestHelpers.parse_ip(conn.remote_ip)
+    }
+  end
+
+  def password_auth(username, password) do
+    case Auth.password_auth(username, password) do
+      {:ok, %{user: user, email: email}} ->
+        if email.verified,
+          do: {:ok, user},
+          else: {:error, :unconfirmed}
+
+      :error ->
+        {:error, :wrong}
+    end
+  end
+
+  def auth_error_message(:wrong), do: "Invalid username, email or password."
+
+  def auth_error_message(:unconfirmed),
+    do: "Email has not been verified yet. You can resend the verification email below."
+
+  def password_breached_message() do
+    # docs_path + anchor #password-security
+    "The password you provided has previously been breached. " <>
+      "To increase your security, please change your password." <>
+      "<br /><a class=\"small\" href=\"#{~p"/docs/faq"}#password-security\">" <>
+      "Learn more about our password security.</a>"
+  end
+
+  def start_session_internal(conn, user) do
+    {:ok, _user_session, session_token} =
+      UserSessions.create_browser_session(user,
+        name: detect_browser(conn),
+        audit: %{audit_data(conn) | user: user}
+      )
+
+    conn
+    |> configure_session(renew: true)
+    |> put_session("session_token", Base.encode64(session_token))
+  end
+
+  def sso_link_error_message(:not_member),
+    do:
+      "This Hexpm account is not a member of the organization. Ask an administrator to add it before retrying SSO."
+
+  def sso_link_error_message({:identity_conflict, _changeset}),
+    do: "That SSO identity or Hexpm account is already linked."
+
+  def sso_link_error_message(:session_user_mismatch),
+    do:
+      "That SSO authentication belongs to a different Hexpm account. Sign in as that account and start SSO again."
+
+  def sso_link_error_message(_reason),
+    do:
+      "The SSO account-link request is no longer valid. You are signed in, but no SSO identity was connected."
+
+  def sso_callback_error_message(:not_member),
+    do:
+      "This Hexpm account is not a member of the organization. Ask an administrator to add it before retrying SSO."
+
+  def sso_callback_error_message(:session_user_mismatch),
+    do:
+      "That provider identity is already linked to a different Hexpm account. Sign in as that account, or ask an organization administrator to unlink it."
+
+  def sso_callback_error_message(:identity_conflict),
+    do:
+      "This Hexpm account is already linked to a different provider identity in this organization. Unlink it before linking another."
+
+  # The code stays for anything without dedicated copy, since it is what an
+  # administrator quotes to support.
+  def sso_callback_error_message(code), do: "SSO authentication failed (#{code})."
+
+  def remember_sso_state(conn, state) when is_binary(state) do
+    states =
+      [state | List.wrap(get_session(conn, "sso_states"))]
+      |> Enum.uniq()
+      |> Enum.take(5)
+
+    put_session(conn, "sso_states", states)
+  end
+
+  def valid_sso_state?(conn, state) when is_binary(state) do
+    Enum.any?(List.wrap(get_session(conn, "sso_states")), &secure_compare(&1, state))
+  end
+
+  def valid_sso_state?(_conn, _state), do: false
+
+  def forget_sso_state(conn, state) do
+    states =
+      conn
+      |> get_session("sso_states")
+      |> List.wrap()
+      |> Enum.reject(&secure_compare(&1, state))
+
+    case states do
+      [] -> delete_session(conn, "sso_states")
+      states -> put_session(conn, "sso_states", states)
+    end
+  end
+
+  def start_tfa_session(conn, user, return) do
+    conn
+    |> configure_session(renew: true)
+    |> put_session("tfa_user_id", %{
+      "uid" => user.id,
+      "at" => NaiveDateTime.utc_now() |> NaiveDateTime.to_iso8601(),
+      "return" => return
+    })
+  end
+
+  defp secure_compare(left, right)
+       when is_binary(left) and is_binary(right) and byte_size(left) == byte_size(right),
+       do: Plug.Crypto.secure_compare(left, right)
+
+  defp secure_compare(_left, _right), do: false
+
+  defp detect_browser(conn) do
+    user_agent = get_req_header(conn, "user-agent") |> List.first()
+
+    cond do
+      is_nil(user_agent) -> "Unknown Browser"
+      String.contains?(user_agent, "Chrome") -> "Chrome"
+      String.contains?(user_agent, "Firefox") -> "Firefox"
+      String.contains?(user_agent, "Safari") -> "Safari"
+      String.contains?(user_agent, "Edge") -> "Edge"
+      true -> "Browser Session"
+    end
+  end
+
+  def requires_login(conn, _opts) do
+    if logged_in?(conn) do
+      conn
+    else
+      return_path =
+        case conn.query_string do
+          "" -> conn.request_path
+          qs -> conn.request_path <> "?" <> qs
+        end
+
+      conn
+      |> redirect(to: ~p"/login?return=#{return_path}")
+      |> halt()
+    end
+  end
+
+  def logged_in?(conn) do
+    !!conn.assigns[:current_user]
+  end
+
+  def nillify_params(conn, keys) do
+    params =
+      Enum.reduce(keys, conn.params, fn key, params ->
+        case Map.fetch(conn.params, key) do
+          {:ok, value} -> Map.put(params, key, scrub_param(value))
+          :error -> params
+        end
+      end)
+
+    %{conn | params: params}
+  end
+
+  defp scrub_param(%{__struct__: mod} = struct) when is_atom(mod) do
+    struct
+  end
+
+  defp scrub_param(%{} = param) do
+    Enum.reduce(param, %{}, fn {k, v}, acc ->
+      Map.put(acc, k, scrub_param(v))
+    end)
+  end
+
+  defp scrub_param(param) when is_list(param) do
+    Enum.map(param, &scrub_param/1)
+  end
+
+  defp scrub_param(param) do
+    if scrub?(param), do: nil, else: param
+  end
+
+  defp scrub?(" " <> rest), do: scrub?(rest)
+  defp scrub?(""), do: true
+  defp scrub?(_), do: false
+
+  # HTTP 100 Continue handling for large uploads
+  def handle_100_continue(conn, opts) do
+    # If authorization failed (conn halted), don't process 100 Continue
+    if conn.halted do
+      conn
+    else
+      case get_req_header(conn, "expect") do
+        ["100-continue"] ->
+          # Validate Content-Length header is present
+          case get_req_header(conn, "content-length") do
+            [] ->
+              conn
+              |> put_status(411)
+              |> put_view(HexpmWeb.ErrorView)
+              |> render(:"411")
+              |> halt()
+
+            [content_length] ->
+              # Check size limit if max_size option provided
+              case check_max_size(content_length, Keyword.get(opts, :max_size)) do
+                :ok ->
+                  # Authorization already passed, send 100 Continue and read body
+                  conn = inform(conn, :continue, [])
+                  {conn, path} = HexpmWeb.Plugs.read_body_to_file(conn)
+                  put_in(conn.params["body"], path)
+
+                {:error, :too_large} ->
+                  validation_failed(conn, %{tar: "too big"})
+              end
+          end
+
+        _ ->
+          # No Expect header, continue normally
+          conn
+      end
+    end
+  end
+
+  defp check_max_size(_content_length, nil), do: :ok
+
+  defp check_max_size(content_length, max_size) do
+    case Integer.parse(content_length) do
+      {size, _} when size > max_size -> {:error, :too_large}
+      _ -> :ok
+    end
+  end
+
+  @doc """
+  Sanitizes form params to prevent crashes when rendering forms with malformed input.
+
+  This function ensures all values are either strings, nil, or lists of sanitized maps
+  (for nested associations).
+  """
+  def sanitize_params(params) when is_map(params) do
+    Map.new(params, fn
+      {key, value} when is_binary(value) -> {key, value}
+      {key, value} when is_list(value) -> {key, Enum.map(value, &sanitize_params/1)}
+      {key, _value} -> {key, nil}
+    end)
+  end
+
+  def sanitize_params(_), do: %{}
+
+  @doc """
+  Returns the value if it's a binary string, otherwise returns nil.
+  Use this to safely handle params that could be maps or lists from malformed input.
+  """
+  def safe_string(value) when is_binary(value), do: value
+  def safe_string(_), do: nil
+
+  # A leading `//` starts an authority, so `//evil.com` leaves the site. The
+  # rest are spellings of that same trick that a naive "starts with a single
+  # slash" check would admit:
+  #
+  #   * `\` is treated as `/` by browsers, so `/\evil.com` is scheme-relative.
+  #   * tab, LF and CR are stripped while parsing a URL, so `/<TAB>/evil.com`
+  #     resolves as `//evil.com` (the bypass behind CVE-2026-64941). LF and CR
+  #     would also split a Location header.
+  #   * `%2f` and `%5c` are the encoded spellings, rejected so that a later
+  #     decoding step downstream cannot reintroduce the leading `//`.
+  @invalid_return_path_chars ["\\", "\t", "\n", "\r", "%09", "%2f", "%2F", "%5c", "%5C"]
+
+  @doc """
+  Returns the value if it is a local path, otherwise returns nil.
+
+  A local path starts with `/`, but not with `//`, and contains none of the
+  characters that let a path resolve off-site. Use to validate user-supplied
+  redirect targets before passing to `redirect(to: ...)`.
+  """
+  def safe_return_path("/"), do: "/"
+  def safe_return_path("//" <> _), do: nil
+
+  def safe_return_path("/" <> _ = path) do
+    if String.contains?(path, @invalid_return_path_chars), do: nil, else: path
+  end
+
+  def safe_return_path(_), do: nil
+
+  @doc """
+  Safely parses a string to integer. Returns nil for invalid input.
+  """
+  def safe_to_integer(value) when is_integer(value), do: value
+
+  def safe_to_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {int, ""} -> int
+      _ -> nil
+    end
+  end
+
+  def safe_to_integer(_), do: nil
+end

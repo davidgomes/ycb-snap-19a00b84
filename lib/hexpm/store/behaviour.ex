@@ -1,0 +1,16 @@
+defmodule Hexpm.Store.Behaviour do
+  @type bucket :: String.t() | {module, String.t()}
+  @type prefix :: key
+  @type key :: String.t()
+  @type body :: binary
+  @type opts :: Keyword.t()
+
+  @callback list(bucket, prefix) :: [key]
+  @callback get(bucket, key, opts) :: body | nil
+  @callback size(bucket, key) :: non_neg_integer() | nil
+  @callback get_to_file(bucket, key, Path.t(), opts) :: :ok | nil
+  @callback put(bucket, key, body, opts) :: term
+  @callback put_file(bucket, key, Path.t(), opts) :: term
+  @callback delete(bucket, key) :: term
+  @callback delete_many(bucket, [key]) :: :ok
+end

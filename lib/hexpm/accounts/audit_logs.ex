@@ -1,0 +1,53 @@
+defmodule Hexpm.Accounts.AuditLogs do
+  use Hexpm.Context
+
+  alias Hexpm.Accounts.AuditLog
+
+  def all_by(schema) do
+    AuditLog.all_by(schema)
+    |> AuditLog.newest_first()
+    |> Repo.all()
+  end
+
+  def all_by(schema, page, per_page) do
+    AuditLog.all_by(schema)
+    |> AuditLog.newest_first()
+    |> Hexpm.Utils.paginate(page, per_page)
+    |> Repo.all()
+  end
+
+  @doc """
+  Return the number of audit_logs belong to the schema (user/organization/package)
+  """
+  def count_by(schema) do
+    AuditLog.count_by(schema)
+    |> Repo.one()
+  end
+
+  @doc """
+  Return a map of policy name -> audit_log count for every policy in the
+  organization, in a single grouped query.
+  """
+  def count_by_policies(organization) do
+    AuditLog.count_by_policies(organization)
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  def admin() do
+    %{
+      user: Hexpm.Accounts.Users.get("admin"),
+      auth_credential: nil,
+      user_agent: "ADMIN",
+      remote_ip: nil
+    }
+  end
+
+  @doc """
+  Audit data for something a background job did to an organization, with the
+  organization as the subject because no person acted.
+  """
+  def system(organization) do
+    %{user: organization, auth_credential: nil, user_agent: "SYSTEM", remote_ip: nil}
+  end
+end

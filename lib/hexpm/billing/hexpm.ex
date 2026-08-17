@@ -1,0 +1,176 @@
+defmodule Hexpm.Billing.Hexpm do
+  require Logger
+  alias Hexpm.HTTP
+
+  @behaviour Hexpm.Billing.Behaviour
+  @timeout 15_000
+
+  # TODO: Remove when all customers migrated to SCA/PaymentIntents
+  def checkout(organization, data) do
+    case post("/api/customers/#{organization}/payment_source", data) do
+      {:ok, 204, _headers, body} -> {:ok, body}
+      {:ok, 422, _headers, body} -> {:error, body}
+      other -> unexpected_response("checkout", organization, other)
+    end
+  end
+
+  def get(organization, opts \\ []) do
+    query = URI.encode_query(Enum.reject(opts, fn {_k, v} -> is_nil(v) end))
+    url = "/api/customers/#{organization}?#{query}"
+
+    result =
+      fn -> get_json(url) end
+      |> Hexpm.HTTP.retry("billing")
+
+    case result do
+      {:ok, 200, _headers, body} -> body
+      {:ok, 404, _headers, _body} -> nil
+    end
+  end
+
+  def cancel(organization) do
+    {:ok, 200, _headers, body} = post("/api/customers/#{organization}/cancel", %{})
+    body
+  end
+
+  def resume(organization) do
+    case post("/api/customers/#{organization}/resume", %{}) do
+      {:ok, 200, _headers, body} -> {:ok, body}
+      {:ok, status, _headers, body} when status in 400..499 -> {:error, body}
+    end
+  end
+
+  def create(params) do
+    case post("/api/customers", params) do
+      {:ok, 200, _headers, body} -> {:ok, body}
+      {:ok, 422, _headers, body} -> {:error, body}
+      other -> unexpected_response("create", params["token"], other)
+    end
+  end
+
+  def update(organization, params) do
+    case patch("/api/customers/#{organization}", params) do
+      {:ok, 200, _headers, body} -> {:ok, body}
+      {:ok, 402, _headers, body} -> {:requires_action, body}
+      {:ok, 404, _headers, _body} -> {:ok, nil}
+      {:ok, 422, _headers, body} -> {:error, body}
+      other -> unexpected_response("update", organization, other)
+    end
+  end
+
+  def void_invoice(organization, payments_token) do
+    case post("/api/customers/#{organization}/void_invoice", %{
+           "payments_token" => payments_token
+         }) do
+      {:ok, 204, _headers, _body} -> :ok
+      {:ok, status, _headers, body} when status in 400..499 -> {:error, body}
+      other -> unexpected_response("void_invoice", organization, other)
+    end
+  end
+
+  def change_plan(organization, params) do
+    case post("/api/customers/#{organization}/plan", params) do
+      {:ok, 204, _headers, _body} -> :ok
+      {:ok, 422, _headers, body} -> {:error, body}
+      other -> unexpected_response("change_plan", organization, other)
+    end
+  end
+
+  def invoice(id, opts \\ []) do
+    query = URI.encode_query(Enum.reject(opts, fn {_k, v} -> is_nil(v) end))
+    url = "/api/invoices/#{id}/html?#{query}"
+
+    {:ok, 200, _headers, body} =
+      fn -> get_html(url) end
+      |> Hexpm.HTTP.retry("billing")
+
+    body
+  end
+
+  def pay_invoice(id) do
+    result =
+      fn -> post("/api/invoices/#{id}/pay", %{}) end
+      |> Hexpm.HTTP.retry("billing")
+
+    case result do
+      {:ok, 204, _headers, _body} -> :ok
+      {:ok, 422, _headers, body} -> {:error, body}
+      other -> unexpected_response("pay_invoice", id, other)
+    end
+  end
+
+  def report() do
+    {:ok, 200, _headers, body} =
+      fn -> get_json("/api/reports/customers") end
+      |> Hexpm.HTTP.retry("billing")
+
+    body
+  end
+
+  # The billing service reports the underlying failure to Sentry, hexpm only
+  # needs enough to tie a customer report to a point in time
+  defp unexpected_response(operation, context, response) do
+    Logger.error([
+      "billing ",
+      operation,
+      " failed for ",
+      to_string(context),
+      ": ",
+      inspect(response)
+    ])
+
+    {:error, %{}}
+  end
+
+  defp auth() do
+    Application.get_env(:hexpm, :billing_key)
+  end
+
+  defp post(url, body) do
+    url = Application.get_env(:hexpm, :billing_url) <> url
+    body = JSON.encode!(body)
+
+    headers = [
+      {"authorization", auth()},
+      {"accept", "application/json"},
+      {"content-type", "application/json"}
+    ]
+
+    HTTP.impl().post(url, headers, body, receive_timeout: @timeout)
+  end
+
+  defp patch(url, body) do
+    url = Application.get_env(:hexpm, :billing_url) <> url
+    body = JSON.encode!(body)
+
+    headers = [
+      {"authorization", auth()},
+      {"accept", "application/json"},
+      {"content-type", "application/json"}
+    ]
+
+    HTTP.impl().patch(url, headers, body, receive_timeout: @timeout)
+  end
+
+  defp get_json(url) do
+    url = Application.get_env(:hexpm, :billing_url) <> url
+
+    headers = [
+      {"authorization", auth()},
+      {"accept", "application/json"}
+    ]
+
+    HTTP.impl().get(url, headers, receive_timeout: @timeout)
+  end
+
+  defp get_html(url) do
+    url = Application.get_env(:hexpm, :billing_url) <> url
+
+    headers = [
+      {"authorization", auth()},
+      {"accept", "text/html"}
+    ]
+
+    HTTP.impl().get(url, headers, receive_timeout: @timeout)
+  end
+end

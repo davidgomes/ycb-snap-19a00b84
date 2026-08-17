@@ -1,0 +1,1244 @@
+defmodule HexpmWeb.Dashboard.OrganizationController do
+  use HexpmWeb, :controller
+
+  alias Hexpm.Repository.{
+    Packages,
+    Policies,
+    Policy,
+    Releases,
+    Repository
+  }
+
+  alias HexpmWeb.Dashboard.KeyController
+  alias HexpmWeb.Dashboard.Organization.Components.BillingHelpers
+  alias Hexpm.Accounts.SSO
+
+  @policy_suggestion_limit 8
+
+  plug :requires_login
+
+  plug HexpmWeb.Plugs.Sudo
+       when action in [
+              :new,
+              :create,
+              :show,
+              :members,
+              :keys,
+              :packages,
+              :billing,
+              :danger_zone,
+              :update,
+              :audit_logs,
+              :sso,
+              :leave,
+              :billing_token,
+              :cancel_billing,
+              :resume_billing,
+              :update_billing,
+              :create_billing,
+              :add_seats,
+              :remove_seats,
+              :void_invoice,
+              :change_plan,
+              :create_key,
+              :delete_key,
+              :show_invoice,
+              :pay_invoice,
+              :update_profile,
+              :policies,
+              :new_policy,
+              :create_policy,
+              :edit_policy,
+              :update_policy,
+              :delete_policy
+            ]
+
+  def redirect_repo(conn, params) do
+    glob = params["glob"] || []
+    path = ~p"/dashboard/orgs" <> "/" <> Enum.join(glob, "/")
+
+    conn
+    |> put_status(301)
+    |> redirect(to: path)
+  end
+
+  def show(conn, %{"dashboard_org" => organization}) do
+    access_organization(conn, organization, "read", fn organization ->
+      render_index(conn, organization)
+    end)
+  end
+
+  def members(conn, %{"dashboard_org" => organization}) do
+    access_organization(conn, organization, "read", fn organization ->
+      render_index(conn, organization, tab: :members)
+    end)
+  end
+
+  def keys(conn, %{"dashboard_org" => organization}) do
+    access_organization(conn, organization, "write", fn organization ->
+      generated_key = get_session(conn, :generated_key)
+      conn = delete_session(conn, :generated_key)
+      render_index(conn, organization, tab: :keys, generated_key: generated_key)
+    end)
+  end
+
+  def packages(conn, %{"dashboard_org" => organization}) do
+    access_organization(conn, organization, "read", fn organization ->
+      render_index(conn, organization, tab: :packages)
+    end)
+  end
+
+  def update(conn, %{
+        "dashboard_org" => organization,
+        "action" => "add_member",
+        "organization_user" => params
+      }) do
+    username = params["username"]
+
+    access_organization(conn, organization, "admin", fn organization ->
+      if user = Users.public_get(username, [:emails]) do
+        case Organizations.add_member(organization, user, params, audit: audit_data(conn)) do
+          {:ok, _} ->
+            conn
+            |> put_flash(:info, "User #{username} has been added to the organization.")
+            |> redirect(to: ~p"/dashboard/orgs/#{organization}/members")
+
+          {:error, :seats_exhausted} ->
+            conn
+            |> put_status(400)
+            |> put_flash(:error, "Not enough seats in organization to add member.")
+            |> render_index(organization, tab: :members)
+
+          {:error, changeset} ->
+            conn
+            |> put_status(400)
+            |> render_index(organization, tab: :members, add_member_changeset: changeset)
+        end
+      else
+        conn
+        |> put_status(400)
+        |> put_flash(:error, "Unknown user #{username}.")
+        |> render_index(organization, tab: :members)
+      end
+    end)
+  end
+
+  def update(conn, %{
+        "dashboard_org" => organization,
+        "action" => "remove_member",
+        "organization_user" => params
+      }) do
+    # TODO: Also remove all package ownerships on organization for removed member
+    username = params["username"]
+
+    access_organization(conn, organization, "admin", fn organization ->
+      if user = Users.public_get(username) do
+        case Organizations.remove_member(organization, user, audit: audit_data(conn)) do
+          :ok ->
+            conn
+            |> put_flash(:info, "User #{username} has been removed from the organization.")
+            |> redirect(to: ~p"/dashboard/orgs/#{organization}/members")
+
+          {:error, :last_member} ->
+            conn
+            |> put_status(400)
+            |> put_flash(:error, "Cannot remove last member from organization.")
+            |> render_index(organization, tab: :members)
+        end
+      else
+        conn
+        |> put_status(400)
+        |> put_flash(:error, "Unknown user #{username}.")
+        |> render_index(organization, tab: :members)
+      end
+    end)
+  end
+
+  def update(conn, %{
+        "dashboard_org" => organization,
+        "action" => "change_role",
+        "organization_user" => params
+      }) do
+    username = params["username"]
+
+    access_organization(conn, organization, "admin", fn organization ->
+      if user = Users.public_get(username) do
+        case Organizations.change_role(organization, user, params, audit: audit_data(conn)) do
+          {:ok, _} ->
+            conn
+            |> put_flash(:info, "User #{username}'s role has been changed to #{params["role"]}.")
+            |> redirect(to: ~p"/dashboard/orgs/#{organization}/members")
+
+          {:error, :last_admin} ->
+            conn
+            |> put_status(400)
+            |> put_flash(:error, "Cannot demote last admin member.")
+            |> render_index(organization, tab: :members)
+
+          {:error, changeset} ->
+            conn
+            |> put_status(400)
+            |> render_index(organization, tab: :members, change_role_changeset: changeset)
+        end
+      else
+        conn
+        |> put_status(400)
+        |> put_flash(:error, "Unknown user #{username}.")
+        |> render_index(organization, tab: :members)
+      end
+    end)
+  end
+
+  def update(conn, %{
+        "dashboard_org" => organization,
+        "action" => "invite_member",
+        "organization_invitation" => params
+      }) do
+    access_organization(conn, organization, "admin", fn organization ->
+      case OrganizationInvitations.invite(organization, params, conn.assigns.current_user,
+             audit: audit_data(conn)
+           ) do
+        {:ok, invitation} ->
+          conn
+          |> put_flash(:info, "An invitation has been sent to #{invitation.email}.")
+          |> redirect(to: ~p"/dashboard/orgs/#{organization}/members")
+
+        {:error, :already_member} ->
+          conn
+          |> put_status(400)
+          |> put_flash(:error, "That address already belongs to a member of this organization.")
+          |> render_index(organization, tab: :members)
+
+        {:error, changeset} ->
+          conn
+          |> put_status(400)
+          |> render_index(organization, tab: :members, invite_changeset: changeset)
+      end
+    end)
+  end
+
+  def update(conn, %{
+        "dashboard_org" => organization,
+        "action" => "revoke_invitation",
+        "organization_invitation" => %{"id" => id}
+      }) do
+    access_organization(conn, organization, "admin", fn organization ->
+      case OrganizationInvitations.get_pending(organization, safe_to_integer(id) || 0) do
+        nil ->
+          conn
+          |> put_status(400)
+          |> put_flash(:error, "That invitation is no longer pending.")
+          |> render_index(organization, tab: :members)
+
+        invitation ->
+          {:ok, invitation} =
+            OrganizationInvitations.revoke(organization, invitation, audit: audit_data(conn))
+
+          conn
+          |> put_flash(:info, "The invitation for #{invitation.email} has been revoked.")
+          |> redirect(to: ~p"/dashboard/orgs/#{organization}/members")
+      end
+    end)
+  end
+
+  def audit_logs(conn, %{"dashboard_org" => organization} = params) do
+    access_organization(conn, organization, "read", fn organization ->
+      per_page = 20
+      page = Hexpm.Utils.safe_int(params["page"]) || 1
+      audit_logs = AuditLogs.all_by(organization, page, per_page)
+      count = AuditLogs.count_by(organization)
+
+      render_index(conn, organization,
+        tab: :audit_logs,
+        audit_logs: audit_logs,
+        audit_logs_total_count: count,
+        page: page,
+        per_page: per_page
+      )
+    end)
+  end
+
+  def sso(conn, %{"dashboard_org" => organization}) do
+    access_organization(conn, organization, "admin", fn organization ->
+      if SSO.enabled?(organization) do
+        conn
+        |> allow_provider_form_action(organization)
+        |> render_index(organization, tab: :sso)
+      else
+        not_found(conn)
+      end
+    end)
+  end
+
+  # Testing a connection submits a form whose response redirects to the provider,
+  # and Chrome applies form-action to that redirect.
+  defp allow_provider_form_action(conn, organization) do
+    case SSO.get_connection(organization) do
+      nil ->
+        conn
+
+      connection ->
+        HexpmWeb.Plugs.ContentSecurityPolicy.allow_form_action(conn, connection.issuer)
+    end
+  end
+
+  def billing(conn, %{"dashboard_org" => organization}) do
+    access_organization(conn, organization, "admin", fn organization ->
+      render_index(conn, organization, tab: :billing)
+    end)
+  end
+
+  def danger_zone(conn, %{"dashboard_org" => organization}) do
+    access_organization(conn, organization, "read", fn organization ->
+      render_index(conn, organization, tab: :danger_zone)
+    end)
+  end
+
+  def policies(conn, %{"dashboard_org" => organization}) do
+    access_organization(conn, organization, "read", fn organization ->
+      render_index(conn, organization, tab: :policies)
+    end)
+  end
+
+  def new_policy(conn, %{"dashboard_org" => organization}) do
+    access_organization(conn, organization, "admin", fn organization ->
+      render_index(conn, organization,
+        tab: :policies,
+        policy_action: :new,
+        policy_changeset: Policy.changeset(%Policy{}, %{})
+      )
+    end)
+  end
+
+  def create_policy(conn, %{"dashboard_org" => organization, "policy" => params}) do
+    access_organization(conn, organization, "admin", fn organization ->
+      with :ok <- check_policy_tier(organization, params),
+           {:ok, %{policy: policy}} <-
+             Policies.create(organization, params, audit: audit_data(conn)) do
+        conn
+        |> put_flash(:info, "Policy #{policy.name} was created.")
+        |> redirect(to: ~p"/dashboard/orgs/#{organization}/policies/#{policy.name}")
+      else
+        {:error, :tier, message} ->
+          conn
+          |> put_status(400)
+          |> put_flash(:error, message)
+          |> render_index(organization,
+            tab: :policies,
+            policy_action: :new,
+            policy_changeset: Policy.changeset(%Policy{}, params)
+          )
+
+        {:error, :policy, changeset, _} ->
+          conn
+          |> put_status(400)
+          |> render_index(organization,
+            tab: :policies,
+            policy_action: :new,
+            policy_changeset: changeset
+          )
+      end
+    end)
+  end
+
+  def edit_policy(conn, %{"dashboard_org" => organization, "name" => name}) do
+    access_organization(conn, organization, "read", fn organization ->
+      case Policies.get(organization, name) do
+        nil ->
+          not_found(conn)
+
+        policy ->
+          render_index(conn, organization,
+            tab: :policies,
+            policy_action: :edit,
+            policy: policy,
+            policy_changeset: Policies.change(organization, policy)
+          )
+      end
+    end)
+  end
+
+  def policy_package_suggestions(conn, %{"dashboard_org" => organization} = params) do
+    access_organization(conn, organization, "read", fn organization ->
+      repository = policy_suggestion_repository(organization, params["repository"])
+      term = params["term"] || ""
+
+      items =
+        if repository do
+          repository
+          |> Packages.suggest(term, @policy_suggestion_limit)
+          |> Enum.map(fn package ->
+            %{
+              name: package.name,
+              latest_version: version_string(package.latest_version)
+            }
+          end)
+        else
+          []
+        end
+
+      json(conn, %{items: items})
+    end)
+  end
+
+  def policy_version_suggestions(conn, %{"dashboard_org" => organization} = params) do
+    access_organization(conn, organization, "read", fn organization ->
+      repository = policy_suggestion_repository(organization, params["repository"])
+      package_name = String.trim(to_string(params["package"] || ""))
+      term = String.trim(to_string(params["term"] || ""))
+
+      items =
+        if repository && package_name != "" do
+          repository
+          |> Packages.get(package_name)
+          |> version_suggestions(term)
+        else
+          []
+        end
+
+      json(conn, %{items: items})
+    end)
+  end
+
+  def update_policy(conn, %{"dashboard_org" => organization, "name" => name, "policy" => params}) do
+    access_organization(conn, organization, "admin", fn organization ->
+      case Policies.get(organization, name) do
+        nil ->
+          not_found(conn)
+
+        policy ->
+          with :ok <- check_policy_tier(organization, params),
+               {:ok, %{policy: updated}} <-
+                 Policies.update(policy, params, audit: audit_data(conn)) do
+            conn
+            |> put_flash(:info, "Policy #{updated.name} was updated.")
+            |> redirect(to: ~p"/dashboard/orgs/#{organization}/policies/#{updated.name}")
+          else
+            {:error, :tier, message} ->
+              conn
+              |> put_status(400)
+              |> put_flash(:error, message)
+              |> render_index(organization,
+                tab: :policies,
+                policy_action: :edit,
+                policy: policy,
+                policy_changeset: Policies.change(organization, policy, params)
+              )
+
+            {:error, :policy, changeset, _} ->
+              conn
+              |> put_status(400)
+              |> render_index(organization,
+                tab: :policies,
+                policy_action: :edit,
+                policy: policy,
+                policy_changeset: changeset
+              )
+          end
+      end
+    end)
+  end
+
+  def delete_policy(conn, %{"dashboard_org" => organization, "name" => name}) do
+    access_organization(conn, organization, "admin", fn organization ->
+      case Policies.get(organization, name) do
+        nil ->
+          not_found(conn)
+
+        policy ->
+          {:ok, _} = Policies.delete(policy, audit: audit_data(conn))
+
+          conn
+          |> put_flash(:info, "Policy #{name} was deleted.")
+          |> redirect(to: ~p"/dashboard/orgs/#{organization}/policies")
+      end
+    end)
+  end
+
+  defp check_policy_tier(organization, %{"visibility" => "private"}) do
+    if Hexpm.Accounts.Organization.billing_active?(organization) do
+      :ok
+    else
+      {:error, :tier, "private policies require a paid plan"}
+    end
+  end
+
+  defp check_policy_tier(_organization, _params), do: :ok
+
+  def leave(conn, %{
+        "dashboard_org" => organization,
+        "organization_name" => organization_name
+      }) do
+    access_organization(conn, organization, "read", fn organization ->
+      if organization.name == organization_name do
+        current_user = conn.assigns.current_user
+
+        case Organizations.remove_member(organization, current_user, audit: audit_data(conn)) do
+          :ok ->
+            conn
+            |> put_flash(:info, "You just left the organization #{organization.name}.")
+            |> redirect(to: ~p"/dashboard/profile")
+
+          {:error, :last_member} ->
+            conn
+            |> put_status(400)
+            |> put_flash(:error, "The last member of an organization cannot leave.")
+            |> render_index(organization, tab: :danger_zone)
+        end
+      else
+        conn
+        |> put_status(400)
+        |> put_flash(:error, "Invalid organization name.")
+        |> render_index(organization, tab: :danger_zone)
+      end
+    end)
+  end
+
+  def billing_token(conn, %{"dashboard_org" => organization, "token" => token}) do
+    access_organization(conn, organization, "admin", fn organization ->
+      audit = %{audit_data: audit_data(conn), organization: organization}
+
+      case Hexpm.Billing.checkout(organization.name, %{payment_source: token}, audit: audit) do
+        {:ok, _} ->
+          conn
+          |> put_resp_header("content-type", "application/json")
+          |> send_resp(200, JSON.encode!(%{}))
+
+        {:error, reason} ->
+          conn
+          |> put_resp_header("content-type", "application/json")
+          |> send_resp(422, JSON.encode!(reason))
+      end
+    end)
+  end
+
+  def cancel_billing(conn, %{"dashboard_org" => organization}) do
+    access_organization(conn, organization, "admin", fn organization ->
+      audit = %{audit_data: audit_data(conn), organization: organization}
+      customer = Hexpm.Billing.cancel(organization.name, audit: audit)
+
+      message = cancel_message(customer["subscription"]["current_period_end"])
+
+      conn
+      |> put_flash(:info, message)
+      |> redirect(to: ~p"/dashboard/orgs/#{organization}/billing")
+    end)
+  end
+
+  def resume_billing(conn, %{"dashboard_org" => organization}) do
+    access_organization(conn, organization, "admin", fn organization ->
+      audit = %{audit_data: audit_data(conn), organization: organization}
+
+      case Hexpm.Billing.resume(organization.name, audit: audit) do
+        {:ok, _customer} ->
+          conn
+          |> put_flash(:info, "Your subscription has been resumed.")
+          |> redirect(to: ~p"/dashboard/orgs/#{organization}/billing")
+
+        {:error, reason} ->
+          conn
+          |> put_flash(:error, reason["errors"] || "Failed to resume subscription.")
+          |> redirect(to: ~p"/dashboard/orgs/#{organization}/billing")
+      end
+    end)
+  end
+
+  def show_invoice(conn, %{"dashboard_org" => organization, "id" => id}) do
+    access_organization(conn, organization, "admin", fn organization ->
+      id = safe_to_integer(id)
+
+      if is_nil(id) do
+        not_found(conn)
+      else
+        customer = Hexpm.Billing.get(organization.name)
+        invoice_ids = Enum.map(customer["invoices"], & &1["id"])
+
+        if id in invoice_ids do
+          invoice =
+            Hexpm.Billing.invoice(id, style_nonce: conn.assigns[:style_src_nonce])
+
+          conn
+          |> put_resp_header("content-type", "text/html")
+          |> send_resp(200, invoice)
+        else
+          not_found(conn)
+        end
+      end
+    end)
+  end
+
+  def pay_invoice(conn, %{"dashboard_org" => organization, "id" => id}) do
+    access_organization(conn, organization, "admin", fn organization ->
+      id = safe_to_integer(id)
+
+      if is_nil(id) do
+        not_found(conn)
+      else
+        customer = Hexpm.Billing.get(organization.name)
+        invoice_ids = Enum.map(customer["invoices"], & &1["id"])
+
+        audit = %{audit_data: audit_data(conn), organization: organization}
+
+        if id in invoice_ids do
+          case Hexpm.Billing.pay_invoice(id, audit: audit) do
+            :ok ->
+              conn
+              |> put_flash(:info, "Invoice paid.")
+              |> redirect(to: ~p"/dashboard/orgs/#{organization}/billing")
+
+            {:error, reason} ->
+              conn
+              |> put_status(400)
+              |> put_flash(:error, "Failed to pay invoice: #{reason["errors"]}.")
+              |> render_index(organization, tab: :billing)
+          end
+        else
+          not_found(conn)
+        end
+      end
+    end)
+  end
+
+  def update_billing(conn, %{"dashboard_org" => organization} = params) do
+    access_organization(conn, organization, "admin", fn organization ->
+      audit = %{audit_data: audit_data(conn), organization: organization}
+
+      update_billing(
+        conn,
+        organization,
+        params,
+        &Hexpm.Billing.update(organization.name, &1, audit: audit)
+      )
+    end)
+  end
+
+  def create_billing(conn, %{"dashboard_org" => organization} = params) do
+    access_organization(conn, organization, "admin", fn organization ->
+      params = Map.put(params, "token", organization.name)
+      audit = %{audit_data: audit_data(conn), organization: organization}
+
+      update_billing(conn, organization, params, fn customer_params ->
+        Seats.update_quantity(organization, :member_count, fn quantity ->
+          Hexpm.Billing.create(Map.put(customer_params, "quantity", quantity), audit: audit)
+        end)
+      end)
+    end)
+  end
+
+  @not_enough_seats "The number of open seats cannot be less than the number of organization members."
+
+  def add_seats(conn, %{"dashboard_org" => organization} = params) do
+    access_organization(conn, organization, "admin", fn organization ->
+      current_seats = safe_to_integer(params["current-seats"])
+      add_seats_val = safe_to_integer(params["add-seats"])
+
+      if is_nil(current_seats) or is_nil(add_seats_val) do
+        conn
+        |> put_flash(:error, "Invalid seat numbers.")
+        |> redirect(to: ~p"/dashboard/orgs/#{organization}/billing")
+      else
+        audit = %{audit_data: audit_data(conn), organization: organization}
+        seats = current_seats + add_seats_val
+
+        result =
+          Seats.update_quantity(organization, seats, fn quantity ->
+            billing_params = %{"quantity" => quantity, "nonce" => params["nonce"]}
+            Hexpm.Billing.update(organization.name, billing_params, audit: audit)
+          end)
+
+        case result do
+          {:ok, _customer} ->
+            conn
+            |> put_flash(:info, "The number of open seats have been increased.")
+            |> redirect(to: ~p"/dashboard/orgs/#{organization}/billing")
+
+          {:requires_action, body} ->
+            conn
+            |> put_resp_content_type("application/json")
+            |> send_resp(
+              402,
+              JSON.encode!(%{
+                requires_action: true,
+                client_secret: body["client_secret"],
+                invoice_id: body["invoice_id"],
+                stripe_publishable_key: body["stripe_publishable_key"]
+              })
+            )
+
+          {:error, {:seats_below_members, _used}} ->
+            conn
+            |> put_status(400)
+            |> put_flash(:error, @not_enough_seats)
+            |> render_index(organization, tab: :billing)
+
+          {:error, reason} ->
+            conn
+            |> put_flash(:error, reason["errors"] || "Failed to update billing information.")
+            |> redirect(to: ~p"/dashboard/orgs/#{organization}/billing")
+        end
+      end
+    end)
+  end
+
+  def remove_seats(conn, %{"dashboard_org" => organization} = params) do
+    access_organization(conn, organization, "admin", fn organization ->
+      seats = safe_to_integer(params["seats"])
+
+      if is_nil(seats) do
+        conn
+        |> put_flash(:error, "Invalid seat number.")
+        |> redirect(to: ~p"/dashboard/orgs/#{organization}/billing")
+      else
+        audit = %{audit_data: audit_data(conn), organization: organization}
+
+        result =
+          Seats.update_quantity(organization, seats, fn quantity ->
+            Hexpm.Billing.update(organization.name, %{"quantity" => quantity}, audit: audit)
+          end)
+
+        case result do
+          {:ok, _customer} ->
+            conn
+            |> put_flash(:info, "The number of open seats have been reduced.")
+            |> redirect(to: ~p"/dashboard/orgs/#{organization}/billing")
+
+          {:error, {:seats_below_members, _used}} ->
+            conn
+            |> put_status(400)
+            |> put_flash(:error, @not_enough_seats)
+            |> render_index(organization, tab: :billing)
+
+          {:error, reason} ->
+            conn
+            |> put_flash(:error, reason["errors"] || "Failed to update billing information.")
+            |> redirect(to: ~p"/dashboard/orgs/#{organization}/billing")
+        end
+      end
+    end)
+  end
+
+  def void_invoice(conn, %{"dashboard_org" => organization, "invoice_id" => invoice_id}) do
+    access_organization(conn, organization, "admin", fn organization ->
+      case Hexpm.Billing.void_invoice(organization.name, invoice_id) do
+        :ok -> :ok
+        {:error, _reason} -> :ok
+      end
+
+      send_resp(conn, 204, "")
+    end)
+  end
+
+  def change_plan(conn, %{"dashboard_org" => organization} = params) do
+    access_organization(conn, organization, "admin", fn organization ->
+      audit = %{audit_data: audit_data(conn), organization: organization}
+
+      case Hexpm.Billing.change_plan(
+             organization.name,
+             %{"plan_id" => params["plan_id"]},
+             audit: audit
+           ) do
+        :ok ->
+          conn
+          |> put_flash(:info, "You have switched to the #{plan_name(params["plan_id"])} plan.")
+          |> redirect(to: ~p"/dashboard/orgs/#{organization}/billing")
+
+        {:error, reason} ->
+          conn
+          |> put_flash(:error, reason["errors"] || "Failed to change plan.")
+          |> redirect(to: ~p"/dashboard/orgs/#{organization}/billing")
+      end
+    end)
+  end
+
+  defp plan_name("organization-monthly"), do: "monthly organization"
+  defp plan_name("organization-annually"), do: "annual organization"
+
+  def new(conn, _params) do
+    render_new(conn)
+  end
+
+  def create(conn, params) do
+    user = conn.assigns.current_user
+
+    case Organizations.create(user, params["organization"], audit: audit_data(conn)) do
+      {:ok, organization} ->
+        conn
+        |> put_flash(:info, "Organization created with one month free trial period active.")
+        |> redirect(to: ~p"/dashboard/orgs/#{organization}")
+
+      {:error, changeset} ->
+        conn
+        |> put_status(400)
+        |> render_new(changeset: changeset, params: params)
+    end
+  end
+
+  defp update_billing(conn, organization, params, fun) do
+    customer_params =
+      params
+      |> Map.take(["email", "person", "company", "token", "quantity"])
+      |> Map.put_new("person", nil)
+      |> Map.put_new("company", nil)
+
+    with :ok <- validate_billing_params(customer_params),
+         {:ok, _} <- fun.(customer_params) do
+      conn
+      |> put_flash(:info, "Updated your billing information.")
+      |> redirect(to: ~p"/dashboard/orgs/#{organization}/billing")
+    else
+      {:error, errors}
+      when is_map_key(errors, "email") or
+             is_map_key(errors, "person") or
+             is_map_key(errors, "company") ->
+        conn
+        |> put_status(400)
+        |> put_flash(:error, "Please fill in all required fields.")
+        |> render_index(organization, params: params, errors: errors, tab: :billing)
+
+      {:error, reason} ->
+        conn
+        |> put_status(400)
+        |> put_flash(:error, "Failed to update billing information.")
+        |> render_index(organization, params: params, errors: reason["errors"], tab: :billing)
+    end
+  end
+
+  defp validate_billing_params(%{"email" => email} = params)
+       when is_binary(email) and email != "" do
+    person = params["person"]
+    company = params["company"]
+
+    cond do
+      is_map(person) && (person["country"] == nil || person["country"] == "") ->
+        {:error, %{"person" => %{"country" => ["can't be blank"]}}}
+
+      is_map(company) ->
+        errors =
+          %{}
+          |> maybe_add_error(company["name"] in [nil, ""], "company", "name", "can't be blank")
+          |> maybe_add_error(
+            company["address_country"] in [nil, ""],
+            "company",
+            "country",
+            "can't be blank"
+          )
+          |> maybe_add_error(
+            company["address_line1"] in [nil, ""],
+            "company",
+            "address",
+            "can't be blank"
+          )
+          |> maybe_add_error(
+            company["address_city"] in [nil, ""],
+            "company",
+            "city",
+            "can't be blank"
+          )
+          |> maybe_add_error(
+            company["address_zip"] in [nil, ""],
+            "company",
+            "zip_code",
+            "can't be blank"
+          )
+
+        if map_size(errors) > 0, do: {:error, errors}, else: :ok
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_billing_params(_params) do
+    {:error, %{"email" => ["can't be blank"]}}
+  end
+
+  defp maybe_add_error(errors, true, section, field, message) do
+    put_in(errors, [Access.key(section, %{}), field], [message])
+  end
+
+  defp maybe_add_error(errors, false, _section, _field, _message), do: errors
+
+  def create_key(conn, %{"dashboard_org" => organization} = params) do
+    access_organization(conn, organization, "write", fn organization ->
+      key_params =
+        params["key"] |> KeyController.munge_permissions() |> KeyController.munge_expiry()
+
+      case Keys.create(organization, key_params, audit: audit_data(conn)) do
+        {:ok, %{key: key}} ->
+          conn
+          |> put_session(:generated_key, %{name: key.name, user_secret: key.user_secret})
+          |> put_flash(:info, "The key #{key.name} was successfully generated.")
+          |> redirect(to: ~p"/dashboard/orgs/#{organization}/keys")
+
+        {:error, :key, changeset, _} ->
+          conn
+          |> put_status(400)
+          |> render_index(organization, tab: :keys, key_changeset: changeset)
+      end
+    end)
+  end
+
+  def delete_key(conn, %{"dashboard_org" => organization, "name" => name}) do
+    access_organization(conn, organization, "write", fn organization ->
+      case Keys.revoke(organization, name, audit: audit_data(conn)) do
+        {:ok, _struct} ->
+          conn
+          |> put_flash(:info, "The key #{name} was revoked successfully.")
+          |> redirect(to: ~p"/dashboard/orgs/#{organization}/keys")
+
+        {:error, _} ->
+          conn
+          |> put_status(400)
+          |> put_flash(:error, "The key #{name} was not found.")
+          |> render_index(organization, tab: :keys)
+      end
+    end)
+  end
+
+  def update_profile(conn, %{"dashboard_org" => organization, "profile" => profile_params}) do
+    access_organization(conn, organization, "admin", fn organization ->
+      case Users.update_profile(organization.user, profile_params, audit: audit_data(conn)) do
+        {:ok, _updated_user} ->
+          conn
+          |> put_flash(:info, "Profile updated successfully.")
+          |> redirect(to: ~p"/dashboard/orgs/#{organization}")
+
+        {:error, _} ->
+          conn
+          |> put_status(400)
+          |> put_flash(:error, "Oops, something went wrong!")
+          |> render_index(organization)
+      end
+    end)
+  end
+
+  defp render_new(conn, opts \\ []) do
+    render(
+      conn,
+      "new.html",
+      title: "Dashboard - Organization sign up",
+      container: "container page dashboard",
+      billing_email: nil,
+      person: nil,
+      company: nil,
+      params: opts[:params],
+      errors: opts[:errors],
+      changeset: opts[:changeset] || create_changeset()
+    )
+  end
+
+  # The packages tab renders a version and a download total per package; the keys
+  # tab only needs the names to build its permission checkboxes.
+  defp packages_assign(organization, :packages) do
+    organization
+    |> organization_packages()
+    |> Hexpm.Repo.preload(:downloads)
+    |> Packages.attach_latest_releases()
+  end
+
+  defp packages_assign(organization, :keys), do: organization_packages(organization)
+  defp packages_assign(_organization, _tab), do: []
+
+  defp organization_packages(%{repository: %{packages: packages}}) when is_list(packages) do
+    Enum.sort_by(packages, & &1.name)
+  end
+
+  defp organization_packages(_), do: []
+
+  defp customer(conn, organization, tab) when tab in [:billing, :members] do
+    Hexpm.Billing.get(organization.name, script_nonce: conn.assigns[:script_src_nonce])
+  end
+
+  defp customer(_conn, _organization, _tab), do: nil
+
+  defp organization_repository(%{repository: %Ecto.Association.NotLoaded{}} = organization) do
+    Hexpm.Repo.preload(organization, :repository).repository
+  end
+
+  defp organization_repository(%{repository: repository}), do: repository
+  defp organization_repository(_organization), do: nil
+
+  defp policy_suggestion_repository(_organization, "hexpm"), do: Repository.hexpm()
+
+  defp policy_suggestion_repository(%{name: name} = organization, repository)
+       when repository == name do
+    organization_repository(organization)
+  end
+
+  defp policy_suggestion_repository(_organization, _repository), do: nil
+
+  defp version_suggestions(nil, _term), do: []
+
+  defp version_suggestions(package, term) do
+    package
+    |> Releases.all()
+    |> Enum.map(&to_string(&1.version))
+    |> Enum.filter(&version_matches?(&1, term))
+    |> Enum.take(@policy_suggestion_limit)
+    |> Enum.map(&%{version: &1})
+  end
+
+  defp version_matches?(_version, ""), do: true
+  defp version_matches?(version, term), do: String.contains?(version, term)
+
+  defp version_string(nil), do: nil
+  defp version_string(version), do: to_string(version)
+
+  defp render_index(conn, organization, opts \\ []) do
+    user = organization.user
+    public_email = user && Enum.find(user.emails, & &1.public)
+    gravatar_email = user && Enum.find(user.emails, & &1.gravatar)
+
+    customer = customer(conn, organization, opts[:tab])
+    keys = if opts[:tab] == :keys, do: Keys.all(organization), else: []
+    delete_key_path = ~p"/dashboard/orgs/#{organization}/keys"
+    create_key_path = ~p"/dashboard/orgs/#{organization}/keys"
+    packages = packages_assign(organization, opts[:tab])
+    policy_action = opts[:policy_action]
+    policy = opts[:policy]
+    policy_admin? = policy_admin?(conn, organization)
+
+    {policies, policy_stats, policy_activity, policy_rev} =
+      policy_assigns(organization, opts[:tab], policy_action, policy)
+
+    assigns =
+      [
+        title: "Dashboard - Organization",
+        container: "container page dashboard",
+        tab: opts[:tab] || :profile,
+        changeset: user && User.update_profile(user, %{}),
+        public_email: public_email && public_email.email,
+        gravatar_email: gravatar_email && gravatar_email.email,
+        organization: organization,
+        repository: organization.repository,
+        keys: keys,
+        audit_logs_path_fn: &~p"/dashboard/orgs/#{organization}/audit-logs?#{&1}",
+        params: opts[:params],
+        errors: opts[:errors],
+        delete_key_path: delete_key_path,
+        create_key_path: create_key_path,
+        generated_key: opts[:generated_key],
+        key_changeset: opts[:key_changeset] || key_changeset(),
+        packages: packages,
+        add_member_changeset: opts[:add_member_changeset] || add_member_changeset(),
+        new_organization_changeset: create_changeset(),
+        policy_action: policy_action,
+        policy: policy,
+        policy_admin?: policy_admin?,
+        policy_changeset: opts[:policy_changeset],
+        policies: policies,
+        policy_stats: policy_stats,
+        policy_activity: policy_activity,
+        policy_rev: policy_rev,
+        sso_org_session: current_org_session(conn, organization)
+      ] ++
+        audit_log_assigns(organization, opts[:tab], opts) ++
+        sso_assigns(organization, opts[:tab]) ++
+        member_assigns(organization, opts[:tab], opts)
+
+    assigns = Keyword.merge(assigns, customer_assigns(customer, organization))
+    render(conn, "index.html", assigns)
+  end
+
+  defp audit_log_assigns(organization, :audit_logs, opts) do
+    per_page = opts[:per_page] || 30
+    page = opts[:page] || 1
+
+    [
+      audit_logs: opts[:audit_logs] || AuditLogs.all_by(organization, page, per_page),
+      audit_logs_total_count: opts[:audit_logs_total_count] || AuditLogs.count_by(organization),
+      page: page,
+      per_page: per_page
+    ]
+  end
+
+  defp audit_log_assigns(_organization, _tab, _opts) do
+    [audit_logs: [], audit_logs_total_count: 0, page: 1, per_page: 30]
+  end
+
+  defp policy_assigns(organization, :policies, nil, _policy) do
+    policies = Policies.all(organization)
+    revisions = AuditLogs.count_by_policies(organization)
+    stats = Map.new(policies, &{&1.id, %{rev: Map.get(revisions, &1.name, 0)}})
+    {policies, stats, [], 0}
+  end
+
+  defp policy_assigns(_organization, :policies, :edit, policy) when not is_nil(policy) do
+    activity =
+      Hexpm.Accounts.AuditLog.all_by(policy)
+      |> Hexpm.Accounts.AuditLog.newest_first()
+      |> Ecto.Query.limit(10)
+      |> Hexpm.Repo.all()
+
+    {[], %{}, activity, AuditLogs.count_by(policy)}
+  end
+
+  defp policy_assigns(_organization, _tab, _action, _policy), do: {[], %{}, [], 0}
+
+  defp sso_assigns(organization, :sso) do
+    connection = SSO.get_connection(organization)
+    identities = if connection, do: SSO.identities(connection), else: []
+
+    [
+      sso_connection: connection,
+      sso_identities: identities,
+      sso_failures: if(connection, do: SSO.failures(connection), else: []),
+      sso_callback_url: url(~p"/sso/callback"),
+      sso_login_url: url(~p"/sso/org/#{organization}"),
+      sso_domains: OrganizationDomains.all(organization)
+    ]
+  end
+
+  defp sso_assigns(_organization, _tab), do: []
+
+  defp member_assigns(organization, :members, opts) do
+    [
+      invitations: OrganizationInvitations.all_pending(organization),
+      invite_changeset: opts[:invite_changeset] || invite_changeset()
+    ]
+  end
+
+  defp member_assigns(_organization, _tab, _opts) do
+    [invitations: [], invite_changeset: invite_changeset()]
+  end
+
+  defp current_org_session(conn, organization) do
+    if SSO.enabled?(organization) && conn.assigns[:current_session] do
+      SSO.current_org_session(conn.assigns.current_session.id, organization.id)
+    end
+  end
+
+  # Whether the current user may edit policies (create/update/delete are all
+  # admin-gated). Used to hide write affordances from readers who can still view
+  # the policy pages.
+  defp policy_admin?(conn, organization) do
+    user = conn.assigns[:current_user]
+
+    case user && Enum.find(organization.organization_users, &(&1.user_id == user.id)) do
+      nil -> false
+      repo_user -> repo_user.role in Organization.role_or_higher("admin")
+    end
+  end
+
+  defp customer_assigns(nil, _organization) do
+    [
+      billing_started?: false,
+      checkout_html: nil,
+      billing_email: nil,
+      plan_id: "organization-monthly",
+      plan_unit_amount: nil,
+      pending_plan_unit_amount: nil,
+      plan_price_change_at: nil,
+      subscription: nil,
+      monthly_cost: nil,
+      amount_with_tax: nil,
+      quantity: nil,
+      max_period_quantity: nil,
+      proration_amount: nil,
+      proration_days: nil,
+      tax_rate: nil,
+      discount: nil,
+      card: nil,
+      invoices: [],
+      person: nil,
+      company: nil,
+      pending_action_html: nil,
+      post_action: nil,
+      stripe_publishable_key: nil
+    ]
+  end
+
+  defp customer_assigns(customer, organization) do
+    post_action = ~p"/dashboard/orgs/#{organization}/billing-token"
+
+    [
+      billing_started?: true,
+      checkout_html: customer["checkout_html"],
+      billing_email: customer["email"],
+      plan_id: customer["plan_id"],
+      plan_unit_amount:
+        customer["plan_unit_amount"] || legacy_plan_unit_amount(customer["plan_id"]),
+      pending_plan_unit_amount: customer["pending_plan_unit_amount"],
+      plan_price_change_at: customer["plan_price_change_at"],
+      proration_amount: customer["proration_amount"],
+      proration_days: customer["proration_days"],
+      subscription: customer["subscription"],
+      monthly_cost: customer["monthly_cost"],
+      amount_with_tax: customer["amount_with_tax"],
+      quantity: customer["quantity"],
+      max_period_quantity: customer["max_period_quantity"],
+      tax_rate: customer["tax_rate"],
+      discount: customer["discount"],
+      card: customer["card"],
+      invoices: customer["invoices"],
+      person: customer["person"],
+      company: customer["company"],
+      pending_action_html: customer["pending_action_html"],
+      post_action: post_action,
+      stripe_publishable_key: customer["stripe_publishable_key"]
+    ]
+  end
+
+  defp legacy_plan_unit_amount("organization-annually"), do: 7_000
+  defp legacy_plan_unit_amount(_plan_id), do: 700
+
+  defp access_organization(conn, organization, role, fun) do
+    user = conn.assigns.current_user
+
+    organization =
+      Organizations.get(organization, [
+        :user,
+        user: :emails,
+        repository: [packages: :repository]
+      ])
+
+    if organization do
+      organization = %{
+        organization
+        | organization_users: Organizations.all_members(organization, user: :emails)
+      }
+
+      if repo_user = Enum.find(organization.organization_users, &(&1.user_id == user.id)) do
+        if repo_user.role in Organization.role_or_higher(role) do
+          fun.(organization)
+        else
+          conn
+          |> put_status(400)
+          |> put_flash(:error, "You do not have permission for this action.")
+          |> render_index(organization)
+        end
+      else
+        not_found(conn)
+      end
+    else
+      not_found(conn)
+    end
+  end
+
+  defp add_member_changeset() do
+    Organization.add_member(%OrganizationUser{}, %{"role" => "read"})
+  end
+
+  defp invite_changeset() do
+    OrganizationInvitation.changeset(%OrganizationInvitation{}, %{"role" => "read"})
+  end
+
+  defp create_changeset() do
+    Organization.changeset(%Organization{}, %{})
+  end
+
+  defp key_changeset() do
+    Key.changeset(%Key{}, %{}, %{})
+  end
+
+  defp cancel_message(nil = _cancel_date) do
+    "Your subscription is cancelled"
+  end
+
+  defp cancel_message(cancel_date) do
+    date = BillingHelpers.payment_date(cancel_date)
+
+    "Your subscription is cancelled, you will have access to the organization until " <>
+      "the end of your billing period at #{date}"
+  end
+end

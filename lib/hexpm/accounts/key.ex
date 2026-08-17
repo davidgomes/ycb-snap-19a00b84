@@ -1,0 +1,197 @@
+defmodule Hexpm.Accounts.Key do
+  use Hexpm.Schema
+
+  @derive HexpmWeb.Stale
+  @derive {Phoenix.Param, key: :name}
+
+  schema "keys" do
+    field :name, :string
+    field :secret_first, :string
+    field :secret_second, :string
+    field :public, :boolean, default: true
+    field :revoke_at, :utc_datetime_usec
+    timestamps()
+
+    embeds_one :last_use, Use, on_replace: :delete do
+      field :used_at, :utc_datetime_usec
+      field :user_agent, :string
+      field :ip, :string
+    end
+
+    belongs_to :user, User
+    belongs_to :organization, Organization
+    embeds_many :permissions, KeyPermission
+
+    # Only used after key creation to hold the user's key (not hashed)
+    # the user key will never be retrievable after this
+    field :user_secret, :string, virtual: true
+  end
+
+  def changeset(key, user_or_organization, params) do
+    cast(key, params, ~w(name revoke_at)a)
+    |> validate_required(~w(name)a)
+    |> validate_revoke_at_in_future()
+    |> add_keys()
+    |> prepare_changes(&unique_name/1)
+    |> cast_embed(:permissions, with: &KeyPermission.changeset(&1, user_or_organization, &2))
+    |> put_default_embed(:permissions, [%KeyPermission{domain: "api"}])
+  end
+
+  defp validate_revoke_at_in_future(changeset) do
+    validate_change(changeset, :revoke_at, fn :revoke_at, revoke_at ->
+      if DateTime.compare(revoke_at, DateTime.utc_now()) == :gt do
+        []
+      else
+        [revoke_at: "must be in the future"]
+      end
+    end)
+  end
+
+  def build(user_or_organization, params) do
+    build_assoc(user_or_organization, :keys)
+    |> associate_owner(user_or_organization)
+    |> changeset(user_or_organization, params)
+  end
+
+  defmacrop query_revoked(key) do
+    quote do
+      not is_nil(unquote(key).revoke_at) and unquote(key).revoke_at < fragment("NOW()")
+    end
+  end
+
+  def all(user_or_organization) do
+    from(
+      k in assoc(user_or_organization, :keys),
+      where: not query_revoked(k),
+      where: k.public,
+      order_by: k.name
+    )
+  end
+
+  def get(user_or_organization, name) do
+    from(
+      k in assoc(user_or_organization, :keys),
+      where: k.name == ^name,
+      where: not query_revoked(k)
+    )
+  end
+
+  def get_revoked(user_or_organization, name) do
+    from(
+      k in assoc(user_or_organization, :keys),
+      where: k.name == ^name,
+      where: query_revoked(k)
+    )
+  end
+
+  def revoke(key, revoke_at \\ nil) do
+    revoke_at = revoke_at || DateTime.add(DateTime.utc_now(), -1, :second)
+
+    key
+    |> change()
+    |> put_change(:revoke_at, revoke_at)
+  end
+
+  def revoke_by_name(user_or_organization, key_name, revoke_at \\ DateTime.utc_now()) do
+    from(
+      k in assoc(user_or_organization, :keys),
+      where: k.name == ^key_name and not query_revoked(k),
+      update: [
+        set: [
+          revoke_at: ^revoke_at,
+          updated_at: ^DateTime.utc_now()
+        ]
+      ]
+    )
+  end
+
+  def revoke_all(user_or_organization, revoke_at \\ nil) do
+    revoke_at = revoke_at || DateTime.add(DateTime.utc_now(), -1, :second)
+
+    from(
+      k in assoc(user_or_organization, :keys),
+      where: not query_revoked(k),
+      update: [
+        set: [
+          revoke_at: ^revoke_at,
+          updated_at: ^DateTime.utc_now()
+        ]
+      ]
+    )
+  end
+
+  def gen_key() do
+    user_secret = Auth.gen_key()
+    app_secret = Application.get_env(:hexpm, :secret)
+
+    <<first::binary-size(32), second::binary-size(32)>> =
+      :crypto.mac(:hmac, :sha256, app_secret, user_secret)
+      |> Base.encode16(case: :lower)
+
+    {user_secret, first, second}
+  end
+
+  def update_last_use(key, params) do
+    key
+    |> change()
+    |> put_embed(:last_use, struct(Key.Use, params))
+  end
+
+  defp add_keys(changeset) do
+    {user_secret, first, second} = gen_key()
+
+    changeset
+    |> put_change(:user_secret, user_secret)
+    |> put_change(:secret_first, first)
+    |> put_change(:secret_second, second)
+  end
+
+  defp unique_name(changeset) do
+    {:ok, name} = fetch_change(changeset, :name)
+
+    source =
+      if changeset.data.organization_id do
+        assoc(changeset.data, :organization)
+      else
+        assoc(changeset.data, :user)
+      end
+
+    names =
+      from(
+        s in source,
+        join: k in assoc(s, :keys),
+        where: not query_revoked(k),
+        where: k.name == ^name or like(k.name, ^(name <> "-%")),
+        select: k.name
+      )
+      |> changeset.repo.all
+
+    name = if name in names, do: find_unique_name(name, names), else: name
+
+    put_change(changeset, :name, name)
+  end
+
+  defp find_unique_name(name, names) do
+    max =
+      names
+      |> Enum.flat_map(fn existing_name ->
+        case Integer.parse(String.trim_leading(existing_name, name <> "-")) do
+          {num, ""} -> [num]
+          _ -> []
+        end
+      end)
+      |> Enum.max(&>=/2, fn -> 1 end)
+
+    "#{name}-#{max + 1}"
+  end
+
+  def revoked?(%Key{} = key) do
+    not is_nil(key.revoke_at) and DateTime.compare(key.revoke_at, DateTime.utc_now()) == :lt
+  end
+
+  def associate_owner(nil, _owner), do: nil
+  def associate_owner(%Key{} = key, %User{} = user), do: %{key | user: user, organization: nil}
+
+  def associate_owner(%Key{} = key, %Organization{} = organization),
+    do: %{key | user: nil, organization: organization}
+end

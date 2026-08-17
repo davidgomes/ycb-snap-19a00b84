@@ -1,0 +1,236 @@
+defmodule HexpmWeb.API.ReleaseController do
+  use HexpmWeb, :controller
+
+  @tarball_max_size 16 * 1024 * 1024
+
+  plug :maybe_fetch_release when action in [:show]
+  plug :fetch_release when action in [:delete]
+  plug :maybe_fetch_package when action in [:create]
+
+  plug :authorize,
+       [domains: [{"api", "read"}], fun: {AuthHelpers, :organization_access}]
+       when action in [:show]
+
+  plug :authorize,
+       [
+         authentication: :required,
+         domains: [{"api", "write"}, "package"],
+         fun: [{AuthHelpers, :package_owner}, {AuthHelpers, :organization_billing_active}]
+       ]
+       when action in [:create, :delete]
+
+  plug :handle_100_continue, [max_size: @tarball_max_size] when action in [:create, :publish]
+  plug :parse_tarball when action in [:publish]
+  plug :maybe_fetch_package when action in [:publish]
+
+  plug :authorize,
+       [
+         authentication: :required,
+         domains: [{"api", "write"}, "package"],
+         fun: [{AuthHelpers, :package_owner}, {AuthHelpers, :organization_billing_active}]
+       ]
+       when action in [:publish]
+
+  @download_period_params ~w(day month all)
+
+  def publish(conn, %{"body" => body_path} = params) do
+    case release_metadata(body_path) do
+      {:ok, meta, inner_checksum, outer_checksum} ->
+        replace? = Map.get(params, "replace", true)
+        request_id = List.first(get_resp_header(conn, "x-request-id"))
+
+        log_tarball(
+          conn.assigns.repository.name,
+          meta["name"],
+          meta["version"],
+          request_id,
+          body_path
+        )
+
+        Releases.publish(
+          conn.assigns.repository,
+          conn.assigns.package,
+          conn.assigns.current_user || conn.assigns.current_organization.user,
+          body_path,
+          meta,
+          inner_checksum,
+          outer_checksum,
+          audit: audit_data(conn),
+          replace: replace?
+        )
+
+      {:error, errors} ->
+        {:error, %{tar: errors}}
+    end
+    |> publish_result(conn)
+  end
+
+  def create(conn, %{"body" => body_path}) do
+    handle_tarball(
+      conn,
+      conn.assigns.repository,
+      conn.assigns.package,
+      conn.assigns.current_user || conn.assigns.current_organization.user,
+      body_path
+    )
+  end
+
+  def show(conn, params) do
+    if release = conn.assigns.release do
+      downloads_period = Hexpm.Utils.safe_to_atom(params["downloads"], @download_period_params)
+      downloads_after = Hexpm.Utils.safe_date(params["downloads_after"])
+      downloads_before = Hexpm.Utils.safe_date(params["downloads_before"])
+
+      downloads =
+        Downloads.for_period(release, downloads_period,
+          downloads_after: downloads_after,
+          downloads_before: downloads_before
+        )
+
+      release =
+        release
+        |> Releases.preload([:requirements, :publisher, :security_advisories])
+        |> Map.put(:downloads, downloads)
+
+      when_stale(conn, release, fn conn ->
+        conn
+        |> api_cache(:public)
+        |> render(:show, release: release)
+      end)
+    else
+      not_found(conn)
+    end
+  end
+
+  def delete(conn, _params) do
+    package = conn.assigns.package
+    release = conn.assigns.release
+
+    case Releases.revert(package, release, audit: audit_data(conn)) do
+      :ok ->
+        conn
+        |> api_cache(:private)
+        |> send_resp(204, "")
+
+      {:error, _, changeset, _} ->
+        validation_failed(conn, changeset)
+    end
+  end
+
+  defp parse_tarball(conn, _opts) do
+    case release_metadata(conn.params["body"], :metadata) do
+      {:ok, meta, _inner_checksum, _outer_checksum} ->
+        params = Map.put(conn.params, "name", meta["name"])
+
+        %{conn | params: params}
+        |> assign(:meta, meta)
+
+      {:error, errors} ->
+        validation_failed(conn, %{tar: errors})
+    end
+  end
+
+  defp handle_tarball(conn, repository, package, user, body_path) do
+    case release_metadata(body_path) do
+      {:ok, meta, inner_checksum, outer_checksum} ->
+        # Validate that tarball name matches URL parameter name
+        cond do
+          conn.params["name"] && meta["name"] != conn.params["name"] ->
+            {:error, %{name: "metadata does not match package name"}}
+
+          true ->
+            replace? = Map.get(conn.params, "replace", true)
+            request_id = List.first(get_resp_header(conn, "x-request-id"))
+            log_tarball(repository.name, meta["name"], meta["version"], request_id, body_path)
+
+            Releases.publish(
+              repository,
+              package,
+              user,
+              body_path,
+              meta,
+              inner_checksum,
+              outer_checksum,
+              audit: audit_data(conn),
+              replace: replace?
+            )
+        end
+
+      {:error, errors} ->
+        {:error, %{tar: errors}}
+    end
+    |> publish_result(conn)
+  end
+
+  defp publish_result({:ok, %{action: :insert, package: package, release: release}}, conn) do
+    location = ~p"/api/packages/#{package}/releases/#{release}"
+
+    conn
+    |> put_resp_header("location", location)
+    |> api_cache(:public)
+    |> put_status(201)
+    |> render(:show, release: release)
+  end
+
+  defp publish_result({:ok, %{action: :update, release: release}}, conn) do
+    conn
+    |> api_cache(:public)
+    |> render(:show, release: release)
+  end
+
+  defp publish_result({:error, errors}, conn) do
+    validation_failed(conn, errors)
+  end
+
+  defp publish_result({:error, _, changeset, _}, conn) do
+    validation_failed(conn, normalize_errors(changeset))
+  end
+
+  defp normalize_errors(%{changes: %{requirements: requirements}} = changeset) do
+    requirements =
+      Enum.map(requirements, fn %{errors: errors} = req ->
+        name = Ecto.Changeset.get_field(req, :name)
+        %{req | errors: for({_, v} <- errors, do: {name, v}, into: %{})}
+      end)
+
+    put_in(changeset.changes.requirements, requirements)
+  end
+
+  defp normalize_errors(changeset), do: changeset
+
+  defp log_tarball(repository, package, version, request_id, body_path) do
+    # Use random ID instead of user-controlled request_id in key to prevent overwrites
+    random_id = Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
+    filename = "#{repository}-#{package}-#{version}-#{random_id}.tar.gz"
+    key = Path.join(["debug", "tarballs", filename])
+    # Store request_id in metadata for debugging (ignored by Store.Local)
+    opts = [cache_control: "private", meta: %{"request-id" => request_id || "unknown"}]
+    Hexpm.Store.put_file(:repo_bucket, key, body_path, opts)
+  end
+
+  defp release_metadata(body_path, mode \\ :validate)
+
+  defp release_metadata(body_path, :metadata) do
+    unpack_release_metadata(body_path, :none)
+  end
+
+  defp release_metadata(body_path, :validate) do
+    tmp_dir = Hexpm.TmpDir.tmp_dir("release-tarball")
+
+    try do
+      unpack_release_metadata(body_path, String.to_charlist(tmp_dir))
+    after
+      Hexpm.TmpDir.cleanup()
+    end
+  end
+
+  defp unpack_release_metadata(body_path, output) do
+    case :hex_tarball.unpack({:file, String.to_charlist(body_path)}, output) do
+      {:ok, %{inner_checksum: inner_checksum, outer_checksum: outer_checksum, metadata: metadata}} ->
+        {:ok, metadata, inner_checksum, outer_checksum}
+
+      {:error, reason} ->
+        {:error, List.to_string(:hex_tarball.format_error(reason))}
+    end
+  end
+end

@@ -1,0 +1,360 @@
+defmodule Hexpm.Emails do
+  use Phoenix.Swoosh, view: HexpmWeb.EmailView
+  alias Hexpm.Accounts.{Email, Organization, User}
+
+  def owner_added(package, owners, owner) do
+    base_email()
+    |> email_to(owners)
+    |> subject("Hex.pm - Owner added to package #{package.name}")
+    |> assign(:username, owner.username)
+    |> assign(:package, package.name)
+    |> render_body(:owner_add)
+  end
+
+  def owner_removed(package, owners, owner) do
+    base_email()
+    |> email_to(owners)
+    |> subject("Hex.pm - Owner removed from package #{package.name}")
+    |> assign(:username, owner.username)
+    |> assign(:package, package.name)
+    |> render_body(:owner_remove)
+  end
+
+  def verification(user, email) do
+    base_email()
+    |> email_to(%{email | user: user})
+    |> subject("Hex.pm - Email verification")
+    |> assign(:username, user.username)
+    |> assign(:email_address, email.email)
+    |> assign(:key, email.verification_key)
+    |> render_body(:verification)
+  end
+
+  def password_reset_request(user, reset) do
+    base_email()
+    |> email_to(user)
+    |> subject("Hex.pm - Password reset request")
+    |> assign(:username, user.username)
+    |> assign(:key, reset.key)
+    |> render_body(:password_reset_request)
+  end
+
+  def security_password_reset(user, reset) do
+    base_email()
+    |> email_to(user)
+    |> subject("Hex.pm - Your password has been reset for security reasons")
+    |> assign(:username, user.username)
+    |> assign(:key, reset.key)
+    |> render_body(:security_password_reset)
+  end
+
+  def account_deletion_request(user, request) do
+    base_email()
+    |> email_to(user)
+    |> subject("Hex.pm - Account deletion request")
+    |> assign(:username, user.username)
+    |> assign(:key, request.key)
+    |> render_body(:account_deletion_request)
+  end
+
+  def account_deleted(user) do
+    base_email()
+    |> email_to(user)
+    |> subject("Hex.pm - Your account has been deleted")
+    |> assign(:username, user.username)
+    |> render_body(:account_deleted)
+  end
+
+  def account_removed(user, packages_deleted?, reason) do
+    base_email()
+    |> email_to(user)
+    |> subject("Hex.pm - Your account has been removed")
+    |> assign(:username, user.username)
+    |> assign(:packages_deleted, packages_deleted?)
+    |> assign(:reason, reason)
+    |> render_body(:account_removed)
+  end
+
+  def package_removed(owners, package, reason) do
+    base_email()
+    |> email_to(owners)
+    |> subject("Hex.pm - Package #{package} has been removed")
+    |> assign(:package, package)
+    |> assign(:reason, reason)
+    |> render_body(:package_removed)
+  end
+
+  def release_removed(owners, package, version, remaining, reason) do
+    base_email()
+    |> email_to(owners)
+    |> subject("Hex.pm - Package #{package} v#{version} has been removed")
+    |> assign(:package, package)
+    |> assign(:version, version)
+    |> assign(:remaining, remaining)
+    |> assign(:reason, reason)
+    |> render_body(:release_removed)
+  end
+
+  def password_changed(user) do
+    base_email()
+    |> email_to(user)
+    |> subject("Hex.pm - Your password has changed")
+    |> assign(:username, user.username)
+    |> render_body(:password_changed)
+  end
+
+  def tfa_enabled(user) do
+    base_email()
+    |> email_to(user)
+    |> subject("Hex.pm - TFA has been enabled on your account")
+    |> assign(:username, user.username)
+    |> render_body(:tfa_enabled)
+  end
+
+  def tfa_disabled(user) do
+    base_email()
+    |> email_to(user)
+    |> subject("Hex.pm - TFA has been disabled on your account")
+    |> assign(:username, user.username)
+    |> render_body(:tfa_disabled)
+  end
+
+  def tfa_rotate_recovery_codes(user) do
+    base_email()
+    |> email_to(user)
+    |> subject("Hex.pm - Your TFA recovery codes have been rotated")
+    |> assign(:username, user.username)
+    |> render_body(:tfa_recovery_rotated)
+  end
+
+  def email_added(user, new_email) do
+    base_email()
+    |> email_to(user)
+    |> subject("Hex.pm - A new email address was added to your account")
+    |> assign(:username, user.username)
+    |> assign(:new_email, new_email.email)
+    |> render_body(:email_added)
+  end
+
+  def primary_email_changed(user, old_addr, new_addr) do
+    base_email()
+    |> email_to(old_addr)
+    |> subject("Hex.pm - Your primary email address has changed")
+    |> assign(:username, user.username)
+    |> assign(:old_addr, old_addr)
+    |> assign(:new_addr, new_addr)
+    |> render_body(:primary_email_changed)
+  end
+
+  def api_key_created(user_or_org, key) do
+    base_email()
+    |> email_to(user_or_org)
+    |> subject("Hex.pm - A new API key was created on your account")
+    |> assign(:username, display_name(user_or_org))
+    |> assign(:key_name, key.name)
+    |> render_body(:api_key_created)
+  end
+
+  def api_key_revoked(user_or_org, key) do
+    base_email()
+    |> email_to(user_or_org)
+    |> subject("Hex.pm - An API key was revoked on your account")
+    |> assign(:username, display_name(user_or_org))
+    |> assign(:key_name, key.name)
+    |> render_body(:api_key_revoked)
+  end
+
+  def api_keys_all_revoked(user_or_org) do
+    base_email()
+    |> email_to(user_or_org)
+    |> subject("Hex.pm - All API keys have been revoked on your account")
+    |> assign(:username, display_name(user_or_org))
+    |> render_body(:api_keys_all_revoked)
+  end
+
+  def typosquat_candidates(candidates, threshold) do
+    base_email()
+    |> email_to(Application.get_env(:hexpm, :support_email))
+    |> subject("[TYPOSQUAT CANDIDATES]")
+    |> assign(:candidates, candidates)
+    |> assign(:threshold, threshold)
+    |> render_body(:typosquat_candidates)
+  end
+
+  def package_report(package, package_url, report, reporter) do
+    reporter_recipient = {reporter.name, reporter.email}
+
+    base_email()
+    |> email_to(Application.fetch_env!(:hexpm, :support_email))
+    |> Swoosh.Email.cc(reporter_recipient)
+    |> Swoosh.Email.reply_to(reporter_recipient)
+    |> subject("Hex.pm package report: #{report.summary}")
+    |> assign(:package, package)
+    |> assign(:package_url, package_url)
+    |> assign(:reason, Hexpm.PackageReports.Report.reason_label(report.reason))
+    |> assign(:summary, report.summary)
+    |> assign(:description, report.description)
+    |> assign(:reporter, reporter)
+    |> render_body(:package_report)
+  end
+
+  def organization_invite(organization, user) do
+    base_email()
+    |> email_to(user)
+    |> subject("Hex.pm - You have been added to the #{organization.name} organization")
+    |> assign(:organization, organization.name)
+    |> assign(:username, user.username)
+    |> render_body(:organization_invite)
+  end
+
+  def organization_invitation(invitation) do
+    base_email()
+    |> email_to(invitation.email)
+    |> subject(
+      "Hex.pm - You have been invited to the #{invitation.organization.name} organization"
+    )
+    |> assign(:organization, invitation.organization.name)
+    |> assign(:role, invitation.role)
+    |> assign(:token, invitation.raw_token)
+    |> assign(:expires_at, invitation.expires_at)
+    |> render_body(:organization_invitation)
+  end
+
+  def sso_identity_linked(organization, username, recipients) do
+    base_email()
+    |> email_to(recipients)
+    |> subject("Hex.pm - Organization SSO connected")
+    |> assign(:organization, organization)
+    |> assign(:username, username)
+    |> render_body(:sso_identity_linked)
+  end
+
+  def sso_identity_unlinked(organization, username, recipients) do
+    base_email()
+    |> email_to(recipients)
+    |> subject("Hex.pm - Organization SSO disconnected")
+    |> assign(:organization, organization)
+    |> assign(:username, username)
+    |> render_body(:sso_identity_unlinked)
+  end
+
+  def sso_seats(organization, kind, recipients) do
+    base_email()
+    |> email_to(recipients)
+    |> subject("Hex.pm - #{sso_seats_subject(kind, organization)}")
+    |> assign(:organization, organization)
+    |> assign(:kind, kind)
+    |> render_body(:sso_seats)
+  end
+
+  defp sso_seats_subject("seats_exhausted", organization), do: "#{organization} has no seats left"
+
+  defp sso_seats_subject("expansion_failed", organization),
+    do: "#{organization} could not add a seat"
+
+  def sso_email_mismatch(organization, username, recipients, provider_email) do
+    base_email()
+    |> email_to(recipients)
+    |> subject("Hex.pm - Organization SSO email differs")
+    |> assign(:organization, organization)
+    |> assign(:provider_email, provider_email)
+    |> assign(:username, username)
+    |> render_body(:sso_email_mismatch)
+  end
+
+  def package_published(owners, publisher, name, version) do
+    base_email()
+    |> email_to(owners)
+    |> subject("Hex.pm - Package #{name} v#{version} published")
+    |> assign(:publisher, publisher)
+    |> assign(:version, version)
+    |> assign(:package, name)
+    |> render_body(:package_published)
+  end
+
+  def secrets_detected(recipients, name, version, findings) do
+    base_email()
+    |> email_to(recipients)
+    |> subject("Hex.pm - Possible credentials found in #{name} v#{version}")
+    |> assign(:package, name)
+    |> assign(:version, version)
+    |> assign(:findings, findings)
+    |> render_body(:secrets_detected)
+  end
+
+  def announcement(receiver, subject, body) do
+    base_email()
+    |> email_to(receiver)
+    |> subject(subject)
+    |> assign(:subject, subject)
+    |> assign(:body, body)
+    |> render_body(:announcement)
+  end
+
+  defp email_to(email, to) do
+    recipients =
+      to
+      |> List.wrap()
+      |> Enum.flat_map(&expand_organization/1)
+      |> Enum.reject(&is_nil(recipient_email(&1)))
+      |> Enum.sort_by(&recipient_email/1)
+      |> Enum.uniq_by(&recipient_email/1)
+      |> Enum.map(&to_recipient/1)
+
+    Swoosh.Email.to(email, recipients)
+  end
+
+  defp to_recipient(email) when is_binary(email), do: email
+  defp to_recipient(%Email{} = email), do: {email.user.username, email.email}
+  defp to_recipient(%User{} = user), do: {user.username, User.email(user, :primary)}
+
+  defp recipient_email(nil), do: nil
+  defp recipient_email(email) when is_binary(email), do: email
+  defp recipient_email(%Email{email: email}), do: email
+  defp recipient_email(%User{} = user), do: User.email(user, :primary)
+
+  defp expand_organization(email) when is_binary(email), do: [email]
+  defp expand_organization(%Email{} = email), do: [email]
+  defp expand_organization(%User{organization: nil} = user), do: [user]
+  defp expand_organization(%User{organization: %Ecto.Association.NotLoaded{}} = user), do: [user]
+
+  defp expand_organization(
+         %User{organization: %{organization_users: %Ecto.Association.NotLoaded{}}} = user
+       ) do
+    [user]
+  end
+
+  # Same rule whichever side the organization arrives from. Filtering to admins
+  # here without the fallback below meant an organization with no admin member
+  # resolved to nobody and the mail was simply not sent.
+  defp expand_organization(%User{organization: organization}),
+    do: expand_organization(organization)
+
+  defp expand_organization(%Organization{organization_users: org_users}) do
+    admins =
+      org_users
+      |> Enum.filter(&(&1.role == "admin"))
+      |> Enum.map(&User.email(&1.user, :primary))
+
+    if admins == [] do
+      Enum.map(org_users, &User.email(&1.user, :primary))
+    else
+      admins
+    end
+  end
+
+  defp display_name(%User{username: username}), do: username
+  defp display_name(%Organization{name: name}), do: name
+
+  defp base_email() do
+    new()
+    |> from(source())
+    |> put_layout({HexpmWeb.EmailView, :layout})
+    |> put_provider_option(:click_tracking, %{enable: false})
+  end
+
+  defp source() do
+    host = Application.get_env(:hexpm, :email_host) || "hex.pm"
+    {"Hex.pm", "noreply@#{host}"}
+  end
+end

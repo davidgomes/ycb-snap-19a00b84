@@ -1,0 +1,91 @@
+defmodule Hexpm.Accounts.UserHandles do
+  use Hexpm.Schema
+
+  @derive {HexpmWeb.Stale, last_modified: nil}
+
+  embedded_schema do
+    field :twitter, :string
+    field :bluesky, :string
+    field :github, :string
+    field :elixirforum, :string
+    field :freenode, :string
+    field :slack, :string
+    field :url, :string
+  end
+
+  def changeset(handles, params) do
+    handles
+    |> cast(params, ~w(twitter bluesky github elixirforum freenode slack url)a)
+    |> validate_change(:url, fn :url, url ->
+      case URI.new(url) do
+        {:ok, uri} ->
+          if uri.scheme not in ["http", "https"] do
+            [url: "should be a valid http or https URL"]
+          else
+            []
+          end
+
+        {:error, err} ->
+          [url: err]
+      end
+    end)
+  end
+
+  def services() do
+    [
+      {:twitter, "X.com", "https://x.com/{handle}"},
+      {:bluesky, "Bluesky", "https://bsky.app/profile/{handle}"},
+      {:github, "GitHub", "https://github.com/{handle}"},
+      {:elixirforum, "Elixir Forum", "https://elixirforum.com/u/{handle}"},
+      {:freenode, "Libera", "irc://irc.libera.chat/elixir"},
+      {:slack, "Slack", "https://elixir-slack.community"}
+    ]
+  end
+
+  def render(%{handles: nil}) do
+    []
+  end
+
+  def render(user) do
+    Enum.flat_map(services(), fn {field, service, url} ->
+      handle = Map.get(user.handles, field)
+
+      if handle = handle && handle(field, handle) do
+        full_url = String.replace(url, "{handle}", handle)
+        [{service, handle, full_url}]
+      else
+        []
+      end
+    end)
+  end
+
+  def handle(:twitter, handle) do
+    handle = String.replace(handle, "twitter.com", "x.com")
+    unuri(handle, "x.com", "/")
+  end
+
+  def handle(:bluesky, "did:" <> _ = handle), do: handle
+  def handle(:bluesky, handle), do: unuri(handle, "bsky.app", "/profile/")
+  def handle(:github, handle), do: unuri(handle, "github.com", "/")
+  def handle(:elixirforum, handle), do: unuri(handle, "elixirforum.com", "/u/")
+  def handle(_service, handle), do: handle
+
+  defp unuri(handle, host, path) do
+    uri = URI.parse(handle)
+    http? = uri.scheme in ["http", "https"]
+    host? = String.contains?(uri.host || "", host)
+    path? = String.starts_with?(uri.path || "", path)
+
+    cond do
+      http? and host? and path? ->
+        {_, handle} = String.split_at(uri.path, String.length(path))
+        handle
+
+      uri.path ->
+        String.replace(uri.path, host <> path, "")
+
+      true ->
+        nil
+    end
+  end
+end
