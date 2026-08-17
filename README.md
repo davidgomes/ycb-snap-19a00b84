@@ -9,6 +9,12 @@ Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
 
 Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
 
+## Python worker
+
+Badge generation jobs enqueued from `BadgeForge.Badges` are processed by a
+Python Oban worker that shares the same `oban_jobs` table. See
+[`python/README.md`](python/README.md) for setup and run instructions.
+
 ## Learn more
 
 * Official website: https://www.phoenixframework.org/
