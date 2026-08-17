@@ -1,0 +1,622 @@
+defmodule ElixirLS.LanguageServer.Parser do
+  @moduledoc """
+  This server parses source files and maintains cache of AST and metadata
+  """
+  use GenServer
+  alias ElixirLS.LanguageServer.JsonRpc
+  alias ElixirLS.LanguageServer.Diagnostics
+  alias ElixirLS.LanguageServer.Server
+  alias ElixirLS.LanguageServer.SourceFile
+  alias ElixirSense.Core.MetadataBuilder
+  require Logger
+
+  @debounce_timeout 300
+  @parse_timeout 120_000
+
+  @dummy_source ""
+  @dummy_ast Code.string_to_quoted!(@dummy_source)
+  @dummy_metadata ElixirSense.Core.Metadata.fill(@dummy_source, MetadataBuilder.build(@dummy_ast))
+
+  defmodule Context do
+    defstruct [
+      :source_file,
+      :path,
+      :ast,
+      :diagnostics,
+      :metadata,
+      :parsed_version,
+      :flag
+    ]
+  end
+
+  def start_link(args) do
+    GenServer.start_link(__MODULE__, args, name: __MODULE__)
+  end
+
+  def notify_closed(uri) do
+    GenServer.cast(__MODULE__, {:closed, uri})
+  end
+
+  def parse_with_debounce(uri, source_file = %SourceFile{}) do
+    if should_parse?(uri, source_file) do
+      GenServer.cast(__MODULE__, {:parse_with_debounce, uri, source_file})
+    else
+      :ok
+    end
+  end
+
+  def parse_immediate(uri, source_file = %SourceFile{}, position \\ nil) do
+    if should_parse?(uri, source_file) do
+      case GenServer.call(
+             __MODULE__,
+             {:parse_immediate, uri, source_file, position},
+             @parse_timeout
+           ) do
+        :error -> raise "parser error"
+        :stale -> raise Server.ContentModifiedError, uri
+        %Context{} = context -> context
+      end
+    else
+      # not parsing - respond with empty struct
+      %Context{
+        source_file: source_file,
+        path: get_path(uri),
+        ast: @dummy_ast,
+        metadata: @dummy_metadata
+      }
+    end
+  end
+
+  @impl true
+  def init(_args) do
+    # TODO get source files on start?
+    {:ok, %{files: %{}, debounce_refs: %{}, parse_pids: %{}, parse_uris: %{}, queue: []}}
+  end
+
+  @impl GenServer
+  def terminate(reason, _state) do
+    case reason do
+      :normal ->
+        :ok
+
+      :shutdown ->
+        :ok
+
+      {:shutdown, _} ->
+        :ok
+
+      _other ->
+        ElixirLS.LanguageServer.Server.do_sanity_check()
+        message = Exception.format_exit(reason)
+
+        JsonRpc.telemetry(
+          "lsp_server_error",
+          %{
+            "elixir_ls.lsp_process" => inspect(__MODULE__),
+            "elixir_ls.lsp_server_error" => message
+          },
+          %{}
+        )
+
+        Logger.info("Terminating #{__MODULE__}: #{message}")
+    end
+
+    :ok
+  end
+
+  @impl true
+  def handle_cast({:closed, uri}, state = %{files: files}) do
+    state = cancel_debounce(state, uri)
+
+    # TODO maybe cancel parse
+
+    updated_files = Map.delete(files, uri)
+    notify_diagnostics_updated(updated_files)
+    {:noreply, %{state | files: updated_files}}
+  end
+
+  def handle_cast(
+        {:parse_with_debounce, uri, source_file = %SourceFile{version: current_version}},
+        state
+      ) do
+    state =
+      update_in(state.debounce_refs[uri], fn
+        nil ->
+          # schedule parse with debounce timeout
+          {Process.send_after(self(), {:parse_file, uri}, @debounce_timeout), current_version}
+
+        {old_ref, old_version} when old_version >= current_version ->
+          # already parsing this or newer version - ignore this request
+          {old_ref, current_version}
+
+        {old_ref, old_version} when old_version < current_version ->
+          # cancel previous parse and schedule new one with debounce timeout
+          Process.cancel_timer(old_ref, info: false)
+          {Process.send_after(self(), {:parse_file, uri}, @debounce_timeout), current_version}
+      end)
+
+    state =
+      update_in(state.files[uri], fn
+        nil ->
+          # add new file
+          %Context{
+            source_file: source_file,
+            path: get_path(uri)
+          }
+
+        %Context{source_file: %SourceFile{version: old_version}} = old_file
+        when current_version > old_version ->
+          # replace updated file with new version
+          %{old_file | source_file: source_file}
+
+        %Context{} = old_file ->
+          # ignore this request - this or newer version already in state
+          old_file
+      end)
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_call(
+        {:parse_immediate, uri, source_file = %SourceFile{}, position},
+        from,
+        %{files: files} = state
+      ) do
+    current_version = source_file.version
+    parent = self()
+
+    case {files[uri], Map.has_key?(state.parse_pids, {uri, current_version})} do
+      {%Context{parsed_version: ^current_version} = file, _} ->
+        {:reply, file, state}
+
+      {_, true} ->
+        state = %{state | queue: state.queue ++ [{{uri, current_version, position}, from}]}
+        {:noreply, state}
+
+      {%Context{source_file: %SourceFile{version: old_version}}, _}
+      when old_version > current_version ->
+        {:reply, :stale, state}
+
+      {other, _} ->
+        state = cancel_debounce(state, uri)
+
+        updated_file =
+          case other do
+            nil ->
+              %Context{
+                source_file: source_file,
+                path: get_path(uri)
+              }
+
+            %Context{source_file: %SourceFile{version: old_version}} = old_file
+            when old_version <= current_version ->
+              %{old_file | source_file: source_file}
+          end
+
+        {pid, ref} =
+          spawn_monitor(fn ->
+            updated_file = do_parse(updated_file, position)
+            send(parent, {:parse_file_done, uri, updated_file, from})
+          end)
+
+        {:noreply,
+         %{
+           state
+           | files: Map.put(files, uri, updated_file),
+             parse_pids: put_nested(state.parse_pids, {uri, current_version}, ref, {pid, from}),
+             parse_uris: Map.put(state.parse_uris, ref, {uri, current_version})
+         }}
+    end
+  end
+
+  @impl GenServer
+  def handle_info(
+        {:parse_file, uri},
+        %{files: files, debounce_refs: debounce_refs} = state
+      ) do
+    state =
+      case files[uri] do
+        nil ->
+          # file got closed, no need to do anything
+          state
+
+        file ->
+          version = file.source_file.version
+
+          parent = self()
+
+          {pid, ref} =
+            spawn_monitor(fn ->
+              updated_file = do_parse(file)
+              send(parent, {:parse_file_done, uri, updated_file, nil})
+            end)
+
+          %{
+            state
+            | debounce_refs: Map.delete(debounce_refs, uri),
+              parse_pids: put_nested(state.parse_pids, {uri, version}, ref, {pid, nil}),
+              parse_uris: Map.put(state.parse_uris, ref, {uri, version})
+          }
+      end
+
+    {:noreply, state}
+  end
+
+  def handle_info(
+        {:parse_file_done, uri, updated_file, from},
+        %{files: files} = state
+      ) do
+    if from do
+      GenServer.reply(from, updated_file)
+    end
+
+    parsed_file_version = updated_file.parsed_version
+
+    state =
+      case files[uri] do
+        nil ->
+          # file got closed, no need to do anything
+          state
+
+        %Context{source_file: %SourceFile{version: version}} when version > parsed_file_version ->
+          # result is from stale request, discard it
+          state
+
+        _ ->
+          updated_files = Map.put(files, uri, updated_file)
+          notify_diagnostics_updated(updated_files)
+          %{state | files: updated_files}
+      end
+
+    queue =
+      Enum.reduce(state.queue, [], fn
+        {{^uri, ^parsed_file_version, _position}, from}, acc ->
+          GenServer.reply(from, updated_file)
+          acc
+
+        {request, from}, acc ->
+          [{request, from} | acc]
+      end)
+      |> Enum.reverse()
+
+    {:noreply, %{state | queue: queue}}
+  end
+
+  def handle_info(
+        {:DOWN, ref, :process, pid, reason},
+        %{parse_pids: parse_pids, parse_uris: parse_uris} = state
+      ) do
+    {{uri, version}, updated_parse_uris} = Map.pop!(parse_uris, ref)
+
+    {by_ref, updated_parse_pids} = Map.pop!(parse_pids, {uri, version})
+    {{^pid, from}, updated_by_ref} = Map.pop!(by_ref, ref)
+
+    updated_parse_pids =
+      if updated_by_ref == %{} do
+        updated_parse_pids
+      else
+        Map.put(updated_parse_pids, {uri, version}, updated_by_ref)
+      end
+
+    if reason != :normal and from != nil do
+      GenServer.reply(from, :error)
+    end
+
+    if reason != :normal do
+      ElixirLS.LanguageServer.Server.do_sanity_check()
+      message = Exception.format_exit(reason)
+
+      JsonRpc.telemetry(
+        "lsp_server_error",
+        %{
+          "elixir_ls.lsp_process" => inspect(__MODULE__),
+          "elixir_ls.lsp_server_error" => "do_parse crashed: " <> message
+        },
+        %{}
+      )
+    end
+
+    state = %{state | parse_pids: updated_parse_pids, parse_uris: updated_parse_uris}
+
+    {:noreply, state}
+  end
+
+  defp should_parse?(uri, source_file) do
+    String.ends_with?(uri, [".ex", ".exs", ".eex", ".heex"]) or
+      source_file.language_id in ["elixir", "eex", "html-eex", "phoenix-heex"]
+  end
+
+  def do_parse(
+        %Context{source_file: source_file = %SourceFile{}, path: path} = file,
+        cursor_position \\ nil
+      ) do
+    text = source_file.text
+    language_id = source_file.language_id
+
+    # `parse_file/3` stays the sole source of editor diagnostics (via
+    # `Code.with_diagnostics`) and the parser for EEx/HEEx. It returns a tagged
+    # `{:ok, ast, diagnostics}` / `{:error, diagnostics}` - the tag (not the AST
+    # value) tells us whether Code parsed cleanly, because a valid source can
+    # itself be a falsey AST (e.g. the literal `nil`/`false`). For `.ex/.exs`
+    # Code's AST is discarded; the AST exposed on `Context.ast` (and the
+    # metadata) is always the range-bearing toxic2 tree, so range-aware
+    # providers can read node ranges straight off it.
+    parse_result = parse_file(text, path, language_id)
+
+    diagnostics =
+      case parse_result do
+        {:ok, _ast, diagnostics} -> diagnostics
+        {:error, diagnostics} -> diagnostics
+      end
+
+    {flag, ast, metadata} =
+      if elixir?(path, language_id) do
+        parse_elixir_toxic(text, match?({:ok, _ast, _diagnostics}, parse_result), cursor_position)
+      else
+        # EEx/HEEx: keep the Code AST (no toxic2 / no range support).
+        case parse_result do
+          {:ok, code_ast, _diagnostics} ->
+            acc = MetadataBuilder.build(code_ast)
+            metadata = ElixirSense.Core.Metadata.fill(text, acc)
+            {{:exact, cursor_position}, code_ast, metadata}
+
+          {:error, _diagnostics} ->
+            {:not_parsable, @dummy_ast, @dummy_metadata}
+        end
+      end
+
+    %Context{
+      file
+      | ast: ast,
+        diagnostics: diagnostics,
+        metadata: metadata,
+        parsed_version: source_file.version,
+        flag: flag
+    }
+  end
+
+  # Build the range-bearing AST + metadata from toxic2. `code_ok?` is whether
+  # `Code.string_to_quoted!` (in `parse_file/3`) accepted the source - it decides
+  # `:exact` vs `:fixed`. Never raises: on any unexpected parser/builder failure
+  # we fall back to the dummies and `:not_parsable`, preserving the previous
+  # `fault_tolerant_parse` safety net.
+  defp parse_elixir_toxic(text, code_ok?, cursor_position) do
+    {ast, _toxic_diagnostics} =
+      ElixirSense.Core.Parser.parse_to_neutralized_ast(text, range: true, keep_range: true)
+
+    flag =
+      cond do
+        code_ok? -> {:exact, cursor_position}
+        usable_ast?(ast) -> {:fixed, cursor_position}
+        true -> {:not_parsable, cursor_position}
+      end
+
+    case flag do
+      {:not_parsable, _} ->
+        {flag, @dummy_ast, @dummy_metadata}
+
+      _ ->
+        acc = MetadataBuilder.build(ast)
+        metadata = ElixirSense.Core.Metadata.fill(text, acc)
+        {flag, ast, metadata}
+    end
+  catch
+    kind, err ->
+      stacktrace = __STACKTRACE__
+
+      {payload, stacktrace} =
+        try do
+          Exception.blame(kind, err, stacktrace)
+        catch
+          kind_1, error_1 ->
+            # in case of error in Exception.blame we want to use the original error and stacktrace
+            Logger.error(
+              "Exception.blame failed: #{Exception.format(kind_1, error_1, __STACKTRACE__)}"
+            )
+
+            {err, stacktrace}
+        end
+
+      message = Exception.format(kind, payload, stacktrace)
+
+      Logger.warning(
+        "Unexpected parser error, please report it to elixir project https://github.com/elixir-lang/elixir/issues\n" <>
+          message
+      )
+
+      JsonRpc.telemetry(
+        "parser_error",
+        %{"elixir_ls.parser_error" => message},
+        %{}
+      )
+
+      {{:not_parsable, cursor_position}, @dummy_ast, @dummy_metadata}
+  end
+
+  # toxic2 always returns *some* tree; treat an empty block or a bare error node
+  # as "nothing recovered" so a truly broken file still reports `:not_parsable`.
+  defp usable_ast?(nil), do: false
+  defp usable_ast?({:__block__, _, []}), do: false
+  defp usable_ast?({:__error__, _, _}), do: false
+  defp usable_ast?(_ast), do: true
+
+  defp get_path(uri) do
+    case uri do
+      "file:" <> _ ->
+        SourceFile.Path.from_uri(uri)
+
+      _ ->
+        "nofile"
+    end
+  end
+
+  defp cancel_debounce(state = %{debounce_refs: debounce_refs}, uri) do
+    {maybe_ref, updated_debounce_refs} = Map.pop(debounce_refs, uri)
+
+    if maybe_ref do
+      {ref, _version} = maybe_ref
+      Process.cancel_timer(ref, info: false)
+    end
+
+    %{state | debounce_refs: updated_debounce_refs}
+  end
+
+  defp notify_diagnostics_updated(updated_files) do
+    updated_files
+    |> Map.new(fn {uri, %Context{diagnostics: diagnostics, parsed_version: version}} ->
+      {uri, {version, diagnostics}}
+    end)
+    |> Server.parser_finished()
+  end
+
+  defp elixir?(file, language_id) do
+    (is_binary(file) and (String.ends_with?(file, ".ex") or String.ends_with?(file, ".exs"))) or
+      language_id in ["elixir"]
+  end
+
+  defp eex?(file, language_id) do
+    (is_binary(file) and String.ends_with?(file, ".eex")) or language_id in ["eex", "html-eex"]
+  end
+
+  defp html_eex?(file, language_id) do
+    (is_binary(file) and
+       (String.ends_with?(file, ".html.eex") or String.ends_with?(file, ".htm.eex"))) or
+      language_id in ["html-eex"]
+  end
+
+  defp heex?(file, language_id) do
+    (is_binary(file) and String.ends_with?(file, ".heex")) or language_id in ["phoenix-heex"]
+  end
+
+  defp parse_file(text, file, language_id) do
+    {result, raw_diagnostics} =
+      Code.with_diagnostics([log: false], fn ->
+        try do
+          parser_options = [
+            file: file,
+            columns: true,
+            token_metadata: true
+          ]
+
+          ast =
+            cond do
+              eex?(file, language_id) ->
+                EEx.compile_string(text,
+                  file: file,
+                  parser_options: parser_options
+                )
+
+              html_eex?(file, language_id) ->
+                if Code.ensure_loaded?(Phoenix.HTML.Engine) do
+                  EEx.compile_string(text,
+                    file: file,
+                    parser_options: parser_options,
+                    engine: Phoenix.HTML.Engine
+                  )
+                else
+                  EEx.compile_string(text,
+                    file: file,
+                    parser_options: parser_options
+                  )
+                end
+
+              heex?(file, language_id) ->
+                cond do
+                  Code.ensure_loaded?(Phoenix.LiveView.TagEngine) ->
+                    # LV 0.18+
+                    EEx.compile_string(text,
+                      file: file,
+                      parser_options: parser_options,
+                      source: text,
+                      caller: __ENV__,
+                      engine: Phoenix.LiveView.TagEngine,
+                      tag_handler: Phoenix.LiveView.HTMLEngine
+                    )
+
+                  Code.ensure_loaded?(Phoenix.LiveView.HTMLEngine) ->
+                    # LV <= 0.18.17
+                    EEx.compile_string(text,
+                      file: file,
+                      parser_options: parser_options,
+                      source: text,
+                      caller: __ENV__,
+                      engine: Phoenix.LiveView.HTMLEngine
+                    )
+
+                  true ->
+                    EEx.compile_string(text,
+                      file: file,
+                      parser_options: parser_options
+                    )
+                end
+
+              true ->
+                Code.string_to_quoted!(text, parser_options)
+            end
+
+          {:ok, ast}
+        rescue
+          e in [
+            EEx.SyntaxError,
+            SyntaxError,
+            TokenMissingError,
+            MismatchedDelimiterError,
+            CompileError
+          ] ->
+            diagnostic = Diagnostics.from_error(:error, e, __STACKTRACE__, file, :no_stacktrace)
+
+            {:error, diagnostic}
+
+          e ->
+            if is_struct(e) and
+                 e.__struct__ in [
+                   Phoenix.LiveView.Tokenizer.ParseError,
+                   Phoenix.LiveView.HTMLTokenizer.ParseError
+                 ] do
+              diagnostic =
+                Diagnostics.from_error(:error, e, __STACKTRACE__, file, :no_stacktrace)
+
+              {:error, diagnostic}
+            else
+              reraise e, __STACKTRACE__
+            end
+        catch
+          kind, err ->
+            diagnostic = Diagnostics.from_error(kind, err, __STACKTRACE__, file, :no_stacktrace)
+
+            # e.g. https://github.com/elixir-lang/elixir/issues/12926
+            Logger.warning(
+              "Unexpected parser error, please report it to elixir project https://github.com/elixir-lang/elixir/issues\n" <>
+                diagnostic.message
+            )
+
+            JsonRpc.telemetry(
+              "parser_error",
+              %{"elixir_ls.parser_error" => diagnostic.message},
+              %{}
+            )
+
+            {:error, diagnostic}
+        end
+      end)
+
+    warning_diagnostics =
+      raw_diagnostics
+      |> Enum.map(fn raw ->
+        Diagnostics.from_code_diagnostic(raw, file, :no_stacktrace)
+      end)
+
+    case result do
+      {:ok, ast} -> {:ok, ast, warning_diagnostics}
+      {:error, diagnostic} -> {:error, [diagnostic | warning_diagnostics]}
+    end
+  end
+
+  defp put_nested(map, key1, key2, value) do
+    update_in(map, [key1], fn
+      nil -> %{key2 => value}
+      inner -> Map.put(inner, key2, value)
+    end)
+  end
+end

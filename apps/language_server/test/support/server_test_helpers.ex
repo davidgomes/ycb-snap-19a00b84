@@ -1,0 +1,134 @@
+defmodule ElixirLS.LanguageServer.Test.ServerTestHelpers do
+  import ExUnit.Callbacks, only: [start_supervised!: 1]
+
+  alias ElixirLS.LanguageServer.Server
+  alias ElixirLS.LanguageServer.JsonRpc
+  alias ElixirLS.LanguageServer.SourceFile
+  alias ElixirLS.LanguageServer.Providers.WorkspaceSymbols
+  alias ElixirLS.LanguageServer.ClientCapabilities
+  alias ElixirLS.Utils.PacketCapture
+  use ElixirLS.LanguageServer.Protocol
+
+  def start_server(server) do
+    packet_capture = start_supervised!({PacketCapture, self()})
+
+    replace_logger(packet_capture)
+
+    Process.group_leader(server, packet_capture)
+
+    json_rpc = start_supervised!({JsonRpc, name: JsonRpc})
+    Process.group_leader(json_rpc, packet_capture)
+
+    workspace_symbols = start_supervised!({WorkspaceSymbols, []})
+    Process.group_leader(workspace_symbols, packet_capture)
+
+    server
+  end
+
+  def replace_logger(packet_capture) do
+    # :logger application is already started
+    # replace console logger with LSP
+    configs =
+      for handler_id <- :logger.get_handler_ids() do
+        {:ok, config} = :logger.get_handler_config(handler_id)
+        :ok = :logger.remove_handler(handler_id)
+        config
+      end
+
+    :ok =
+      :logger.add_handler(
+        Logger.Backends.JsonRpc,
+        Logger.Backends.JsonRpc,
+        Logger.Backends.JsonRpc.handler_config()
+      )
+
+    ExUnit.Callbacks.on_exit(fn ->
+      :ok = :logger.remove_handler(Logger.Backends.JsonRpc)
+
+      for config <- configs do
+        :ok = :logger.add_handler(config.id, config.module, config)
+      end
+    end)
+  end
+
+  def initialize(server, config \\ nil) do
+    Server.receive_packet(
+      server,
+      initialize_req(1, root_uri(), %{
+        "workspace" => %{
+          "configuration" => true
+        }
+      })
+    )
+
+    Server.receive_packet(server, notification("initialized", %{}))
+
+    config = config || %{"dialyzerEnabled" => false}
+
+    id =
+      receive do
+        %{
+          "id" => id,
+          "method" => "workspace/configuration"
+        } ->
+          id
+      after
+        1000 -> raise "timeout"
+      end
+
+    JsonRpc.receive_packet(response(id, [config]))
+
+    wait_until_compiled(server)
+  end
+
+  def fake_initialize(server, mix_project? \\ true) do
+    # Store default client capabilities for tests
+    default_client_capabilities = %GenLSP.Structures.ClientCapabilities{
+      text_document: %GenLSP.Structures.TextDocumentClientCapabilities{
+        completion: %GenLSP.Structures.CompletionClientCapabilities{
+          completion_item: %{
+            snippet_support: true,
+            deprecated_support: true,
+            tag_support: %{value_set: [1]}
+          }
+        },
+        hover: %GenLSP.Structures.HoverClientCapabilities{},
+        signature_help: %GenLSP.Structures.SignatureHelpClientCapabilities{},
+        document_symbol: %GenLSP.Structures.DocumentSymbolClientCapabilities{
+          hierarchical_document_symbol_support: true
+        }
+      },
+      workspace: %GenLSP.Structures.WorkspaceClientCapabilities{
+        configuration: true,
+        did_change_configuration: %GenLSP.Structures.DidChangeConfigurationClientCapabilities{
+          dynamic_registration: true
+        },
+        did_change_watched_files: %GenLSP.Structures.DidChangeWatchedFilesClientCapabilities{
+          dynamic_registration: true
+        },
+        symbol: %GenLSP.Structures.WorkspaceSymbolClientCapabilities{
+          tag_support: %{value_set: [1]}
+        }
+      }
+    }
+
+    ClientCapabilities.store(default_client_capabilities)
+
+    :sys.replace_state(server, fn state ->
+      %{state | server_instance_id: "123", project_dir: File.cwd!(), mix_project?: mix_project?}
+    end)
+  end
+
+  def wait_until_compiled(pid) do
+    state = :sys.get_state(pid)
+
+    if state.build_running? do
+      Process.sleep(500)
+      wait_until_compiled(pid)
+    end
+  end
+
+  def root_uri do
+    SourceFile.Path.to_uri(File.cwd!())
+  end
+end
