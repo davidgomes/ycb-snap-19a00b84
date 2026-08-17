@@ -378,12 +378,19 @@ defprotocol Flop.Schema do
   `{mod :: module, function :: atom, opts :: keyword}`.
 
   - `filter` is called to filter by the field. It receives the Ecto query, the
-    Flop filter and an options keyword list, and returns the updated query. A
-    custom field needs it to be filterable.
-  - `field_dynamic` is called to order by the field. It receives an options
-    keyword list and returns an `Ecto.Query.dynamic_expr`, which Flop applies
-    the order direction to. It receives neither the query nor the direction. A
-    custom field needs it to be sortable.
+    Flop filter and an options keyword list, and returns the updated query.
+  - `field_dynamic` receives an options keyword list and returns an
+    `Ecto.Query.dynamic_expr`. It receives neither the query nor the filter or
+    order direction. It is used to order by the field, applying the order
+    direction to the returned expression. It is also used to filter by the
+    field, if no `filter` function is configured; in that case, Flop builds
+    the filter condition for the given operator around the returned
+    expression, the same way it would for a regular schema field.
+
+  A custom field needs at least one of the two callbacks: `field_dynamic` to
+  be sortable, and `filter` or `field_dynamic` to be filterable. If both
+  `filter` and `field_dynamic` are configured and the field is filterable,
+  `filter` takes precedence for filtering.
 
   If runtime options are necessary (like the timezone of the request or the user
   ID of the current user), use the `extra_opts` option when calling Flop
@@ -461,6 +468,32 @@ defprotocol Flop.Schema do
   `:bindings` option to specify them. Then, using `Flop.with_named_bindings/4`,
   these bindings can be conditionally added to your query based on filter
   conditions.
+
+  If you only need a custom field for calculated values that can be filtered
+  and ordered with the regular filter operators, you can configure just the
+  `field_dynamic` callback and omit `filter` entirely.
+
+      @derive {
+        Flop.Schema,
+        filterable: [:age_in_months],
+        sortable: [:age_in_months],
+        adapter_opts: [
+          custom_fields: [
+            age_in_months: [
+              field_dynamic: {CustomFields, :age_in_months, []},
+              ecto_type: :integer
+            ]
+          ]
+        ]
+      }
+
+      defmodule CustomFields do
+        import Ecto.Query
+
+        def age_in_months(_opts) do
+          dynamic([r], fragment("? * 12", r.age))
+        end
+      end
 
   ## Ecto type option
 
@@ -556,7 +589,8 @@ defprotocol Flop.Schema do
 
   - `:filterable` (required) - A list of fields that can be used in filters.
     Supports fields from the Ecto schema, join fields, compound fields and
-    custom fields. Alias fields are not supported.
+    custom fields. Alias fields are not supported. Custom fields need either a
+    `:filter` or a `:field_dynamic` function to be filterable.
   - `:sortable` (required) - A list of fields that can be used for sorting.
     Supports fields from the Ecto schema, join fields, compound fields, alias
     fields, and custom fields that configure `:field_dynamic`.
@@ -624,11 +658,15 @@ defprotocol Flop.Schema do
   - `:filter` - A module/function/options tuple referencing a custom filter
     function. The function must take the Ecto query, the `Flop.Filter` struct,
     and the options from the tuple as arguments, and return the updated query.
-    Required if the field is filterable.
+    Required if the field is filterable, unless `:field_dynamic` is set.
   - `:field_dynamic` - A module/function/options tuple referencing a function
     that returns the field expression as an `Ecto.Query.dynamic_expr`. The
-    function takes the options from the tuple as its only argument. Flop applies
-    the order direction to the expression. Required if the field is sortable.
+    function takes the options from the tuple as its only argument. Flop
+    applies the order direction to the expression if the field is used for
+    ordering, or builds the filter condition for the given operator around
+    the expression if the field is used for filtering and no `:filter`
+    function is configured. Required if the field is sortable, and required
+    if the field is filterable and no `:filter` function is configured.
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator
     and value validation is based on this option.
   - `:bindings` - If either callback requires certain named bindings to be

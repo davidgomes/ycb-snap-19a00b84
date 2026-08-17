@@ -290,6 +290,148 @@ defmodule Flop.Adapter.Ecto.Operators do
     {fragment, prelude, nil}
   end
 
+  # `field_dynamic` variants of the `op_config/1` and `op_config/2` clauses
+  # above, used to filter custom fields via a `field_dynamic` function
+  # instead of a schema field. The prelude and combinator are always the same
+  # as for the schema field variant, so they are not repeated here.
+
+  def op_config_dynamic(:=~, false), do: op_config_dynamic(:like)
+  def op_config_dynamic(:ilike, false), do: op_config_dynamic(:like)
+  def op_config_dynamic(:not_ilike, false), do: op_config_dynamic(:not_like)
+  def op_config_dynamic(:ilike_and, false), do: op_config_dynamic(:like_and)
+  def op_config_dynamic(:ilike_or, false), do: op_config_dynamic(:like_or)
+
+  def op_config_dynamic(:starts_with, false) do
+    like_fragment_dynamic(quote(do: ^var!(value)))
+  end
+
+  def op_config_dynamic(:ends_with, false) do
+    like_fragment_dynamic(quote(do: ^var!(value)))
+  end
+
+  def op_config_dynamic(op, _ilike?), do: op_config_dynamic(op)
+
+  def op_config_dynamic(:==) do
+    quote do
+      ^var!(field_dynamic) == ^var!(value)
+    end
+  end
+
+  def op_config_dynamic(:!=) do
+    quote do
+      ^var!(field_dynamic) != ^var!(value)
+    end
+  end
+
+  def op_config_dynamic(:>=) do
+    quote do
+      ^var!(field_dynamic) >= ^var!(value)
+    end
+  end
+
+  def op_config_dynamic(:<=) do
+    quote do
+      ^var!(field_dynamic) <= ^var!(value)
+    end
+  end
+
+  def op_config_dynamic(:>) do
+    quote do
+      ^var!(field_dynamic) > ^var!(value)
+    end
+  end
+
+  def op_config_dynamic(:<) do
+    quote do
+      ^var!(field_dynamic) < ^var!(value)
+    end
+  end
+
+  def op_config_dynamic(:in) do
+    quote do
+      ^var!(field_dynamic) in ^var!(value)
+    end
+  end
+
+  def op_config_dynamic(:contains) do
+    quote do
+      ^var!(value) in ^var!(field_dynamic)
+    end
+  end
+
+  def op_config_dynamic(:not_contains) do
+    quote do
+      ^var!(value) not in ^var!(field_dynamic)
+    end
+  end
+
+  def op_config_dynamic(:like) do
+    like_fragment_dynamic(quote(do: ^var!(value)))
+  end
+
+  def op_config_dynamic(:not_like) do
+    quote do
+      not unquote(like_fragment_dynamic(quote(do: ^var!(value))))
+    end
+  end
+
+  def op_config_dynamic(:=~) do
+    quote do
+      ilike(^var!(field_dynamic), ^var!(value))
+    end
+  end
+
+  def op_config_dynamic(:ilike) do
+    quote do
+      ilike(^var!(field_dynamic), ^var!(value))
+    end
+  end
+
+  def op_config_dynamic(:not_ilike) do
+    quote do
+      not ilike(^var!(field_dynamic), ^var!(value))
+    end
+  end
+
+  def op_config_dynamic(:not_in) do
+    quote do
+      ^var!(field_dynamic) not in ^var!(processed_value) and
+        not (^var!(reject_nil?) and is_nil(^var!(field_dynamic)))
+    end
+  end
+
+  def op_config_dynamic(:like_and) do
+    like_fragment_dynamic(quote(do: ^substring))
+  end
+
+  def op_config_dynamic(:like_or) do
+    like_fragment_dynamic(quote(do: ^substring))
+  end
+
+  def op_config_dynamic(:ilike_and) do
+    quote do
+      ilike(^var!(field_dynamic), ^substring)
+    end
+  end
+
+  def op_config_dynamic(:ilike_or) do
+    quote do
+      ilike(^var!(field_dynamic), ^substring)
+    end
+  end
+
+  def op_config_dynamic(:starts_with) do
+    quote do
+      ilike(^var!(field_dynamic), ^var!(value))
+    end
+  end
+
+  def op_config_dynamic(:ends_with) do
+    quote do
+      ilike(^var!(field_dynamic), ^var!(value))
+    end
+  end
+
   # The escape character must be bound rather than written into the fragment
   # because no literal works everywhere. MySQL reads '\' as an incomplete string
   # escape, SQLite and Postgres read '\\' as two characters.
@@ -298,6 +440,19 @@ defmodule Flop.Adapter.Ecto.Operators do
       fragment(
         "? LIKE ? ESCAPE ?",
         field(r, ^var!(field)),
+        unquote(pattern),
+        ^"\\"
+      )
+    end
+  end
+
+  # Same as `like_fragment/1`, but for custom fields that are filtered via a
+  # `field_dynamic` function instead of a schema field.
+  defp like_fragment_dynamic(pattern) do
+    quote do
+      fragment(
+        "? LIKE ? ESCAPE ?",
+        ^var!(field_dynamic),
         unquote(pattern),
         ^"\\"
       )
@@ -337,6 +492,39 @@ defmodule Flop.Adapter.Ecto.Operators do
       fragment(
         "JSON_CONTAINS(?, ?)",
         field(r, ^var!(field)),
+        ^[Dialect.dump_array_element(var!(value), var!(ecto_type))]
+      )
+    end
+  end
+
+  # `field_dynamic` variants of the `empty/1` and `json_contains/0` macros
+  # above, used to filter custom fields via a `field_dynamic` function.
+  #
+  # There are no `:array` and `:map` variants of this macro. Combining a
+  # pinned `field_dynamic` expression with `type(^[], ^ecto_type)` (where
+  # `ecto_type` is itself a runtime variable rather than a literal) in the
+  # same `dynamic/2` call confuses Ecto's pin escaping, so those two cases are
+  # built directly in `Flop.Adapter.Ecto.build_op/5` instead, by computing the
+  # correctly typed empty value in a separate `dynamic/2` call first.
+
+  defmacro empty_dynamic(:json_array) do
+    quote do
+      is_nil(^var!(field_dynamic)) or
+        fragment("JSON_LENGTH(?) = 0", ^var!(field_dynamic))
+    end
+  end
+
+  defmacro empty_dynamic(:other) do
+    quote do
+      is_nil(^var!(field_dynamic))
+    end
+  end
+
+  defmacro json_contains_dynamic do
+    quote do
+      fragment(
+        "JSON_CONTAINS(?, ?)",
+        ^var!(field_dynamic),
         ^[Dialect.dump_array_element(var!(value), var!(ecto_type))]
       )
     end

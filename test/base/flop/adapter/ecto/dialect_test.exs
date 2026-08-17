@@ -184,6 +184,43 @@ defmodule Flop.Adapter.Ecto.DialectTest do
     end
   end
 
+  describe "the query built for the array operators on a field_dynamic custom field" do
+    test "uses the array itself on an adapter that has one" do
+      assert custom_field_where_clause(PostgresRepo, :contains, "pear") ==
+               ~S|^"pear" in c0.tags|
+
+      assert custom_field_where_clause(PostgresRepo, :not_contains, "pear") ==
+               ~S|^"pear" not in c0.tags|
+
+      assert custom_field_where_clause(PostgresRepo, :empty, true) ==
+               ~S|is_nil(c0.tags) or c0.tags == type(^[], {:array, :string})|
+    end
+
+    test "uses the JSON functions on an adapter that has no array type" do
+      assert custom_field_where_clause(MyXQLRepo, :contains, "pear") ==
+               ~S|fragment("JSON_CONTAINS(?, ?)", c0.tags, ^["pear"])|
+
+      assert custom_field_where_clause(MyXQLRepo, :not_contains, "pear") ==
+               ~S|not fragment("JSON_CONTAINS(?, ?)", c0.tags, ^["pear"])|
+
+      assert custom_field_where_clause(MyXQLRepo, :empty, true) ==
+               ~S|is_nil(c0.tags) or fragment("JSON_LENGTH(?) = 0", c0.tags)|
+    end
+  end
+
+  defp custom_field_where_clause(repo, op, value) do
+    flop = %Flop{
+      filters: [%Flop.Filter{field: :tags_score, op: op, value: value}]
+    }
+
+    MyApp.CustomFieldPet
+    |> Flop.query(flop, for: MyApp.CustomFieldPet, repo: repo)
+    |> inspect()
+    |> String.split("where: ")
+    |> List.last()
+    |> String.trim_trailing(">")
+  end
+
   defp where_clause(repo) do
     flop = %Flop{
       filters: [%Flop.Filter{field: :name, op: :ilike, value: "abc"}]
