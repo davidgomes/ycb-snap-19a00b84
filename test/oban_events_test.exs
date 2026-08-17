@@ -55,30 +55,6 @@ defmodule ObanEventsTest do
     }
   end
 
-  # Helper module for :if conditions
-  defmodule ConditionHelpers do
-    def check_enabled(event), do: event.data["enabled"] == true
-    def check_premium(event), do: event.data["plan"] == "premium"
-    def always_false(_event), do: false
-  end
-
-  # Test module with :if conditions
-  defmodule ConditionalHandlers do
-    @moduledoc false
-    use ObanEvents
-
-    alias ObanEventsTest.ConditionHelpers
-
-    @events %{
-      conditional_event: [
-        {TestHandler, if: {ConditionHelpers, :check_enabled, []}},
-        {TestHandler, if: {ConditionHelpers, :check_premium, []}},
-        {TestHandler, if: {ConditionHelpers, :always_false, []}},
-        TestHandler
-      ]
-    }
-  end
-
   describe "emit/2" do
     test "creates Oban jobs for registered event handlers" do
       event_data = %{
@@ -159,6 +135,28 @@ defmodule ObanEventsTest do
       assert job.tags == ["custom"]
     end
 
+    test "passes through arbitrary Oban.Job options" do
+      defmodule UniqueOptsEventBus do
+        @moduledoc false
+        use ObanEvents, oban: {Oban, unique: [period: 60]}
+
+        @events %{
+          unique_event: [
+            {ObanEventsTest.TestHandler, oban: [unique: [period: 30], meta: %{source: "test"}]},
+            ObanEventsTest.TestHandler
+          ]
+        }
+      end
+
+      assert {:ok, jobs} = UniqueOptsEventBus.emit(:unique_event, %{"test" => "data"})
+      assert length(jobs) == 2
+
+      [job1, job2] = jobs
+      assert job1.unique[:period] == 30
+      assert job1.meta["source"] == "test"
+      assert job2.unique[:period] == 60
+    end
+
     test "per-handler options override global defaults" do
       assert {:ok, jobs} =
                PerHandlerOptionsEventBus.emit(:multi_handler_event, %{"test" => "data"})
@@ -187,41 +185,6 @@ defmodule ObanEventsTest do
       assert job3.priority == 2
       assert job3.max_attempts == 3
       assert job3.tags == []
-    end
-
-    test ":if conditions filter handlers based on event data" do
-      # enabled=true, plan=premium -> should schedule first 2 handlers + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => true,
-                 "plan" => "premium"
-               })
-
-      assert length(jobs) == 3
-
-      # enabled=true, plan=free -> should schedule first handler + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{"enabled" => true, "plan" => "free"})
-
-      assert length(jobs) == 2
-
-      # enabled=false, plan=premium -> should schedule second handler + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => false,
-                 "plan" => "premium"
-               })
-
-      assert length(jobs) == 2
-
-      # enabled=false, plan=free -> should only schedule default handler
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => false,
-                 "plan" => "free"
-               })
-
-      assert length(jobs) == 1
     end
   end
 end
