@@ -714,7 +714,13 @@ defmodule HexpmWeb.Dashboard.Policy.Components.PolicyEdit do
         </div>
 
         <div data-override-rows class="space-y-2">
-          <%= inputs_for @form, :overrides, fn of -> %>
+          <%!--
+            skip_hidden: true - inputs_for would otherwise render a hidden id
+            input for each override ahead of calling this block. `.override_row`
+            already renders the id as part of the row, so without skipping it
+            a removed row leaves its id behind and the override survives save.
+          --%>
+          <%= inputs_for @form, :overrides, [skip_hidden: true], fn of -> %>
             <.override_row
               action_name={Form.input_name(of, :action)}
               action_value={to_string(Form.input_value(of, :action) || "allow")}

@@ -135,6 +135,89 @@ defmodule HexpmWeb.Dashboard.OrganizationController.PolicyTest do
       assert Enum.any?(updated.repositories, &(&1.repository == org.name))
     end
 
+    test "removes an override whose row submitted nothing but its id",
+         %{user: user, organization: org} do
+      {:ok, %{policy: policy}} =
+        Policies.create(
+          org,
+          %{
+            "name" => "polone",
+            "visibility" => "public",
+            "repositories" => [
+              %{
+                "repository" => "hexpm",
+                "overrides" => [
+                  %{"action" => "allow", "package" => "kept"},
+                  %{"action" => "deny", "package" => "removed"}
+                ]
+              }
+            ]
+          },
+          audit: audit_data(user)
+        )
+
+      hexpm_tab = Enum.find(policy.repositories, &(&1.repository == "hexpm"))
+      ids = Map.new(hexpm_tab.overrides, &{&1.package, &1.id})
+
+      conn = build_conn() |> test_login(user)
+
+      overrides = %{
+        "0" => %{"id" => ids["kept"], "action" => "allow", "package" => "kept"},
+        "1" => %{"id" => ids["removed"]}
+      }
+
+      params = %{
+        "policy" => %{
+          "visibility" => "public",
+          "repositories" => repository_params(policy, "hexpm", %{"overrides" => overrides})
+        }
+      }
+
+      conn = post(conn, "/dashboard/orgs/#{org.name}/policies/#{policy.name}", params)
+
+      assert redirected_to(conn) =~ "/dashboard/orgs/#{org.name}/policies/polone"
+
+      hexpm = Enum.find(Policies.get(org, "polone").repositories, &(&1.repository == "hexpm"))
+      assert Enum.map(hexpm.overrides, & &1.package) == ["kept"]
+    end
+
+    test "removes every override when the form submits no override rows",
+         %{user: user, organization: org} do
+      {:ok, %{policy: policy}} =
+        Policies.create(
+          org,
+          %{
+            "name" => "polone",
+            "visibility" => "public",
+            "repositories" => [
+              %{
+                "repository" => "hexpm",
+                "cooldown" => "14d",
+                "overrides" => [%{"action" => "deny", "package" => "removed"}]
+              }
+            ]
+          },
+          audit: audit_data(user)
+        )
+
+      conn = build_conn() |> test_login(user)
+
+      params = %{
+        "policy" => %{
+          "visibility" => "public",
+          "repositories" => repository_params(policy, "hexpm", %{"cooldown" => "14d"})
+        }
+      }
+
+      conn = post(conn, "/dashboard/orgs/#{org.name}/policies/#{policy.name}", params)
+
+      assert redirected_to(conn) =~ "/dashboard/orgs/#{org.name}/policies/polone"
+
+      hexpm = Enum.find(Policies.get(org, "polone").repositories, &(&1.repository == "hexpm"))
+      assert hexpm.cooldown == "14d"
+      assert hexpm.overrides == []
+    end
+
     test "ignores an attempt to rename the policy", %{user: user, organization: org} do
       {:ok, %{policy: policy}} =
         Policies.create(org, %{"name" => "polone", "visibility" => "public"},
@@ -267,6 +350,47 @@ defmodule HexpmWeb.Dashboard.OrganizationController.PolicyTest do
       assert version_url =~ "repository=hexpm"
       refute response =~ "data-package-catalog"
       refute response =~ "<datalist"
+    end
+
+    test "renders each override id input only inside its row", %{
+      user: user,
+      organization: org
+    } do
+      {:ok, %{policy: policy}} =
+        Policies.create(
+          org,
+          %{
+            "name" => "strict-prod",
+            "visibility" => "public",
+            "repositories" => [
+              %{
+                "repository" => "hexpm",
+                "overrides" => [
+                  %{"action" => "deny", "package" => "badlib"},
+                  %{"action" => "allow", "package" => "goodlib"}
+                ]
+              }
+            ]
+          },
+          audit: audit_data(user)
+        )
+
+      conn = build_conn() |> test_login(user)
+      conn = get(conn, "/dashboard/orgs/#{org.name}/policies/#{policy.name}")
+
+      {:ok, document} = Floki.parse_document(html_response(conn, 200))
+
+      override_id_selector = fn selector ->
+        document
+        |> Floki.find(selector)
+        |> Floki.attribute("name")
+        |> Enum.filter(&String.match?(&1, ~r/\[overrides\]\[\d+\]\[id\]$/))
+      end
+
+      # An id input rendered outside the row would survive the row being
+      # removed and keep the override alive on the next save.
+      assert override_id_selector.("input") == override_id_selector.("[data-override-row] input")
+      assert length(override_id_selector.("input")) == 2
     end
 
     test "suggests override packages with the existing bounded package search", %{
