@@ -1,0 +1,182 @@
+# Quickstart
+
+`GRPC` is a fully featured Elixir implementation of the gRPC protocol (grpc.io),
+enabling efficient communication between services through a unified and
+stream-oriented API. It supports all RPC types, friendly error handling, TLS,
+interceptors, reflection, and optional HTTP transcoding.
+
+Suitable for both server and client development in pure Elixir, enabling
+scalable, efficient and type-safe distributed systems.
+
+## Main features:
+
+  * Unary, Server Streaming, Client Streaming, Bi-directional Streaming RPCs;
+  * Streaming-first API for every call;
+  * Interceptors (auth, logging, rate limiting, tracing);
+  * Error handling with predictable propagation;
+  * TLS authentication and message compression;
+  * Connection load balancing strategies (Round Robin, Pick First);
+  * gRPC Reflection;
+  * HTTP Transcoding for REST ↔ gRPC compatibility;
+
+---
+
+## Setup
+
+```elixir
+app_root = Path.join(__DIR__, "..")
+
+Mix.install(
+  [
+    {:grpc, path: app_root, env: :dev},
+    {:protobuf, "~> 0.14"}, # optional for importing well-known Google gRPC types
+    {:grpc_reflection, "~> 0.2"}, # optional for enabling gRPC reflection
+    {:protobuf_generate, "~> 0.1", only: :dev} # optional for Protobuf code generation with plugins
+  ],
+  config_path: Path.join(app_root, "config/config.exs"),
+  lockfile: Path.join(app_root, "mix.lock")
+)
+```
+
+---
+
+## Protobuf Service and Messages
+
+```elixir
+defmodule Helloworld.HelloRequest do
+  use Protobuf, syntax: :proto3
+  field :name, 1, type: :string
+end
+
+defmodule Helloworld.HelloReply do
+  use Protobuf, syntax: :proto3
+  field :message, 1, type: :string
+end
+
+defmodule Helloworld.Greeter.Service do
+  use GRPC.Service, name: "helloworld.Greeter"
+  rpc :SayHello, Helloworld.HelloRequest, Helloworld.HelloReply
+end
+
+defmodule Helloworld.Greeter.Stub do
+  use GRPC.Stub, service: Helloworld.Greeter.Service
+end
+```
+
+---
+
+## Logging Interceptor
+
+We create a basic interceptor to log incoming RPC calls.
+
+```elixir
+defmodule LoggingInterceptor do
+  @behaviour GRPC.Server.Interceptor
+  require Logger
+
+  def init(options), do: options
+
+  def call(%GRPC.Server.Stream{} = stream, req, next, _opts) do
+    Logger.info("RPC: #{stream.service_name}/#{stream.method_name} received request")
+    next.(stream, req)
+  end
+end
+```
+
+---
+
+## gRPC Server Implementation
+
+```elixir
+defmodule HelloServer do
+  use GRPC.Server, service: Helloworld.Greeter.Service
+
+  def say_hello(%{name: name}, _stream) do
+    Helloworld.HelloReply.new(message: "Hello, #{name}!")
+  end
+end
+```
+
+---
+
+## Endpoint with Interceptor
+
+Endpoints allow starting one or more servers via the `run` directive along with
+optional middleware which are registered using the `intercept` directive.
+
+```elixir
+defmodule HelloEndpoint do
+  use GRPC.Endpoint
+
+  intercept(LoggingInterceptor)
+  run(HelloServer)
+end
+```
+
+Interceptors are called in the order they appear, allowing for pluggable logging,
+authentication, etc. to be applied to incoming requests.
+
+---
+
+## Starting the Server
+
+Here we start the GRPC server under supervision at port `50051`.
+
+```elixir
+{:ok, _pid} =
+  GRPC.Server.Supervisor.start_link(endpoint: HelloEndpoint, port: 50051)
+
+IO.puts("gRPC Server running on port 50051")
+```
+
+A TLS configuration can be defined by assigning a `%GRPC.Credential{}` struct, typically created by calling
+`GRPC.Credential.new/1`, to the `cred` key in the `adapter_opts` option. For example:
+
+```elixir
+  adapter_opts: [cred: GRPC.Credential.new(ssl: Application.get_env(:my_app, :ssl))]
+```
+
+### As part of a supervision tree
+
+Typically the server will be started as part of a supervision tree rather than started
+manually:
+
+```elixir
+defmodule Helloworld.Application do
+  @moduledoc false
+  use Application
+
+  @impl true
+  def start(_type, _args) do
+    children = [
+      {
+        GRPC.Server.Supervisor, [
+          endpoint: HelloEndpoint,
+          port: 50051,
+          start_server: true,
+          adapter_opts: [cred: GRPC.Credential.new(ssl: Application.get_env(:my_app, :ssl))]
+        ]
+      }
+    ]
+
+    opts = [strategy: :one_for_one, name: Helloworld.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
+end
+```
+
+---
+
+## Create a Client and Test the RPC
+
+```elixir
+{:ok, _} = GRPC.Client.Supervisor.start_link()
+{:ok, channel} = GRPC.Stub.connect("localhost:50051")
+
+request = Helloworld.HelloRequest.new(name: "Hello gRPC Livebook")
+{:ok, reply} = Helloworld.Greeter.Stub.say_hello(channel, request)
+
+IO.inspect(reply, label: "Received reply")
+```
+
+---

@@ -1,0 +1,136 @@
+defmodule GRPC.Integration.ClientInterceptorTest do
+  use GRPC.Integration.TestCase
+
+  defmodule HelloServer do
+    use GRPC.Server, service: Helloworld.Greeter.Service
+
+    def say_hello(req, stream) do
+      headers = GRPC.Stream.get_headers(stream)
+      label = headers["x-test-label"]
+      %Helloworld.HelloReply{message: "Hello, #{req.name} #{label}"}
+    end
+  end
+
+  defmodule AddHeadersClientInterceptor do
+    @behaviour GRPC.Client.Interceptor
+
+    def init(label), do: label
+
+    def call(%{headers: headers} = stream, req, next, label) do
+      new_headers =
+        case Map.get(headers, "x-test-label") do
+          nil -> %{"x-test-label" => label}
+          original -> %{headers | "x-test-label" => "#{original} #{label}"}
+        end
+
+      new_stream = GRPC.Client.Stream.put_headers(stream, new_headers)
+      next.(new_stream, req)
+    end
+  end
+
+  defmodule RaiseClientInterceptor do
+    @behaviour GRPC.Client.Interceptor
+
+    def init(opts), do: opts
+
+    def call(_stream, _req, _next, %{
+          error_function: error_function,
+          delay: delay,
+          message: message
+        }) do
+      Process.sleep(delay)
+      error_function.(message)
+    end
+  end
+
+  defmodule HelloEndpoint do
+    use GRPC.Endpoint
+
+    run(HelloServer)
+  end
+
+  # test "client sends headers" do
+  #   client_prefix = GRPC.Telemetry.client_rpc_prefix()
+  #   stop_client_name = client_prefix ++ [:stop]
+  #   service_name = Helloworld.Greeter.Service.__meta__(:name)
+
+  #   attach_events([
+  #     stop_client_name
+  #   ])
+
+  #   run_endpoint(HelloEndpoint, fn port ->
+  #     {:ok, channel} =
+  #       GRPC.Stub.connect("localhost:#{port}",
+  #         interceptors: [
+  #           {AddHeadersClientInterceptor, "two"},
+  #           {AddHeadersClientInterceptor, "one"}
+  #         ]
+  #       )
+
+  #     req = %Helloworld.HelloRequest{name: "Elixir"}
+  #     {:ok, reply} = channel |> Helloworld.Greeter.Stub.say_hello(req)
+  #     assert reply.message == "Hello, Elixir one two"
+
+  #     assert_received {^stop_client_name, _measurements, metadata}
+  #     assert %{stream: stream, request: ^req} = metadata
+
+  #     assert %{
+  #              channel: ^channel,
+  #              service_name: ^service_name,
+  #              method_name: "SayHello"
+  #            } = stream
+  #   end)
+  # end
+
+  test "sends exception event upon client exception" do
+    message = "exception-#{inspect(self())}"
+
+    for {function, _kind, _reason} <- [
+          {&throw/1, :throw, message},
+          {&:erlang.exit/1, :throw, message},
+          {&raise/1, :error, %RuntimeError{message: message}},
+          {&:erlang.error/1, :error, %ErlangError{original: message}}
+        ] do
+      client_prefix = GRPC.Telemetry.client_rpc_prefix()
+      stop_client_name = client_prefix ++ [:stop]
+      exception_client_name = client_prefix ++ [:exception]
+
+      attach_events([
+        stop_client_name,
+        exception_client_name
+      ])
+
+      run_endpoint(HelloEndpoint, fn port ->
+        delay = 10
+
+        {:ok, channel} =
+          GRPC.Stub.connect("localhost:#{port}",
+            interceptors: [
+              {RaiseClientInterceptor,
+               %{error_function: function, message: message, delay: delay}}
+            ]
+          )
+
+        req = %Helloworld.HelloRequest{name: "Elixir"}
+
+        try do
+          Helloworld.Greeter.Stub.say_hello(channel, req)
+        rescue
+          _ -> :ok
+        catch
+          _, _ -> :ok
+        else
+          _ -> flunk("did not raise")
+        end
+
+        assert_received {^exception_client_name, measurements, metadata}
+        assert %{duration: duration} = measurements
+
+        assert System.convert_time_unit(duration, :native, :millisecond) >= delay
+
+        assert is_map(metadata)
+        assert is_list(Map.get(metadata, :stacktrace, []))
+      end)
+    end
+  end
+end
