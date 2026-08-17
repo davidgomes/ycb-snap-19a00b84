@@ -1,0 +1,5096 @@
+# WARNING: DO NOT EDIT, AUTO-GENERATED CODE!
+# See https://github.com/aws-beam/aws-codegen for more details.
+
+defmodule AWS.BedrockAgentRuntime do
+  @moduledoc """
+  Contains APIs related to model invocation and querying of knowledge bases.
+  """
+
+  alias AWS.Client
+  alias AWS.Request
+
+  @typedoc """
+
+  ## Example:
+
+      parameter_detail() :: %{
+        "description" => String.t() | atom(),
+        "required" => [boolean()],
+        "type" => list(any())
+      }
+
+  """
+  @type parameter_detail() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      parameter() :: %{
+        "name" => [String.t() | atom()],
+        "type" => [String.t() | atom()],
+        "value" => [String.t() | atom()]
+      }
+
+  """
+  @type parameter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      span() :: %{
+        "end" => [integer()],
+        "start" => [integer()]
+      }
+
+  """
+  @type span() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      rerank_result() :: %{
+        "document" => rerank_document(),
+        "index" => [integer()],
+        "relevanceScore" => [float()]
+      }
+
+  """
+  @type rerank_result() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieval_result_content_column() :: %{
+        "columnName" => [String.t() | atom()],
+        "columnValue" => [String.t() | atom()],
+        "type" => list(any())
+      }
+
+  """
+  @type retrieval_result_content_column() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      api_request_body() :: %{
+        "content" => map()
+      }
+
+  """
+  @type api_request_body() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      pre_processing_model_invocation_output() :: %{
+        "metadata" => metadata(),
+        "parsedResponse" => pre_processing_parsed_response(),
+        "rawResponse" => raw_response(),
+        "reasoningContent" => list(),
+        "traceId" => String.t() | atom()
+      }
+
+  """
+  @type pre_processing_model_invocation_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      external_sources_retrieve_and_generate_configuration() :: %{
+        "generationConfiguration" => external_sources_generation_configuration(),
+        "modelArn" => String.t() | atom(),
+        "sources" => list(external_source())
+      }
+
+  """
+  @type external_sources_retrieve_and_generate_configuration() :: %{
+          (String.t() | atom()) => any()
+        }
+
+  @typedoc """
+
+  ## Example:
+
+      node_input_field() :: %{
+        "category" => list(any()),
+        "content" => list(),
+        "executionChain" => list(node_input_execution_chain_item()),
+        "name" => String.t() | atom(),
+        "source" => node_input_source(),
+        "type" => list(any())
+      }
+
+  """
+  @type node_input_field() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      orchestration_model_invocation_output() :: %{
+        "metadata" => metadata(),
+        "rawResponse" => raw_response(),
+        "reasoningContent" => list(),
+        "traceId" => String.t() | atom()
+      }
+
+  """
+  @type orchestration_model_invocation_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      model_not_ready_exception() :: %{
+        "message" => String.t() | atom()
+      }
+
+  """
+  @type model_not_ready_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_agent_memory_request() :: %{
+        optional("memoryId") => String.t() | atom(),
+        optional("sessionId") => String.t() | atom()
+      }
+
+  """
+  @type delete_agent_memory_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      session_summary() :: %{
+        "createdAt" => non_neg_integer(),
+        "lastUpdatedAt" => non_neg_integer(),
+        "sessionArn" => String.t() | atom(),
+        "sessionId" => String.t() | atom(),
+        "sessionStatus" => list(any())
+      }
+
+  """
+  @type session_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_sessions_request() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+
+  """
+  @type list_sessions_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      node_output_event() :: %{
+        "fields" => list(node_output_field()),
+        "nodeName" => String.t() | atom(),
+        "timestamp" => non_neg_integer()
+      }
+
+  """
+  @type node_output_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invocation_step_summary() :: %{
+        "invocationId" => String.t() | atom(),
+        "invocationStepId" => String.t() | atom(),
+        "invocationStepTime" => non_neg_integer(),
+        "sessionId" => String.t() | atom()
+      }
+
+  """
+  @type invocation_step_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      metadata() :: %{
+        "clientRequestId" => [String.t() | atom()],
+        "endTime" => non_neg_integer(),
+        "operationTotalTimeMs" => [float()],
+        "startTime" => non_neg_integer(),
+        "totalTimeMs" => [float()],
+        "usage" => usage()
+      }
+
+  """
+  @type metadata() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieval_result_kendra_document_location() :: %{
+        "uri" => [String.t() | atom()]
+      }
+
+  """
+  @type retrieval_result_kendra_document_location() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      optimize_prompt_request() :: %{
+        required("input") => list(),
+        required("targetModelId") => [String.t() | atom()]
+      }
+
+  """
+  @type optimize_prompt_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      api_result() :: %{
+        "actionGroup" => [String.t() | atom()],
+        "agentId" => [String.t() | atom()],
+        "apiPath" => String.t() | atom(),
+        "confirmationState" => list(any()),
+        "httpMethod" => [String.t() | atom()],
+        "httpStatusCode" => [integer()],
+        "responseBody" => map(),
+        "responseState" => list(any())
+      }
+
+  """
+  @type api_result() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      knowledge_base_vector_search_configuration() :: %{
+        "filter" => list(),
+        "implicitFilterConfiguration" => implicit_filter_configuration(),
+        "numberOfResults" => [integer()],
+        "overrideSearchType" => list(any()),
+        "rerankingConfiguration" => vector_search_reranking_configuration()
+      }
+
+  """
+  @type knowledge_base_vector_search_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      pre_processing_parsed_response() :: %{
+        "isValid" => [boolean()],
+        "rationale" => String.t() | atom()
+      }
+
+  """
+  @type pre_processing_parsed_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      external_source() :: %{
+        "byteContent" => byte_content_doc(),
+        "s3Location" => s3_object_doc(),
+        "sourceType" => list(any())
+      }
+
+  """
+  @type external_source() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      text_prompt() :: %{
+        "text" => [String.t() | atom()]
+      }
+
+  """
+  @type text_prompt() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      throttling_exception() :: %{
+        "message" => String.t() | atom()
+      }
+
+  """
+  @type throttling_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      input_file() :: %{
+        "name" => [String.t() | atom()],
+        "source" => file_source(),
+        "useCase" => list(any())
+      }
+
+  """
+  @type input_file() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_invocation_steps_response() :: %{
+        "invocationStepSummaries" => list(invocation_step_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_invocation_steps_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      byte_content_doc() :: %{
+        "contentType" => String.t() | atom(),
+        "data" => binary(),
+        "identifier" => String.t() | atom()
+      }
+
+  """
+  @type byte_content_doc() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      performance_configuration() :: %{
+        "latency" => list(any())
+      }
+
+  """
+  @type performance_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      inline_agent_file_part() :: %{
+        "files" => list(output_file())
+      }
+
+  """
+  @type inline_agent_file_part() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      access_denied_exception() :: %{
+        "message" => String.t() | atom()
+      }
+
+  """
+  @type access_denied_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      satisfied_condition() :: %{
+        "conditionName" => [String.t() | atom()]
+      }
+
+  """
+  @type satisfied_condition() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieval_result_s3_location() :: %{
+        "uri" => [String.t() | atom()]
+      }
+
+  """
+  @type retrieval_result_s3_location() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      prompt_configuration() :: %{
+        "additionalModelRequestFields" => [any()],
+        "basePromptTemplate" => String.t() | atom(),
+        "foundationModel" => String.t() | atom(),
+        "inferenceConfiguration" => inference_configuration(),
+        "parserMode" => list(any()),
+        "promptCreationMode" => list(any()),
+        "promptState" => list(any()),
+        "promptType" => list(any())
+      }
+
+  """
+  @type prompt_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_configuration_with_arn() :: %{
+        "guardrailIdentifier" => String.t() | atom(),
+        "guardrailVersion" => String.t() | atom()
+      }
+
+  """
+  @type guardrail_configuration_with_arn() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      function_parameter() :: %{
+        "name" => [String.t() | atom()],
+        "type" => [String.t() | atom()],
+        "value" => [String.t() | atom()]
+      }
+
+  """
+  @type function_parameter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      knowledge_base_configuration() :: %{
+        "knowledgeBaseId" => String.t() | atom(),
+        "retrievalConfiguration" => knowledge_base_retrieval_configuration()
+      }
+
+  """
+  @type knowledge_base_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      collaborator_configuration() :: %{
+        "agentAliasArn" => String.t() | atom(),
+        "collaboratorInstruction" => String.t() | atom(),
+        "collaboratorName" => String.t() | atom(),
+        "relayConversationHistory" => list(any())
+      }
+
+  """
+  @type collaborator_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      agent_collaborator_input_payload() :: %{
+        "returnControlResults" => return_control_results(),
+        "text" => String.t() | atom(),
+        "type" => list(any())
+      }
+
+  """
+  @type agent_collaborator_input_payload() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieval_result_confluence_location() :: %{
+        "url" => [String.t() | atom()]
+      }
+
+  """
+  @type retrieval_result_confluence_location() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_trace_node_input_field() :: %{
+        "category" => list(any()),
+        "content" => list(),
+        "executionChain" => list(flow_trace_node_input_execution_chain_item()),
+        "nodeInputName" => String.t() | atom(),
+        "source" => flow_trace_node_input_source(),
+        "type" => list(any())
+      }
+
+  """
+  @type flow_trace_node_input_field() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      analyze_prompt_event() :: %{
+        "message" => [String.t() | atom()]
+      }
+
+  """
+  @type analyze_prompt_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_content_filter() :: %{
+        "action" => list(any()),
+        "confidence" => list(any()),
+        "type" => list(any())
+      }
+
+  """
+  @type guardrail_content_filter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_completion_event() :: %{
+        "completionReason" => list(any())
+      }
+
+  """
+  @type flow_completion_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      generation_configuration() :: %{
+        "additionalModelRequestFields" => map(),
+        "guardrailConfiguration" => guardrail_configuration(),
+        "inferenceConfig" => inference_config(),
+        "performanceConfig" => performance_configuration(),
+        "promptTemplate" => prompt_template()
+      }
+
+  """
+  @type generation_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      raw_response() :: %{
+        "content" => [String.t() | atom()]
+      }
+
+  """
+  @type raw_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieve_and_generate_stream_response() :: %{
+        "sessionId" => String.t() | atom(),
+        "stream" => list()
+      }
+
+  """
+  @type retrieve_and_generate_stream_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      end_session_request() :: %{}
+
+  """
+  @type end_session_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_output_field() :: %{
+        "content" => list(),
+        "name" => String.t() | atom()
+      }
+
+  """
+  @type flow_output_field() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      post_processing_model_invocation_output() :: %{
+        "metadata" => metadata(),
+        "parsedResponse" => post_processing_parsed_response(),
+        "rawResponse" => raw_response(),
+        "reasoningContent" => list(),
+        "traceId" => String.t() | atom()
+      }
+
+  """
+  @type post_processing_model_invocation_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      inference_configuration() :: %{
+        "maximumLength" => integer(),
+        "stopSequences" => list([String.t() | atom()]()),
+        "temperature" => float(),
+        "topK" => integer(),
+        "topP" => float()
+      }
+
+  """
+  @type inference_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_input_field() :: %{
+        "content" => list(),
+        "name" => String.t() | atom()
+      }
+
+  """
+  @type flow_input_field() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_execution_input_event() :: %{
+        "fields" => list(flow_input_field()),
+        "nodeName" => String.t() | atom(),
+        "timestamp" => non_neg_integer()
+      }
+
+  """
+  @type flow_execution_input_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      inline_agent_payload_part() :: %{
+        "attribution" => attribution(),
+        "bytes" => binary()
+      }
+
+  """
+  @type inline_agent_payload_part() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      inline_bedrock_model_configurations() :: %{
+        "performanceConfig" => performance_configuration()
+      }
+
+  """
+  @type inline_bedrock_model_configurations() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      action_group_invocation_input() :: %{
+        "actionGroupName" => String.t() | atom(),
+        "apiPath" => String.t() | atom(),
+        "executionType" => list(any()),
+        "function" => String.t() | atom(),
+        "invocationId" => [String.t() | atom()],
+        "parameters" => list(parameter()),
+        "requestBody" => request_body(),
+        "verb" => String.t() | atom()
+      }
+
+  """
+  @type action_group_invocation_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      trace_part() :: %{
+        "agentAliasId" => String.t() | atom(),
+        "agentId" => String.t() | atom(),
+        "agentVersion" => String.t() | atom(),
+        "callerChain" => list(list()),
+        "collaboratorName" => String.t() | atom(),
+        "eventTime" => non_neg_integer(),
+        "sessionId" => String.t() | atom(),
+        "trace" => list()
+      }
+
+  """
+  @type trace_part() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_custom_word() :: %{
+        "action" => list(any()),
+        "match" => [String.t() | atom()]
+      }
+
+  """
+  @type guardrail_custom_word() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      function_invocation_input() :: %{
+        "actionGroup" => [String.t() | atom()],
+        "actionInvocationType" => list(any()),
+        "agentId" => [String.t() | atom()],
+        "collaboratorName" => String.t() | atom(),
+        "function" => [String.t() | atom()],
+        "parameters" => list(function_parameter())
+      }
+
+  """
+  @type function_invocation_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      post_processing_parsed_response() :: %{
+        "text" => String.t() | atom()
+      }
+
+  """
+  @type post_processing_parsed_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      generate_query_request() :: %{
+        required("queryGenerationInput") => query_generation_input(),
+        required("transformationConfiguration") => transformation_configuration()
+      }
+
+  """
+  @type generate_query_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      property_parameters() :: %{
+        "properties" => list(parameter())
+      }
+
+  """
+  @type property_parameters() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_trace_event() :: %{
+        "trace" => list()
+      }
+
+  """
+  @type flow_trace_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieve_and_generate_stream_request() :: %{
+        optional("retrieveAndGenerateConfiguration") => retrieve_and_generate_configuration(),
+        optional("sessionConfiguration") => retrieve_and_generate_session_configuration(),
+        optional("sessionId") => String.t() | atom(),
+        required("input") => retrieve_and_generate_input()
+      }
+
+  """
+  @type retrieve_and_generate_stream_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      stop_flow_execution_response() :: %{
+        "executionArn" => String.t() | atom(),
+        "status" => list(any())
+      }
+
+  """
+  @type stop_flow_execution_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      rerank_document() :: %{
+        "jsonDocument" => [any()],
+        "textDocument" => rerank_text_document(),
+        "type" => list(any())
+      }
+
+  """
+  @type rerank_document() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      node_output_field() :: %{
+        "content" => list(),
+        "name" => String.t() | atom(),
+        "next" => list(node_output_next()),
+        "type" => list(any())
+      }
+
+  """
+  @type node_output_field() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      generate_query_response() :: %{
+        "queries" => list(generated_query())
+      }
+
+  """
+  @type generate_query_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_execution_flow_snapshot_request() :: %{}
+
+  """
+  @type get_execution_flow_snapshot_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      reranking_configuration() :: %{
+        "bedrockRerankingConfiguration" => bedrock_reranking_configuration(),
+        "type" => list(any())
+      }
+
+  """
+  @type reranking_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      validation_exception() :: %{
+        "message" => String.t() | atom()
+      }
+
+  """
+  @type validation_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      payload_part() :: %{
+        "attribution" => attribution(),
+        "bytes" => binary()
+      }
+
+  """
+  @type payload_part() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      code_interpreter_invocation_input() :: %{
+        "code" => [String.t() | atom()],
+        "files" => list([String.t() | atom()]())
+      }
+
+  """
+  @type code_interpreter_invocation_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invoke_inline_agent_request() :: %{
+        optional("actionGroups") => list(agent_action_group()),
+        optional("agentCollaboration") => list(any()),
+        optional("agentName") => String.t() | atom(),
+        optional("bedrockModelConfigurations") => inline_bedrock_model_configurations(),
+        optional("collaboratorConfigurations") => list(collaborator_configuration()),
+        optional("collaborators") => list(collaborator()),
+        optional("customOrchestration") => custom_orchestration(),
+        optional("customerEncryptionKeyArn") => String.t() | atom(),
+        optional("enableTrace") => [boolean()],
+        optional("endSession") => [boolean()],
+        optional("guardrailConfiguration") => guardrail_configuration_with_arn(),
+        optional("idleSessionTTLInSeconds") => integer(),
+        optional("inlineSessionState") => inline_session_state(),
+        optional("inputText") => String.t() | atom(),
+        optional("knowledgeBases") => list(knowledge_base()),
+        optional("orchestrationType") => list(any()),
+        optional("promptCreationConfigurations") => prompt_creation_configurations(),
+        optional("promptOverrideConfiguration") => prompt_override_configuration(),
+        optional("streamingConfigurations") => streaming_configurations(),
+        required("foundationModel") => String.t() | atom(),
+        required("instruction") => String.t() | atom()
+      }
+
+  """
+  @type invoke_inline_agent_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      rerank_request() :: %{
+        optional("nextToken") => String.t() | atom(),
+        required("queries") => list(rerank_query()),
+        required("rerankingConfiguration") => reranking_configuration(),
+        required("sources") => list(rerank_source())
+      }
+
+  """
+  @type rerank_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      optimize_prompt_response() :: %{
+        "optimizedPrompt" => list()
+      }
+
+  """
+  @type optimize_prompt_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_flow_execution_events_response() :: %{
+        "flowExecutionEvents" => list(list()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_flow_execution_events_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieval_result_content() :: %{
+        "audio" => audio_segment(),
+        "byteContent" => [String.t() | atom()],
+        "row" => list(retrieval_result_content_column()),
+        "text" => [String.t() | atom()],
+        "type" => list(any()),
+        "video" => video_segment()
+      }
+
+  """
+  @type retrieval_result_content() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      rerank_query() :: %{
+        "textQuery" => rerank_text_document(),
+        "type" => list(any())
+      }
+
+  """
+  @type rerank_query() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      vector_search_bedrock_reranking_configuration() :: %{
+        "metadataConfiguration" => metadata_configuration_for_reranking(),
+        "modelConfiguration" => vector_search_bedrock_reranking_model_configuration(),
+        "numberOfRerankedResults" => [integer()]
+      }
+
+  """
+  @type vector_search_bedrock_reranking_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_session_response() :: %{
+        "createdAt" => non_neg_integer(),
+        "lastUpdatedAt" => non_neg_integer(),
+        "sessionArn" => String.t() | atom(),
+        "sessionId" => String.t() | atom(),
+        "sessionStatus" => list(any())
+      }
+
+  """
+  @type update_session_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      agent_collaborator_invocation_output() :: %{
+        "agentCollaboratorAliasArn" => String.t() | atom(),
+        "agentCollaboratorName" => [String.t() | atom()],
+        "metadata" => metadata(),
+        "output" => agent_collaborator_output_payload()
+      }
+
+  """
+  @type agent_collaborator_invocation_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      put_invocation_step_response() :: %{
+        "invocationStepId" => String.t() | atom()
+      }
+
+  """
+  @type put_invocation_step_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      query_transformation_configuration() :: %{
+        "type" => list(any())
+      }
+
+  """
+  @type query_transformation_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      agent_action_group() :: %{
+        "actionGroupExecutor" => list(),
+        "actionGroupName" => String.t() | atom(),
+        "apiSchema" => list(),
+        "description" => String.t() | atom(),
+        "functionSchema" => list(),
+        "parentActionGroupSignature" => list(any()),
+        "parentActionGroupSignatureParams" => map()
+      }
+
+  """
+  @type agent_action_group() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      file_source() :: %{
+        "byteContent" => byte_content_file(),
+        "s3Location" => s3_object_file(),
+        "sourceType" => list(any())
+      }
+
+  """
+  @type file_source() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_event() :: %{
+        "action" => list(any())
+      }
+
+  """
+  @type guardrail_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      bedrock_model_configurations() :: %{
+        "performanceConfig" => performance_configuration()
+      }
+
+  """
+  @type bedrock_model_configurations() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      s3_location() :: %{
+        "uri" => String.t() | atom()
+      }
+
+  """
+  @type s3_location() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      reasoning_text_block() :: %{
+        "signature" => [String.t() | atom()],
+        "text" => [String.t() | atom()]
+      }
+
+  """
+  @type reasoning_text_block() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      routing_classifier_model_invocation_output() :: %{
+        "metadata" => metadata(),
+        "rawResponse" => raw_response(),
+        "traceId" => String.t() | atom()
+      }
+
+  """
+  @type routing_classifier_model_invocation_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      s3_object_doc() :: %{
+        "uri" => String.t() | atom()
+      }
+
+  """
+  @type s3_object_doc() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieve_response() :: %{
+        "guardrailAction" => list(any()),
+        "nextToken" => String.t() | atom(),
+        "retrievalResults" => list(knowledge_base_retrieval_result())
+      }
+
+  """
+  @type retrieve_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieve_and_generate_input() :: %{
+        "text" => [String.t() | atom()]
+      }
+
+  """
+  @type retrieve_and_generate_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      video_segment() :: %{
+        "s3Uri" => [String.t() | atom()],
+        "summary" => [String.t() | atom()]
+      }
+
+  """
+  @type video_segment() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      input_image() :: %{
+        "format" => list(any()),
+        "inlineContent" => binary()
+      }
+
+  """
+  @type input_image() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      knowledge_base() :: %{
+        "description" => String.t() | atom(),
+        "knowledgeBaseId" => String.t() | atom(),
+        "retrievalConfiguration" => knowledge_base_retrieval_configuration()
+      }
+
+  """
+  @type knowledge_base() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invoke_agent_request() :: %{
+        optional("bedrockModelConfigurations") => bedrock_model_configurations(),
+        optional("enableTrace") => [boolean()],
+        optional("endSession") => [boolean()],
+        optional("inputText") => String.t() | atom(),
+        optional("memoryId") => String.t() | atom(),
+        optional("promptCreationConfigurations") => prompt_creation_configurations(),
+        optional("sessionState") => session_state(),
+        optional("sourceArn") => String.t() | atom(),
+        optional("streamingConfigurations") => streaming_configurations()
+      }
+
+  """
+  @type invoke_agent_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_agent_memory_request() :: %{
+        optional("maxItems") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        required("memoryId") => String.t() | atom(),
+        required("memoryType") => list(any())
+      }
+
+  """
+  @type get_agent_memory_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      knowledge_base_retrieval_configuration() :: %{
+        "vectorSearchConfiguration" => knowledge_base_vector_search_configuration()
+      }
+
+  """
+  @type knowledge_base_retrieval_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      model_performance_configuration() :: %{
+        "performanceConfig" => performance_configuration()
+      }
+
+  """
+  @type model_performance_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      filter_attribute() :: %{
+        "key" => String.t() | atom(),
+        "value" => any()
+      }
+
+  """
+  @type filter_attribute() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      node_action_event() :: %{
+        "nodeName" => String.t() | atom(),
+        "operationName" => [String.t() | atom()],
+        "operationRequest" => [any()],
+        "operationResponse" => [any()],
+        "requestId" => [String.t() | atom()],
+        "serviceName" => [String.t() | atom()],
+        "timestamp" => non_neg_integer()
+      }
+
+  """
+  @type node_action_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      usage() :: %{
+        "inputTokens" => [integer()],
+        "outputTokens" => [integer()]
+      }
+
+  """
+  @type usage() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      internal_server_exception() :: %{
+        "message" => String.t() | atom(),
+        "reason" => [String.t() | atom()]
+      }
+
+  """
+  @type internal_server_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      reprompt_response() :: %{
+        "source" => list(any()),
+        "text" => [String.t() | atom()]
+      }
+
+  """
+  @type reprompt_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_session_request() :: %{
+        optional("encryptionKeyArn") => String.t() | atom(),
+        optional("sessionMetadata") => map(),
+        optional("tags") => map()
+      }
+
+  """
+  @type create_session_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_trace_condition_node_result_event() :: %{
+        "nodeName" => String.t() | atom(),
+        "satisfiedConditions" => list(flow_trace_condition()),
+        "timestamp" => non_neg_integer()
+      }
+
+  """
+  @type flow_trace_condition_node_result_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      code_interpreter_invocation_output() :: %{
+        "executionError" => [String.t() | atom()],
+        "executionOutput" => [String.t() | atom()],
+        "executionTimeout" => [boolean()],
+        "files" => list([String.t() | atom()]()),
+        "metadata" => metadata()
+      }
+
+  """
+  @type code_interpreter_invocation_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invoke_flow_request() :: %{
+        optional("enableTrace") => [boolean()],
+        optional("executionId") => String.t() | atom(),
+        optional("modelPerformanceConfiguration") => model_performance_configuration(),
+        required("inputs") => list(flow_input())
+      }
+
+  """
+  @type invoke_flow_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      collaborator() :: %{
+        "actionGroups" => list(agent_action_group()),
+        "agentCollaboration" => list(any()),
+        "agentName" => String.t() | atom(),
+        "collaboratorConfigurations" => list(collaborator_configuration()),
+        "customerEncryptionKeyArn" => String.t() | atom(),
+        "foundationModel" => String.t() | atom(),
+        "guardrailConfiguration" => guardrail_configuration_with_arn(),
+        "idleSessionTTLInSeconds" => integer(),
+        "instruction" => String.t() | atom(),
+        "knowledgeBases" => list(knowledge_base()),
+        "promptOverrideConfiguration" => prompt_override_configuration()
+      }
+
+  """
+  @type collaborator() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieve_and_generate_output() :: %{
+        "text" => [String.t() | atom()]
+      }
+
+  """
+  @type retrieve_and_generate_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_trace_node_output_event() :: %{
+        "fields" => list(flow_trace_node_output_field()),
+        "nodeName" => String.t() | atom(),
+        "timestamp" => non_neg_integer()
+      }
+
+  """
+  @type flow_trace_node_output_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_flow_execution_events_request() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom(),
+        required("eventType") => list(any())
+      }
+
+  """
+  @type list_flow_execution_events_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      start_flow_execution_request() :: %{
+        optional("flowExecutionName") => String.t() | atom(),
+        optional("modelPerformanceConfiguration") => model_performance_configuration(),
+        required("inputs") => list(flow_input())
+      }
+
+  """
+  @type start_flow_execution_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      citation_event() :: %{
+        "citation" => citation(),
+        "generatedResponsePart" => generated_response_part(),
+        "retrievedReferences" => list(retrieved_reference())
+      }
+
+  """
+  @type citation_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      resource_not_found_exception() :: %{
+        "message" => String.t() | atom()
+      }
+
+  """
+  @type resource_not_found_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_invocations_request() :: %{
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+
+  """
+  @type list_invocations_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_execution_output_event() :: %{
+        "fields" => list(flow_output_field()),
+        "nodeName" => String.t() | atom(),
+        "timestamp" => non_neg_integer()
+      }
+
+  """
+  @type flow_execution_output_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieval_result_web_location() :: %{
+        "url" => [String.t() | atom()]
+      }
+
+  """
+  @type retrieval_result_web_location() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_sensitive_information_policy_assessment() :: %{
+        "piiEntities" => list(guardrail_pii_entity_filter()),
+        "regexes" => list(guardrail_regex_filter())
+      }
+
+  """
+  @type guardrail_sensitive_information_policy_assessment() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      prompt_template() :: %{
+        "textPromptTemplate" => String.t() | atom()
+      }
+
+  """
+  @type prompt_template() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_content_policy_assessment() :: %{
+        "filters" => list(guardrail_content_filter())
+      }
+
+  """
+  @type guardrail_content_policy_assessment() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      tag_resource_request() :: %{
+        required("tags") => map()
+      }
+
+  """
+  @type tag_resource_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      custom_orchestration_trace() :: %{
+        "event" => custom_orchestration_trace_event(),
+        "traceId" => String.t() | atom()
+      }
+
+  """
+  @type custom_orchestration_trace() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      file_part() :: %{
+        "files" => list(output_file())
+      }
+
+  """
+  @type file_part() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_trace_node_input_source() :: %{
+        "expression" => String.t() | atom(),
+        "nodeName" => String.t() | atom(),
+        "outputFieldName" => String.t() | atom()
+      }
+
+  """
+  @type flow_trace_node_input_source() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      inference_config() :: %{
+        "textInferenceConfig" => text_inference_config()
+      }
+
+  """
+  @type inference_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      s3_identifier() :: %{
+        "s3BucketName" => String.t() | atom(),
+        "s3ObjectKey" => String.t() | atom()
+      }
+
+  """
+  @type s3_identifier() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_pii_entity_filter() :: %{
+        "action" => list(any()),
+        "match" => [String.t() | atom()],
+        "type" => list(any())
+      }
+
+  """
+  @type guardrail_pii_entity_filter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      custom_orchestration() :: %{
+        "executor" => list()
+      }
+
+  """
+  @type custom_orchestration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_session_request() :: %{}
+
+  """
+  @type get_session_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_trace_condition() :: %{
+        "conditionName" => [String.t() | atom()]
+      }
+
+  """
+  @type flow_trace_condition() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_invocation_steps_request() :: %{
+        optional("invocationIdentifier") => String.t() | atom(),
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+
+  """
+  @type list_invocation_steps_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_flow_executions_request() :: %{
+        optional("flowAliasIdentifier") => String.t() | atom(),
+        optional("maxResults") => integer(),
+        optional("nextToken") => String.t() | atom()
+      }
+
+  """
+  @type list_flow_executions_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieve_request() :: %{
+        optional("guardrailConfiguration") => guardrail_configuration(),
+        optional("nextToken") => String.t() | atom(),
+        optional("retrievalConfiguration") => knowledge_base_retrieval_configuration(),
+        required("retrievalQuery") => knowledge_base_query()
+      }
+
+  """
+  @type retrieve_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      condition_result_event() :: %{
+        "nodeName" => String.t() | atom(),
+        "satisfiedConditions" => list(satisfied_condition()),
+        "timestamp" => non_neg_integer()
+      }
+
+  """
+  @type condition_result_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      node_input_source() :: %{
+        "expression" => String.t() | atom(),
+        "nodeName" => String.t() | atom(),
+        "outputFieldName" => String.t() | atom()
+      }
+
+  """
+  @type node_input_source() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      tag_resource_response() :: %{}
+
+  """
+  @type tag_resource_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_topic_policy_assessment() :: %{
+        "topics" => list(guardrail_topic())
+      }
+
+  """
+  @type guardrail_topic_policy_assessment() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_trace_node_output_next() :: %{
+        "inputFieldName" => String.t() | atom(),
+        "nodeName" => String.t() | atom()
+      }
+
+  """
+  @type flow_trace_node_output_next() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      bedrock_reranking_model_configuration() :: %{
+        "additionalModelRequestFields" => map(),
+        "modelArn" => String.t() | atom()
+      }
+
+  """
+  @type bedrock_reranking_model_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      s3_object_file() :: %{
+        "uri" => String.t() | atom()
+      }
+
+  """
+  @type s3_object_file() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invoke_agent_response() :: %{
+        "completion" => list(),
+        "contentType" => String.t() | atom(),
+        "memoryId" => String.t() | atom(),
+        "sessionId" => String.t() | atom()
+      }
+
+  """
+  @type invoke_agent_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      node_input_execution_chain_item() :: %{
+        "index" => [integer()],
+        "nodeName" => String.t() | atom(),
+        "type" => list(any())
+      }
+
+  """
+  @type node_input_execution_chain_item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invocation_step() :: %{
+        "invocationId" => String.t() | atom(),
+        "invocationStepId" => String.t() | atom(),
+        "invocationStepTime" => non_neg_integer(),
+        "payload" => list(),
+        "sessionId" => String.t() | atom()
+      }
+
+  """
+  @type invocation_step() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_managed_word() :: %{
+        "action" => list(any()),
+        "match" => [String.t() | atom()],
+        "type" => list(any())
+      }
+
+  """
+  @type guardrail_managed_word() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_trace_dependency_event() :: %{
+        "nodeName" => String.t() | atom(),
+        "timestamp" => non_neg_integer(),
+        "traceElements" => list()
+      }
+
+  """
+  @type flow_trace_dependency_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invoke_inline_agent_response() :: %{
+        "completion" => list(),
+        "contentType" => String.t() | atom(),
+        "sessionId" => String.t() | atom()
+      }
+
+  """
+  @type invoke_inline_agent_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_execution_error() :: %{
+        "error" => list(any()),
+        "message" => [String.t() | atom()],
+        "nodeName" => String.t() | atom()
+      }
+
+  """
+  @type flow_execution_error() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      node_failure_event() :: %{
+        "errorCode" => list(any()),
+        "errorMessage" => [String.t() | atom()],
+        "nodeName" => String.t() | atom(),
+        "timestamp" => non_neg_integer()
+      }
+
+  """
+  @type node_failure_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      text_to_sql_configuration() :: %{
+        "knowledgeBaseConfiguration" => text_to_sql_knowledge_base_configuration(),
+        "type" => list(any())
+      }
+
+  """
+  @type text_to_sql_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieval_result_share_point_location() :: %{
+        "url" => [String.t() | atom()]
+      }
+
+  """
+  @type retrieval_result_share_point_location() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_session_response() :: %{
+        "createdAt" => non_neg_integer(),
+        "encryptionKeyArn" => String.t() | atom(),
+        "lastUpdatedAt" => non_neg_integer(),
+        "sessionArn" => String.t() | atom(),
+        "sessionId" => String.t() | atom(),
+        "sessionMetadata" => map(),
+        "sessionStatus" => list(any())
+      }
+
+  """
+  @type get_session_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_trace_node_input_execution_chain_item() :: %{
+        "index" => [integer()],
+        "nodeName" => String.t() | atom(),
+        "type" => list(any())
+      }
+
+  """
+  @type flow_trace_node_input_execution_chain_item() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_flow_executions_response() :: %{
+        "flowExecutionSummaries" => list(flow_execution_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_flow_executions_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      implicit_filter_configuration() :: %{
+        "metadataAttributes" => list(metadata_attribute_schema()),
+        "modelArn" => String.t() | atom()
+      }
+
+  """
+  @type implicit_filter_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      rationale() :: %{
+        "text" => String.t() | atom(),
+        "traceId" => String.t() | atom()
+      }
+
+  """
+  @type rationale() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_execution_summary() :: %{
+        "createdAt" => non_neg_integer(),
+        "endedAt" => non_neg_integer(),
+        "executionArn" => String.t() | atom(),
+        "flowAliasIdentifier" => String.t() | atom(),
+        "flowIdentifier" => String.t() | atom(),
+        "flowVersion" => String.t() | atom(),
+        "status" => list(any())
+      }
+
+  """
+  @type flow_execution_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      rerank_source() :: %{
+        "inlineDocumentSource" => rerank_document(),
+        "type" => list(any())
+      }
+
+  """
+  @type rerank_source() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      content_body() :: %{
+        "body" => [String.t() | atom()],
+        "images" => list(image_input())
+      }
+
+  """
+  @type content_body() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      conflict_exception() :: %{
+        "message" => String.t() | atom()
+      }
+
+  """
+  @type conflict_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      observation() :: %{
+        "actionGroupInvocationOutput" => action_group_invocation_output(),
+        "agentCollaboratorInvocationOutput" => agent_collaborator_invocation_output(),
+        "codeInterpreterInvocationOutput" => code_interpreter_invocation_output(),
+        "finalResponse" => final_response(),
+        "knowledgeBaseLookupOutput" => knowledge_base_lookup_output(),
+        "repromptResponse" => reprompt_response(),
+        "traceId" => String.t() | atom(),
+        "type" => list(any())
+      }
+
+  """
+  @type observation() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      untag_resource_response() :: %{}
+
+  """
+  @type untag_resource_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_trace() :: %{
+        "action" => list(any()),
+        "inputAssessments" => list(guardrail_assessment()),
+        "metadata" => metadata(),
+        "outputAssessments" => list(guardrail_assessment()),
+        "traceId" => String.t() | atom()
+      }
+
+  """
+  @type guardrail_trace() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      put_invocation_step_request() :: %{
+        optional("invocationStepId") => String.t() | atom(),
+        required("invocationIdentifier") => String.t() | atom(),
+        required("invocationStepTime") => non_neg_integer(),
+        required("payload") => list()
+      }
+
+  """
+  @type put_invocation_step_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      byte_content_file() :: %{
+        "data" => binary(),
+        "mediaType" => String.t() | atom()
+      }
+
+  """
+  @type byte_content_file() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      generated_query() :: %{
+        "sql" => [String.t() | atom()],
+        "type" => list(any())
+      }
+
+  """
+  @type generated_query() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_invocation_step_response() :: %{
+        "invocationStep" => invocation_step()
+      }
+
+  """
+  @type get_invocation_step_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_failure_event() :: %{
+        "errorCode" => list(any()),
+        "errorMessage" => [String.t() | atom()],
+        "timestamp" => non_neg_integer()
+      }
+
+  """
+  @type flow_failure_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_agent_memory_response() :: %{}
+
+  """
+  @type delete_agent_memory_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      get_flow_execution_response() :: %{
+        "endedAt" => non_neg_integer(),
+        "errors" => list(flow_execution_error()),
+        "executionArn" => String.t() | atom(),
+        "flowAliasIdentifier" => String.t() | atom(),
+        "flowIdentifier" => String.t() | atom(),
+        "flowVersion" => String.t() | atom(),
+        "startedAt" => non_neg_integer(),
+        "status" => list(any())
+      }
+
+  """
+  @type get_flow_execution_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      untag_resource_request() :: %{
+        required("tagKeys") => list(String.t() | atom())
+      }
+
+  """
+  @type untag_resource_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      attribution() :: %{
+        "citations" => list(citation())
+      }
+
+  """
+  @type attribution() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      optimized_prompt_event() :: %{
+        "optimizedPrompt" => list()
+      }
+
+  """
+  @type optimized_prompt_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      bad_gateway_exception() :: %{
+        "message" => String.t() | atom(),
+        "resourceName" => String.t() | atom()
+      }
+
+  """
+  @type bad_gateway_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      prompt_override_configuration() :: %{
+        "overrideLambda" => String.t() | atom(),
+        "promptConfigurations" => list(prompt_configuration())
+      }
+
+  """
+  @type prompt_override_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_invocation_request() :: %{
+        optional("description") => String.t() | atom(),
+        optional("invocationId") => String.t() | atom()
+      }
+
+  """
+  @type create_invocation_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      memory_session_summary() :: %{
+        "memoryId" => String.t() | atom(),
+        "sessionExpiryTime" => non_neg_integer(),
+        "sessionId" => String.t() | atom(),
+        "sessionStartTime" => non_neg_integer(),
+        "summaryText" => String.t() | atom()
+      }
+
+  """
+  @type memory_session_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      conversation_history() :: %{
+        "messages" => list(message())
+      }
+
+  """
+  @type conversation_history() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      node_output_next() :: %{
+        "inputFieldName" => String.t() | atom(),
+        "nodeName" => String.t() | atom()
+      }
+
+  """
+  @type node_output_next() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_topic() :: %{
+        "action" => list(any()),
+        "name" => [String.t() | atom()],
+        "type" => list(any())
+      }
+
+  """
+  @type guardrail_topic() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      final_response() :: %{
+        "metadata" => metadata(),
+        "text" => String.t() | atom()
+      }
+
+  """
+  @type final_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      update_session_request() :: %{
+        optional("sessionMetadata") => map()
+      }
+
+  """
+  @type update_session_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      external_sources_generation_configuration() :: %{
+        "additionalModelRequestFields" => map(),
+        "guardrailConfiguration" => guardrail_configuration(),
+        "inferenceConfig" => inference_config(),
+        "performanceConfig" => performance_configuration(),
+        "promptTemplate" => prompt_template()
+      }
+
+  """
+  @type external_sources_generation_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      knowledge_base_query() :: %{
+        "image" => input_image(),
+        "text" => [String.t() | atom()],
+        "type" => list(any())
+      }
+
+  """
+  @type knowledge_base_query() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      vector_search_reranking_configuration() :: %{
+        "bedrockRerankingConfiguration" => vector_search_bedrock_reranking_configuration(),
+        "type" => list(any())
+      }
+
+  """
+  @type vector_search_reranking_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_sessions_response() :: %{
+        "nextToken" => String.t() | atom(),
+        "sessionSummaries" => list(session_summary())
+      }
+
+  """
+  @type list_sessions_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_regex_filter() :: %{
+        "action" => list(any()),
+        "match" => [String.t() | atom()],
+        "name" => [String.t() | atom()],
+        "regex" => [String.t() | atom()]
+      }
+
+  """
+  @type guardrail_regex_filter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      stop_flow_execution_request() :: %{}
+
+  """
+  @type stop_flow_execution_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      knowledge_base_retrieve_and_generate_configuration() :: %{
+        "generationConfiguration" => generation_configuration(),
+        "knowledgeBaseId" => String.t() | atom(),
+        "modelArn" => String.t() | atom(),
+        "orchestrationConfiguration" => orchestration_configuration(),
+        "retrievalConfiguration" => knowledge_base_retrieval_configuration()
+      }
+
+  """
+  @type knowledge_base_retrieve_and_generate_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      image_input() :: %{
+        "format" => list(any()),
+        "source" => list()
+      }
+
+  """
+  @type image_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieve_and_generate_configuration() :: %{
+        "externalSourcesConfiguration" => external_sources_retrieve_and_generate_configuration(),
+        "knowledgeBaseConfiguration" => knowledge_base_retrieve_and_generate_configuration(),
+        "type" => list(any())
+      }
+
+  """
+  @type retrieve_and_generate_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_configuration() :: %{
+        "guardrailId" => [String.t() | atom()],
+        "guardrailVersion" => [String.t() | atom()]
+      }
+
+  """
+  @type guardrail_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_invocation_step_request() :: %{
+        required("invocationIdentifier") => String.t() | atom()
+      }
+
+  """
+  @type get_invocation_step_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      text_response_part() :: %{
+        "span" => span(),
+        "text" => [String.t() | atom()]
+      }
+
+  """
+  @type text_response_part() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      prompt_creation_configurations() :: %{
+        "excludePreviousThinkingSteps" => [boolean()],
+        "previousConversationTurnsToInclude" => [integer()]
+      }
+
+  """
+  @type prompt_creation_configurations() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      field_for_reranking() :: %{
+        "fieldName" => [String.t() | atom()]
+      }
+
+  """
+  @type field_for_reranking() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      agent_collaborator_output_payload() :: %{
+        "returnControlPayload" => return_control_payload(),
+        "text" => String.t() | atom(),
+        "type" => list(any())
+      }
+
+  """
+  @type agent_collaborator_output_payload() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invoke_flow_response() :: %{
+        "executionId" => String.t() | atom(),
+        "responseStream" => list()
+      }
+
+  """
+  @type invoke_flow_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      function_definition() :: %{
+        "description" => String.t() | atom(),
+        "name" => String.t() | atom(),
+        "parameters" => map(),
+        "requireConfirmation" => list(any())
+      }
+
+  """
+  @type function_definition() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      node_input_event() :: %{
+        "fields" => list(node_input_field()),
+        "nodeName" => String.t() | atom(),
+        "timestamp" => non_neg_integer()
+      }
+
+  """
+  @type node_input_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_session_request() :: %{}
+
+  """
+  @type delete_session_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      node_dependency_event() :: %{
+        "nodeName" => String.t() | atom(),
+        "timestamp" => non_neg_integer(),
+        "traceElements" => list()
+      }
+
+  """
+  @type node_dependency_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieval_result_salesforce_location() :: %{
+        "url" => [String.t() | atom()]
+      }
+
+  """
+  @type retrieval_result_salesforce_location() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_tags_for_resource_response() :: %{
+        "tags" => map()
+      }
+
+  """
+  @type list_tags_for_resource_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      delete_session_response() :: %{}
+
+  """
+  @type delete_session_response() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_trace_node_output_field() :: %{
+        "content" => list(),
+        "next" => list(flow_trace_node_output_next()),
+        "nodeOutputName" => String.t() | atom(),
+        "type" => list(any())
+      }
+
+  """
+  @type flow_trace_node_output_field() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      metadata_configuration_for_reranking() :: %{
+        "selectionMode" => list(any()),
+        "selectiveModeConfiguration" => list()
+      }
+
+  """
+  @type metadata_configuration_for_reranking() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieve_and_generate_output_event() :: %{
+        "text" => [String.t() | atom()]
+      }
+
+  """
+  @type retrieve_and_generate_output_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      image_block() :: %{
+        "format" => list(any()),
+        "source" => list()
+      }
+
+  """
+  @type image_block() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      return_control_results() :: %{
+        "invocationId" => [String.t() | atom()],
+        "returnControlInvocationResults" => list(list())
+      }
+
+  """
+  @type return_control_results() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_trace_node_input_event() :: %{
+        "fields" => list(flow_trace_node_input_field()),
+        "nodeName" => String.t() | atom(),
+        "timestamp" => non_neg_integer()
+      }
+
+  """
+  @type flow_trace_node_input_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      end_session_response() :: %{
+        "sessionArn" => String.t() | atom(),
+        "sessionId" => String.t() | atom(),
+        "sessionStatus" => list(any())
+      }
+
+  """
+  @type end_session_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      metadata_attribute_schema() :: %{
+        "description" => [String.t() | atom()],
+        "key" => [String.t() | atom()],
+        "type" => list(any())
+      }
+
+  """
+  @type metadata_attribute_schema() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      streaming_configurations() :: %{
+        "applyGuardrailInterval" => [integer()],
+        "streamFinalResponse" => [boolean()]
+      }
+
+  """
+  @type streaming_configurations() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieve_and_generate_request() :: %{
+        optional("retrieveAndGenerateConfiguration") => retrieve_and_generate_configuration(),
+        optional("sessionConfiguration") => retrieve_and_generate_session_configuration(),
+        optional("sessionId") => String.t() | atom(),
+        required("input") => retrieve_and_generate_input()
+      }
+
+  """
+  @type retrieve_and_generate_request() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      output_file() :: %{
+        "bytes" => binary(),
+        "name" => [String.t() | atom()],
+        "type" => String.t() | atom()
+      }
+
+  """
+  @type output_file() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      action_group_invocation_output() :: %{
+        "metadata" => metadata(),
+        "text" => String.t() | atom()
+      }
+
+  """
+  @type action_group_invocation_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      text_to_sql_knowledge_base_configuration() :: %{
+        "knowledgeBaseArn" => String.t() | atom()
+      }
+
+  """
+  @type text_to_sql_knowledge_base_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      bedrock_reranking_configuration() :: %{
+        "modelConfiguration" => bedrock_reranking_model_configuration(),
+        "numberOfResults" => [integer()]
+      }
+
+  """
+  @type bedrock_reranking_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      inline_session_state() :: %{
+        "conversationHistory" => conversation_history(),
+        "files" => list(input_file()),
+        "invocationId" => [String.t() | atom()],
+        "promptSessionAttributes" => map(),
+        "returnControlInvocationResults" => list(list()),
+        "sessionAttributes" => map()
+      }
+
+  """
+  @type inline_session_state() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      rerank_text_document() :: %{
+        "text" => [String.t() | atom()]
+      }
+
+  """
+  @type rerank_text_document() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_assessment() :: %{
+        "contentPolicy" => guardrail_content_policy_assessment(),
+        "sensitiveInformationPolicy" => guardrail_sensitive_information_policy_assessment(),
+        "topicPolicy" => guardrail_topic_policy_assessment(),
+        "wordPolicy" => guardrail_word_policy_assessment()
+      }
+
+  """
+  @type guardrail_assessment() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      audio_segment() :: %{
+        "s3Uri" => [String.t() | atom()],
+        "transcription" => [String.t() | atom()]
+      }
+
+  """
+  @type audio_segment() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      session_state() :: %{
+        "conversationHistory" => conversation_history(),
+        "files" => list(input_file()),
+        "invocationId" => [String.t() | atom()],
+        "knowledgeBaseConfigurations" => list(knowledge_base_configuration()),
+        "promptSessionAttributes" => map(),
+        "returnControlInvocationResults" => list(list()),
+        "sessionAttributes" => map()
+      }
+
+  """
+  @type session_state() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invocation_input() :: %{
+        "actionGroupInvocationInput" => action_group_invocation_input(),
+        "agentCollaboratorInvocationInput" => agent_collaborator_invocation_input(),
+        "codeInterpreterInvocationInput" => code_interpreter_invocation_input(),
+        "invocationType" => list(any()),
+        "knowledgeBaseLookupInput" => knowledge_base_lookup_input(),
+        "traceId" => String.t() | atom()
+      }
+
+  """
+  @type invocation_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_agent_memory_response() :: %{
+        "memoryContents" => list(list()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type get_agent_memory_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      query_generation_input() :: %{
+        "text" => [String.t() | atom()],
+        "type" => list(any())
+      }
+
+  """
+  @type query_generation_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      guardrail_word_policy_assessment() :: %{
+        "customWords" => list(guardrail_custom_word()),
+        "managedWordLists" => list(guardrail_managed_word())
+      }
+
+  """
+  @type guardrail_word_policy_assessment() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_invocations_response() :: %{
+        "invocationSummaries" => list(invocation_summary()),
+        "nextToken" => String.t() | atom()
+      }
+
+  """
+  @type list_invocations_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      vector_search_bedrock_reranking_model_configuration() :: %{
+        "additionalModelRequestFields" => map(),
+        "modelArn" => String.t() | atom()
+      }
+
+  """
+  @type vector_search_bedrock_reranking_model_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieved_reference() :: %{
+        "content" => retrieval_result_content(),
+        "location" => retrieval_result_location(),
+        "metadata" => map()
+      }
+
+  """
+  @type retrieved_reference() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieve_and_generate_response() :: %{
+        "citations" => list(citation()),
+        "guardrailAction" => list(any()),
+        "output" => retrieve_and_generate_output(),
+        "sessionId" => String.t() | atom()
+      }
+
+  """
+  @type retrieve_and_generate_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieve_and_generate_session_configuration() :: %{
+        "kmsKeyArn" => String.t() | atom()
+      }
+
+  """
+  @type retrieve_and_generate_session_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      api_parameter() :: %{
+        "name" => [String.t() | atom()],
+        "type" => [String.t() | atom()],
+        "value" => [String.t() | atom()]
+      }
+
+  """
+  @type api_parameter() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      generated_response_part() :: %{
+        "textResponsePart" => text_response_part()
+      }
+
+  """
+  @type generated_response_part() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      citation() :: %{
+        "generatedResponsePart" => generated_response_part(),
+        "retrievedReferences" => list(retrieved_reference())
+      }
+
+  """
+  @type citation() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_execution_flow_snapshot_response() :: %{
+        "customerEncryptionKeyArn" => String.t() | atom(),
+        "definition" => [String.t() | atom()],
+        "executionRoleArn" => String.t() | atom(),
+        "flowAliasIdentifier" => String.t() | atom(),
+        "flowIdentifier" => String.t() | atom(),
+        "flowVersion" => String.t() | atom()
+      }
+
+  """
+  @type get_execution_flow_snapshot_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieval_result_custom_document_location() :: %{
+        "id" => [String.t() | atom()]
+      }
+
+  """
+  @type retrieval_result_custom_document_location() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      knowledge_base_lookup_input() :: %{
+        "knowledgeBaseId" => String.t() | atom(),
+        "text" => String.t() | atom()
+      }
+
+  """
+  @type knowledge_base_lookup_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_trace_node_action_event() :: %{
+        "nodeName" => String.t() | atom(),
+        "operationName" => [String.t() | atom()],
+        "operationRequest" => [any()],
+        "operationResponse" => [any()],
+        "requestId" => [String.t() | atom()],
+        "serviceName" => [String.t() | atom()],
+        "timestamp" => non_neg_integer()
+      }
+
+  """
+  @type flow_trace_node_action_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      agent_collaborator_invocation_input() :: %{
+        "agentCollaboratorAliasArn" => String.t() | atom(),
+        "agentCollaboratorName" => [String.t() | atom()],
+        "input" => agent_collaborator_input_payload()
+      }
+
+  """
+  @type agent_collaborator_invocation_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      function_result() :: %{
+        "actionGroup" => [String.t() | atom()],
+        "agentId" => [String.t() | atom()],
+        "confirmationState" => list(any()),
+        "function" => [String.t() | atom()],
+        "responseBody" => map(),
+        "responseState" => list(any())
+      }
+
+  """
+  @type function_result() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieval_result_location() :: %{
+        "confluenceLocation" => retrieval_result_confluence_location(),
+        "customDocumentLocation" => retrieval_result_custom_document_location(),
+        "kendraDocumentLocation" => retrieval_result_kendra_document_location(),
+        "s3Location" => retrieval_result_s3_location(),
+        "salesforceLocation" => retrieval_result_salesforce_location(),
+        "sharePointLocation" => retrieval_result_share_point_location(),
+        "sqlLocation" => retrieval_result_sql_location(),
+        "type" => list(any()),
+        "webLocation" => retrieval_result_web_location()
+      }
+
+  """
+  @type retrieval_result_location() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      text_inference_config() :: %{
+        "maxTokens" => integer(),
+        "stopSequences" => list([String.t() | atom()]()),
+        "temperature" => float(),
+        "topP" => float()
+      }
+
+  """
+  @type text_inference_config() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      get_flow_execution_request() :: %{}
+
+  """
+  @type get_flow_execution_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      model_invocation_input() :: %{
+        "foundationModel" => String.t() | atom(),
+        "inferenceConfiguration" => inference_configuration(),
+        "overrideLambda" => String.t() | atom(),
+        "parserMode" => list(any()),
+        "promptCreationMode" => list(any()),
+        "text" => String.t() | atom(),
+        "traceId" => String.t() | atom(),
+        "type" => list(any())
+      }
+
+  """
+  @type model_invocation_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      message() :: %{
+        "content" => list(list()),
+        "role" => list(any())
+      }
+
+  """
+  @type message() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      dependency_failed_exception() :: %{
+        "message" => String.t() | atom(),
+        "resourceName" => String.t() | atom()
+      }
+
+  """
+  @type dependency_failed_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      request_body() :: %{
+        "content" => map()
+      }
+
+  """
+  @type request_body() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      orchestration_configuration() :: %{
+        "additionalModelRequestFields" => map(),
+        "inferenceConfig" => inference_config(),
+        "performanceConfig" => performance_configuration(),
+        "promptTemplate" => prompt_template(),
+        "queryTransformationConfiguration" => query_transformation_configuration()
+      }
+
+  """
+  @type orchestration_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_multi_turn_input_request_event() :: %{
+        "content" => list(),
+        "nodeName" => String.t() | atom(),
+        "nodeType" => list(any())
+      }
+
+  """
+  @type flow_multi_turn_input_request_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_output_event() :: %{
+        "content" => list(),
+        "nodeName" => String.t() | atom(),
+        "nodeType" => list(any())
+      }
+
+  """
+  @type flow_output_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      flow_input() :: %{
+        "content" => list(),
+        "nodeInputName" => String.t() | atom(),
+        "nodeName" => String.t() | atom(),
+        "nodeOutputName" => String.t() | atom()
+      }
+
+  """
+  @type flow_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      failure_trace() :: %{
+        "failureCode" => [integer()],
+        "failureReason" => String.t() | atom(),
+        "metadata" => metadata(),
+        "traceId" => String.t() | atom()
+      }
+
+  """
+  @type failure_trace() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      custom_orchestration_trace_event() :: %{
+        "text" => [String.t() | atom()]
+      }
+
+  """
+  @type custom_orchestration_trace_event() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      retrieval_result_sql_location() :: %{
+        "query" => [String.t() | atom()]
+      }
+
+  """
+  @type retrieval_result_sql_location() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      list_tags_for_resource_request() :: %{}
+
+  """
+  @type list_tags_for_resource_request() :: %{}
+
+  @typedoc """
+
+  ## Example:
+
+      inline_agent_return_control_payload() :: %{
+        "invocationId" => [String.t() | atom()],
+        "invocationInputs" => list(list())
+      }
+
+  """
+  @type inline_agent_return_control_payload() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_invocation_response() :: %{
+        "createdAt" => non_neg_integer(),
+        "invocationId" => String.t() | atom(),
+        "sessionId" => String.t() | atom()
+      }
+
+  """
+  @type create_invocation_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      inline_agent_trace_part() :: %{
+        "callerChain" => list(list()),
+        "collaboratorName" => String.t() | atom(),
+        "eventTime" => non_neg_integer(),
+        "sessionId" => String.t() | atom(),
+        "trace" => list()
+      }
+
+  """
+  @type inline_agent_trace_part() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      invocation_summary() :: %{
+        "createdAt" => non_neg_integer(),
+        "invocationId" => String.t() | atom(),
+        "sessionId" => String.t() | atom()
+      }
+
+  """
+  @type invocation_summary() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      transformation_configuration() :: %{
+        "mode" => list(any()),
+        "textToSqlConfiguration" => text_to_sql_configuration()
+      }
+
+  """
+  @type transformation_configuration() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      knowledge_base_retrieval_result() :: %{
+        "content" => retrieval_result_content(),
+        "location" => retrieval_result_location(),
+        "metadata" => map(),
+        "score" => [float()]
+      }
+
+  """
+  @type knowledge_base_retrieval_result() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      knowledge_base_lookup_output() :: %{
+        "metadata" => metadata(),
+        "retrievedReferences" => list(retrieved_reference())
+      }
+
+  """
+  @type knowledge_base_lookup_output() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      service_quota_exceeded_exception() :: %{
+        "message" => String.t() | atom()
+      }
+
+  """
+  @type service_quota_exceeded_exception() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      return_control_payload() :: %{
+        "invocationId" => [String.t() | atom()],
+        "invocationInputs" => list(list())
+      }
+
+  """
+  @type return_control_payload() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      rerank_response() :: %{
+        "nextToken" => String.t() | atom(),
+        "results" => list(rerank_result())
+      }
+
+  """
+  @type rerank_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      create_session_response() :: %{
+        "createdAt" => non_neg_integer(),
+        "sessionArn" => String.t() | atom(),
+        "sessionId" => String.t() | atom(),
+        "sessionStatus" => list(any())
+      }
+
+  """
+  @type create_session_response() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      api_invocation_input() :: %{
+        "actionGroup" => [String.t() | atom()],
+        "actionInvocationType" => list(any()),
+        "agentId" => [String.t() | atom()],
+        "apiPath" => String.t() | atom(),
+        "collaboratorName" => String.t() | atom(),
+        "httpMethod" => [String.t() | atom()],
+        "parameters" => list(api_parameter()),
+        "requestBody" => api_request_body()
+      }
+
+  """
+  @type api_invocation_input() :: %{(String.t() | atom()) => any()}
+
+  @typedoc """
+
+  ## Example:
+
+      start_flow_execution_response() :: %{
+        "executionArn" => String.t() | atom()
+      }
+
+  """
+  @type start_flow_execution_response() :: %{(String.t() | atom()) => any()}
+
+  @type create_invocation_errors() ::
+          service_quota_exceeded_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type create_session_errors() ::
+          service_quota_exceeded_exception()
+          | conflict_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type delete_agent_memory_errors() ::
+          service_quota_exceeded_exception()
+          | dependency_failed_exception()
+          | bad_gateway_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type delete_session_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type end_session_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type generate_query_errors() ::
+          service_quota_exceeded_exception()
+          | dependency_failed_exception()
+          | bad_gateway_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_agent_memory_errors() ::
+          service_quota_exceeded_exception()
+          | dependency_failed_exception()
+          | bad_gateway_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_execution_flow_snapshot_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_flow_execution_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_invocation_step_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type get_session_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type invoke_agent_errors() ::
+          service_quota_exceeded_exception()
+          | dependency_failed_exception()
+          | bad_gateway_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+          | model_not_ready_exception()
+
+  @type invoke_flow_errors() ::
+          service_quota_exceeded_exception()
+          | dependency_failed_exception()
+          | bad_gateway_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type invoke_inline_agent_errors() ::
+          service_quota_exceeded_exception()
+          | dependency_failed_exception()
+          | bad_gateway_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_flow_execution_events_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_flow_executions_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_invocation_steps_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_invocations_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_sessions_errors() ::
+          internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type list_tags_for_resource_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type optimize_prompt_errors() ::
+          dependency_failed_exception()
+          | bad_gateway_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type put_invocation_step_errors() ::
+          service_quota_exceeded_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type rerank_errors() ::
+          service_quota_exceeded_exception()
+          | dependency_failed_exception()
+          | bad_gateway_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type retrieve_errors() ::
+          service_quota_exceeded_exception()
+          | dependency_failed_exception()
+          | bad_gateway_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type retrieve_and_generate_errors() ::
+          service_quota_exceeded_exception()
+          | dependency_failed_exception()
+          | bad_gateway_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type retrieve_and_generate_stream_errors() ::
+          service_quota_exceeded_exception()
+          | dependency_failed_exception()
+          | bad_gateway_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type start_flow_execution_errors() ::
+          service_quota_exceeded_exception()
+          | dependency_failed_exception()
+          | bad_gateway_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type stop_flow_execution_errors() ::
+          dependency_failed_exception()
+          | bad_gateway_exception()
+          | conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type tag_resource_errors() ::
+          service_quota_exceeded_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type untag_resource_errors() ::
+          resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  @type update_session_errors() ::
+          conflict_exception()
+          | resource_not_found_exception()
+          | internal_server_exception()
+          | validation_exception()
+          | access_denied_exception()
+          | throttling_exception()
+
+  def metadata do
+    %{
+      api_version: "2023-07-26",
+      content_type: "application/x-amz-json-1.1",
+      credential_scope: nil,
+      endpoint_prefix: "bedrock-agent-runtime",
+      global?: false,
+      hostname: nil,
+      protocol: "rest-json",
+      service_id: "Bedrock Agent Runtime",
+      signature_version: "v4",
+      signing_name: "bedrock",
+      target_prefix: nil
+    }
+  end
+
+  @doc """
+  Creates a new invocation within a session.
+
+  An invocation groups the related invocation steps that store the content from a
+  conversation. For more information about sessions, see [Store and retrieve conversation history and context with Amazon Bedrock
+  sessions](https://docs.aws.amazon.com/bedrock/latest/userguide/sessions.html).
+
+  Related APIs
+
+    *
+  [ListInvocations](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_ListInvocations.html)     *
+  [ListSessions](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_ListSessions.html)
+
+    *
+  [GetSession](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_GetSession.html)
+  """
+  @spec create_invocation(map(), String.t() | atom(), create_invocation_request(), list()) ::
+          {:ok, create_invocation_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_invocation_errors()}
+  def create_invocation(%Client{} = client, session_identifier, input, options \\ []) do
+    url_path = "/sessions/#{AWS.Util.encode_uri(session_identifier)}/invocations/"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :put,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      201
+    )
+  end
+
+  @doc """
+  Creates a session to temporarily store conversations for generative AI (GenAI)
+  applications built with open-source frameworks such as LangGraph and LlamaIndex.
+
+  Sessions enable you to save the state of conversations at checkpoints, with the
+  added security and infrastructure of Amazon Web Services. For more information,
+  see [Store and retrieve conversation history and context with Amazon Bedrock sessions](https://docs.aws.amazon.com/bedrock/latest/userguide/sessions.html).
+
+  By default, Amazon Bedrock uses Amazon Web Services-managed keys for session
+  encryption, including session metadata, or you can use your own KMS key. For
+  more information, see [Amazon Bedrock session encryption](https://docs.aws.amazon.com/bedrock/latest/userguide/session-encryption.html).
+
+  You use a session to store state and conversation history for generative AI
+  applications built with open-source frameworks. For Amazon Bedrock Agents, the
+  service automatically manages conversation context and associates them with the
+  agent-specific sessionId you specify in the
+  [InvokeAgent](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_InvokeAgent.html) API operation.
+
+  Related APIs:
+
+    *
+  [ListSessions](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_ListSessions.html)
+
+    *
+  [GetSession](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_GetSession.html)     *
+  [EndSession](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_EndSession.html)
+
+    *
+  [DeleteSession](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_DeleteSession.html)
+  """
+  @spec create_session(map(), create_session_request(), list()) ::
+          {:ok, create_session_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, create_session_errors()}
+  def create_session(%Client{} = client, input, options \\ []) do
+    url_path = "/sessions/"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :put,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      201
+    )
+  end
+
+  @doc """
+  Deletes memory from the specified memory identifier.
+  """
+  @spec delete_agent_memory(
+          map(),
+          String.t() | atom(),
+          String.t() | atom(),
+          delete_agent_memory_request(),
+          list()
+        ) ::
+          {:ok, delete_agent_memory_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_agent_memory_errors()}
+  def delete_agent_memory(%Client{} = client, agent_alias_id, agent_id, input, options \\ []) do
+    url_path =
+      "/agents/#{AWS.Util.encode_uri(agent_id)}/agentAliases/#{AWS.Util.encode_uri(agent_alias_id)}/memories"
+
+    headers = []
+    custom_headers = []
+
+    {query_params, input} =
+      [
+        {"memoryId", "memoryId"},
+        {"sessionId", "sessionId"}
+      ]
+      |> Request.build_params(input)
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :delete,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      202
+    )
+  end
+
+  @doc """
+  Deletes a session that you ended.
+
+  You can't delete a session with an `ACTIVE` status. To delete an active session,
+  you must first end it with the
+  [EndSession](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_EndSession.html) API operation. For more information about sessions, see [Store and retrieve
+  conversation history and context with Amazon Bedrock
+  sessions](https://docs.aws.amazon.com/bedrock/latest/userguide/sessions.html).
+  """
+  @spec delete_session(map(), String.t() | atom(), delete_session_request(), list()) ::
+          {:ok, delete_session_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, delete_session_errors()}
+  def delete_session(%Client{} = client, session_identifier, input, options \\ []) do
+    url_path = "/sessions/#{AWS.Util.encode_uri(session_identifier)}/"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :delete,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Ends the session.
+
+  After you end a session, you can still access its content but you can’t add to
+  it. To delete the session and it's content, you use the DeleteSession API
+  operation. For more information about sessions, see [Store and retrieve conversation history and context with Amazon Bedrock
+  sessions](https://docs.aws.amazon.com/bedrock/latest/userguide/sessions.html).
+  """
+  @spec end_session(map(), String.t() | atom(), end_session_request(), list()) ::
+          {:ok, end_session_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, end_session_errors()}
+  def end_session(%Client{} = client, session_identifier, input, options \\ []) do
+    url_path = "/sessions/#{AWS.Util.encode_uri(session_identifier)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :patch,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Generates an SQL query from a natural language query.
+
+  For more information, see [Generate a query for structured data](https://docs.aws.amazon.com/bedrock/latest/userguide/knowledge-base-generate-query.html)
+  in the Amazon Bedrock User Guide.
+  """
+  @spec generate_query(map(), generate_query_request(), list()) ::
+          {:ok, generate_query_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, generate_query_errors()}
+  def generate_query(%Client{} = client, input, options \\ []) do
+    url_path = "/generateQuery"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Gets the sessions stored in the memory of the agent.
+  """
+  @spec get_agent_memory(
+          map(),
+          String.t() | atom(),
+          String.t() | atom(),
+          String.t() | atom() | nil,
+          String.t() | atom(),
+          String.t() | atom(),
+          String.t() | atom() | nil,
+          list()
+        ) ::
+          {:ok, get_agent_memory_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_agent_memory_errors()}
+  def get_agent_memory(
+        %Client{} = client,
+        agent_alias_id,
+        agent_id,
+        max_items \\ nil,
+        memory_id,
+        memory_type,
+        next_token \\ nil,
+        options \\ []
+      ) do
+    url_path =
+      "/agents/#{AWS.Util.encode_uri(agent_id)}/agentAliases/#{AWS.Util.encode_uri(agent_alias_id)}/memories"
+
+    headers = []
+    query_params = []
+
+    query_params =
+      if !is_nil(next_token) do
+        [{"nextToken", next_token} | query_params]
+      else
+        query_params
+      end
+
+    query_params =
+      if !is_nil(memory_type) do
+        [{"memoryType", memory_type} | query_params]
+      else
+        query_params
+      end
+
+    query_params =
+      if !is_nil(memory_id) do
+        [{"memoryId", memory_id} | query_params]
+      else
+        query_params
+      end
+
+    query_params =
+      if !is_nil(max_items) do
+        [{"maxItems", max_items} | query_params]
+      else
+        query_params
+      end
+
+    meta = metadata()
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Retrieves the flow definition snapshot used for a flow execution.
+
+  The snapshot represents the flow metadata and definition as it existed at the
+  time the execution was started. Note that even if the flow is edited after an
+  execution starts, the snapshot connected to the execution remains unchanged.
+
+  Flow executions is in preview release for Amazon Bedrock and is subject to
+  change.
+  """
+  @spec get_execution_flow_snapshot(
+          map(),
+          String.t() | atom(),
+          String.t() | atom(),
+          String.t() | atom(),
+          list()
+        ) ::
+          {:ok, get_execution_flow_snapshot_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_execution_flow_snapshot_errors()}
+  def get_execution_flow_snapshot(
+        %Client{} = client,
+        execution_identifier,
+        flow_alias_identifier,
+        flow_identifier,
+        options \\ []
+      ) do
+    url_path =
+      "/flows/#{AWS.Util.encode_uri(flow_identifier)}/aliases/#{AWS.Util.encode_uri(flow_alias_identifier)}/executions/#{AWS.Util.encode_uri(execution_identifier)}/flowsnapshot"
+
+    headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Retrieves details about a specific flow execution, including its status, start
+  and end times, and any errors that occurred during execution.
+  """
+  @spec get_flow_execution(
+          map(),
+          String.t() | atom(),
+          String.t() | atom(),
+          String.t() | atom(),
+          list()
+        ) ::
+          {:ok, get_flow_execution_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_flow_execution_errors()}
+  def get_flow_execution(
+        %Client{} = client,
+        execution_identifier,
+        flow_alias_identifier,
+        flow_identifier,
+        options \\ []
+      ) do
+    url_path =
+      "/flows/#{AWS.Util.encode_uri(flow_identifier)}/aliases/#{AWS.Util.encode_uri(flow_alias_identifier)}/executions/#{AWS.Util.encode_uri(execution_identifier)}"
+
+    headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Retrieves the details of a specific invocation step within an invocation in a
+  session.
+
+  For more information about sessions, see [Store and retrieve conversation history and context with Amazon Bedrock
+  sessions](https://docs.aws.amazon.com/bedrock/latest/userguide/sessions.html).
+  """
+  @spec get_invocation_step(
+          map(),
+          String.t() | atom(),
+          String.t() | atom(),
+          get_invocation_step_request(),
+          list()
+        ) ::
+          {:ok, get_invocation_step_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_invocation_step_errors()}
+  def get_invocation_step(
+        %Client{} = client,
+        invocation_step_id,
+        session_identifier,
+        input,
+        options \\ []
+      ) do
+    url_path =
+      "/sessions/#{AWS.Util.encode_uri(session_identifier)}/invocationSteps/#{AWS.Util.encode_uri(invocation_step_id)}"
+
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Retrieves details about a specific session.
+
+  For more information about sessions, see [Store and retrieve conversation history and context with Amazon Bedrock
+  sessions](https://docs.aws.amazon.com/bedrock/latest/userguide/sessions.html).
+  """
+  @spec get_session(map(), String.t() | atom(), list()) ::
+          {:ok, get_session_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, get_session_errors()}
+  def get_session(%Client{} = client, session_identifier, options \\ []) do
+    url_path = "/sessions/#{AWS.Util.encode_uri(session_identifier)}/"
+    headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+
+
+  Sends a prompt for the agent to process and respond to.
+
+  Note the following fields for the request:
+
+    * To continue the same conversation with an agent, use the same
+  `sessionId` value in the request.
+
+    * To activate trace enablement, turn `enableTrace` to `true`. Trace
+  enablement helps you follow the agent's reasoning process that led it to the
+  information it processed, the actions it took, and the final result it yielded.
+  For more information, see [Trace enablement](https://docs.aws.amazon.com/bedrock/latest/userguide/agents-test.html#trace-events).
+
+    * End a conversation by setting `endSession` to `true`.
+
+    * In the `sessionState` object, you can include attributes for the
+  session or prompt or, if you configured an action group to return control,
+  results from invocation of the action group.
+
+  The response contains both **chunk** and **trace** attributes.
+
+  The final response is returned in the `bytes` field of the `chunk` object. The
+  `InvokeAgent` returns one chunk for the entire interaction.
+
+    * The `attribution` object contains citations for parts of the
+  response.
+
+    * If you set `enableTrace` to `true` in the request, you can trace
+  the agent's steps and reasoning process that led it to the response.
+
+    * If the action predicted was configured to return control, the
+  response returns parameters for the action, elicited from the user, in the
+  `returnControl` field.
+
+    * Errors are also surfaced in the response.
+  """
+  @spec invoke_agent(
+          map(),
+          String.t() | atom(),
+          String.t() | atom(),
+          String.t() | atom(),
+          invoke_agent_request(),
+          list()
+        ) ::
+          {:ok, invoke_agent_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, invoke_agent_errors()}
+  def invoke_agent(%Client{} = client, agent_alias_id, agent_id, session_id, input, options \\ []) do
+    url_path =
+      "/agents/#{AWS.Util.encode_uri(agent_id)}/agentAliases/#{AWS.Util.encode_uri(agent_alias_id)}/sessions/#{AWS.Util.encode_uri(session_id)}/text"
+
+    {headers, input} =
+      [
+        {"sourceArn", "x-amz-source-arn"}
+      ]
+      |> Request.build_params(input)
+
+    custom_headers = []
+    query_params = []
+
+    options =
+      Keyword.put(
+        options,
+        :response_header_parameters,
+        [
+          {"x-amzn-bedrock-agent-content-type", "contentType"},
+          {"x-amz-bedrock-agent-memory-id", "memoryId"},
+          {"x-amz-bedrock-agent-session-id", "sessionId"}
+        ]
+      )
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Invokes an alias of a flow to run the inputs that you specify and return the
+  output of each node as a stream.
+
+  If there's an error, the error is returned. For more information, see [Test a flow in Amazon
+  Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/flows-test.html)
+  in the [Amazon Bedrock User Guide](https://docs.aws.amazon.com/bedrock/latest/userguide/what-is-service.html).
+
+  The CLI doesn't support streaming operations in Amazon Bedrock, including
+  `InvokeFlow`.
+  """
+  @spec invoke_flow(
+          map(),
+          String.t() | atom(),
+          String.t() | atom(),
+          invoke_flow_request(),
+          list()
+        ) ::
+          {:ok, invoke_flow_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, invoke_flow_errors()}
+  def invoke_flow(
+        %Client{} = client,
+        flow_alias_identifier,
+        flow_identifier,
+        input,
+        options \\ []
+      ) do
+    url_path =
+      "/flows/#{AWS.Util.encode_uri(flow_identifier)}/aliases/#{AWS.Util.encode_uri(flow_alias_identifier)}"
+
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    options =
+      Keyword.put(
+        options,
+        :response_header_parameters,
+        [{"x-amz-bedrock-flow-execution-id", "executionId"}]
+      )
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Invokes an inline Amazon Bedrock agent using the configurations you provide with
+  the request.
+
+    * Specify the following fields for security purposes.
+
+      * (Optional) `customerEncryptionKeyArn` – The Amazon
+  Resource Name (ARN) of a KMS key to encrypt the creation of the agent.
+
+      * (Optional) `idleSessionTTLinSeconds` – Specify the
+  number of seconds for which the agent should maintain session information. After
+  this time expires, the subsequent `InvokeInlineAgent` request begins a new
+  session.
+
+    * To override the default prompt behavior for agent orchestration
+  and to use advanced prompts, include a `promptOverrideConfiguration` object. For
+  more information, see [Advanced prompts](https://docs.aws.amazon.com/bedrock/latest/userguide/advanced-prompts.html).
+
+    * The agent instructions will not be honored if your agent has only
+  one knowledge base, uses default prompts, has no action group, and user input is
+  disabled.
+  """
+  @spec invoke_inline_agent(map(), String.t() | atom(), invoke_inline_agent_request(), list()) ::
+          {:ok, invoke_inline_agent_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, invoke_inline_agent_errors()}
+  def invoke_inline_agent(%Client{} = client, session_id, input, options \\ []) do
+    url_path = "/agents/#{AWS.Util.encode_uri(session_id)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    options =
+      Keyword.put(
+        options,
+        :response_header_parameters,
+        [
+          {"x-amzn-bedrock-agent-content-type", "contentType"},
+          {"x-amz-bedrock-agent-session-id", "sessionId"}
+        ]
+      )
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists events that occurred during a flow execution.
+
+  Events provide detailed information about the execution progress, including node
+  inputs and outputs, flow inputs and outputs, condition results, and failure
+  events.
+
+  Flow executions is in preview release for Amazon Bedrock and is subject to
+  change.
+  """
+  @spec list_flow_execution_events(
+          map(),
+          String.t() | atom(),
+          String.t() | atom(),
+          String.t() | atom(),
+          String.t() | atom(),
+          String.t() | atom() | nil,
+          String.t() | atom() | nil,
+          list()
+        ) ::
+          {:ok, list_flow_execution_events_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_flow_execution_events_errors()}
+  def list_flow_execution_events(
+        %Client{} = client,
+        execution_identifier,
+        flow_alias_identifier,
+        flow_identifier,
+        event_type,
+        max_results \\ nil,
+        next_token \\ nil,
+        options \\ []
+      ) do
+    url_path =
+      "/flows/#{AWS.Util.encode_uri(flow_identifier)}/aliases/#{AWS.Util.encode_uri(flow_alias_identifier)}/executions/#{AWS.Util.encode_uri(execution_identifier)}/events"
+
+    headers = []
+    query_params = []
+
+    query_params =
+      if !is_nil(next_token) do
+        [{"nextToken", next_token} | query_params]
+      else
+        query_params
+      end
+
+    query_params =
+      if !is_nil(max_results) do
+        [{"maxResults", max_results} | query_params]
+      else
+        query_params
+      end
+
+    query_params =
+      if !is_nil(event_type) do
+        [{"eventType", event_type} | query_params]
+      else
+        query_params
+      end
+
+    meta = metadata()
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Lists all executions of a flow.
+
+  Results can be paginated and include summary information about each execution,
+  such as status, start and end times, and the execution's Amazon Resource Name
+  (ARN).
+
+  Flow executions is in preview release for Amazon Bedrock and is subject to
+  change.
+  """
+  @spec list_flow_executions(
+          map(),
+          String.t() | atom(),
+          String.t() | atom() | nil,
+          String.t() | atom() | nil,
+          String.t() | atom() | nil,
+          list()
+        ) ::
+          {:ok, list_flow_executions_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_flow_executions_errors()}
+  def list_flow_executions(
+        %Client{} = client,
+        flow_identifier,
+        flow_alias_identifier \\ nil,
+        max_results \\ nil,
+        next_token \\ nil,
+        options \\ []
+      ) do
+    url_path = "/flows/#{AWS.Util.encode_uri(flow_identifier)}/executions"
+    headers = []
+    query_params = []
+
+    query_params =
+      if !is_nil(next_token) do
+        [{"nextToken", next_token} | query_params]
+      else
+        query_params
+      end
+
+    query_params =
+      if !is_nil(max_results) do
+        [{"maxResults", max_results} | query_params]
+      else
+        query_params
+      end
+
+    query_params =
+      if !is_nil(flow_alias_identifier) do
+        [{"flowAliasIdentifier", flow_alias_identifier} | query_params]
+      else
+        query_params
+      end
+
+    meta = metadata()
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Lists all invocation steps associated with a session and optionally, an
+  invocation within the session.
+
+  For more information about sessions, see [Store and retrieve conversation history and context with Amazon Bedrock
+  sessions](https://docs.aws.amazon.com/bedrock/latest/userguide/sessions.html).
+  """
+  @spec list_invocation_steps(map(), String.t() | atom(), list_invocation_steps_request(), list()) ::
+          {:ok, list_invocation_steps_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_invocation_steps_errors()}
+  def list_invocation_steps(%Client{} = client, session_identifier, input, options \\ []) do
+    url_path = "/sessions/#{AWS.Util.encode_uri(session_identifier)}/invocationSteps/"
+    headers = []
+    custom_headers = []
+
+    {query_params, input} =
+      [
+        {"maxResults", "maxResults"},
+        {"nextToken", "nextToken"}
+      ]
+      |> Request.build_params(input)
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists all invocations associated with a specific session.
+
+  For more information about sessions, see [Store and retrieve conversation history and context with Amazon Bedrock
+  sessions](https://docs.aws.amazon.com/bedrock/latest/userguide/sessions.html).
+  """
+  @spec list_invocations(map(), String.t() | atom(), list_invocations_request(), list()) ::
+          {:ok, list_invocations_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_invocations_errors()}
+  def list_invocations(%Client{} = client, session_identifier, input, options \\ []) do
+    url_path = "/sessions/#{AWS.Util.encode_uri(session_identifier)}/invocations/"
+    headers = []
+    custom_headers = []
+
+    {query_params, input} =
+      [
+        {"maxResults", "maxResults"},
+        {"nextToken", "nextToken"}
+      ]
+      |> Request.build_params(input)
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Lists all sessions in your Amazon Web Services account.
+
+  For more information about sessions, see [Store and retrieve conversation history and context with Amazon Bedrock
+  sessions](https://docs.aws.amazon.com/bedrock/latest/userguide/sessions.html).
+  """
+  @spec list_sessions(map(), list_sessions_request(), list()) ::
+          {:ok, list_sessions_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_sessions_errors()}
+  def list_sessions(%Client{} = client, input, options \\ []) do
+    url_path = "/sessions/"
+    headers = []
+    custom_headers = []
+
+    {query_params, input} =
+      [
+        {"maxResults", "maxResults"},
+        {"nextToken", "nextToken"}
+      ]
+      |> Request.build_params(input)
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  List all the tags for the resource you specify.
+  """
+  @spec list_tags_for_resource(map(), String.t() | atom(), list()) ::
+          {:ok, list_tags_for_resource_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, list_tags_for_resource_errors()}
+  def list_tags_for_resource(%Client{} = client, resource_arn, options \\ []) do
+    url_path = "/tags/#{AWS.Util.encode_uri(resource_arn)}"
+    headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(client, meta, :get, url_path, query_params, headers, nil, options, 200)
+  end
+
+  @doc """
+  Optimizes a prompt for the task that you specify.
+
+  For more information, see [Optimize a prompt](https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-management-optimize.html)
+  in the [Amazon Bedrock User Guide](https://docs.aws.amazon.com/bedrock/latest/userguide/what-is-service.html).
+  """
+  @spec optimize_prompt(map(), optimize_prompt_request(), list()) ::
+          {:ok, optimize_prompt_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, optimize_prompt_errors()}
+  def optimize_prompt(%Client{} = client, input, options \\ []) do
+    url_path = "/optimize-prompt"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Add an invocation step to an invocation in a session.
+
+  An invocation step stores fine-grained state checkpoints, including text and
+  images, for each interaction. For more information about sessions, see [Store and retrieve conversation history and context with Amazon Bedrock
+  sessions](https://docs.aws.amazon.com/bedrock/latest/userguide/sessions.html).
+
+  Related APIs:
+
+    *
+  [GetInvocationStep](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_GetInvocationStep.html)     *
+  [ListInvocationSteps](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_ListInvocationSteps.html)
+
+    *
+  [ListInvocations](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_ListInvocations.html)     *
+  [ListSessions](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_agent-runtime_ListInvocations.html)
+  """
+  @spec put_invocation_step(map(), String.t() | atom(), put_invocation_step_request(), list()) ::
+          {:ok, put_invocation_step_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, put_invocation_step_errors()}
+  def put_invocation_step(%Client{} = client, session_identifier, input, options \\ []) do
+    url_path = "/sessions/#{AWS.Util.encode_uri(session_identifier)}/invocationSteps/"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :put,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      201
+    )
+  end
+
+  @doc """
+  Reranks the relevance of sources based on queries.
+
+  For more information, see [Improve the relevance of query responses with a reranker
+  model](https://docs.aws.amazon.com/bedrock/latest/userguide/rerank.html).
+  """
+  @spec rerank(map(), rerank_request(), list()) ::
+          {:ok, rerank_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, rerank_errors()}
+  def rerank(%Client{} = client, input, options \\ []) do
+    url_path = "/rerank"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Queries a knowledge base and retrieves information from it.
+  """
+  @spec retrieve(map(), String.t() | atom(), retrieve_request(), list()) ::
+          {:ok, retrieve_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, retrieve_errors()}
+  def retrieve(%Client{} = client, knowledge_base_id, input, options \\ []) do
+    url_path = "/knowledgebases/#{AWS.Util.encode_uri(knowledge_base_id)}/retrieve"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Queries a knowledge base and generates responses based on the retrieved results
+  and using the specified foundation model or [inference profile](https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html).
+
+  The response only cites sources that are relevant to the query.
+  """
+  @spec retrieve_and_generate(map(), retrieve_and_generate_request(), list()) ::
+          {:ok, retrieve_and_generate_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, retrieve_and_generate_errors()}
+  def retrieve_and_generate(%Client{} = client, input, options \\ []) do
+    url_path = "/retrieveAndGenerate"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Queries a knowledge base and generates responses based on the retrieved results,
+  with output in streaming format.
+
+  The CLI doesn't support streaming operations in Amazon Bedrock, including
+  `InvokeModelWithResponseStream`.
+
+  This operation requires permission for the ` bedrock:RetrieveAndGenerate`
+  action.
+  """
+  @spec retrieve_and_generate_stream(map(), retrieve_and_generate_stream_request(), list()) ::
+          {:ok, retrieve_and_generate_stream_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, retrieve_and_generate_stream_errors()}
+  def retrieve_and_generate_stream(%Client{} = client, input, options \\ []) do
+    url_path = "/retrieveAndGenerateStream"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    options =
+      Keyword.put(
+        options,
+        :response_header_parameters,
+        [{"x-amzn-bedrock-knowledge-base-session-id", "sessionId"}]
+      )
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Starts an execution of an Amazon Bedrock flow.
+
+  Unlike flows that run until completion or time out after five minutes, flow
+  executions let you run flows asynchronously for longer durations. Flow
+  executions also yield control so that your application can perform other tasks.
+
+  This operation returns an Amazon Resource Name (ARN) that you can use to track
+  and manage your flow execution.
+
+  Flow executions is in preview release for Amazon Bedrock and is subject to
+  change.
+  """
+  @spec start_flow_execution(
+          map(),
+          String.t() | atom(),
+          String.t() | atom(),
+          start_flow_execution_request(),
+          list()
+        ) ::
+          {:ok, start_flow_execution_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, start_flow_execution_errors()}
+  def start_flow_execution(
+        %Client{} = client,
+        flow_alias_identifier,
+        flow_identifier,
+        input,
+        options \\ []
+      ) do
+    url_path =
+      "/flows/#{AWS.Util.encode_uri(flow_identifier)}/aliases/#{AWS.Util.encode_uri(flow_alias_identifier)}/executions"
+
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Stops an Amazon Bedrock flow's execution.
+
+  This operation prevents further processing of the flow and changes the execution
+  status to `Aborted`.
+  """
+  @spec stop_flow_execution(
+          map(),
+          String.t() | atom(),
+          String.t() | atom(),
+          String.t() | atom(),
+          stop_flow_execution_request(),
+          list()
+        ) ::
+          {:ok, stop_flow_execution_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, stop_flow_execution_errors()}
+  def stop_flow_execution(
+        %Client{} = client,
+        execution_identifier,
+        flow_alias_identifier,
+        flow_identifier,
+        input,
+        options \\ []
+      ) do
+    url_path =
+      "/flows/#{AWS.Util.encode_uri(flow_identifier)}/aliases/#{AWS.Util.encode_uri(flow_alias_identifier)}/executions/#{AWS.Util.encode_uri(execution_identifier)}/stop"
+
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Associate tags with a resource.
+
+  For more information, see [Tagging resources](https://docs.aws.amazon.com/bedrock/latest/userguide/what-is-service.html)
+  in the Amazon Bedrock User Guide.
+  """
+  @spec tag_resource(map(), String.t() | atom(), tag_resource_request(), list()) ::
+          {:ok, tag_resource_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, tag_resource_errors()}
+  def tag_resource(%Client{} = client, resource_arn, input, options \\ []) do
+    url_path = "/tags/#{AWS.Util.encode_uri(resource_arn)}"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :post,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Remove tags from a resource.
+  """
+  @spec untag_resource(map(), String.t() | atom(), untag_resource_request(), list()) ::
+          {:ok, untag_resource_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, untag_resource_errors()}
+  def untag_resource(%Client{} = client, resource_arn, input, options \\ []) do
+    url_path = "/tags/#{AWS.Util.encode_uri(resource_arn)}"
+    headers = []
+    custom_headers = []
+
+    {query_params, input} =
+      [
+        {"tagKeys", "tagKeys"}
+      ]
+      |> Request.build_params(input)
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :delete,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+
+  @doc """
+  Updates the metadata or encryption settings of a session.
+
+  For more information about sessions, see [Store and retrieve conversation history and context with Amazon Bedrock
+  sessions](https://docs.aws.amazon.com/bedrock/latest/userguide/sessions.html).
+  """
+  @spec update_session(map(), String.t() | atom(), update_session_request(), list()) ::
+          {:ok, update_session_response(), any()}
+          | {:error, {:unexpected_response, any()}}
+          | {:error, term()}
+          | {:error, update_session_errors()}
+  def update_session(%Client{} = client, session_identifier, input, options \\ []) do
+    url_path = "/sessions/#{AWS.Util.encode_uri(session_identifier)}/"
+    headers = []
+    custom_headers = []
+    query_params = []
+
+    meta = metadata()
+
+    Request.request_rest(
+      client,
+      meta,
+      :put,
+      url_path,
+      query_params,
+      custom_headers ++ headers,
+      input,
+      options,
+      200
+    )
+  end
+end
