@@ -140,6 +140,61 @@ cursor_before = metadata.before
 IO.puts "total count: #{metadata.total_count}"
 ```
 
+## Dynamic expressions
+
+Sometimes you may need to paginate on a value that isn't a plain column, e.g. a
+computed rank produced by full-text search. You can achieve this by providing a
+function that returns an `Ecto.Query.dynamic/2` expression as the cursor field,
+along with a `fetch_cursor_value_fun` that knows how to retrieve that value from
+each returned record.
+
+```elixir
+  query =
+    from(
+      f in Post,
+      # Alias for fragment must match witch cursor field name in fetch_cursor_value_fun and cursor_fields
+      select_merge: %{
+        rank_value:
+          fragment("ts_rank(document, plainto_tsquery('simple', ?)) AS rank_value", ^q)
+      },
+      where: fragment("document @@ plainto_tsquery('simple', ?)", ^q),
+      order_by: [
+        desc: fragment("rank_value"),
+        desc: f.id
+      ]
+    )
+
+  query
+  |> Repo.paginate(
+    limit: 30,
+    fetch_cursor_value_fun: fn
+      # Here we build the rank_value for each returned row
+      schema, :rank_value ->
+        {:ok, %{rows: [[rank_value]]}} =
+          Repo.query("SELECT ts_rank($1, plainto_tsquery('simple', $2))", [
+            schema.document,
+            q
+          ])
+
+        rank_value
+
+      schema, field ->
+        Paginator.default_fetch_cursor_value(schema, field)
+    end,
+    cursor_fields: [
+      {:rank_value,
+       # Here we build the rank_value that will be used in the where clause
+       fn ->
+         dynamic(
+           [x],
+           fragment("ts_rank(document, plainto_tsquery('simple', ?))", ^q)
+         )
+       end},
+      :id
+    ]
+  )
+```
+
 ## Security Considerations
 
 `Repo.paginate/4` will throw an `ArgumentError` should it detect an executable term in the cursor parameters passed to it (`before`, `after`).
