@@ -1,0 +1,59 @@
+defmodule Warehouse.MixProject do
+  use Mix.Project
+
+  def project do
+    [
+      app: :warehouse,
+      version: "0.1.0",
+      elixir: "~> 1.10",
+      elixirc_paths: elixirc_paths(Mix.env()),
+      start_permanent: Mix.env() == :prod,
+      deps: deps(),
+      releases: [
+        warehouse: [
+          include_executables_for: [:unix],
+          applications: [runtime_tools: :permanent]
+        ]
+      ]
+    ]
+  end
+
+  # Run "mix help compile.app" to learn about applications.
+  def application do
+    [
+      extra_applications: [:logger],
+      mod: {Warehouse.Application, []}
+    ]
+  end
+
+  # Specifies which paths to compile per environment.
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
+  # Run "mix help deps" to learn about dependencies.
+  defp deps do
+    [
+      {:amqp, "~> 2.0", override: true},
+      {:bottle, github: "system76/bottle", ref: "f66e8cc"},
+      {:broadway_rabbitmq, "~> 0.6.0"},
+      {:credo, "~> 1.3", only: [:dev, :test]},
+      {:decimal, "~> 1.9.0", override: true},
+      {:decorator, "~> 1.2"},
+      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
+      {:ecto_enum, "~> 1.4"},
+      {:ecto_sql, "~> 3.5"},
+      {:ex_aws_sqs, "~> 3.2"},
+      {:ex_aws, "~> 2.1.6"},
+      {:ex_machina, "~> 2.4", only: :test},
+      {:hackney, "~> 1.16"},
+      {:httpoison, "~> 1.8"},
+      {:jason, "~> 1.2", override: true},
+      {:logger_json, github: "Nebo15/logger_json", ref: "8e4290a"},
+      {:myxql, "~> 0.4.0"},
+      {:saxy, "~> 1.1"},
+      {:spandex_datadog, "~> 1.1"},
+      {:spandex, "~> 3.0.3"},
+      {:telemetry, "~> 0.4"}
+    ]
+  end
+end
