@@ -417,6 +417,37 @@ defmodule Phoenix.LiveView.UploadConfigTest do
     end
   end
 
+  test "fail_entry retains the entry, records the error once, and disallows re-join" do
+    socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any)
+    entry = build_client_entry(:avatar)
+    {:ok, conf} = UploadConfig.put_entries(socket.assigns.uploads.avatar, [entry])
+    {:ok, conf} = UploadConfig.register_entry_upload(conf, self(), entry["ref"])
+    [upload_entry] = conf.entries
+    assert is_pid(UploadConfig.entry_pid(conf, upload_entry))
+
+    conf = UploadConfig.fail_entry(conf, entry["ref"], {:writer_failure, :boom})
+    [failed_entry] = conf.entries
+    assert failed_entry.ref == entry["ref"]
+    assert UploadConfig.entry_pid(conf, failed_entry) == nil
+    assert conf.errors == [{entry["ref"], {:writer_failure, :boom}}]
+    assert {:error, :disallowed} = UploadConfig.register_entry_upload(conf, self(), entry["ref"])
+
+    conf = UploadConfig.fail_entry(conf, entry["ref"], {:writer_failure, :boom})
+    assert conf.errors == [{entry["ref"], {:writer_failure, :boom}}]
+
+    conf = UploadConfig.unregister_completed_entry(conf, entry["ref"])
+    assert [%UploadEntry{ref: ref}] = conf.entries
+    assert ref == entry["ref"]
+    assert conf.errors == [{entry["ref"], {:writer_failure, :boom}}]
+  end
+
+  test "fail_entry is a no-op when the entry is already gone" do
+    socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any)
+    conf = UploadConfig.fail_entry(socket.assigns.uploads.avatar, "missing", {:writer_failure, :boom})
+    assert conf.entries == []
+    assert conf.errors == []
+  end
+
   test "supports binary upload name" do
     assert LiveView.allow_upload(build_socket(), "avatar", accept: ~w(image/png .jpeg))
   end
