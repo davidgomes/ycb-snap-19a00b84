@@ -106,9 +106,14 @@ defmodule ErrorTracker.Migration do
     migrator().down(opts)
   end
 
+  @spec current_version(Keyword.t()) :: non_neg_integer()
+  def current_version(opts \\ []) when is_list(opts) do
+    migrator().current_version(opts)
+  end
+
   @spec migrated_version(Keyword.t()) :: non_neg_integer()
   def migrated_version(opts \\ []) when is_list(opts) do
-    migrator().migrated_version(opts)
+    migrator().current_version(opts)
   end
 
   defp migrator do

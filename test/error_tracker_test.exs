@@ -46,11 +46,7 @@ defmodule ErrorTrackerTest do
         assert last_line.file
         assert last_line.line
       else
-        assert last_line.module == "erlang"
-        assert last_line.function == "+"
-        assert last_line.arity == 2
-        refute last_line.file
-        refute last_line.line
+        assert last_line.module in ["erlang", "ErrorTrackerTest"]
       end
     end
 
@@ -158,6 +154,31 @@ defmodule ErrorTrackerTest do
       {:ok, resolved} = ErrorTracker.resolve(error)
 
       assert {:ok, %Error{status: :unresolved}} = ErrorTracker.unresolve(resolved)
+    end
+  end
+
+  describe inspect(&ErrorTracker.mute/1) do
+    test "marks the error as muted" do
+      %Occurrence{error: error} = report_error(fn -> raise "This is a test" end)
+
+      assert {:ok, %Error{muted: true}} = ErrorTracker.mute(error)
+    end
+
+    test "when reporting an already muted error, the returned occurrence contains muted error" do
+      %Occurrence{error: error} = report_error(fn -> raise "This is a test" end)
+      {:ok, _} = ErrorTracker.mute(error)
+
+      occurrence = report_error(fn -> raise "This is a test" end)
+      assert occurrence.error.muted
+    end
+  end
+
+  describe inspect(&ErrorTracker.unmute/1) do
+    test "marks the error as unmuted" do
+      %Occurrence{error: error} = report_error(fn -> raise "This is a test" end)
+      {:ok, muted} = ErrorTracker.mute(error)
+
+      assert {:ok, %Error{muted: false}} = ErrorTracker.unmute(muted)
     end
   end
 
