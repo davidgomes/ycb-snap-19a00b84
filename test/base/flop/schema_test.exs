@@ -409,4 +409,35 @@ defmodule Flop.SchemaTest do
 
     assert error.message =~ "cannot sort by custom field"
   end
+
+  test "allows custom field with orderer to be added to sortable list" do
+    defmodule Basil do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [
+            filter: {__MODULE__, :some_function, []},
+            orderer: {__MODULE__, :some_orderer_function, []},
+            ecto_type: :utc_datetime
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    assert Schema.sortable(%Basil{}) == [:inserted_at]
+
+    assert Schema.field_info(%Basil{}, :inserted_at) == %Flop.FieldInfo{
+             ecto_type: :utc_datetime,
+             operators: nil,
+             extra: %{
+               type: :custom,
+               filter: {Basil, :some_function, []},
+               orderer: {Basil, :some_orderer_function, []},
+               bindings: []
+             }
+           }
+  end
 end

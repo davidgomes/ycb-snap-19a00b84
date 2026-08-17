@@ -112,6 +112,7 @@ defmodule Flop.Adapter.Ecto do
               type: {:tuple, [:atom, :atom, :keyword_list]},
               required: true
             ],
+            orderer: [type: {:tuple, [:atom, :atom, :keyword_list]}],
             ecto_type: [type: :any, required: true],
             bindings: [type: {:list, :atom}],
             operators: [type: {:list, :atom}]
@@ -288,17 +289,12 @@ defmodule Flop.Adapter.Ecto do
 
     dialect = dialect(opts)
 
-    directions =
-      Enum.map(directions, fn {direction, field} ->
-        {Dialect.order_direction(dialect, direction), field}
-      end)
-
     case opts[:for] do
       nil ->
-        Enum.reduce(directions, query, fn {order_direction, field}, acc_query ->
+        Enum.reduce(directions, query, fn {direction, field}, acc_query ->
           order_by_direction(
             acc_query,
-            order_direction,
+            Dialect.order_direction(dialect, direction),
             dynamic([r], field(r, ^field))
           )
         end)
@@ -306,9 +302,17 @@ defmodule Flop.Adapter.Ecto do
       module ->
         struct = struct(module)
 
-        Enum.reduce(directions, query, fn {_, field} = expr, acc_query ->
+        Enum.reduce(directions, query, fn {direction, field}, acc_query ->
           field_info = Flop.Schema.field_info(struct, field)
-          apply_order_by_field(acc_query, expr, field_info, struct)
+
+          apply_order_by_field(
+            acc_query,
+            direction,
+            field,
+            field_info,
+            struct,
+            dialect
+          )
         end)
     end
   end
@@ -337,44 +341,83 @@ defmodule Flop.Adapter.Ecto do
 
   defp apply_order_by_field(
          q,
-         {order_direction, _},
+         direction,
+         _field,
          %FieldInfo{
            extra: %{type: :join, binding: binding, field: field}
          },
-         _
+         _struct,
+         dialect
        ) do
     order_by_direction(
       q,
-      order_direction,
+      Dialect.order_direction(dialect, direction),
       dynamic([{^binding, r}], field(r, ^field))
     )
   end
 
   defp apply_order_by_field(
          q,
-         {direction, _},
+         direction,
+         _field,
          %FieldInfo{
            extra: %{type: :compound, fields: fields}
          },
-         struct
+         struct,
+         dialect
        ) do
     Enum.reduce(fields, q, fn field, acc_query ->
       field_info = Flop.Schema.field_info(struct, field)
-      apply_order_by_field(acc_query, {direction, field}, field_info, struct)
+
+      apply_order_by_field(
+        acc_query,
+        direction,
+        field,
+        field_info,
+        struct,
+        dialect
+      )
     end)
   end
 
   defp apply_order_by_field(
          q,
-         {order_direction, field},
+         direction,
+         field,
          %FieldInfo{extra: %{type: :alias}},
-         _
+         _struct,
+         dialect
        ) do
-    order_by_direction(q, order_direction, dynamic(selected_as(^field)))
+    order_by_direction(
+      q,
+      Dialect.order_direction(dialect, direction),
+      dynamic(selected_as(^field))
+    )
   end
 
-  defp apply_order_by_field(q, {order_direction, field}, _, _) do
-    order_by_direction(q, order_direction, dynamic([r], field(r, ^field)))
+  # custom fields are ordered by the configured orderer function, which
+  # receives the plain, dialect-independent order direction, since it builds
+  # its own `ORDER BY` expression and is responsible for handling any
+  # database-specific quirks itself
+  defp apply_order_by_field(
+         q,
+         direction,
+         _field,
+         %FieldInfo{
+           extra: %{type: :custom, orderer: {mod, fun, custom_orderer_opts}}
+         },
+         _struct,
+         _dialect
+       ) do
+    apply(mod, fun, [q, direction, custom_orderer_opts])
+  end
+
+  defp apply_order_by_field(q, direction, field, _, _struct, dialect) do
+    order_by_direction(
+      q,
+      Dialect.order_direction(dialect, direction),
+      dynamic([r], field(r, ^field))
+    )
   end
 
   @impl Flop.Adapter
@@ -409,7 +452,7 @@ defmodule Flop.Adapter.Ecto do
 
   # only reachable with an unvalidated Flop struct
   defp cursor_dynamic([{_, _, _, %FieldInfo{extra: %{type: type}}} | _])
-       when type in [:compound, :alias] do
+       when type in [:compound, :alias, :custom] do
     raise ArgumentError, """
     cursor pagination is not supported for #{type} fields
 
@@ -873,6 +916,7 @@ defmodule Flop.Adapter.Ecto do
   defp normalize_custom_field_opts({name, opts}) when is_list(opts) do
     opts = %{
       filter: Keyword.fetch!(opts, :filter),
+      orderer: Keyword.get(opts, :orderer),
       ecto_type: Keyword.fetch!(opts, :ecto_type),
       operators: Keyword.get(opts, :operators),
       bindings: Keyword.get(opts, :bindings, [])
@@ -986,19 +1030,23 @@ defmodule Flop.Adapter.Ecto do
 
     illegal_fields =
       custom_fields
-      |> Map.keys()
-      |> Enum.filter(&(&1 in sortable))
+      |> Enum.filter(fn {field, field_opts} ->
+        field in sortable and is_nil(field_opts.orderer)
+      end)
+      |> Enum.map(fn {field, _} -> field end)
 
     if illegal_fields != [] do
       raise ArgumentError, """
-      cannot sort by custom fields
+      cannot sort by custom fields without an orderer
 
-      Custom fields are not allowed to be sortable. These custom fields were
-      configured as sortable:
+      Custom fields are only allowed to be sortable if the `:orderer` option
+      is set. These custom fields were configured as sortable, but have no
+      orderer configured:
 
           #{inspect(illegal_fields)}
 
-      Use alias fields if you want to implement custom sorting.
+      Use alias fields if you want to implement custom sorting without an
+      orderer function.
       """
     end
 
