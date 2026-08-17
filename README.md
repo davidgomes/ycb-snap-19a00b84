@@ -6,7 +6,12 @@
 
 # EctoJob
 
-A transactional job queue built with Ecto, PostgreSQL and GenStage
+A transactional job queue built with Ecto and GenStage.
+
+It is compatible with PostgreSQL and MySQL with a major difference:
+* PostgreSQL: job queue updates are notified to ecto_job through PostgreSQL
+  notification feature.
+* MySQL: job queue updates are notified through database polling.
 
 ## Goals
 
@@ -242,8 +247,9 @@ Jobs are added to the queue by inserting into the table, using `Ecto.Repo.transa
 A `GenStage` producer responds to demand for jobs by efficiently pulling jobs from the queue in batches.
 When there is insufficient jobs in the queue, the demand for jobs is buffered.
 
-As jobs are inserted into the queue, `pg_notify` notifies the producer that new work is available,
-allowing the producer to dispatch jobs immediately if there is pending demand.
+On PostgreSQL, as jobs are inserted into the queue, `pg_notify` notifies the producer that new work
+is available, allowing the producer to dispatch jobs immediately if there is pending demand.
+On MySQL, the producer relies solely on polling to discover newly inserted jobs.
 
 A `GenStage` `ConsumerSupervisor` subscribes to the producer, and spawns a new `Task` for each job.
 

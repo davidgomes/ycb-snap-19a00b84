@@ -157,7 +157,10 @@ defmodule EctoJob.Migrations do
     ### Priv
     ###
     defp fragment_utc_now(Ecto.Adapters.Postgres), do: fragment("timezone('UTC', now())")
-    defp fragment_utc_now(Ecto.Adapters.MyXQL), do: fragment("UTC_TIMESTAMP()")
+    # MySQL requires DEFAULT expressions on non-TIMESTAMP/DATETIME functions to be
+    # parenthesized, e.g. `DEFAULT (UTC_TIMESTAMP())`, which Ecto's DDL builder does
+    # not emit. `CURRENT_TIMESTAMP(6)` is special-cased by MySQL and accepted as-is.
+    defp fragment_utc_now(Ecto.Adapters.MyXQL), do: fragment("CURRENT_TIMESTAMP(6)")
   end
 
   defmodule UpdateJobTable do
