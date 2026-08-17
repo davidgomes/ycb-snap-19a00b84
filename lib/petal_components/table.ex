@@ -54,7 +54,8 @@ defmodule PetalComponents.Table do
     """
 
   slot :col do
-    attr :label, :string
+    attr :label, :any
+    attr :header_slot, :any
     attr :class, :any
     attr :row_class, :any
     attr :sortable, :boolean, doc: "render the header as a sort button"
@@ -98,18 +99,22 @@ defmodule PetalComponents.Table do
               class={[col[:class], @sticky_header && "pc-table__th--sticky"]}
               aria-sort={col[:sortable] && aria_sort(sort_state(col, @sort_by, @sort_dir))}
             >
-              <%= if col[:sortable] do %>
-                <button
-                  type="button"
-                  class="pc-table__sort"
-                  phx-click={resolve_on_sort(@on_sort, sort_key(col))}
-                  phx-value-sort={sort_key(col)}
-                >
-                  {col[:label]}
-                  <.sort_icon state={sort_state(col, @sort_by, @sort_dir)} />
-                </button>
+              <%= if col[:header_slot] do %>
+                {render_slot(col[:header_slot])}
               <% else %>
-                {col[:label]}
+                <%= if col[:sortable] do %>
+                  <button
+                    type="button"
+                    class="pc-table__sort"
+                    phx-click={resolve_on_sort(@on_sort, sort_key(col))}
+                    phx-value-sort={sort_key(col)}
+                  >
+                    {col[:label]}
+                    <.sort_icon state={sort_state(col, @sort_by, @sort_dir)} />
+                  </button>
+                <% else %>
+                  {col[:label]}
+                <% end %>
               <% end %>
             </.th>
           </.tr>

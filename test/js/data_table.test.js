@@ -264,6 +264,35 @@ describe("PetalDataTable", () => {
     expect(wrap.style.display).toBe("none");
   });
 
+  it("syncs the header checkbox indeterminate state on mount and update", () => {
+    const el = document.createElement("div");
+    el.id = "dt";
+    el.className = "pc-data-table";
+    el.innerHTML = `
+      <input type="checkbox" data-pc-dt-select-all="indeterminate" />
+    `;
+    document.body.appendChild(el);
+
+    const hook = Object.create(hooks.PetalDataTable);
+    hook.el = el;
+    hook.mounted();
+    mounted.push(hook);
+
+    const cb = el.querySelector("input");
+    expect(cb.indeterminate).toBe(true);
+    expect(cb.checked).toBe(false);
+
+    cb.dataset.pcDtSelectAll = "checked";
+    hook.updated();
+    expect(cb.indeterminate).toBe(false);
+    expect(cb.checked).toBe(true);
+
+    cb.dataset.pcDtSelectAll = "unchecked";
+    hook.updated();
+    expect(cb.indeterminate).toBe(false);
+    expect(cb.checked).toBe(false);
+  });
+
   it("destroyed cancels a pending search patch", () => {
     const { hook, el, patched } = mount({
       navTemplate: "/orders?search=:term",

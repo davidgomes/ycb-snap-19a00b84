@@ -2595,6 +2595,21 @@
   .pc-data-table__toolbar {
     @apply mb-3 flex flex-wrap items-center gap-2;
   }
+  .pc-data-table__selection-toolbar {
+    @apply mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-primary-50 px-3 py-2 text-sm text-primary-900 dark:bg-primary-950/40 dark:text-primary-100;
+  }
+  .pc-data-table__selection-count {
+    @apply font-medium;
+  }
+  .pc-data-table__selection-actions {
+    @apply ml-auto flex items-center gap-2;
+  }
+  .pc-data-table__selection-th {
+    @apply w-px px-4 py-3;
+  }
+  .pc-data-table__selection-td {
+    @apply w-px px-4 py-4;
+  }
   .pc-data-table__scroll {
     @apply overflow-x-auto;
   }

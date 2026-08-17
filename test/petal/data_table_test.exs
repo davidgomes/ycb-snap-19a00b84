@@ -363,6 +363,120 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "pc-data-table__actions"
   end
 
+  test "selectable with empty selection renders selection checkboxes and normal toolbar" do
+    assigns =
+      base(%{
+        rows: [
+          %{id: 1, name: "Amy"},
+          %{id: 2, name: "Bea"}
+        ],
+        selected_ids: []
+      })
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        selected_ids={@selected_ids}
+        on_select="select_row"
+        on_select_all="select_all"
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:selection_actions>
+          <button type="button">Bulk Delete</button>
+        </:selection_actions>
+      </.data_table>
+      """)
+
+    # Header checkbox unchecked
+    assert html =~ ~s(data-pc-dt-select-all="unchecked")
+    assert html =~ ~s(phx-click="select_all")
+    assert html =~ ~s(aria-label="Select all rows")
+    # Row checkboxes
+    assert html =~ ~s(phx-click="select_row")
+    assert html =~ ~s(phx-value-id="1")
+    assert html =~ ~s(phx-value-id="2")
+    assert html =~ ~s(aria-label="Select row")
+    assert html =~ ~s(aria-selected="false")
+    # Toolbar does not show selection toolbar when selection is empty
+    refute html =~ "pc-data-table__selection-toolbar"
+    refute html =~ "Bulk Delete"
+  end
+
+  test "selectable with partial selection renders indeterminate header and morphing toolbar" do
+    assigns =
+      base(%{
+        rows: [
+          %{id: 1, name: "Amy"},
+          %{id: 2, name: "Bea"}
+        ],
+        selected_ids: [1]
+      })
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        selected_ids={@selected_ids}
+        on_select="select_row"
+        on_select_all="select_all"
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:selection_actions>
+          <button type="button">Bulk Delete</button>
+        </:selection_actions>
+      </.data_table>
+      """)
+
+    # Header indeterminate
+    assert html =~ ~s(data-pc-dt-select-all="indeterminate")
+    assert html =~ ~s(aria-checked="mixed")
+    # Row selection
+    assert html =~ ~s(aria-selected="true")
+    # Selection toolbar rendered with count and actions
+    assert html =~ "pc-data-table__selection-toolbar"
+    assert html =~ "1 selected"
+    assert html =~ "Bulk Delete"
+  end
+
+  test "selectable with all selected renders checked header" do
+    assigns =
+      base(%{
+        rows: [
+          %{id: 1, name: "Amy"},
+          %{id: 2, name: "Bea"}
+        ],
+        selected_ids: [1, 2]
+      })
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        selected_ids={@selected_ids}
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    # Header checked
+    assert html =~ ~s(data-pc-dt-select-all="checked")
+    assert html =~ ~s(aria-checked="true")
+    assert html =~ "2 selected"
+  end
+
   test "raises without either wiring mode" do
     assigns = base(%{path: nil})
 

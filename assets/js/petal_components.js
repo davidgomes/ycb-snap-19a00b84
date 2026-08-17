@@ -4613,6 +4613,24 @@ export const PetalDataTable = {
   mounted() {
     this.searchTimer = null;
 
+    this.syncSelectAll = () => {
+      const selectAll = this.el.querySelector("[data-pc-dt-select-all]");
+      if (!selectAll) return;
+      const state = selectAll.dataset.pcDtSelectAll;
+      if (state === "indeterminate") {
+        selectAll.indeterminate = true;
+        selectAll.checked = false;
+      } else if (state === "checked") {
+        selectAll.indeterminate = false;
+        selectAll.checked = true;
+      } else {
+        selectAll.indeterminate = false;
+        selectAll.checked = false;
+      }
+    };
+
+    this.syncSelectAll();
+
     this.onInput = (e) => {
       if (!e.target.closest("[data-pc-dt-search]")) return;
       clearTimeout(this.searchTimer);
@@ -4659,6 +4677,10 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+  },
+
+  updated() {
+    this.syncSelectAll?.();
   },
 
   destroyed() {

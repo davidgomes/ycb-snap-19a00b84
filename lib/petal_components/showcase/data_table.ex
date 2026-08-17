@@ -59,4 +59,31 @@ defmodule PetalComponents.Showcase.DataTable do
     </.data_table>
     """
   end
+
+  example :selection, "Row selection and morphing toolbar",
+    description:
+      "selectable enables row checkboxes, a tri-state header checkbox, and a selection toolbar that morphs when items are selected. Pass selected_ids and selection action buttons via the :selection_actions slot." do
+    ~H"""
+    <% state = %State{order_by: [amount: :desc], page: 1, page_size: 5} %>
+    <% {rows, state} = Engine.List.run(PetalComponents.Showcase.DataTable.sample_rows(), state) %>
+    <.data_table
+      id="sx-dt-selection"
+      rows={rows}
+      state={state}
+      path="#"
+      selectable
+      selected_ids={[1, 3]}
+      on_select="select_row"
+      on_select_all="select_all"
+    >
+      <:selection_actions>
+        <.button size="sm" variant="outline" color="danger">Delete</.button>
+        <.button size="sm" variant="outline">Export</.button>
+      </:selection_actions>
+      <:col :let={row} field={:name} sortable>{row.name}</:col>
+      <:col :let={row} field={:email}>{row.email}</:col>
+      <:col :let={row} field={:amount} sortable align="right">${row.amount}</:col>
+    </.data_table>
+    """
+  end
 end
