@@ -1,17 +1,17 @@
 defmodule Tidewave.MCP.ServerTest do
   use ExUnit.Case, async: true
-  import Plug.Test
-  import Plug.Conn
   import ExUnit.CaptureLog
 
   @moduletag :capture_log
 
-  describe "handle_message/1" do
-    setup do
-      %{conn: mcp_conn()}
-    end
+  @config %{
+    allow_remote_access: false,
+    phoenix_endpoint: nil,
+    inspect_opts: [charlists: :as_lists, limit: 50, pretty: true]
+  }
 
-    test "handles initialization message", %{conn: conn} do
+  describe "handle_message/3" do
+    test "handles initialization message" do
       message = %{
         "jsonrpc" => "2.0",
         "method" => "initialize",
@@ -24,74 +24,54 @@ defmodule Tidewave.MCP.ServerTest do
         }
       }
 
-      conn = %{conn | body_params: message}
-      response = Tidewave.MCP.Server.handle_http_message(conn)
-
-      assert response.status == 200
-      response_body = Jason.decode!(response.resp_body)
-      assert response_body["jsonrpc"] == "2.0"
-      assert response_body["id"] == "1"
-      assert response_body["result"]["protocolVersion"] == "2025-03-26"
-      assert is_list(response_body["result"]["tools"])
-      assert "browser_eval" in Enum.map(response_body["result"]["tools"], & &1["name"])
+      assert {:ok, response} = Tidewave.MCP.Server.handle_message(message, @config, true)
+      assert response.jsonrpc == "2.0"
+      assert response.id == "1"
+      assert response.result.protocolVersion == "2025-03-26"
+      assert is_list(response.result.tools)
+      assert "browser_eval" in Enum.map(response.result.tools, & &1.name)
     end
 
-    test "handles initialized notification", %{conn: conn} do
+    test "handles initialized notification" do
       message = %{
         "jsonrpc" => "2.0",
         "method" => "notifications/initialized"
       }
 
-      conn = %{conn | body_params: message}
-      response = Tidewave.MCP.Server.handle_http_message(conn)
-
-      assert response.status == 202
-      assert response.resp_body == "{\"status\":\"ok\"}"
+      assert {:ok, nil} = Tidewave.MCP.Server.handle_message(message, @config, true)
     end
 
-    test "handles cancelled notification", %{conn: conn} do
+    test "handles cancelled notification" do
       message = %{
         "jsonrpc" => "2.0",
         "method" => "notifications/cancelled",
         "params" => %{"reason" => "test"}
       }
 
-      conn = %{conn | body_params: message}
-      response = Tidewave.MCP.Server.handle_http_message(conn)
-
-      assert response.status == 202
-      assert response.resp_body == "{\"status\":\"ok\"}"
+      assert {:ok, nil} = Tidewave.MCP.Server.handle_message(message, @config, true)
     end
 
-    test "ignores unhandled notifications without crashing", %{conn: conn} do
+    test "ignores unhandled notifications without crashing" do
       message = %{
         "jsonrpc" => "2.0",
         "method" => "notifications/roots/list_changed"
       }
 
-      conn = %{conn | body_params: message}
-      response = Tidewave.MCP.Server.handle_http_message(conn)
-
-      assert response.status == 202
-      assert response.resp_body == "{\"status\":\"ok\"}"
+      assert {:ok, nil} = Tidewave.MCP.Server.handle_message(message, @config, true)
     end
 
-    test "handles tools/list request", %{conn: conn} do
+    test "handles tools/list request" do
       message = %{
         "jsonrpc" => "2.0",
         "method" => "tools/list",
         "id" => "2"
       }
 
-      conn = %{conn | body_params: message}
-      response = Tidewave.MCP.Server.handle_http_message(conn)
-
-      assert response.status == 200
-      response_body = Jason.decode!(response.resp_body)
-      assert response_body["jsonrpc"] == "2.0"
-      assert response_body["id"] == "2"
-      assert is_list(response_body["result"]["tools"])
-      assert "browser_eval" in Enum.map(response_body["result"]["tools"], & &1["name"])
+      assert {:ok, response} = Tidewave.MCP.Server.handle_message(message, @config, true)
+      assert response.jsonrpc == "2.0"
+      assert response.id == "2"
+      assert is_list(response.result.tools)
+      assert "browser_eval" in Enum.map(response.result.tools, & &1.name)
     end
 
     test "does not include browser tools when disabled" do
@@ -101,12 +81,10 @@ defmodule Tidewave.MCP.ServerTest do
         "id" => "2"
       }
 
-      conn = %{mcp_conn("/tidewave/mcp?include_browser_tools=false") | body_params: message}
-      response = Tidewave.MCP.Server.handle_http_message(conn)
-
-      assert response.status == 200
-      response_body = Jason.decode!(response.resp_body)
-      refute "browser_eval" in Enum.map(response_body["result"]["tools"], & &1["name"])
+      assert {:ok, response} = Tidewave.MCP.Server.handle_message(message, @config, false)
+      assert response.jsonrpc == "2.0"
+      assert response.id == "2"
+      refute "browser_eval" in Enum.map(response.result.tools, & &1.name)
     end
 
     test "does not dispatch browser tools when disabled" do
@@ -117,12 +95,8 @@ defmodule Tidewave.MCP.ServerTest do
         "params" => %{"name" => "browser_eval", "arguments" => %{}}
       }
 
-      conn = %{mcp_conn("/tidewave/mcp?include_browser_tools=false") | body_params: message}
-      response = Tidewave.MCP.Server.handle_http_message(conn)
-
-      assert response.status == 400
-      response_body = Jason.decode!(response.resp_body)
-      assert response_body["error"]["code"] == -32601
+      assert {:error, response} = Tidewave.MCP.Server.handle_message(message, @config, false)
+      assert response.error.code == -32601
     end
 
     test "returns invalid arguments for malformed browser tool arguments" do
@@ -133,33 +107,27 @@ defmodule Tidewave.MCP.ServerTest do
         "params" => %{"name" => "browser_eval", "arguments" => "invalid"}
       }
 
-      conn = %{mcp_conn("/tidewave/mcp?include_browser_tools=true") | body_params: message}
-      response = Tidewave.MCP.Server.handle_http_message(conn)
-
-      assert response.status == 400
-      response_body = Jason.decode!(response.resp_body)
-      assert response_body["error"]["code"] == -32602
-      assert response_body["error"]["message"] == "Invalid arguments for tool"
+      assert {:error, response} = Tidewave.MCP.Server.handle_message(message, @config, true)
+      assert response.error.code == -32602
+      assert response.error.message == "Invalid arguments for tool"
     end
 
-    test "returns error for invalid JSON-RPC message", %{conn: conn} do
+    test "returns error for invalid JSON-RPC message" do
       message = %{"invalid" => "message"}
 
       log =
         capture_log([level: :warning], fn ->
-          conn = %{conn | body_params: message}
-          response = Tidewave.MCP.Server.handle_http_message(conn)
+          assert {:error, response} =
+                   Tidewave.MCP.Server.handle_message(message, @config, true)
 
-          assert response.status == 200
-          response_body = Jason.decode!(response.resp_body)
-          assert response_body["error"]["code"] == -32600
-          assert response_body["error"]["message"] == "Could not parse message"
+          assert response.error.code == -32600
+          assert response.error.message == "Could not parse message"
         end)
 
       assert log =~ "Invalid JSON-RPC message format"
     end
 
-    test "handles tool calls", %{conn: conn} do
+    test "handles tool calls" do
       message = %{
         "jsonrpc" => "2.0",
         "method" => "tools/call",
@@ -170,69 +138,43 @@ defmodule Tidewave.MCP.ServerTest do
         }
       }
 
-      conn = %{conn | body_params: message}
-      response = Tidewave.MCP.Server.handle_http_message(conn)
-
-      assert response.status == 200
-      response_body = Jason.decode!(response.resp_body)
-      assert response_body["jsonrpc"] == "2.0"
-      assert response_body["id"] == "3"
-      assert response_body["result"]["content"]
+      assert {:ok, response} = Tidewave.MCP.Server.handle_message(message, @config, true)
+      assert response.jsonrpc == "2.0"
+      assert response.id == "3"
+      assert response.result.content
     end
 
-    test "handles prompts/list request", %{conn: conn} do
+    test "handles prompts/list request" do
       message = %{
         "jsonrpc" => "2.0",
         "method" => "prompts/list",
         "id" => "4"
       }
 
-      conn = %{conn | body_params: message}
-      response = Tidewave.MCP.Server.handle_http_message(conn)
-
-      assert response.status == 200
-      response_body = Jason.decode!(response.resp_body)
-      assert response_body["result"]["prompts"] == []
+      assert {:ok, response} = Tidewave.MCP.Server.handle_message(message, @config, true)
+      assert response.result.prompts == []
     end
 
-    test "handles resources/list request", %{conn: conn} do
+    test "handles resources/list request" do
       message = %{
         "jsonrpc" => "2.0",
         "method" => "resources/list",
         "id" => "6"
       }
 
-      conn = %{conn | body_params: message}
-      response = Tidewave.MCP.Server.handle_http_message(conn)
-
-      assert response.status == 200
-      response_body = Jason.decode!(response.resp_body)
-      assert response_body["result"]["resources"] == []
+      assert {:ok, response} = Tidewave.MCP.Server.handle_message(message, @config, true)
+      assert response.result.resources == []
     end
 
-    test "handles resources/templates/list request", %{conn: conn} do
+    test "handles resources/templates/list request" do
       message = %{
         "jsonrpc" => "2.0",
         "method" => "resources/templates/list",
         "id" => "10"
       }
 
-      conn = %{conn | body_params: message}
-      response = Tidewave.MCP.Server.handle_http_message(conn)
-
-      assert response.status == 200
-      response_body = Jason.decode!(response.resp_body)
-      assert response_body["result"]["templates"] == []
+      assert {:ok, response} = Tidewave.MCP.Server.handle_message(message, @config, true)
+      assert response.result.templates == []
     end
-  end
-
-  defp mcp_conn(path \\ "/tidewave/mcp") do
-    conn(:post, path, %{})
-    |> put_req_header("content-type", "application/json")
-    |> put_private(:tidewave_config, %{
-      allow_remote_access: false,
-      phoenix_endpoint: nil,
-      inspect_opts: [charlists: :as_lists, limit: 50, pretty: true]
-    })
   end
 end
