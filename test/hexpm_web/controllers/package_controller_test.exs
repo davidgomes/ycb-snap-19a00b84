@@ -1,0 +1,977 @@
+defmodule HexpmWeb.PackageControllerTest do
+  use HexpmWeb.ConnCase, async: true
+
+  setup do
+    user1 = insert(:user)
+    user2 = insert(:user)
+
+    repository1 = insert(:repository)
+    repository2 = insert(:repository)
+
+    package1 = insert(:package)
+    package2 = insert(:package)
+    package3 = insert(:package, repository_id: repository1.id)
+    package4 = insert(:package, repository_id: repository2.id)
+    package5 = insert(:package, name: "with_underscore")
+
+    insert(
+      :release,
+      package: package1,
+      version: "0.0.1",
+      meta: build(:release_metadata, app: package1.name),
+      has_docs: true
+    )
+
+    insert(
+      :release,
+      package: package1,
+      version: "0.0.2",
+      meta: build(:release_metadata, app: package1.name),
+      has_docs: nil
+    )
+
+    insert(
+      :release,
+      package: package1,
+      version: %Version{major: 0, minor: 0, patch: 3, pre: ["dev", 0, 1]},
+      meta: build(:release_metadata, app: package1.name),
+      has_docs: true
+    )
+
+    insert(
+      :release,
+      package: package2,
+      version: "1.0.0",
+      meta: build(:release_metadata, app: package2.name)
+    )
+
+    insert(
+      :release,
+      package: package3,
+      version: "0.0.1",
+      meta: build(:release_metadata, app: package3.name)
+    )
+
+    insert(
+      :release,
+      package: package4,
+      version: "0.0.1",
+      meta: build(:release_metadata, app: package4.name)
+    )
+
+    package5_release =
+      insert(
+        :release,
+        package: package5,
+        version: "0.0.1",
+        meta: build(:release_metadata, app: package5.name)
+      )
+
+    insert(:organization_user, user: user1, organization: repository1.organization)
+
+    %{
+      package1: package1,
+      package2: package2,
+      package3: package3,
+      package4: package4,
+      package5: package5,
+      package5_release: package5_release,
+      repository1: repository1,
+      repository2: repository2,
+      user1: user1,
+      user2: user2
+    }
+  end
+
+  describe "GET /packages" do
+    test "list all", %{package1: package1, package2: package2} do
+      conn = get(build_conn(), "/packages")
+      result = response(conn, 200)
+      assert result =~ ~r/#{package1.name}.*0.0.2/s
+      assert result =~ package2.name
+    end
+
+    test "search with search query", %{package1: package1, package2: package2} do
+      conn = get(build_conn(), "/packages?search=#{package1.name}")
+      assert response(conn, 200) =~ ~r/#{package1.name}.*0.0.2/s
+
+      conn = get(build_conn(), "/packages?search=#{package2.name}")
+      assert response(conn, 200) =~ ~r/#{package2.name}.*1.0.0/s
+    end
+
+    test "search with whitespace", %{package5: package5, package5_release: package5_release} do
+      insert(:download,
+        package: package5,
+        release: package5_release,
+        downloads: 1_234,
+        day: Hexpm.Utils.utc_yesterday()
+      )
+
+      :ok = Hexpm.Repo.refresh_view(Hexpm.Repository.PackageDownload)
+
+      conn = get(build_conn(), "/packages?search=with underscore")
+      assert response(conn, 200) =~ "Exact Match"
+      assert response(conn, 200) =~ "total downloads: 1 234"
+      assert response(conn, 200) =~ ~r/#{package5.name}.*0.0.1/s
+      refute response(conn, 200) =~ "No Results Found"
+    end
+
+    test "search with exact match", %{package5: package5, package5_release: package5_release} do
+      insert(:download,
+        package: package5,
+        release: package5_release,
+        downloads: 5_000,
+        day: Hexpm.Utils.utc_yesterday()
+      )
+
+      :ok = Hexpm.Repo.refresh_view(Hexpm.Repository.PackageDownload)
+
+      conn = get(build_conn(), "/packages?search=with_underscore")
+      assert response(conn, 200) =~ "Exact Match"
+      assert response(conn, 200) =~ "total downloads: 5 000"
+      refute response(conn, 200) =~ "Search Results"
+    end
+
+    test "search with build_tool match" do
+      conn = get(build_conn(), "/packages?search=build_tool%3Amix")
+      assert response(conn, 200) =~ "packages found"
+    end
+
+    test "search without match" do
+      conn = get(build_conn(), "/packages?search=nonexistent")
+      assert response(conn, 200) =~ "No Results Found"
+      refute response(conn, 200) =~ "Exact Match"
+    end
+
+    test "list private packages", %{
+      user1: user1,
+      package3: package3,
+      package4: package4,
+      repository1: repository1,
+      repository2: repository2
+    } do
+      conn =
+        build_conn()
+        |> test_login(user1)
+        |> get("/packages")
+
+      result = response(conn, 200)
+      assert result =~ "#{repository1.name} / #{package3.name}"
+      refute result =~ "#{repository2.name} / #{package4.name}"
+    end
+
+    test "depends search only returns packages from repositories the user can access", %{
+      user1: user1,
+      repository1: repository1,
+      repository2: repository2
+    } do
+      dependency = insert(:package, name: "repo_visible_dep", repository_id: repository1.id)
+      visible = insert(:package, name: "repo_visible_match", repository_id: repository1.id)
+      hidden = insert(:package, name: "repo_hidden_match", repository_id: repository2.id)
+
+      insert(:release, package: dependency, version: "1.0.0")
+
+      rel = insert(:release, package: visible, version: "1.0.0")
+      insert(:requirement, release: rel, dependency: dependency, requirement: "~> 1.0")
+      recompute_dependants(visible)
+
+      rel = insert(:release, package: hidden, version: "1.0.0")
+      insert(:requirement, release: rel, dependency: dependency, requirement: "~> 1.0")
+      recompute_dependants(hidden)
+
+      search = URI.encode_www_form("depends:#{repository1.name}:#{dependency.name}")
+
+      result =
+        build_conn()
+        |> test_login(user1)
+        |> get("/packages?search=#{search}")
+        |> response(200)
+
+      assert result =~ "#{repository1.name} / #{visible.name}"
+      refute result =~ "#{repository2.name} / #{hidden.name}"
+    end
+
+    test "depends search can match visible packages via a hidden dependency package", %{
+      user1: user1,
+      repository1: repository1,
+      repository2: repository2
+    } do
+      hidden_dependency =
+        insert(:package, name: "repo_hidden_dependency", repository_id: repository2.id)
+
+      visible = insert(:package, name: "repo_visible_inference", repository_id: repository1.id)
+      hidden = insert(:package, name: "repo_hidden_inference", repository_id: repository2.id)
+
+      insert(:release, package: hidden_dependency, version: "1.0.0")
+
+      rel = insert(:release, package: visible, version: "1.0.0")
+      insert(:requirement, release: rel, dependency: hidden_dependency, requirement: "~> 1.0")
+      recompute_dependants(visible)
+
+      rel = insert(:release, package: hidden, version: "1.0.0")
+      insert(:requirement, release: rel, dependency: hidden_dependency, requirement: "~> 1.0")
+      recompute_dependants(hidden)
+
+      search = URI.encode_www_form("depends:#{repository2.name}:#{hidden_dependency.name}")
+
+      result =
+        build_conn()
+        |> test_login(user1)
+        |> get("/packages?search=#{search}")
+        |> response(200)
+
+      assert result =~ "#{repository1.name} / #{visible.name}"
+      refute result =~ "#{repository2.name} / #{hidden.name}"
+    end
+  end
+
+  describe "GET /packages/:name" do
+    test "banners the release on screen when an advisory affects it", %{package1: package1} do
+      advise(package1, "GHSA-current-release", "0.0.2")
+
+      # 0.0.2 is the latest stable, so it is what the package page opens on.
+      assert response(get(build_conn(), "/packages/#{package1.name}"), 200) =~
+               "This version has known vulnerabilities"
+
+      refute response(get(build_conn(), "/packages/#{package1.name}/0.0.1"), 200) =~
+               "This version has known vulnerabilities"
+    end
+
+    test "show package", %{package1: package1} do
+      conn = get(build_conn(), "/packages/#{package1.name}")
+      html = response(conn, 200)
+
+      assert html =~ escape(~s({:#{package1.name}, "~> 0.0.2"}))
+
+      assert {:ok, document} = Floki.parse_document(html)
+      assert link_text(document, "/packages/#{package1.name}/dependents") == "0 Dependants"
+      assert link_text(document, "/packages/#{package1.name}/dependencies") == "0 Dependencies"
+      assert link_text(document, "/packages/#{package1.name}/versions") == "3 Versions"
+
+      assert package_tab_hrefs(document, package1.name) == [
+               "/packages/#{package1.name}",
+               "/packages/#{package1.name}/versions",
+               "/packages/#{package1.name}/dependencies",
+               "/packages/#{package1.name}/dependents",
+               "/packages/#{package1.name}/0.0.2/files",
+               "/packages/#{package1.name}/audit-logs"
+             ]
+
+      assert [_ | _] = Floki.find(document, "details summary.package-tabs-mobile-trigger")
+    end
+
+    test "show package with long name" do
+      long_name = "opentelemetry_semantic_conventions"
+
+      package =
+        insert(:package,
+          name: long_name,
+          meta: build(:package_metadata, description: "Test package for long name overflow")
+        )
+
+      insert(
+        :release,
+        package: package,
+        version: "0.1.0",
+        meta: build(:release_metadata, app: long_name)
+      )
+
+      conn = get(build_conn(), "/packages/#{long_name}")
+      html = response(conn, 200)
+
+      assert html =~ long_name
+      assert html =~ "min-w-0 break-words"
+
+      assert {:ok, document} = Floki.parse_document(html)
+      assert [_ | _] = Floki.find(document, "details summary.package-tabs-mobile-trigger")
+    end
+
+    test "show package uses singular dependant label for one dependant", %{package1: package1} do
+      add_dependant(package1, "single_dependant")
+
+      html =
+        build_conn()
+        |> get("/packages/#{package1.name}")
+        |> html_response(200)
+
+      assert {:ok, document} = Floki.parse_document(html)
+      assert link_text(document, "/packages/#{package1.name}/dependents") == "1 Dependant"
+    end
+
+    test "show package uses plural dependant label for multiple dependants", %{package1: package1} do
+      add_dependant(package1, "first_dependant")
+      add_dependant(package1, "second_dependant")
+
+      html =
+        build_conn()
+        |> get("/packages/#{package1.name}")
+        |> html_response(200)
+
+      assert {:ok, document} = Floki.parse_document(html)
+      assert link_text(document, "/packages/#{package1.name}/dependents") == "2 Dependants"
+    end
+
+    test "package name is case sensitive", %{package1: package1} do
+      get(build_conn(), "/packages/#{String.upcase(package1.name)}")
+      |> response(404)
+    end
+
+    test "show package requires repository", %{package3: package3} do
+      build_conn()
+      |> get("/packages/#{package3.name}")
+      |> response(404)
+    end
+
+    test "show package details with activity link", %{package1: package} do
+      insert(:audit_log, action: "docs.publish", params: %{package: %{id: package.id}})
+
+      html_response =
+        build_conn()
+        |> get("/packages/#{package.name}")
+        |> html_response(200)
+
+      # Activity tab link should be present
+      assert html_response =~ "Activity"
+      # Check we have the package details sidebar
+      assert html_response =~ "Package Details"
+      assert html_response =~ "Checksum"
+    end
+
+    test "show documentation link when available", %{package1: package} do
+      html_response =
+        build_conn()
+        |> get("/packages/#{package.name}")
+        |> html_response(200)
+
+      # Should have documentation button in header
+      assert html_response =~ "HexDocs"
+    end
+  end
+
+  describe "GET /packages/:name/:version" do
+    test "show package version", %{package1: package1} do
+      conn = get(build_conn(), "/packages/#{package1.name}/0.0.1")
+      assert response(conn, 200) =~ escape(~s({:#{package1.name}, "~> 0.0.1"}))
+    end
+
+    test "show publisher info", %{package1: package1} do
+      release =
+        insert(
+          :release,
+          package: package1,
+          publisher: build(:user),
+          version: "0.1.0",
+          meta: build(:release_metadata, app: package1.name)
+        )
+
+      conn = get(build_conn(), "/packages/#{package1.name}/0.1.0")
+      assert response(conn, 200) =~ release.publisher.username
+    end
+
+    test "show package from other repository", %{
+      user1: user1,
+      repository1: repository1,
+      package3: package3
+    } do
+      conn =
+        build_conn()
+        |> test_login(user1)
+        |> get("/packages/#{repository1.name}/#{package3.name}")
+
+      body = response(conn, 200)
+
+      assert body =~
+               escape(~s({:#{package3.name}, "~> 0.0.1", organization: "#{repository1.name}"}))
+
+      assert [readme_url] =
+               body
+               |> Floki.parse_document!()
+               |> Floki.attribute("#readme-frame", "src")
+
+      assert readme_url =~ "/#{repository1.name}/#{package3.name}/0.0.1?token="
+      [_url, token] = String.split(readme_url, "token=")
+      assert :ok = HexpmWeb.ReadmeToken.verify(token, repository1.name, package3.name, "0.0.1")
+    end
+
+    test "dont show private package", %{
+      user2: user2,
+      repository1: repository1,
+      package3: package3
+    } do
+      build_conn()
+      |> test_login(user2)
+      |> get("/packages/#{repository1.name}/#{package3.name}")
+      |> response(404)
+    end
+
+    test "show hexpm package", %{package1: package1} do
+      conn = get(build_conn(), "/packages/hexpm/#{package1.name}")
+      assert response(conn, 200) =~ escape(~s({:#{package1.name}, "~> 0.0.2"}))
+    end
+
+    test "show package requires repository", %{package3: package3} do
+      build_conn()
+      |> get("/packages/#{package3.name}/0.0.1")
+      |> response(404)
+    end
+
+    test "version-pinned page links Dependencies tab to versioned dependencies",
+         %{package1: package1} do
+      body = response(get(build_conn(), "/packages/#{package1.name}/0.0.1"), 200)
+      assert body =~ "/packages/#{package1.name}/0.0.1/dependencies"
+    end
+  end
+
+  describe "GET /packages/:repository/:name/:version" do
+    test "show hexpm package", %{package1: package1} do
+      conn = get(build_conn(), "/packages/hexpm/#{package1.name}/0.0.1")
+      assert response(conn, 200) =~ escape(~s({:#{package1.name}, "~> 0.0.1"}))
+    end
+
+    test "show package", %{user1: user1, repository1: repository1, package3: package3} do
+      conn =
+        build_conn()
+        |> test_login(user1)
+        |> get("/packages/#{repository1.name}/#{package3.name}/0.0.1")
+
+      assert response(conn, 200) =~
+               escape(~s({:#{package3.name}, "~> 0.0.1", organization: "#{repository1.name}"}))
+    end
+
+    test "repository name is case sensitive", %{
+      user1: user1,
+      repository1: repository1,
+      package3: package3
+    } do
+      build_conn()
+      |> test_login(user1)
+      |> get("/packages/#{String.upcase(repository1.name)}/#{package3.name}/0.0.1")
+      |> response(404)
+    end
+
+    test "dont show private package", %{
+      user2: user2,
+      repository1: repository1,
+      package3: package3
+    } do
+      build_conn()
+      |> test_login(user2)
+      |> get("/packages/#{repository1.name}/#{package3.name}/0.0.1")
+      |> response(404)
+    end
+  end
+
+  describe "GET /packages/:name/audit-logs" do
+    test "sets title correctly" do
+      _package = insert(:package, name: "Test")
+
+      conn = get(build_conn(), "/packages/Test/audit-logs")
+
+      assert response(conn, :ok) =~ "Recent Activities for Test"
+    end
+
+    test "renders audit_logs correctly" do
+      package = insert(:package, name: "Test")
+      insert(:audit_log, action: "docs.publish", params: %{package: %{id: package.id}})
+
+      conn = get(build_conn(), "/packages/Test/audit-logs")
+
+      assert response(conn, :ok) =~ "Publish documentation"
+    end
+
+    test "paginates audit logs 100 per page" do
+      package = insert(:package, name: "Test")
+      base_time = ~U[2024-01-01 00:00:00Z]
+
+      Enum.each(1..101, fn version ->
+        timestamp = DateTime.add(base_time, version, :second)
+
+        insert(:audit_log,
+          action: "release.publish",
+          params: %{
+            "package" => %{"id" => package.id},
+            "release" => %{"version" => "0.0.#{version}"}
+          },
+          inserted_at: timestamp
+        )
+      end)
+
+      first_page =
+        build_conn()
+        |> get("/packages/Test/audit-logs")
+        |> response(:ok)
+
+      {:ok, first_document} = Floki.parse_document(first_page)
+      first_page_activities = table_column_texts(first_document, 2)
+
+      assert "Publish release 0.0.101" in first_page_activities
+      assert "Publish release 0.0.2" in first_page_activities
+      refute "Publish release 0.0.1" in first_page_activities
+      assert first_page =~ "/packages/Test/audit-logs?page=2"
+
+      second_page =
+        build_conn()
+        |> get("/packages/Test/audit-logs?page=2")
+        |> response(:ok)
+
+      {:ok, second_document} = Floki.parse_document(second_page)
+      second_page_activities = table_column_texts(second_document, 2)
+
+      assert "Publish release 0.0.1" in second_page_activities
+      refute "Publish release 0.0.2" in second_page_activities
+      assert current_page(second_document) == "2"
+      assert normalized_text(second_document) =~ "101 total"
+    end
+
+    test "computes daily_graph for sidebar", %{package1: package1} do
+      release = Hexpm.Repository.Releases.all(package1) |> List.first()
+
+      insert(:download,
+        package: package1,
+        release: release,
+        downloads: 42,
+        day: Date.utc_today() |> Date.add(-2)
+      )
+
+      conn = get(build_conn(), "/packages/#{package1.name}/audit-logs")
+      assert response(conn, 200)
+      assert conn.assigns.daily_graph != []
+      assert Enum.any?(conn.assigns.daily_graph, fn n -> n > 0 end)
+    end
+  end
+
+  describe "GET /packages/:repository/:name/audit-logs" do
+    test "requires access to this repository" do
+      repository = insert(:repository, name: "Repo")
+      _package = insert(:package, repository_id: repository.id, name: "Test")
+
+      conn = get(build_conn(), "/packages/Repo/Test/audit-logs")
+
+      assert response(conn, :not_found)
+    end
+  end
+
+  describe "GET /packages/:name/versions" do
+    test "renders versions page", %{package1: package1} do
+      conn = get(build_conn(), "/packages/#{package1.name}/versions")
+      result = response(conn, 200)
+      assert result =~ "0.0.1"
+      assert result =~ "0.0.2"
+
+      assert {:ok, document} = Floki.parse_document(result)
+      assert link_text(document, "/packages/#{package1.name}/versions") == "3 Versions"
+    end
+
+    test "returns 404 for unknown package" do
+      conn = get(build_conn(), "/packages/nonexistent_package/versions")
+      assert response(conn, 404)
+    end
+
+    test "marks the versions an advisory affects", %{package1: package1, package2: package2} do
+      advise(package1, "GHSA-versions-page", "0.0.1")
+
+      assert response(get(build_conn(), "/packages/#{package1.name}/versions"), 200) =~
+               "Vulnerable"
+
+      refute response(get(build_conn(), "/packages/#{package2.name}/versions"), 200) =~
+               "Vulnerable"
+    end
+
+    test "returns 404 for private package without auth", %{
+      package3: package3,
+      repository1: repository1
+    } do
+      conn = get(build_conn(), "/packages/#{repository1.name}/#{package3.name}/versions")
+      assert response(conn, 404)
+    end
+
+    test "computes daily_graph for sidebar", %{package1: package1} do
+      release = Hexpm.Repository.Releases.all(package1) |> List.first()
+
+      insert(:download,
+        package: package1,
+        release: release,
+        downloads: 42,
+        day: Date.utc_today() |> Date.add(-2)
+      )
+
+      conn = get(build_conn(), "/packages/#{package1.name}/versions")
+      assert response(conn, 200)
+      assert conn.assigns.daily_graph != []
+      assert Enum.any?(conn.assigns.daily_graph, fn n -> n > 0 end)
+    end
+  end
+
+  describe "GET /packages/:name/advisories" do
+    test "shows empty state when no advisories", %{package1: package1} do
+      conn = get(build_conn(), "/packages/#{package1.name}/advisories")
+      result = response(conn, 200)
+      assert result =~ "No security advisories found for this package"
+    end
+
+    test "renders an advisory with cvss, references, and affected ranges",
+         %{package1: package1} do
+      record = %{
+        id: "GHSA-test-html",
+        summary: "Test advisory for HTML rendering",
+        aliases: ["CVE-2024-99999"],
+        published_at: ~U[2024-04-03 16:46:30Z],
+        modified_at: ~U[2024-04-05 01:28:39Z],
+        withdrawn_at: nil,
+        cvss_vector: "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+        cvss_score: 9.8,
+        cvss_rating: "critical",
+        references: [%{type: "WEB", url: "https://example.com/advisory"}],
+        affected: [
+          %{
+            package: package1.name,
+            requirements: [Version.parse_requirement!(">= 0.0.1 and < 0.0.2")],
+            versions: ["0.0.1"]
+          }
+        ]
+      }
+
+      Hexpm.Security.Advisories.upsert([record], %{package1.name => package1.id})
+
+      conn = get(build_conn(), "/packages/#{package1.name}/advisories")
+      result = response(conn, 200)
+
+      assert result =~ "GHSA-test-html"
+      assert result =~ "CVE-2024-99999"
+      assert result =~ "Test advisory for HTML rendering"
+      assert result =~ "Critical"
+      assert result =~ "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"
+      assert result =~ "&gt;= 0.0.1 and &lt; 0.0.2"
+      assert result =~ "https://example.com/advisory"
+
+      assert {:ok, document} = Floki.parse_document(result)
+
+      assert package_tab_hrefs(document, package1.name) == [
+               "/packages/#{package1.name}",
+               "/packages/#{package1.name}/versions",
+               "/packages/#{package1.name}/dependencies",
+               "/packages/#{package1.name}/dependents",
+               "/packages/#{package1.name}/advisories",
+               "/packages/#{package1.name}/0.0.2/files",
+               "/packages/#{package1.name}/audit-logs"
+             ]
+    end
+
+    test "groups advisories sharing aliases for display", %{package1: package1} do
+      records = [
+        %{
+          id: "GHSA-628h-q48j-jr6q",
+          summary: "GHSA duplicate summary",
+          aliases: ["CVE-2026-32689"],
+          published_at: ~U[2026-05-08 00:00:00Z],
+          modified_at: ~U[2026-05-08 00:00:00Z],
+          withdrawn_at: nil,
+          cvss_vector: nil,
+          cvss_score: nil,
+          cvss_rating: nil,
+          references: [
+            %{
+              type: "WEB",
+              url:
+                "https://github.com/phoenixframework/phoenix/security/advisories/GHSA-628h-q48j-jr6q"
+            }
+          ],
+          affected: [
+            %{
+              package: package1.name,
+              requirements: [Version.parse_requirement!(">= 1.8.0 and < 1.8.6")],
+              versions: []
+            }
+          ]
+        },
+        %{
+          id: "EEF-CVE-2026-32689",
+          summary: "EEF canonical summary",
+          aliases: ["CVE-2026-32689", "GHSA-628h-q48j-jr6q"],
+          published_at: ~U[2026-05-05 00:00:00Z],
+          modified_at: ~U[2026-05-10 00:00:00Z],
+          withdrawn_at: nil,
+          cvss_vector: nil,
+          cvss_score: nil,
+          cvss_rating: nil,
+          references: [
+            %{type: "ADVISORY", url: "https://cna.erlef.org/cves/CVE-2026-32689.html"}
+          ],
+          affected: [
+            %{
+              package: package1.name,
+              requirements: [Version.parse_requirement!(">= 1.7.0 and < 1.7.22")],
+              versions: []
+            }
+          ]
+        }
+      ]
+
+      Hexpm.Security.Advisories.upsert(records, %{package1.name => package1.id})
+
+      conn = get(build_conn(), "/packages/#{package1.name}/advisories")
+      result = response(conn, 200)
+
+      assert {:ok, document} = Floki.parse_document(result)
+      assert link_text(document, "/packages/#{package1.name}/advisories") == "1 Advisory"
+
+      assert Floki.find(
+               document,
+               ~s(a[href="https://osv.dev/vulnerability/EEF-CVE-2026-32689"])
+             )
+             |> length() == 1
+
+      assert result =~ "EEF canonical summary"
+      refute result =~ "GHSA duplicate summary"
+      assert result =~ "CVE-2026-32689"
+      assert result =~ "GHSA-628h-q48j-jr6q"
+      assert result =~ "https://cna.erlef.org/cves/CVE-2026-32689.html"
+
+      assert result =~
+               "https://github.com/phoenixframework/phoenix/security/advisories/GHSA-628h-q48j-jr6q"
+
+      assert result =~ "&gt;= 1.7.0 and &lt; 1.7.22"
+      assert result =~ "&gt;= 1.8.0 and &lt; 1.8.6"
+    end
+
+    test "withdrawn advisories are excluded", %{package1: package1} do
+      record = %{
+        id: "GHSA-withdrawn-html",
+        summary: "Withdrawn advisory",
+        aliases: [],
+        published_at: ~U[2024-04-03 16:46:30Z],
+        modified_at: ~U[2024-04-05 01:28:39Z],
+        withdrawn_at: ~U[2024-05-01 00:00:00Z],
+        cvss_vector: nil,
+        cvss_score: nil,
+        cvss_rating: nil,
+        references: [],
+        affected: [
+          %{package: package1.name, requirements: [], versions: ["0.0.1"]}
+        ]
+      }
+
+      Hexpm.Security.Advisories.upsert([record], %{package1.name => package1.id})
+
+      conn = get(build_conn(), "/packages/#{package1.name}/advisories")
+      result = response(conn, 200)
+      refute result =~ "GHSA-withdrawn-html"
+      assert result =~ "No security advisories found for this package"
+    end
+
+    test "returns 404 for unknown package" do
+      conn = get(build_conn(), "/packages/nonexistent_package/advisories")
+      assert response(conn, 404)
+    end
+  end
+
+  describe "GET /packages/:name/dependents" do
+    test "renders dependants page", %{package1: package1} do
+      conn = get(build_conn(), "/packages/#{package1.name}/dependents")
+      assert response(conn, 200) =~ "Packages depending on"
+    end
+
+    test "returns 404 for private package without auth", %{
+      package3: package3,
+      repository1: repository1
+    } do
+      conn = get(build_conn(), "/packages/#{repository1.name}/#{package3.name}/dependents")
+      assert response(conn, 404)
+    end
+
+    test "shows requirement for each dependant", %{package1: package1} do
+      add_dependant(package1, "requiring_package")
+
+      html = get(build_conn(), "/packages/#{package1.name}/dependents") |> response(200)
+
+      assert html =~ "requiring_package"
+      assert html =~ "~&gt; 0.0.1"
+    end
+
+    test "computes daily_graph for sidebar", %{package1: package1} do
+      release = Hexpm.Repository.Releases.all(package1) |> List.first()
+
+      insert(:download,
+        package: package1,
+        release: release,
+        downloads: 42,
+        day: Date.utc_today() |> Date.add(-2)
+      )
+
+      conn = get(build_conn(), "/packages/#{package1.name}/dependents")
+      assert response(conn, 200)
+      assert conn.assigns.daily_graph != []
+      assert Enum.any?(conn.assigns.daily_graph, fn n -> n > 0 end)
+    end
+  end
+
+  describe "GET /packages/:name/dependencies" do
+    test "renders dependencies page", %{package1: package1} do
+      conn = get(build_conn(), "/packages/#{package1.name}/dependencies")
+      assert response(conn, 200) =~ "Dependencies of"
+    end
+
+    test "returns 404 for private package without auth", %{
+      package3: package3,
+      repository1: repository1
+    } do
+      conn = get(build_conn(), "/packages/#{repository1.name}/#{package3.name}/dependencies")
+      assert response(conn, 404)
+    end
+
+    test "computes daily_graph for sidebar", %{package1: package1} do
+      release = Hexpm.Repository.Releases.all(package1) |> List.first()
+
+      insert(:download,
+        package: package1,
+        release: release,
+        downloads: 42,
+        day: Date.utc_today() |> Date.add(-2)
+      )
+
+      conn = get(build_conn(), "/packages/#{package1.name}/dependencies")
+      assert response(conn, 200)
+      assert conn.assigns.daily_graph != []
+      assert Enum.any?(conn.assigns.daily_graph, fn n -> n > 0 end)
+    end
+  end
+
+  describe "GET /packages/:name/:version/dependencies" do
+    test "renders dependencies page for the selected version", %{package1: package1} do
+      conn = get(build_conn(), "/packages/#{package1.name}/0.0.1/dependencies")
+      body = response(conn, 200)
+      assert body =~ "Dependencies of"
+      assert body =~ "gleam add #{package1.name}@0.0.1"
+    end
+
+    test "returns 404 when version does not exist", %{package1: package1} do
+      conn = get(build_conn(), "/packages/#{package1.name}/9.9.9/dependencies")
+      assert response(conn, 404)
+    end
+
+    test "renders for repository/name/version triple", %{
+      package3: package3,
+      repository1: repository1,
+      user1: user1
+    } do
+      conn =
+        build_conn()
+        |> test_login(user1)
+        |> get("/packages/#{repository1.name}/#{package3.name}/0.0.1/dependencies")
+
+      assert response(conn, 200) =~ "Dependencies of"
+    end
+
+    test "renders for repository/name unversioned dependencies", %{
+      package3: package3,
+      repository1: repository1,
+      user1: user1
+    } do
+      conn =
+        build_conn()
+        |> test_login(user1)
+        |> get("/packages/#{repository1.name}/#{package3.name}/dependencies")
+
+      assert response(conn, 200) =~ "Dependencies of"
+    end
+  end
+
+  defp escape(html) do
+    {:safe, safe} = Phoenix.HTML.html_escape(html)
+    IO.iodata_to_binary(safe)
+  end
+
+  defp advise(package, id, version) do
+    record = %{
+      id: id,
+      summary: "summary",
+      aliases: [],
+      published_at: ~U[2024-01-01 00:00:00Z],
+      modified_at: ~U[2024-01-01 00:00:00Z],
+      withdrawn_at: nil,
+      cvss_vector: nil,
+      cvss_score: nil,
+      cvss_rating: nil,
+      references: [],
+      affected: [%{package: package.name, requirements: [], versions: [version]}]
+    }
+
+    {:ok, _} = Hexpm.Security.Advisories.upsert([record], %{package.name => package.id})
+  end
+
+  defp add_dependant(package, name) do
+    dependant = insert(:package, name: name, repository_id: package.repository_id)
+
+    release =
+      insert(
+        :release,
+        package: dependant,
+        meta: build(:release_metadata, app: dependant.name)
+      )
+
+    insert(:requirement, release: release, dependency: package, requirement: "~> 0.0.1")
+    recompute_dependants(dependant)
+  end
+
+  # Tabs render in both the mobile (<details>) and desktop nav, so a single href
+  # appears multiple times. Return the text of just the first match.
+  defp link_text(document, href) do
+    case Floki.find(document, ~s(a[href="#{href}"])) do
+      [link | _rest] ->
+        link
+        |> Floki.text(sep: " ")
+        |> String.replace(~r/\s+/, " ")
+        |> String.trim()
+
+      [] ->
+        nil
+    end
+  end
+
+  defp package_tab_hrefs(document, package_name) do
+    package_paths = [
+      "/packages/#{package_name}",
+      "/packages/#{package_name}/0.0.2/files",
+      "/packages/#{package_name}/versions",
+      "/packages/#{package_name}/dependencies",
+      "/packages/#{package_name}/dependents",
+      "/packages/#{package_name}/advisories",
+      "/packages/#{package_name}/audit-logs"
+    ]
+
+    document
+    |> Floki.find("a")
+    |> Enum.map(&List.first(Floki.attribute(&1, "href")))
+    |> Enum.filter(&(&1 in package_paths))
+    |> Enum.uniq()
+  end
+
+  defp table_column_texts(document, column_index) do
+    document
+    |> Floki.find("tbody tr")
+    |> Enum.map(fn row ->
+      row
+      |> Floki.find("td")
+      |> Enum.at(column_index - 1)
+      |> case do
+        nil -> nil
+        cell -> Floki.text(cell, sep: " ") |> String.replace(~r/\s+/, " ") |> String.trim()
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp current_page(document) do
+    case Floki.find(document, ~s([aria-current="page"])) do
+      [page | _rest] -> Floki.text(page, sep: " ") |> String.trim()
+      [] -> nil
+    end
+  end
+
+  defp normalized_text(document) do
+    document
+    |> Floki.text(sep: " ")
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
+  end
+end

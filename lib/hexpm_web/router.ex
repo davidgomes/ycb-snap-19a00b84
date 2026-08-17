@@ -1,0 +1,542 @@
+defmodule HexpmWeb.Router do
+  use HexpmWeb, :router
+  import Phoenix.LiveDashboard.Router
+  alias Hexpm.Accounts.{Organization, User}
+
+  @accepted_formats ~w(json elixir erlang)
+
+  pipeline :browser do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :migrate_session
+    plug :fetch_flash
+    plug :put_root_layout, {HexpmWeb.LayoutView, :root}
+    plug :put_layout, {HexpmWeb.LayoutView, :app}
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+    plug :user_agent, required: false
+    plug :validate_url
+    plug HexpmWeb.Plugs.Attack
+    plug :login
+    plug :disable_deactivated
+    plug :default_repository
+
+    plug HexpmWeb.Plugs.ContentSecurityPolicy,
+      nonces_for: [:script_src, :style_src],
+      directives: %{
+        # Fallback for directives that don't have explicit rules
+        default_src: ~w('self'),
+        # 'strict-dynamic' allows scripts loaded by nonced scripts to execute
+        script_src: ~w('strict-dynamic'),
+        # Gravatar for user/org profile pictures, Stripe tracking pixel
+        img_src: ~w('self' data: https://www.gravatar.com https://q.stripe.com),
+        # Allow fonts from self and Google Fonts
+        font_src: ~w('self' https://fonts.gstatic.com),
+        # hcaptcha iframe, asciinema iframe for blog embeds, Stripe Checkout + 3DS
+        frame_src:
+          ~w('self' https://hcaptcha.com https://*.hcaptcha.com https://asciinema.org https://*.stripe.com),
+        # hcaptcha verification, Stripe API (Plausible added at runtime)
+        connect_src: ~w('self' https://*.hcaptcha.com https://api.stripe.com),
+        # Disallow plugins (Flash, etc.)
+        object_src: ~w('none'),
+        # Disallow <base> tag hijacking
+        base_uri: ~w('self'),
+        # Only allow forms to submit to self
+        form_action: ~w('self'),
+        # Disallow embedding this site in frames (clickjacking protection)
+        frame_ancestors: ~w('none')
+      }
+  end
+
+  pipeline :upload do
+    plug :accepts, @accepted_formats
+    plug :user_agent
+    plug :authenticate
+    plug :disable_deactivated
+    plug :validate_url
+    plug HexpmWeb.Plugs.Attack
+    plug :fetch_body
+    plug :default_repository
+  end
+
+  pipeline :api do
+    plug :accepts, @accepted_formats
+    plug :user_agent
+    plug :authenticate
+    plug :disable_deactivated
+    plug :validate_url
+    plug HexpmWeb.Plugs.Attack
+    plug Corsica, origins: "*", allow_methods: ["HEAD", "GET"]
+    plug :default_repository
+  end
+
+  pipeline :browser_api do
+    plug :accepts, ["json"]
+    plug :fetch_session
+    plug :migrate_session
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+    plug :user_agent, required: false
+    plug :validate_url
+    plug HexpmWeb.Plugs.Attack
+    plug :login
+    plug :disable_deactivated
+    plug :default_repository
+  end
+
+  pipeline :readme do
+    plug :accepts, ["html"]
+    plug :put_secure_browser_headers
+    plug HexpmWeb.Plugs.ReadmeContentSecurityPolicy
+  end
+
+  pipeline :admin do
+    plug HexpmWeb.Plugs.DashboardAuth
+  end
+
+  if Mix.env() == :dev do
+    forward "/dev/mailbox", Plug.Swoosh.MailboxPreview
+  end
+
+  scope "/", HexpmWeb, host: "preview." do
+    get "/", PreviewRedirectController, :index
+    get "/sitemap.xml", PreviewRedirectController, :sitemap
+    get "/preview/:package/sitemap.xml", PreviewRedirectController, :package_sitemap
+    get "/preview/:package/:version/sitemap.xml", PreviewRedirectController, :package_sitemap
+    get "/*path", PreviewRedirectController, :path
+  end
+
+  scope "/", HexpmWeb, host: "diff." do
+    get "/", DiffRedirectController, :index
+    get "/diff/:package/:versions", DiffRedirectController, :show
+    get "/diffs", DiffRedirectController, :index
+    get "/*path", DiffRedirectController, :path
+  end
+
+  scope "/", HexpmWeb, host: "readme." do
+    pipe_through :readme
+
+    get "/:repository/:name/:version", ReadmeController, :show
+    get "/:name/:version", ReadmeController, :show
+    get "/:name", ReadmeController, :show
+    match :*, "/*path", ReadmeController, :not_found
+  end
+
+  scope "/", HexpmWeb do
+    get "/preview_sitemap.xml", PreviewRedirectController, :sitemap
+    get "/preview/sitemap.xml", SitemapController, :preview_index
+    get "/preview/:package/sitemap.xml", SitemapController, :preview_package
+  end
+
+  scope "/", HexpmWeb do
+    pipe_through :browser
+
+    get "/", PageController, :index
+    get "/about", PageController, :about
+    get "/pricing", PageController, :pricing
+    get "/sponsors", PageController, :sponsors
+
+    get "/login", LoginController, :show
+    post "/login", LoginController, :create
+    post "/logout", LoginController, :delete
+
+    get "/tfa", TFAAuthController, :show
+    post "/tfa", TFAAuthController, :create
+
+    get "/tfa/recovery", TFARecoveryController, :show
+    post "/tfa/recovery", TFARecoveryController, :create
+
+    get "/signup", SignupController, :show
+    post "/signup", SignupController, :create
+
+    get "/password/new", PasswordController, :show
+    post "/password/new", PasswordController, :update
+
+    get "/password/reset", PasswordResetController, :show
+    post "/password/reset", PasswordResetController, :create
+
+    get "/email/verify", EmailVerificationController, :verify
+    get "/email/verification", EmailVerificationController, :show
+    post "/email/verification", EmailVerificationController, :create
+
+    get "/auth/complete-signup", AuthController, :show_username_form
+    post "/auth/complete-signup", AuthController, :complete_signup
+    get "/auth/:provider", AuthController, :request
+    get "/auth/:provider/callback", AuthController, :callback
+
+    get "/sso/callback", SSOController, :callback, log: false
+    get "/sso/link", SSOController, :link, log: false
+    post "/sso/link", SSOController, :confirm_link, log: false
+    post "/sso/link/cancel", SSOController, :cancel_link, log: false
+    get "/sso/org/:organization", SSOController, :start, log: false
+
+    get "/invites", OrganizationInvitationController, :show, log: false
+    post "/invites", OrganizationInvitationController, :accept, log: false
+
+    get "/sudo", SudoController, :show
+    post "/sudo", SudoController, :create
+    get "/sudo/github", SudoController, :github
+    get "/sudo/recovery", SudoController, :show_recovery
+    post "/sudo/recovery", SudoController, :verify_recovery
+
+    get "/oauth/authorize", OAuthController, :authorize
+    post "/oauth/authorize", OAuthController, :consent
+    get "/oauth/device", DeviceController, :show
+    post "/oauth/device", DeviceController, :create
+    get "/oauth/device/authorize", DeviceController, :authorize_show
+    post "/oauth/device/authorize", DeviceController, :authorize_create
+
+    get "/dashboard", DashboardController, :index
+
+    get "/users/:username", UserController, :show
+    get "/users/:username/stats", UserController, :stats
+
+    get "/orgs/:username", UserController, :show
+
+    get "/docs", DocsController, :index
+    get "/docs/usage", DocsController, :usage
+    get "/docs/publish", DocsController, :publish
+    get "/docs/tasks", DocsController, :tasks
+    get "/docs/gleam-usage", DocsController, :gleam_usage
+    get "/docs/rebar3-usage", DocsController, :rebar3_usage
+    get "/docs/rebar3-publish", DocsController, :rebar3_publish
+    get "/docs/rebar3-private", DocsController, :rebar3_private
+    get "/docs/rebar3-tasks", DocsController, :rebar3_tasks
+    get "/docs/private", DocsController, :private
+    get "/docs/dependency-policies", DocsController, :dependency_policies
+    get "/docs/organization-sso", DocsController, :organization_sso
+    get "/docs/faq", DocsController, :faq
+    get "/docs/mirrors", DocsController, :mirrors
+    get "/docs/public-keys", DocsController, :public_keys
+    get "/docs/self-hosting", DocsController, :self_hosting
+
+    get "/policies/codeofconduct", PolicyController, :coc
+    get "/policies/privacy", PolicyController, :privacy
+    get "/policies/termsofservice", PolicyController, :tos
+    get "/policies/copyright", PolicyController, :copyright
+    get "/policies/dispute", PolicyController, :dispute
+
+    live_session :packages,
+      on_mount: {HexpmWeb.Live.InitAssigns, :default},
+      session: {HexpmWeb.Live.InitAssigns, :session, []} do
+      live "/packages", PackageLive.Index, :index
+      live "/diff/:package/:versions", DiffLive, :show
+      live "/diff/:repository/:package/:versions", DiffLive, :show
+    end
+
+    get "/diffs", DiffController, :index
+
+    get "/preview/:package", PreviewRedirectController, :latest
+    get "/preview/:package/show/*filename", PreviewRedirectController, :latest_file
+    get "/preview/:package/:version", PreviewRedirectController, :version
+    get "/preview/:package/:version/show/*filename", PreviewRedirectController, :version_file
+
+    live_session :preview, on_mount: {HexpmWeb.Live.InitAssigns, :default} do
+      live "/packages/:package/:version/files", PreviewLive, :files
+      live "/packages/:package/:version/files/*filename", PreviewLive, :files
+      live "/packages/:repository/:package/:version/files", PreviewLive, :files
+      live "/packages/:repository/:package/:version/files/*filename", PreviewLive, :files
+    end
+
+    get "/packages/:name/owners", PackageOwnerController, :index
+    post "/packages/:name/owners", PackageOwnerController, :create
+    put "/packages/:name/owners/:username", PackageOwnerController, :update
+    delete "/packages/:name/owners/:username", PackageOwnerController, :delete
+    get "/packages/:name", PackageController, :show
+    get "/packages/:name/audit-logs", PackageController, :audit_logs
+    get "/packages/:name/dependents", PackageController, :dependents
+    get "/packages/:name/dependencies", PackageController, :dependencies
+    get "/packages/:name/versions", PackageController, :versions
+    get "/packages/:name/advisories", PackageController, :advisories
+    get "/packages/:name/:version/dependencies", PackageController, :dependencies
+    get "/packages/:name/:version", PackageController, :show
+    get "/packages/:repository/:name/owners", PackageOwnerController, :index
+    post "/packages/:repository/:name/owners", PackageOwnerController, :create
+    put "/packages/:repository/:name/owners/:username", PackageOwnerController, :update
+    delete "/packages/:repository/:name/owners/:username", PackageOwnerController, :delete
+    get "/packages/:repository/:name/audit-logs", PackageController, :audit_logs
+    get "/packages/:repository/:name/dependents", PackageController, :dependents
+    get "/packages/:repository/:name/versions", PackageController, :versions
+    get "/packages/:repository/:name/advisories", PackageController, :advisories
+    get "/packages/:repository/:name/:version/dependencies", PackageController, :dependencies
+    get "/packages/:repository/:name/:version/raw/*filename", PreviewRawController, :show
+
+    get "/packages/:repository/:name/:version/readme-image/*filename",
+        PreviewImageController,
+        :show
+
+    get "/packages/:repository/:name/:version", PackageController, :show
+
+    get "/blog", BlogController, :index
+    get "/blog/:slug", BlogController, :show
+
+    get "/l/:short_code", ShortURLController, :show
+
+    if Application.compile_env!(:hexpm, [:features, :package_reports]) do
+      get "/reports", PackageReportController, :index
+      post "/reports", PackageReportController, :create
+      get "/reports/new", PackageReportController, :new
+
+      get "/reports/:id", PackageReportController, :show
+      post "/reports/:id/accept", PackageReportController, :accept
+      post "/reports/:id/reject", PackageReportController, :reject
+      post "/reports/:id/solve", PackageReportController, :solve
+      post "/reports/:id/unresolve", PackageReportController, :unresolve
+      post "/reports/:id/comment", PackageReportController, :comment
+    end
+  end
+
+  scope "/dashboard", HexpmWeb.Dashboard do
+    pipe_through :browser
+
+    get "/profile", ProfileController, :index
+    post "/profile", ProfileController, :update
+
+    get "/security", SecurityController, :index, as: :dashboard_security
+
+    post "/security/change-password", SecurityController, :change_password,
+      as: :dashboard_security
+
+    post "/security/add-password", SecurityController, :add_password, as: :dashboard_security
+
+    post "/security/remove-password", SecurityController, :remove_password,
+      as: :dashboard_security
+
+    post "/security/disconnect-github", SecurityController, :disconnect_github,
+      as: :dashboard_security
+
+    post "/security/enable-tfa", SecurityController, :enable_tfa, as: :dashboard_security
+    post "/security/disable-tfa", SecurityController, :disable_tfa, as: :dashboard_security
+
+    post "/security/rotate-recovery-codes", SecurityController, :rotate_recovery_codes,
+      as: :dashboard_security
+
+    post "/security/reset-auth-app", SecurityController, :reset_auth_app, as: :dashboard_security
+
+    post "/security/verify-tfa-code", SecurityController, :verify_tfa_code,
+      as: :dashboard_security
+
+    get "/email", EmailController, :index
+    post "/email", EmailController, :create
+    delete "/email", EmailController, :delete
+    post "/email/primary", EmailController, :primary
+    post "/email/public", EmailController, :public
+    post "/email/resend", EmailController, :resend_verify
+    post "/email/gravatar", EmailController, :gravatar
+    post "/email/options", EmailController, :update_options
+
+    get "/repos", OrganizationController, :redirect_repo
+    get "/repos/*glob", OrganizationController, :redirect_repo
+    get "/orgs", OrganizationController, :new
+    post "/orgs", OrganizationController, :create
+    get "/orgs/:dashboard_org", OrganizationController, :show
+    post "/orgs/:dashboard_org", OrganizationController, :update
+    get "/orgs/:dashboard_org/members", OrganizationController, :members
+    get "/orgs/:dashboard_org/keys", OrganizationController, :keys
+    get "/orgs/:dashboard_org/packages", OrganizationController, :packages
+    get "/orgs/:dashboard_org/audit-logs", OrganizationController, :audit_logs
+    get "/orgs/:dashboard_org/sso", OrganizationController, :sso, log: false
+    post "/orgs/:dashboard_org/sso", OrganizationSSOController, :configure, log: false
+    post "/orgs/:dashboard_org/sso/test", OrganizationSSOController, :test, log: false
+    post "/orgs/:dashboard_org/sso/enable", OrganizationSSOController, :enable, log: false
+    post "/orgs/:dashboard_org/sso/disable", OrganizationSSOController, :disable, log: false
+    post "/orgs/:dashboard_org/sso/delete", OrganizationSSOController, :delete, log: false
+    post "/orgs/:dashboard_org/sso/rotate", OrganizationSSOController, :rotate, log: false
+    post "/orgs/:dashboard_org/sso/promote", OrganizationSSOController, :promote, log: false
+    post "/orgs/:dashboard_org/sso/unlink", OrganizationSSOController, :unlink, log: false
+    post "/orgs/:dashboard_org/sso/jit", OrganizationSSOController, :configure_jit
+    post "/orgs/:dashboard_org/sso/domains", OrganizationSSOController, :add_domain
+    post "/orgs/:dashboard_org/sso/domains/verify", OrganizationSSOController, :verify_domain
+    post "/orgs/:dashboard_org/sso/domains/remove", OrganizationSSOController, :remove_domain
+
+    get "/orgs/:dashboard_org/billing", OrganizationController, :billing
+    get "/orgs/:dashboard_org/danger-zone", OrganizationController, :danger_zone
+    post "/orgs/:dashboard_org/leave", OrganizationController, :leave
+    post "/orgs/:dashboard_org/billing-token", OrganizationController, :billing_token
+    post "/orgs/:dashboard_org/cancel-billing", OrganizationController, :cancel_billing
+    post "/orgs/:dashboard_org/resume-billing", OrganizationController, :resume_billing
+    post "/orgs/:dashboard_org/update-billing", OrganizationController, :update_billing
+    post "/orgs/:dashboard_org/create-billing", OrganizationController, :create_billing
+    post "/orgs/:dashboard_org/add-seats", OrganizationController, :add_seats
+    post "/orgs/:dashboard_org/remove-seats", OrganizationController, :remove_seats
+    post "/orgs/:dashboard_org/void-invoice", OrganizationController, :void_invoice
+    post "/orgs/:dashboard_org/change-plan", OrganizationController, :change_plan
+    post "/orgs/:dashboard_org/keys", OrganizationController, :create_key
+    delete "/orgs/:dashboard_org/keys", OrganizationController, :delete_key
+    get "/orgs/:dashboard_org/invoices/:id", OrganizationController, :show_invoice
+    post "/orgs/:dashboard_org/invoices/:id/pay", OrganizationController, :pay_invoice
+    post "/orgs/:dashboard_org/profile", OrganizationController, :update_profile
+
+    get "/orgs/:dashboard_org/policies", OrganizationController, :policies
+    get "/orgs/:dashboard_org/policies/new", OrganizationController, :new_policy
+
+    get "/orgs/:dashboard_org/policies/package-suggestions",
+        OrganizationController,
+        :policy_package_suggestions
+
+    get "/orgs/:dashboard_org/policies/version-suggestions",
+        OrganizationController,
+        :policy_version_suggestions
+
+    post "/orgs/:dashboard_org/policies", OrganizationController, :create_policy
+    get "/orgs/:dashboard_org/policies/:name", OrganizationController, :edit_policy
+    post "/orgs/:dashboard_org/policies/:name", OrganizationController, :update_policy
+    delete "/orgs/:dashboard_org/policies/:name", OrganizationController, :delete_policy
+
+    get "/keys", KeyController, :index
+    delete "/keys", KeyController, :delete
+    post "/keys", KeyController, :create
+
+    get "/sessions", SessionController, :index
+    delete "/sessions", SessionController, :delete
+
+    get "/audit-logs", AuditLogController, :index
+
+    get "/delete-account", DeleteAccountController, :show
+    post "/delete-account", DeleteAccountController, :create
+    get "/delete-account/confirm", DeleteAccountController, :confirm
+    post "/delete-account/confirm", DeleteAccountController, :confirm_delete
+  end
+
+  scope "/dashboard", HexpmWeb.Dashboard do
+    pipe_through :browser_api
+
+    post "/billing-api/*path", BillingProxyController, :proxy
+  end
+
+  scope "/", HexpmWeb do
+    get "/sitemap.xml", SitemapController, :main
+    get "/docs_sitemap.xml", SitemapController, :docs
+    get "/hexsearch.xml", OpenSearchController, :opensearch
+    get "/installs/hex.ez", InstallController, :archive
+    get "/feeds/blog.xml", FeedsController, :blog
+  end
+
+  scope "/api", HexpmWeb.API, as: :api do
+    pipe_through :upload
+
+    for prefix <- ["/", "/repos/:repository"] do
+      scope prefix do
+        post "/publish", ReleaseController, :publish
+        post "/packages/:name/releases", ReleaseController, :create
+        post "/packages/:name/releases/:version/docs", DocsController, :create
+      end
+    end
+  end
+
+  scope "/api", HexpmWeb.API, as: :api do
+    pipe_through :api
+
+    get "/", IndexController, :index
+
+    post "/users", UserController, :create
+    get "/users/me", UserController, :me
+    get "/users/me/audit-logs", UserController, :audit_logs
+    get "/users/:name", UserController, :show
+    # NOTE: Deprecated (2018-05-21)
+    get "/users/:name/test", UserController, :test
+
+    get "/orgs", OrganizationController, :index
+    get "/orgs/:organization", OrganizationController, :show
+    post "/orgs/:organization", OrganizationController, :update
+    get "/orgs/:organization/audit-logs", OrganizationController, :audit_logs
+
+    get "/orgs/:organization/members", OrganizationUserController, :index
+    post "/orgs/:organization/members", OrganizationUserController, :create
+    get "/orgs/:organization/members/:name", OrganizationUserController, :show
+    post "/orgs/:organization/members/:name", OrganizationUserController, :update
+    delete "/orgs/:organization/members/:name", OrganizationUserController, :delete
+
+    get "/repos", RepositoryController, :index
+    get "/repos/:repository", RepositoryController, :show
+
+    for prefix <- ["/", "/repos/:repository"] do
+      scope prefix do
+        get "/packages", PackageController, :index
+        get "/packages/:name", PackageController, :show
+        get "/packages/:name/audit-logs", PackageController, :audit_logs
+
+        get "/packages/:name/releases/:version", ReleaseController, :show
+        delete "/packages/:name/releases/:version", ReleaseController, :delete
+
+        post "/packages/:name/retire", RetirementController, :create_all
+        post "/packages/:name/releases/:version/retire", RetirementController, :create
+        delete "/packages/:name/releases/:version/retire", RetirementController, :delete
+
+        get "/packages/:name/releases/:version/docs", DocsController, :show
+        delete "/packages/:name/releases/:version/docs", DocsController, :delete
+
+        get "/packages/:name/owners", OwnerController, :index
+        get "/packages/:name/owners/:username", OwnerController, :show
+        put "/packages/:name/owners/:username", OwnerController, :create
+        delete "/packages/:name/owners/:username", OwnerController, :delete
+      end
+    end
+
+    for prefix <- ["/", "/orgs/:organization"] do
+      scope prefix do
+        get "/keys", KeyController, :index
+        get "/keys/:name", KeyController, :show
+        post "/keys", KeyController, :create
+        delete "/keys", KeyController, :delete_all
+        delete "/keys/:name", KeyController, :delete
+      end
+    end
+
+    post "/short_url", ShortURLController, :create
+    get "/auth", AuthController, :show
+
+    post "/oauth/token", OAuthController, :token
+    post "/oauth/device_authorization", OAuthController, :device_authorization
+    post "/oauth/revoke", OAuthController, :revoke
+    post "/oauth/revoke_by_hash", OAuthController, :revoke_by_hash
+  end
+
+  if Mix.env() in [:dev, :test, :hex] do
+    scope "/repo", HexpmWeb do
+      get "/names", TestController, :names
+      get "/versions", TestController, :versions
+      get "/installs/hex-1.x.csv", TestController, :installs_csv
+
+      for prefix <- ["/", "/repos/:repository"] do
+        scope prefix do
+          get "/packages/:package", TestController, :package
+          get "/tarballs/:ball", TestController, :tarball
+        end
+      end
+
+      get "/repos/:repository/policies/:name", TestController, :policy
+    end
+
+    scope "/api", HexpmWeb do
+      pipe_through :api
+
+      post "/repo", TestController, :repo
+      post "/oauth_client", TestController, :oauth_client
+      post "/oauth_token", TestController, :oauth_token
+      post "/oauth_device_authorize", TestController, :oauth_device_authorize
+      get "/oauth_device_pending", TestController, :oauth_device_pending
+    end
+  end
+
+  if Mix.env() == :test do
+    scope "/_test", HexpmWeb do
+      pipe_through :browser
+
+      get "/raise", TestController, :raise_error
+    end
+  end
+
+  scope "/" do
+    pipe_through [:browser, :admin]
+    live_dashboard("/db", metrics: HexpmWeb.Telemetry)
+  end
+
+  def user_path(%User{organization: nil} = user) do
+    ~p"/users/#{user}"
+  end
+
+  def user_path(%User{organization: %Organization{} = organization}) do
+    ~p"/orgs/#{organization}"
+  end
+end

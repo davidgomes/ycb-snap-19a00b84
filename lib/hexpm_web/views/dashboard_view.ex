@@ -1,0 +1,328 @@
+defmodule HexpmWeb.DashboardView do
+  use HexpmWeb, :view
+  alias Hexpm.Accounts.OptionalEmails
+  import HexpmWeb.Components.Modal, only: [show_modal: 1]
+  import HexpmWeb.Dashboard.Key.Components.KeyManagementCard
+
+  import HexpmWeb.Dashboard.Organization.Components.CreateOrganizationModal,
+    only: [create_organization_modal: 1]
+
+  import HexpmWeb.ViewIcons, only: [icon: 3]
+  alias Phoenix.LiveView.JS
+
+  def toggle_sidebar_menu do
+    %JS{}
+    |> JS.toggle_attribute({"data-open", ""}, to: "#sidebar-content")
+    |> JS.toggle_attribute({"data-open", ""}, to: "#sidebar-backdrop")
+    |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: "#sidebar-toggle")
+  end
+
+  defp account_settings() do
+    [
+      profile: {"Profile", ~p"/dashboard/profile"},
+      security: {"Security", ~p"/dashboard/security"},
+      email: {"Emails", ~p"/dashboard/email"},
+      keys: {"Keys", ~p"/dashboard/keys"},
+      sessions: {"Sessions", ~p"/dashboard/sessions"},
+      audit_logs: {"Recent Activities", ~p"/dashboard/audit-logs"},
+      delete_account: {"Delete account", ~p"/dashboard/delete-account"}
+    ]
+  end
+
+  defp icon_for_setting(:profile, selected?) do
+    color = if selected?, do: "text-purple-600", else: "text-grey-600"
+    icon(:heroicon, "user-circle", class: "w-5 h-5 #{color}")
+  end
+
+  defp icon_for_setting(:security, selected?) do
+    color = if selected?, do: "text-purple-600", else: "text-grey-600"
+    icon(:heroicon, "shield-check", class: "w-5 h-5 #{color}")
+  end
+
+  defp icon_for_setting(:email, selected?) do
+    color = if selected?, do: "text-purple-600", else: "text-grey-600"
+    icon(:heroicon, "envelope", class: "w-5 h-5 #{color}")
+  end
+
+  defp icon_for_setting(:keys, selected?) do
+    color = if selected?, do: "text-purple-600", else: "text-grey-600"
+    icon(:heroicon, "key", class: "w-5 h-5 #{color}")
+  end
+
+  defp icon_for_setting(:sessions, selected?) do
+    color = if selected?, do: "text-purple-600", else: "text-grey-600"
+    icon(:heroicon, "computer-desktop", class: "w-5 h-5 #{color}")
+  end
+
+  defp icon_for_setting(:audit_logs, selected?) do
+    color = if selected?, do: "text-purple-600", else: "text-grey-600"
+    icon(:heroicon, "clock", class: "w-5 h-5 #{color}")
+  end
+
+  defp icon_for_setting(:delete_account, selected?) do
+    color = if selected?, do: "text-purple-600", else: "text-grey-600"
+    icon(:heroicon, "trash", class: "w-5 h-5 #{color}")
+  end
+
+  defp selected_setting(conn, id) do
+    url_id =
+      id
+      |> Atom.to_string()
+      |> String.replace("_", "-")
+
+    if Enum.take(conn.path_info, -2) == ["dashboard", url_id] do
+      "selected"
+    end
+  end
+
+  defp selected_organization(conn, name) do
+    # Matching the last two segments only highlighted the organization on its
+    # own page, so every tab under it lost the highlight.
+    case conn.path_info do
+      ["dashboard", "orgs", ^name | _tab] -> "selected"
+      _other -> nil
+    end
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "docs.publish", params: params}) do
+    "Publish documentation for #{params["package"]["name"]} (#{params["release"]["version"]})"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "docs.revert", params: params}) do
+    "Revert documentation for #{params["package"]["name"]} (#{params["release"]["version"]})"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "key.generate", params: params}) do
+    "Generate key #{params["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "key.remove", params: params}) do
+    "Remove key #{params["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "owner.add", params: params}) do
+    "Add #{params["user"]["username"]} as a new owner of package #{params["package"]["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "owner.update", params: params}) do
+    "Update #{params["user"]["username"]} role to #{params["level"]} on package #{params["package"]["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "owner.transfer", params: params}) do
+    "Transfer package #{params["package"]["name"]} to #{params["user"]["username"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "owner.remove", params: params}) do
+    "Remove #{params["user"]["username"]} from owners of package #{params["package"]["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "release.publish", params: params}) do
+    "Publish package #{params["package"]["name"]} (#{params["release"]["version"]})"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "release.revert", params: params}) do
+    "Revert package #{params["package"]["name"]} (#{params["release"]["version"]})"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "release.retire", params: params}) do
+    "Retire package #{params["package"]["name"]} (#{params["release"]["version"]})"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "release.unretire", params: params}) do
+    "Unretire package #{params["package"]["name"]} (#{params["release"]["version"]})"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "email.add", params: params}) do
+    "Add email #{params["email"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "email.remove", params: params}) do
+    "Remove email #{params["email"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "email.primary", params: params}) do
+    "Set email #{params["email"]} as primary email"
+  end
+
+  def humanize_audit_log_info(%AuditLog{
+        action: "email.public",
+        params: %{"old_email" => old_email, "new_email" => nil}
+      }) do
+    "Set email #{old_email["email"]} as private email"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "email.public", params: params}) do
+    "Set email #{params["email"]} as public email"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "email.options", params: params}) do
+    changes = params["changes"] || params[:changes] || %{}
+    changes_list = format_email_preference_changes(changes)
+    "Updated email preferences: #{changes_list}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "email.gravatar", params: params}) do
+    "Set email #{params["email"]} as gravatar email"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "user.create"}) do
+    "Create user account"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "user.update"}) do
+    "Update user profile"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "user_provider.create", params: params}) do
+    "Link #{params["provider"]} account"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "user_provider.delete", params: params}) do
+    "Unlink #{params["provider"]} account"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "security.update"}) do
+    "Update TFA settings"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "security.rotate_recovery_codes"}) do
+    "Rotate TFA recovery codes"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "organization.create", params: params}) do
+    "Create organization #{params["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "organization.member.add", params: params}) do
+    "Add user #{params["user"]["username"]} to organization #{params["organization"]["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "organization.member.remove", params: params}) do
+    "Remove user #{params["user"]["username"]} from organization #{params["organization"]["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "organization.member.role", params: params}) do
+    "Change user #{params["user"]["username"]}'s role to #{params["role"]} " <>
+      "in organization #{params["organization"]["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "password.reset.init"}) do
+    "Request to reset password"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "password.reset.finish"}) do
+    "Reset password successfully"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "password.update"}) do
+    "Update password"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "password.add"}) do
+    "Add password"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "password.remove"}) do
+    "Remove password"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "billing.checkout", params: params}) do
+    "Update payment method for organization #{params["organization"]["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "billing.cancel", params: params}) do
+    "Cancel billing on organization #{params["organization"]["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "billing.resume", params: params}) do
+    "Resume billing on organization #{params["organization"]["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "billing.create", params: params}) do
+    "Add billing information to organization #{params["organization"]["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "billing.update", params: params}) do
+    "Update billing information for organization #{params["organization"]["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "billing.change_plan", params: params}) do
+    "Change billing plan on organization #{params["organization"]["name"]} to " <>
+      "#{plan_id(params["plan_id"])}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{action: "billing.pay_invoice", params: params}) do
+    "Manually pay invoice for organization #{params["organization"]["name"]}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{
+        action: "session.create",
+        params: %{"type" => "browser", "name" => name}
+      }) do
+    "Login from #{name}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{
+        action: "session.create",
+        params: %{"type" => "oauth"} = params
+      }) do
+    client_name = params["client"]["name"]
+    session_name = params["name"]
+
+    if session_name do
+      "Authorize OAuth application: #{client_name} (#{session_name})"
+    else
+      "Authorize OAuth application: #{client_name}"
+    end
+  end
+
+  def humanize_audit_log_info(%AuditLog{
+        action: "session.revoke",
+        params: %{"type" => "browser", "name" => name}
+      }) do
+    "Logout from #{name}"
+  end
+
+  def humanize_audit_log_info(%AuditLog{
+        action: "session.revoke",
+        params: %{"type" => "oauth"} = params
+      }) do
+    client_name = params["client"]["name"]
+    session_name = params["name"]
+
+    if session_name do
+      "Revoke OAuth application: #{client_name} (#{session_name})"
+    else
+      "Revoke OAuth application: #{client_name}"
+    end
+  end
+
+  defp new_organization_changeset(assigns) do
+    assigns[:new_organization_changeset] ||
+      Hexpm.Accounts.Organization.changeset(%Hexpm.Accounts.Organization{}, %{})
+  end
+
+  defp plan_id("organization-monthly"), do: "monthly"
+  defp plan_id("organization-annually"), do: "annually"
+
+  def double_html_escape(string) do
+    string
+    |> Phoenix.HTML.html_escape()
+    |> Phoenix.HTML.safe_to_string()
+    |> Phoenix.HTML.html_escape()
+  end
+
+  defp format_email_preference_changes(changes) do
+    changes
+    |> Enum.map_join(", ", fn {key, value} ->
+      title =
+        case Enum.find(OptionalEmails.list(), &(to_string(&1.id) == key)) do
+          %{title: title} -> title
+          nil -> key
+        end
+
+      status = if value, do: "enabled", else: "disabled"
+      "#{title}: #{status}"
+    end)
+  end
+end

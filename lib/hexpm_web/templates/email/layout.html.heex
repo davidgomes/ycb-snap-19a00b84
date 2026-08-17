@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      /* Email client resets */
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100% !important;
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+        background-color: #f7f5f9;
+      }
+
+      img {
+        border: 0;
+        height: auto;
+        line-height: 100%;
+        outline: none;
+        text-decoration: none;
+        -ms-interpolation-mode: bicubic;
+      }
+
+      table {
+        border-collapse: collapse !important;
+      }
+
+      /* Responsive */
+      @media only screen and (max-width: 600px) {
+        .content-padding {
+          padding-left: 16px !important;
+          padding-right: 16px !important;
+        }
+      }
+    </style>
+  </head>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f7f5f9;">
+    <%!-- Full width wrapper --%>
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      style="background-color: #f7f5f9;"
+    >
+      <tr>
+        <td align="center" style="padding: 0;">
+          <%!-- Header - Full width dark background --%>
+          <% logo_url = email_url("/images/hex-full.png") %>
+          <table
+            role="presentation"
+            width="100%"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            style="background-color: #030913;"
+          >
+            <tr>
+              <td align="center" style="padding: 24px 0;">
+                <table
+                  role="presentation"
+                  align="center"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                >
+                  <tr>
+                    <td style="vertical-align: middle; padding-right: 12px;">
+                      <a href={url(email_uri(), ~p"/")}>
+                        <img
+                          src={logo_url}
+                          alt="hex logo"
+                          style="display: block; height: 32px; width: auto;"
+                        />
+                      </a>
+                    </td>
+                    <td style="vertical-align: middle;">
+                      <a
+                        href={url(email_uri(), ~p"/")}
+                        style="color: #ffffff; font-size: 24px; line-height: 32px; font-weight: 700; letter-spacing: -0.025em; font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; text-decoration: none;"
+                      >
+                        Hex
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+
+          <%!-- Content container - max 600px --%>
+          <table
+            role="presentation"
+            width="600"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            style="max-width: 600px; width: 100%;"
+          >
+            <%!-- Body content with padding --%>
+            <tr>
+              <td style="padding: 40px 32px; background-color: #f7f5f9;" class="content-padding">
+                <%!-- White content box --%>
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="background-color: #ffffff; border-radius: 8px;"
+                >
+                  <tr>
+                    <td style="padding: 40px 32px;" class="content-padding">
+                      {@inner_content}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

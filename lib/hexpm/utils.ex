@@ -1,0 +1,330 @@
+defmodule Hexpm.Utils do
+  @moduledoc """
+  Assorted utility functions.
+  """
+
+  @timeout 60 * 60 * 1000
+
+  import Ecto.Query, only: [from: 2]
+  alias Hexpm.Repository.{Package, Release, Repository}
+  require Logger
+
+  def secure_check(left, right) do
+    if byte_size(left) == byte_size(right) do
+      secure_check(left, right, 0) == 0
+    else
+      false
+    end
+  end
+
+  defp secure_check(<<left, left_rest::binary>>, <<right, right_rest::binary>>, acc) do
+    secure_check(left_rest, right_rest, Bitwise.bor(acc, Bitwise.bxor(left, right)))
+  end
+
+  defp secure_check(<<>>, <<>>, acc) do
+    acc
+  end
+
+  def multi_task(args, fun) do
+    args
+    |> multi_async(fun)
+    |> multi_await()
+  end
+
+  def multi_task(funs) do
+    funs
+    |> multi_async()
+    |> multi_await()
+  end
+
+  def multi_async(args, fun) do
+    Enum.map(args, fn arg -> Task.async(fn -> fun.(arg) end) end)
+  end
+
+  def multi_async(funs) do
+    Enum.map(funs, &Task.async/1)
+  end
+
+  def multi_await(tasks) do
+    Enum.map(tasks, &Task.await(&1, @timeout))
+  end
+
+  def raise_async_stream_error(stream) do
+    Stream.each(stream, fn
+      {:ok, _result} -> :ok
+      {:exit, {_error, stacktrace} = reason} -> reraise(Exception.format_exit(reason), stacktrace)
+      {:exit, reason} -> exit(reason)
+    end)
+  end
+
+  def utc_yesterday() do
+    utc_days_ago(1)
+  end
+
+  def utc_days_ago(days) do
+    {today, _time} = :calendar.universal_time()
+
+    today
+    |> :calendar.date_to_gregorian_days()
+    |> Kernel.-(days)
+    |> :calendar.gregorian_days_to_date()
+    |> Date.from_erl!()
+  end
+
+  def safe_to_atom(binary, allowed) when is_binary(binary) do
+    if binary in allowed, do: String.to_atom(binary)
+  end
+
+  def safe_to_atom(_, _), do: nil
+
+  def safe_date(nil), do: nil
+
+  def safe_date(string) when is_binary(string) do
+    case Date.from_iso8601(string) do
+      {:ok, date} -> date
+      _ -> nil
+    end
+  end
+
+  def safe_date(_), do: nil
+
+  def safe_page(page, _count, _per_page) when page < 1 do
+    1
+  end
+
+  def safe_page(page, count, per_page) when page > div(count, per_page) + 1 do
+    div(count, per_page) + 1
+  end
+
+  def safe_page(page, _count, _per_page) do
+    page
+  end
+
+  def safe_int(nil), do: nil
+
+  def safe_int(string) when is_binary(string) do
+    case Integer.parse(string) do
+      {int, ""} -> int
+      _ -> nil
+    end
+  end
+
+  def safe_int(_), do: nil
+
+  def parse_search(nil), do: nil
+  def parse_search(""), do: nil
+  def parse_search(search) when is_binary(search), do: String.trim(search)
+  def parse_search(_), do: nil
+
+  @doc """
+  Determine if a given timestamp is less than a day (86400 seconds) old
+  """
+  def within_last_day?(timestamp, now \\ NaiveDateTime.utc_now())
+
+  def within_last_day?(nil, _now), do: false
+
+  def within_last_day?(timestamp, now) do
+    NaiveDateTime.diff(now, timestamp, :second) < 24 * 60 * 60
+  end
+
+  def binarify(term, opts \\ [])
+
+  def binarify(binary, _opts) when is_binary(binary), do: binary
+  def binarify(number, _opts) when is_number(number), do: number
+  def binarify(atom, _opts) when is_nil(atom) or is_boolean(atom), do: atom
+  def binarify(atom, _opts) when is_atom(atom), do: Atom.to_string(atom)
+  def binarify(list, opts) when is_list(list), do: for(elem <- list, do: binarify(elem, opts))
+  def binarify(%Version{} = version, _opts), do: to_string(version)
+
+  def binarify(%DateTime{} = dt, _opts),
+    do: dt |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+
+  def binarify(%NaiveDateTime{} = ndt, _opts),
+    do: ndt |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601()
+
+  def binarify(%{__struct__: atom}, _opts) when is_atom(atom),
+    do: raise("not able to binarify %#{inspect(atom)}{}")
+
+  def binarify(tuple, opts) when is_tuple(tuple),
+    do: for(elem <- Tuple.to_list(tuple), do: binarify(elem, opts)) |> List.to_tuple()
+
+  def binarify(map, opts) when is_map(map) do
+    if Keyword.get(opts, :maps, true) do
+      for(elem <- map, into: %{}, do: binarify(elem, opts))
+    else
+      for(elem <- map, do: binarify(elem, opts))
+    end
+  end
+
+  @doc """
+  Returns a url to a resource on the CDN from a list of path components.
+  """
+  @spec cdn_url([String.t()] | String.t()) :: String.t()
+  def cdn_url(path) do
+    Application.get_env(:hexpm, :cdn_url) <> "/" <> Path.join(List.wrap(path))
+  end
+
+  @doc """
+  Returns a url to a resource on the docs site from a list of path components.
+  """
+  @spec docs_html_url(Repository.t(), Package.t(), Release.t() | nil) :: String.t()
+  @spec docs_html_url(String.t(), String.t(), String.t()) :: String.t()
+  def docs_html_url(repository, package, "/" <> _ = path)
+      when is_binary(repository) and is_binary(package) do
+    if repository == "hexpm" do
+      public_docs_url(package, path)
+    else
+      uri = URI.parse(Application.fetch_env!(:hexpm, :private_docs_url))
+      host = "#{name_to_subdomain(repository)}.#{uri.host}"
+      URI.to_string(%{uri | host: host, path: "/#{package}#{path}"})
+    end
+  end
+
+  def docs_html_url(%Repository{id: 1}, package, release) do
+    version = release && "#{release.version}/"
+    public_docs_url(package.name, "/#{version}")
+  end
+
+  def docs_html_url(%Repository{} = repository, package, release) do
+    docs_url = URI.parse(Application.get_env(:hexpm, :private_docs_url))
+    docs_url = %{docs_url | host: "#{name_to_subdomain(repository.name)}.#{docs_url.host}"}
+    package = package.name
+    version = release && "#{release.version}/"
+    "#{docs_url}/#{package}/#{version}"
+  end
+
+  # A handful of packages predate the subdomain scheme and carry a name the
+  # docs CDN routes somewhere else, `search` to the search backend and the rest
+  # to their own services. The apex serves those packages directly instead of
+  # redirecting, so it is the only address they have.
+  @reserved_docs_subdomains ~w(api assets docs preview search staging stats static)
+
+  defp public_docs_url(package, "/" <> _ = path) do
+    uri = URI.parse(Application.fetch_env!(:hexpm, :docs_url))
+
+    if package in @reserved_docs_subdomains do
+      URI.to_string(%{uri | path: "/#{package}#{path}"})
+    else
+      URI.to_string(%{uri | host: "#{name_to_subdomain(package)}.#{uri.host}", path: path})
+    end
+  end
+
+  @doc """
+  Apex-form docs URL for a hexpm-repo package: `<docs_url>/<package>/`.
+
+  Used by `docs_sitemap.xml`, which lists per-package sitemap index entries.
+  Sitemap consumers require the sitemaps an index lists to share its host, and
+  the apex 301 takes the crawler on to `<package>.hexdocs.pm/sitemap.xml`,
+  whose own entries name that subdomain.
+  """
+  @spec docs_html_apex_url(String.t()) :: String.t()
+  def docs_html_apex_url(package_name) do
+    Application.get_env(:hexpm, :docs_url) <> "/" <> package_name <> "/"
+  end
+
+  # Hex package and organization names allow underscores (packages
+  # `^[a-z][a-z0-9_]*$`, orgs `^[a-z0-9_]+$`), but RFC 1123 hostname labels
+  # and RFC 6125 wildcard SAN matching don't, and Fastly enforces strict SAN
+  # matching at the HTTP edge. Map `_` -> `-` for the subdomain. For public
+  # hexdocs.pm packages the Fastly Compute subdomain handler reverses the
+  # mapping before building the GCS bucket key; for hexorgs.pm orgs the
+  # hexdocs app reverses it.
+  def name_to_subdomain(name), do: String.replace(name, "_", "-")
+
+  @doc """
+  Sidebar docs URL for a package given the currently-displayed release and the
+  latest release that has docs.
+
+  - If the current release has docs published, returns the version-specific URL.
+  - If only an older release has docs, returns the latest-with-docs URL with
+    no version segment.
+  - If no release has docs, returns `nil`.
+  """
+  @spec current_docs_html_url(Package.t(), Release.t() | nil, Release.t() | nil) ::
+          String.t() | nil
+  def current_docs_html_url(_package, _current_release, nil), do: nil
+
+  def current_docs_html_url(package, current_release, latest_release_with_docs) do
+    release =
+      if current_release && current_release.version == latest_release_with_docs.version do
+        current_release
+      end
+
+    docs_html_url(package.repository, package, release)
+  end
+
+  @doc """
+  Returns a url to the documentation tarball in the Amazon S3 Hex.pm bucket.
+  """
+  @spec docs_tarball_url(Repository.t(), Package.t(), Release.t()) :: String.t()
+  def docs_tarball_url(%Repository{id: 1}, package, release) do
+    repo = Application.get_env(:hexpm, :cdn_url)
+    package = package.name
+    version = release.version
+    "#{repo}/docs/#{package}-#{version}.tar.gz"
+  end
+
+  def docs_tarball_url(%Repository{} = repository, package, release) do
+    cdn_url = Application.get_env(:hexpm, :cdn_url)
+    repository = repository.name
+    package = package.name
+    version = release.version
+    "#{cdn_url}/repos/#{repository}/docs/#{package}-#{version}.tar.gz"
+  end
+
+  def paginate(query, page, count) when is_integer(page) and page > 0 do
+    offset = (page - 1) * count
+
+    from(
+      var in query,
+      offset: ^offset,
+      limit: ^count
+    )
+  end
+
+  def paginate(query, _page, count) do
+    paginate(query, 1, count)
+  end
+
+  def parse_ip(ip) do
+    parts = String.split(ip, ".")
+
+    if length(parts) == 4 do
+      parts = Enum.map(parts, &String.to_integer/1)
+      for part <- parts, into: <<>>, do: <<part>>
+    end
+  end
+
+  def parse_ip_mask(string) do
+    case String.split(string, "/") do
+      [ip, mask] -> {Hexpm.Utils.parse_ip(ip), String.to_integer(mask)}
+      [ip] -> {Hexpm.Utils.parse_ip(ip), 32}
+    end
+  end
+
+  def in_ip_range?(_range, nil) do
+    false
+  end
+
+  def in_ip_range?(list, ip) when is_list(list) do
+    Enum.any?(list, &in_ip_range?(&1, ip))
+  end
+
+  def in_ip_range?({range, mask}, ip) do
+    <<range::bitstring-size(mask)>> == <<ip::bitstring-size(mask)>>
+  end
+
+  def previous_version(version, all_versions) do
+    case Enum.find_index(all_versions, &(&1 == version)) do
+      nil -> nil
+      version_index -> Enum.at(all_versions, version_index + 1)
+    end
+  end
+
+  @doc """
+  Returns a RFC 2822 format string from a UTC datetime.
+  """
+  def datetime_to_rfc2822(%DateTime{calendar: Calendar.ISO, time_zone: "Etc/UTC"} = datetime) do
+    Calendar.strftime(datetime, "%a, %d %b %Y %H:%M:%S GMT")
+  end
+end

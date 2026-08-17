@@ -1,0 +1,254 @@
+defmodule Hexpm.ReleaseTasks.PurgeExpiredRecords do
+  use Oban.Worker,
+    queue: :periodic,
+    max_attempts: 5,
+    unique: [
+      period: :infinity,
+      states: :incomplete,
+      fields: [:worker]
+    ]
+
+  import Ecto.Query, only: [from: 2]
+  require Logger
+
+  alias Hexpm.CronMonitor
+
+  @repos Application.compile_env!(:hexpm, :ecto_repos)
+  @retention_days 90
+  # Plug session cookies have a 30-day max_age; rows older than that are unreachable.
+  @plug_session_retention_days 30
+  # Deletes run in batches so each statement stays well below the query timeout
+  # regardless of how many rows have accumulated.
+  @batch_size 10_000
+  @monitor_slug "hexpm-purge-expired-records"
+  @monitor_schedule "0 2 * * *"
+
+  @impl Oban.Worker
+  def timeout(_job), do: 1_800_000
+
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: args}) when map_size(args) == 0 do
+    CronMonitor.run(@monitor_slug, @monitor_schedule, &run/0)
+  end
+
+  def perform(%Oban.Job{args: args}), do: {:cancel, {:invalid_args, args}}
+
+  def run(opts \\ []) do
+    batch_size = Keyword.get(opts, :batch_size, @batch_size)
+
+    Enum.each(@repos, fn repo ->
+      app = Keyword.get(repo.config(), :otp_app)
+      Logger.info("[task] Purging expired records for #{app}")
+
+      purge_authorization_codes(repo, batch_size)
+      purge_device_codes(repo, batch_size)
+      purge_oauth_tokens(repo, batch_size)
+      purge_user_sessions(repo, batch_size)
+      purge_plug_sessions(repo, batch_size)
+      purge_password_resets(repo, batch_size)
+      purge_account_deletion_requests(repo, batch_size)
+      purge_sso_transactions(repo, batch_size)
+      purge_sso_sessions(repo, batch_size)
+      purge_organization_invitations(repo, batch_size)
+      purge_keys(repo, batch_size)
+    end)
+  end
+
+  defp purge_authorization_codes(repo, batch_size) do
+    count =
+      delete_in_batches(
+        repo,
+        Hexpm.OAuth.AuthorizationCode,
+        from(ac in Hexpm.OAuth.AuthorizationCode,
+          where: ac.expires_at < fragment("NOW()"),
+          order_by: ac.expires_at
+        ),
+        batch_size
+      )
+
+    Logger.info("[task] Purged #{count} expired authorization codes")
+  end
+
+  defp purge_device_codes(repo, batch_size) do
+    count =
+      delete_in_batches(
+        repo,
+        Hexpm.OAuth.DeviceCode,
+        from(dc in Hexpm.OAuth.DeviceCode,
+          where: dc.expires_at < fragment("NOW()"),
+          order_by: dc.expires_at
+        ),
+        batch_size
+      )
+
+    Logger.info("[task] Purged #{count} expired device codes")
+  end
+
+  # A row has a reachable refresh token iff refresh_jti is set, since that is
+  # what refresh lookups resolve by, and every path that sets it also sets
+  # refresh_token_expires_at. The row is unreachable once both timestamps have
+  # passed, not once the access token alone has.
+  defp purge_oauth_tokens(repo, batch_size) do
+    count =
+      delete_in_batches(
+        repo,
+        Hexpm.OAuth.Token,
+        from(t in Hexpm.OAuth.Token,
+          where:
+            (t.expires_at < fragment("NOW()") and
+               (is_nil(t.refresh_jti) or t.refresh_token_expires_at < fragment("NOW()"))) or
+              not is_nil(t.revoked_at),
+          order_by: t.expires_at
+        ),
+        batch_size
+      )
+
+    Logger.info("[task] Purged #{count} expired/revoked OAuth tokens")
+  end
+
+  defp purge_user_sessions(repo, batch_size) do
+    count =
+      delete_in_batches(
+        repo,
+        Hexpm.UserSession,
+        from(us in Hexpm.UserSession,
+          where:
+            (not is_nil(us.expires_at) and us.expires_at < fragment("NOW()")) or
+              not is_nil(us.revoked_at),
+          order_by: us.expires_at
+        ),
+        batch_size
+      )
+
+    Logger.info("[task] Purged #{count} expired/revoked user sessions")
+  end
+
+  defp purge_plug_sessions(repo, batch_size) do
+    count =
+      delete_in_batches(
+        repo,
+        Hexpm.PlugSession,
+        from(s in Hexpm.PlugSession,
+          where:
+            s.updated_at <
+              fragment("NOW() - make_interval(days => ?)", @plug_session_retention_days),
+          order_by: s.updated_at
+        ),
+        batch_size
+      )
+
+    Logger.info("[task] Purged #{count} stale plug sessions")
+  end
+
+  defp purge_password_resets(repo, batch_size) do
+    count =
+      delete_in_batches(
+        repo,
+        Hexpm.Accounts.PasswordReset,
+        from(pr in Hexpm.Accounts.PasswordReset,
+          where: pr.inserted_at < fragment("NOW() - make_interval(days => ?)", @retention_days),
+          order_by: pr.inserted_at
+        ),
+        batch_size
+      )
+
+    Logger.info("[task] Purged #{count} expired password resets")
+  end
+
+  defp purge_account_deletion_requests(repo, batch_size) do
+    count =
+      delete_in_batches(
+        repo,
+        Hexpm.Accounts.AccountDeletionRequest,
+        from(r in Hexpm.Accounts.AccountDeletionRequest,
+          where: r.inserted_at < ago(@retention_days, "day"),
+          order_by: r.inserted_at
+        ),
+        batch_size
+      )
+
+    Logger.info("[task] Purged #{count} expired account deletion requests")
+  end
+
+  defp purge_sso_transactions(repo, batch_size) do
+    count =
+      delete_in_batches(
+        repo,
+        Hexpm.Accounts.SSO.Transaction,
+        from(transaction in Hexpm.Accounts.SSO.Transaction,
+          where: transaction.expires_at < fragment("NOW()"),
+          order_by: transaction.expires_at
+        ),
+        batch_size
+      )
+
+    Logger.info("[task] Purged #{count} expired organization SSO transactions")
+  end
+
+  # One predicate rather than `expires_at < NOW() OR revoked_at IS NOT NULL`,
+  # which could use neither index. A revoked session carries an expiry too, so
+  # it is collected within the day. Nothing durable is lost: when a member last
+  # authenticated lives on the identity, not here.
+  defp purge_sso_sessions(repo, batch_size) do
+    count =
+      delete_in_batches(
+        repo,
+        Hexpm.Accounts.SSO.OrgSession,
+        from(session in Hexpm.Accounts.SSO.OrgSession,
+          where: session.expires_at < fragment("NOW()"),
+          order_by: session.expires_at
+        ),
+        batch_size
+      )
+
+    Logger.info("[task] Purged #{count} expired organization SSO sessions")
+  end
+
+  # Accepted and revoked invitations carry an expiry too, so they are collected
+  # within the week rather than needing a predicate that no index can serve.
+  # What they recorded is already in the audit log.
+  defp purge_organization_invitations(repo, batch_size) do
+    count =
+      delete_in_batches(
+        repo,
+        Hexpm.Accounts.OrganizationInvitation,
+        from(invitation in Hexpm.Accounts.OrganizationInvitation,
+          where: invitation.expires_at < fragment("NOW()"),
+          order_by: invitation.expires_at
+        ),
+        batch_size
+      )
+
+    Logger.info("[task] Purged #{count} expired organization invitations")
+  end
+
+  defp purge_keys(repo, batch_size) do
+    count =
+      delete_in_batches(
+        repo,
+        Hexpm.Accounts.Key,
+        from(k in Hexpm.Accounts.Key,
+          where:
+            not is_nil(k.revoke_at) and
+              k.revoke_at < fragment("NOW() - make_interval(days => ?)", @retention_days),
+          order_by: k.revoke_at
+        ),
+        batch_size
+      )
+
+    Logger.info("[task] Purged #{count} revoked keys")
+  end
+
+  # Queries order by their filtered timestamp column so the id lookup scans that
+  # column's index; an unordered LIMIT tempts the planner into a seq scan per batch.
+  defp delete_in_batches(repo, schema, query, batch_size, total \\ 0) do
+    ids = from(r in query, select: r.id, limit: ^batch_size)
+    {count, _} = repo.delete_all(from(r in schema, where: r.id in subquery(ids)))
+
+    if count < batch_size do
+      total + count
+    else
+      delete_in_batches(repo, schema, query, batch_size, total + count)
+    end
+  end
+end

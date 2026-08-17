@@ -1,0 +1,427 @@
+defmodule HexpmWeb.AuthControllerTest do
+  use HexpmWeb.ConnCase
+
+  alias Hexpm.Accounts.{Users, UserProviders}
+
+  setup do
+    mock_pwned()
+    :ok
+  end
+
+  describe "GET /auth/github/callback - GitHub signup (new user)" do
+    test "redirects to username selection form" do
+      email = Hexpm.Fake.sequence(:email)
+      username = Hexpm.Fake.sequence(:username)
+      name = Hexpm.Fake.sequence(:full_name)
+
+      conn =
+        build_conn()
+        |> mock_github_auth_success("12345", email,
+          name: name,
+          nickname: username
+        )
+        |> HexpmWeb.AuthController.callback(%{})
+
+      # Should redirect to username selection form
+      assert redirected_to(conn) == "/auth/complete-signup"
+
+      # OAuth data should be stored in session
+      pending_oauth = get_session(conn, "pending_oauth")
+      assert pending_oauth
+      assert pending_oauth[:provider] == "github"
+      assert pending_oauth[:provider_uid] == "12345"
+      assert pending_oauth[:provider_email] == email
+      assert pending_oauth[:provider_name] == name
+      assert pending_oauth[:provider_nickname] == username
+
+      # User should NOT be created yet
+      refute Users.get(username)
+    end
+
+    test "stores OAuth data for user with empty nickname" do
+      email = Hexpm.Fake.sequence(:email)
+      name = Hexpm.Fake.sequence(:full_name)
+
+      conn =
+        build_conn()
+        |> mock_github_auth_success("54321", email,
+          name: name,
+          nickname: ""
+        )
+        |> HexpmWeb.AuthController.callback(%{})
+
+      assert redirected_to(conn) == "/auth/complete-signup"
+
+      pending_oauth = get_session(conn, "pending_oauth")
+      assert pending_oauth
+      assert pending_oauth[:provider_nickname] == ""
+
+      # User should NOT be created yet
+      refute UserProviders.get_by_provider("github", "54321")
+    end
+  end
+
+  describe "GET /auth/github/callback - GitHub login (existing user)" do
+    test "logs in existing user with GitHub provider" do
+      email = Hexpm.Fake.sequence(:email)
+      user = insert(:user)
+      insert(:user_provider, user: user, provider: "github", provider_uid: "67890")
+
+      conn =
+        build_conn()
+        |> mock_github_auth_success("67890", email)
+        |> HexpmWeb.AuthController.callback(%{})
+
+      assert redirected_to(conn) == "/users/#{user.username}"
+      assert get_session(conn, "session_token")
+    end
+
+    test "redirects to TFA when user has TFA enabled" do
+      email = Hexpm.Fake.sequence(:email)
+      user = insert(:user_with_tfa)
+      insert(:user_provider, user: user, provider: "github", provider_uid: "99999")
+
+      conn =
+        build_conn()
+        |> mock_github_auth_success("99999", email)
+        |> HexpmWeb.AuthController.callback(%{})
+
+      assert redirected_to(conn) == "/tfa"
+      tfa_data = get_session(conn, "tfa_user_id")
+      assert tfa_data["uid"] == user.id
+      assert tfa_data["return"] == nil
+      refute tfa_data["session_token"]
+      refute get_session(conn, "session_token")
+      refute Repo.exists?(from(session in Hexpm.UserSession, where: session.user_id == ^user.id))
+    end
+  end
+
+  describe "GET /auth/github/callback - Email conflicts" do
+    test "shows error when email already exists for different user" do
+      existing_user = insert(:user)
+      email = hd(existing_user.emails).email
+      name = Hexpm.Fake.sequence(:full_name)
+      username = Hexpm.Fake.sequence(:username)
+
+      conn =
+        build_conn()
+        |> mock_github_auth_success("11111", email,
+          name: name,
+          nickname: username
+        )
+        |> HexpmWeb.AuthController.callback(%{})
+
+      assert redirected_to(conn) == "/login"
+
+      assert Phoenix.Flash.get(conn.assigns.flash, "error") =~
+               "An account with email #{email} already exists"
+    end
+  end
+
+  describe "GET /auth/github/callback - Link to logged-in user" do
+    test "links GitHub to currently logged-in user" do
+      email = Hexpm.Fake.sequence(:email)
+      user = insert(:user)
+
+      conn =
+        build_conn()
+        |> mock_github_auth_success("22222", email)
+        |> Plug.Conn.assign(:current_user, user)
+        |> HexpmWeb.AuthController.callback(%{})
+
+      assert redirected_to(conn) == "/dashboard/security"
+
+      assert Phoenix.Flash.get(conn.assigns.flash, "info") ==
+               "GitHub account successfully connected."
+
+      user_provider = UserProviders.get_by_provider("github", "22222")
+      assert user_provider
+      assert user_provider.user_id == user.id
+    end
+
+    test "shows error when linking fails" do
+      email = Hexpm.Fake.sequence(:email)
+      user = insert(:user)
+      # Create provider with same uid for different user
+      other_user = insert(:user)
+      insert(:user_provider, user: other_user, provider: "github", provider_uid: "33333")
+
+      conn =
+        build_conn()
+        |> mock_github_auth_success("33333", email)
+        |> Plug.Conn.assign(:current_user, user)
+        |> HexpmWeb.AuthController.callback(%{})
+
+      assert redirected_to(conn) == "/dashboard/security"
+      assert Phoenix.Flash.get(conn.assigns.flash, "error") == "Failed to connect GitHub account."
+    end
+  end
+
+  describe "GET /auth/github/callback - Failed authentication" do
+    test "redirects to login with error message" do
+      conn =
+        build_conn()
+        |> mock_github_auth_failure()
+        |> HexpmWeb.AuthController.callback(%{})
+
+      assert redirected_to(conn) == "/login"
+
+      assert Phoenix.Flash.get(conn.assigns.flash, "error") ==
+               "Failed to authenticate with GitHub."
+    end
+  end
+
+  describe "GET /auth/github/callback - Sudo verification" do
+    test "OAuth callback with sudo_verification flag grants sudo and redirects to return_to" do
+      email = Hexpm.Fake.sequence(:email)
+      user = insert(:user)
+      insert(:user_provider, user: user, provider: "github", provider_uid: "88888")
+
+      conn =
+        build_conn()
+        |> mock_github_auth_success("88888", email)
+        |> Plug.Conn.assign(:current_user, user)
+        |> put_session("sudo_verification", true)
+        |> put_session("sudo_return_to", "/dashboard/keys")
+        |> put_session("sudo_force", true)
+        |> HexpmWeb.AuthController.callback(%{})
+
+      assert redirected_to(conn) == "/dashboard/keys"
+      assert HexpmWeb.Plugs.Sudo.sudo_active?(conn)
+      refute get_session(conn, "sudo_verification")
+      refute get_session(conn, "sudo_return_to")
+      refute get_session(conn, "sudo_force")
+    end
+
+    test "OAuth callback with mismatched provider_uid shows error" do
+      email = Hexpm.Fake.sequence(:email)
+      user = insert(:user)
+      insert(:user_provider, user: user, provider: "github", provider_uid: "99999")
+
+      conn =
+        build_conn()
+        |> mock_github_auth_success("77777", email)
+        |> Plug.Conn.assign(:current_user, user)
+        |> put_session("sudo_verification", true)
+        |> put_session("sudo_return_to", "/dashboard/keys")
+        |> HexpmWeb.AuthController.callback(%{})
+
+      assert redirected_to(conn) == "/sudo"
+      assert Phoenix.Flash.get(conn.assigns.flash, "error") =~ "does not match"
+      refute HexpmWeb.Plugs.Sudo.sudo_active?(conn)
+      refute get_session(conn, "sudo_verification")
+    end
+
+    test "OAuth callback without sudo_verification flag follows normal login flow" do
+      email = Hexpm.Fake.sequence(:email)
+      user = insert(:user)
+      insert(:user_provider, user: user, provider: "github", provider_uid: "66666")
+
+      conn =
+        build_conn()
+        |> mock_github_auth_success("66666", email)
+        |> HexpmWeb.AuthController.callback(%{})
+
+      assert redirected_to(conn) == "/users/#{user.username}"
+      assert get_session(conn, "session_token")
+    end
+  end
+
+  describe "GET /auth/complete-signup - Username selection form" do
+    test "redirects to signup when pending oauth is stale" do
+      stale =
+        NaiveDateTime.utc_now() |> NaiveDateTime.shift(minute: -31) |> NaiveDateTime.to_iso8601()
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{"pending_oauth" => %{"at" => stale}})
+        |> get("/auth/complete-signup")
+
+      assert redirected_to(conn) == "/signup"
+    end
+
+    test "shows form with suggested username" do
+      email = Hexpm.Fake.sequence(:email)
+      username = Hexpm.Fake.sequence(:username)
+      name = Hexpm.Fake.sequence(:full_name)
+
+      # Session data uses string keys after JSON round-trip through DB
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "pending_oauth" => %{
+            "at" => NaiveDateTime.to_iso8601(NaiveDateTime.utc_now()),
+            "provider" => "github",
+            "provider_uid" => "12345",
+            "provider_email" => email,
+            "provider_name" => name,
+            "provider_nickname" => username
+          }
+        })
+        |> get("/auth/complete-signup")
+
+      assert html_response(conn, 200) =~ "Complete your signup"
+      assert html_response(conn, 200) =~ username
+    end
+
+    test "redirects to signup when session expired" do
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{})
+        |> get("/auth/complete-signup")
+
+      assert redirected_to(conn) == "/signup"
+      assert Phoenix.Flash.get(conn.assigns.flash, "error") =~ "Session expired"
+    end
+  end
+
+  describe "POST /auth/complete-signup - Complete signup" do
+    test "creates user and logs them in with chosen username" do
+      email = Hexpm.Fake.sequence(:email)
+      username = Hexpm.Fake.sequence(:username)
+      chosen_username = Hexpm.Fake.sequence(:username)
+      name = Hexpm.Fake.sequence(:full_name)
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "pending_oauth" => %{
+            "at" => NaiveDateTime.to_iso8601(NaiveDateTime.utc_now()),
+            "provider" => "github",
+            "provider_uid" => "12345",
+            "provider_email" => email,
+            "provider_name" => name,
+            "provider_nickname" => username
+          }
+        })
+        |> post("/auth/complete-signup", %{"user" => %{"username" => chosen_username}})
+
+      # User should be created with chosen username
+      user = Users.get(chosen_username, [:emails])
+      assert user
+      assert user.full_name == name
+      refute user.password
+
+      # GitHub email is pre-verified, user logged in immediately
+      assert redirected_to(conn) == "/users/#{chosen_username}"
+      assert Phoenix.Flash.get(conn.assigns.flash, "info") == "Account created successfully!"
+      assert get_session(conn, "session_token")
+
+      # Session should be cleared
+      refute get_session(conn, "pending_oauth")
+
+      # Email should be verified
+      user_email = hd(user.emails)
+      assert user_email.verified
+
+      # Provider should be linked
+      user_provider = UserProviders.get_by_provider("github", "12345")
+      assert user_provider
+      assert user_provider.provider_email == email
+      assert user_provider.user_id == user.id
+    end
+
+    test "shows validation error when username is taken" do
+      existing_username = Hexpm.Fake.sequence(:username)
+      existing_user = insert(:user, username: existing_username)
+      email = Hexpm.Fake.sequence(:email)
+      username = Hexpm.Fake.sequence(:username)
+      name = Hexpm.Fake.sequence(:full_name)
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "pending_oauth" => %{
+            "at" => NaiveDateTime.to_iso8601(NaiveDateTime.utc_now()),
+            "provider" => "github",
+            "provider_uid" => "12345",
+            "provider_email" => email,
+            "provider_name" => name,
+            "provider_nickname" => username
+          }
+        })
+        |> post("/auth/complete-signup", %{"user" => %{"username" => existing_username}})
+
+      # Should re-render the form
+      assert html_response(conn, 200) =~ "Complete your signup"
+      assert html_response(conn, 200) =~ "has already been taken"
+
+      # Should NOT create a new user beyond the existing one
+      users_with_taken_username =
+        Hexpm.Accounts.User
+        |> Ecto.Query.where(username: ^existing_username)
+        |> Hexpm.Repo.all()
+
+      assert length(users_with_taken_username) == 1
+      assert hd(users_with_taken_username).id == existing_user.id
+    end
+
+    test "shows validation error when username is too short" do
+      email = Hexpm.Fake.sequence(:email)
+      username = Hexpm.Fake.sequence(:username)
+      name = Hexpm.Fake.sequence(:full_name)
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "pending_oauth" => %{
+            "at" => NaiveDateTime.to_iso8601(NaiveDateTime.utc_now()),
+            "provider" => "github",
+            "provider_uid" => "12345",
+            "provider_email" => email,
+            "provider_name" => name,
+            "provider_nickname" => username
+          }
+        })
+        |> post("/auth/complete-signup", %{"user" => %{"username" => "ab"}})
+
+      # Should re-render the form
+      assert html_response(conn, 200) =~ "Complete your signup"
+      assert html_response(conn, 200) =~ "at least 3 character"
+
+      # Should NOT create user
+      refute Users.get("ab")
+    end
+
+    test "shows validation error when username has invalid characters" do
+      email = Hexpm.Fake.sequence(:email)
+      username = Hexpm.Fake.sequence(:username)
+      name = Hexpm.Fake.sequence(:full_name)
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{
+          "pending_oauth" => %{
+            "at" => NaiveDateTime.to_iso8601(NaiveDateTime.utc_now()),
+            "provider" => "github",
+            "provider_uid" => "12345",
+            "provider_email" => email,
+            "provider_name" => name,
+            "provider_nickname" => username
+          }
+        })
+        |> post("/auth/complete-signup", %{"user" => %{"username" => "invalid user!"}})
+
+      # Should re-render the form
+      assert html_response(conn, 200) =~ "Complete your signup"
+
+      # Should NOT create user
+      refute Users.get("invalid user!")
+    end
+
+    test "redirects to signup when session expired" do
+      username = Hexpm.Fake.sequence(:username)
+
+      conn =
+        build_conn()
+        |> Plug.Test.init_test_session(%{})
+        |> post("/auth/complete-signup", %{"user" => %{"username" => username}})
+
+      assert redirected_to(conn) == "/signup"
+      assert Phoenix.Flash.get(conn.assigns.flash, "error") =~ "Session expired"
+
+      # Should NOT create user
+      refute Users.get(username)
+    end
+  end
+end

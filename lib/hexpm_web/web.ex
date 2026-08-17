@@ -1,0 +1,141 @@
+defmodule HexpmWeb do
+  @moduledoc """
+  A module that keeps using definitions for controllers,
+  views and so on.
+
+  This can be used in your application as:
+
+      use HexpmWeb, :controller
+      use HexpmWeb, :view
+
+  The definitions below will be executed for every view,
+  controller, etc, so keep them short and clean, focused
+  on imports, uses and aliases.
+
+  Do NOT define functions inside the quoted expressions
+  below.
+  """
+
+  def static_paths, do: ~w(assets fonts images favicon.ico robots.txt reports)
+
+  def controller() do
+    quote do
+      use Phoenix.Controller,
+        formats: [html: "View", json: "View", xml: "View", elixir: "View", erlang: "View"]
+
+      import Ecto
+      import Ecto.Query, only: [from: 1, from: 2]
+
+      import HexpmWeb.{ControllerHelpers, AuthHelpers}
+
+      alias HexpmWeb.{AuthHelpers, Endpoint, Router}
+      alias HexpmWeb.Router.Helpers, as: Routes
+
+      use Hexpm.Shared
+
+      unquote(verified_routes())
+    end
+  end
+
+  def view() do
+    quote do
+      use Phoenix.View,
+        root: "lib/hexpm_web/templates",
+        namespace: HexpmWeb
+
+      import Phoenix.HTML
+      import Phoenix.HTML.Form
+      use PhoenixHTMLHelpers
+
+      # Import convenience functions from controllers
+      import Phoenix.Controller, only: [get_csrf_token: 0, get_flash: 2, view_module: 1]
+
+      # Use all HTML functionality (forms, tags, etc)
+      import Phoenix.HTML.Form,
+        except: [
+          text_input: 2,
+          text_input: 3,
+          email_input: 2,
+          email_input: 3,
+          password_input: 2,
+          password_input: 3,
+          select: 3,
+          select: 4
+        ]
+
+      import HexpmWeb.ViewIcons
+
+      # Import Phoenix Components functionality
+      import Phoenix.Component
+
+      # Import custom components
+      import HexpmWeb.Components.AuthLayout
+      import HexpmWeb.Components.Buttons
+      import HexpmWeb.Components.Form
+      import HexpmWeb.Components.Input
+      import HexpmWeb.Components.Modal
+
+      # Import security dashboard components
+      import HexpmWeb.Templates.Dashboard.Security.Components.ConnectedAccountsCard
+      import HexpmWeb.Templates.Dashboard.Security.Components.PasswordCard
+      import HexpmWeb.Templates.Dashboard.Security.Components.TFACard
+      import HexpmWeb.Templates.Dashboard.Security.Components.AuthenticatorAppCard
+      import HexpmWeb.Templates.Dashboard.Security.Components.RecoveryCodesCard
+      import HexpmWeb.Templates.Dashboard.Security.Components.TFASetupModal
+
+      alias HexpmWeb.ViewHelpers
+      alias HexpmWeb.{Endpoint, Router}
+      alias HexpmWeb.Router.Helpers, as: Routes
+
+      use Hexpm.Shared
+
+      unquote(verified_routes())
+    end
+  end
+
+  def live_view() do
+    quote do
+      use Phoenix.LiveView, layout: {HexpmWeb.LayoutView, :app}
+
+      import Phoenix.HTML
+      import Phoenix.HTML.Form
+      import HexpmWeb.ViewIcons
+      import HexpmWeb.Components.Buttons
+      import HexpmWeb.Components.Input
+      import HexpmWeb.Components.Modal
+      alias HexpmWeb.ViewHelpers
+      use Hexpm.Shared
+
+      unquote(verified_routes())
+    end
+  end
+
+  def router() do
+    quote do
+      use Phoenix.Router
+      import HexpmWeb.Plugs
+      import Phoenix.LiveView.Router
+
+      alias HexpmWeb.{Endpoint, Router}
+      alias HexpmWeb.Router.Helpers, as: Routes
+
+      unquote(verified_routes())
+    end
+  end
+
+  def verified_routes do
+    quote do
+      use Phoenix.VerifiedRoutes,
+        endpoint: HexpmWeb.Endpoint,
+        router: HexpmWeb.Router,
+        statics: HexpmWeb.static_paths()
+    end
+  end
+
+  @doc """
+  When used, dispatch to the appropriate controller/view/etc.
+  """
+  defmacro __using__(which) when is_atom(which) do
+    apply(__MODULE__, which, [])
+  end
+end

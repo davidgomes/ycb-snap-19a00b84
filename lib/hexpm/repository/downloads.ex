@@ -1,0 +1,85 @@
+defmodule Hexpm.Repository.Downloads do
+  use Hexpm.Context
+
+  def last_day() do
+    Repo.one(Download.last_day())
+  end
+
+  def package(package) do
+    PackageDownload.package(package)
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  def packages_all_views(packages) do
+    PackageDownload.packages_and_all_download_views(packages)
+    |> Repo.all()
+    |> Enum.reduce(%{}, fn {id, view, dls}, acc ->
+      Map.update(acc, id, %{view => dls}, &Map.put(&1, view, dls))
+    end)
+  end
+
+  def top_packages(repository, view, count) do
+    top = Repo.all(PackageDownload.top(repository, view, count))
+
+    packages =
+      top
+      |> Enum.map(fn {package, _downloads} -> package end)
+      |> Packages.attach_latest_releases()
+
+    Enum.zip_with(packages, top, fn package, {_package, downloads} ->
+      {package, downloads}
+    end)
+  end
+
+  def total() do
+    PackageDownload.total()
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  def for_period(package_or_release, group_by, opts \\ []) do
+    date_filters = Keyword.take(opts, [:downloads_after, :downloads_before])
+    date_filtered? = Enum.any?(date_filters, fn {_key, value} -> match?(%Date{}, value) end)
+
+    base =
+      case package_or_release do
+        %Package{id: package_id} ->
+          Download.by_period(package_id, group_by || :all)
+
+        %Release{id: release_id} ->
+          ReleaseDownload.by_period(release_id, group_by || :all, date_filtered?)
+      end
+
+    query =
+      date_filters
+      |> Enum.reduce(base, fn
+        {:downloads_after, %Date{} = date}, query -> Download.since_date(query, date)
+        {:downloads_after, nil}, query -> query
+        {:downloads_before, %Date{} = date}, query -> Download.before_date(query, date)
+        {:downloads_before, nil}, query -> query
+      end)
+
+    Repo.all(query)
+  end
+
+  def for_packages_period(packages, group_by, opts \\ []) do
+    package_ids = Enum.map(packages, & &1.id)
+
+    base = Download.by_packages_period(package_ids, group_by || :all)
+
+    query =
+      opts
+      |> Keyword.take([:downloads_after, :downloads_before])
+      |> Enum.reduce(base, fn
+        {:downloads_after, %Date{} = date}, query -> Download.since_date(query, date)
+        {:downloads_after, nil}, query -> query
+        {:downloads_before, %Date{} = date}, query -> Download.before_date(query, date)
+        {:downloads_before, nil}, query -> query
+      end)
+
+    query
+    |> Repo.all()
+    |> Enum.group_by(& &1.package_id)
+  end
+end
