@@ -133,16 +133,31 @@ end
 
 Your event bus module provides these functions:
 
-### `emit/2`
+### `emit/2` and `emit/3`
 
-Emit an event to all registered handlers.
+Emit an event to all registered handlers. `emit/3` accepts an optional
+`metadata` map for additional context (e.g. `actor_id`, `trace_id`, `source`)
+that isn't part of the event's business data but is useful for observability.
 
 ```elixir
-@spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+@spec emit(atom(), map(), map()) :: {:ok, [Oban.Job.t()]}
 
 # Raises ArgumentError if event is not registered
 MyApp.Events.emit(:user_created, %{user_id: 123, email: "user@example.com"})
+
+# With additional metadata
+MyApp.Events.emit(
+  :user_created,
+  %{user_id: 123, email: "user@example.com"},
+  %{actor_id: current_user.id, source: "signup_form"}
+)
 ```
+
+Internally, `emit/2` and `emit/3` build an `ObanEvents.Event` struct (with
+`:name`, `:data`, `:metadata`, and `:emitted_at` fields) before creating jobs.
+Metadata and the emission timestamp are stored alongside the job args, so
+they're visible in the database and the Oban Web UI, but they are not passed
+to `handle_event/2` - handlers only receive the event name and `data`.
 
 ### `get_handlers!/1`
 
@@ -376,6 +391,32 @@ test "emits user_created event" do
     }
   )
 end
+```
+
+### Using `ObanEvents.Testing` Helpers
+
+`ObanEvents.Testing` provides `assert_event_emitted/4` and
+`refute_event_emitted/4`, which wrap `Oban.Testing` and remove the need to
+know about the underlying job args shape:
+
+```elixir
+import ObanEvents.Testing
+
+test "emits user_created event" do
+  {:ok, user} = Accounts.create_user(%{email: "test@example.com"})
+
+  assert_event_emitted(MyApp.Repo, :user_created, MyApp.EmailHandler,
+    data: %{"user_id" => user.id}
+  )
+end
+```
+
+Pass `metadata:` to also match on the event's metadata:
+
+```elixir
+assert_event_emitted(MyApp.Repo, :user_created, MyApp.EmailHandler,
+  metadata: %{"actor_id" => user.id}
+)
 ```
 
 ### Testing Handlers

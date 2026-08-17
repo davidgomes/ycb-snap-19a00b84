@@ -64,10 +64,13 @@ defmodule ObanEvents do
   ## API
 
   Using this module provides:
-  - `emit/2` - Dispatch events to handlers via Oban jobs
+  - `emit/2` and `emit/3` - Dispatch events to handlers via Oban jobs (optionally with metadata)
   - `get_handlers!/1` - Get handlers for an event
   - `all_events/0` - List all registered events
   - `registered?/1` - Check if an event exists
+
+  See `ObanEvents.Event` for the struct used internally to carry event data and
+  additional metadata, and `ObanEvents.Testing` for test helpers.
 
   ## Handler Implementation
 
@@ -96,6 +99,16 @@ defmodule ObanEvents do
   Returns `{:ok, jobs}` on success. Raises `ArgumentError` if event is not registered.
   """
   @callback emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+
+  @doc """
+  Emit an event with additional metadata.
+
+  Behaves like `emit/2`, but also attaches a `metadata` map to the
+  `ObanEvents.Event` used to build the underlying jobs. Metadata is useful
+  for observability (e.g. `actor_id`, `trace_id`, `source`) without mixing
+  it into the event's business `data`.
+  """
+  @callback emit(atom(), map(), map()) :: {:ok, [Oban.Job.t()]}
 
   @doc """
   Get all handler modules registered for a given event.
@@ -148,6 +161,8 @@ defmodule ObanEvents do
 
       - `event_name`: Atom representing the event (e.g., `:user_created`)
       - `data`: Map of event-specific data (atom or string keys both work, must be JSON-serializable)
+      - `metadata`: Optional map of additional metadata (e.g. `actor_id`, `trace_id`) attached
+        to the underlying `ObanEvents.Event` for observability (default: `%{}`)
 
       ## Examples
 
@@ -172,23 +187,30 @@ defmodule ObanEvents do
             "new_email" => "new@example.com"
           })
 
+          # With additional metadata for observability
+          #{inspect(__MODULE__)}.emit(:user_updated, %{user_id: user.id}, %{actor_id: current_user.id})
+
       Note: Handlers always receive data with string keys, regardless of how you emit.
 
       ## Errors
 
       Raises `ArgumentError` if the event is not registered.
       """
-      @spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
-      def emit(event_name, data) when is_atom(event_name) and is_map(data) do
+      @spec emit(atom(), map(), map()) :: {:ok, [Oban.Job.t()]}
+      def emit(event_name, data, metadata \\ %{})
+          when is_atom(event_name) and is_map(data) and is_map(metadata) do
+        event = ObanEvents.Event.new(event_name, data, metadata: metadata)
         handlers = get_handlers!(event_name)
 
         jobs =
           Enum.map(handlers, fn handler_module ->
             DispatchWorker.new(
               %{
-                event: Atom.to_string(event_name),
+                event: Atom.to_string(event.name),
                 handler: Atom.to_string(handler_module),
-                data: data
+                data: event.data,
+                metadata: event.metadata,
+                emitted_at: DateTime.to_iso8601(event.emitted_at)
               },
               queue: @oban_queue,
               max_attempts: @oban_max_attempts,

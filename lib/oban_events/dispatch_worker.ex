@@ -13,6 +13,8 @@ defmodule ObanEvents.DispatchWorker do
   - `event`: String representation of the event name
   - `handler`: String representation of the handler module
   - `data`: Map of event-specific data
+  - `metadata`: Optional map of additional metadata attached to the event (default: `%{}`)
+  - `emitted_at`: Optional ISO 8601 timestamp of when the event was emitted
 
   ## Configuration
 
@@ -33,13 +35,16 @@ defmodule ObanEvents.DispatchWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{
         args: %{"event" => event_name_string, "handler" => handler_module_string, "data" => data}
-      }) do
+      } = job) do
     # Safely convert strings back to atoms
     # These atoms should already exist since they were created during emit
     event = String.to_existing_atom(event_name_string)
     handler = String.to_existing_atom(handler_module_string)
+    metadata = Map.get(job.args, "metadata", %{})
 
-    Logger.info("Processing event: #{event} with handler: #{inspect(handler)}")
+    Logger.info(
+      "Processing event: #{event} with handler: #{inspect(handler)}, metadata: #{inspect(metadata)}"
+    )
 
     case handler.handle_event(event, data) do
       :ok ->

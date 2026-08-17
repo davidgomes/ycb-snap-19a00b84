@@ -99,6 +99,27 @@ defmodule ObanEventsTest do
         TestEventBus.emit(:event_name, "not a map")
       end
     end
+
+    test "defaults metadata to an empty map" do
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{"id" => 1})
+
+      assert job.args["metadata"] == %{}
+      assert is_binary(job.args["emitted_at"])
+    end
+
+    test "attaches additional metadata when provided via emit/3" do
+      metadata = %{"actor_id" => Ecto.UUID.generate(), "source" => "test"}
+
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{"id" => 1}, metadata)
+
+      assert job.args["metadata"] == metadata
+    end
+
+    test "requires metadata to be a map" do
+      assert_raise FunctionClauseError, fn ->
+        TestEventBus.emit(:investment_created, %{}, "not a map")
+      end
+    end
   end
 
   describe "configuration" do
