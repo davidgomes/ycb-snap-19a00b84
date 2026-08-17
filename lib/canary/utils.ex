@@ -107,6 +107,72 @@ defmodule Canary.Utils do
   end
 
   @doc """
+  Check if the resource should always be loaded from the database, regardless
+  of the current action, based on the `:persisted` or `:required` opts.
+  """
+  @spec persisted?(Keyword.t()) :: boolean
+  def persisted?(opts) do
+    !!Keyword.get(opts, :persisted, false) || !!Keyword.get(opts, :required, false)
+  end
+
+  @doc """
+  Returns the list of actions for which authorization is performed against
+  the model name (rather than a loaded resource struct), based on the
+  `:non_id_actions` opt. `:index`, `:new` and `:create` are always included.
+  """
+  @spec non_id_actions(Keyword.t()) :: [atom]
+  def non_id_actions(opts) do
+    case opts[:non_id_actions] do
+      nil -> [:index, :new, :create]
+      extra -> Enum.concat([:index, :new, :create], extra)
+    end
+  end
+
+  @doc """
+  Get the resource name (the key used in `conn.assigns` / `socket.assigns`)
+  for the given action and opts.
+
+  If the `:as` opt is given, it is used as-is. Otherwise the name is
+  inferred from the `:model` opt and pluralized when `action` is `:index`
+  and the resource is not `persisted?/1`.
+
+  Shared between `Canary.Plugs` and `Canary.Hooks` so both infer the same
+  resource name for a given action/opts pair.
+
+      iex> Canary.Utils.get_resource_name(:show, model: Post)
+      :post
+
+      iex> Canary.Utils.get_resource_name(:index, model: Post)
+      :posts
+
+      iex> Canary.Utils.get_resource_name(:show, model: Post, as: :the_post)
+      :the_post
+  """
+  @spec get_resource_name(atom, Keyword.t()) :: atom
+  def get_resource_name(action, opts) do
+    case opts[:as] do
+      nil ->
+        opts[:model]
+        |> Module.split()
+        |> List.last()
+        |> Macro.underscore()
+        |> pluralize_if_needed(action, opts)
+        |> String.to_atom()
+
+      as ->
+        as
+    end
+  end
+
+  defp pluralize_if_needed(name, action, opts) do
+    if action == :index and not persisted?(opts) do
+      name <> "s"
+    else
+      name
+    end
+  end
+
+  @doc """
   Apply the error handler to the connection or socket
   """
   @spec apply_error_handler(Plug.Conn.t() , atom, Keyword.t()) :: Plug.Conn.t()

@@ -6,6 +6,9 @@
     * added `:error_handler` and ErrorHandler behaviour
     * aded  `:required` option
 
+  * Bug fixes
+    * `Canary.Plugs` and `Canary.Hooks` now share the same `Canary.Utils` helpers for resolving the resource name, `:persisted`, and `:non_id_actions` opts, so both behave consistently (e.g. `Canary.Hooks` now also pluralizes the resource name for `:index`-like actions).
+
   * Dependency changes
     * Elixir ~> 1.14 is now required
 
