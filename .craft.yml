@@ -1,0 +1,12 @@
+minVersion: 2.21.1
+changelog:
+  policy: auto
+artifactProvider:
+  name: none
+targets:
+  - name: hex
+  - name: registry
+    type: sdk
+    sdks:
+      'hex:sentry':
+  - name: github

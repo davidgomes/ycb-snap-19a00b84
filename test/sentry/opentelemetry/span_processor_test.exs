@@ -1,0 +1,1051 @@
+defmodule Sentry.Opentelemetry.SpanProcessorTest do
+  use Sentry.Case, async: false
+
+  require OpenTelemetry.Tracer, as: Tracer
+  alias OpenTelemetry.SemConv.Incubating.HTTPAttributes, as: HTTPAttributes
+  alias OpenTelemetry.SemConv.Incubating.URLAttributes, as: URLAttributes
+  alias OpenTelemetry.SemConv.Incubating.DBAttributes, as: DBAttributes
+  alias OpenTelemetry.SemConv.ClientAttributes, as: ClientAttributes
+  alias OpenTelemetry.SemConv.Incubating.MessagingAttributes, as: MessagingAttributes
+
+  import ExUnit.CaptureLog
+  import Sentry.Test.Assertions
+  import Sentry.TestHelpers
+
+  alias Sentry.OpenTelemetry.SpanStorage
+
+  defmodule TestEndpoint do
+    require OpenTelemetry.Tracer, as: Tracer
+
+    def instrumented_function do
+      Tracer.with_span "instrumented_function" do
+        Process.sleep(100)
+
+        child_instrumented_function("one")
+        child_instrumented_function("two")
+      end
+    end
+
+    def child_instrumented_function(name) do
+      Tracer.with_span "child_instrumented_function_#{name}" do
+        Process.sleep(140)
+      end
+    end
+  end
+
+  setup do
+    setup_bypass()
+  end
+
+  @tag span_storage: true
+  test "sends captured root spans as transactions", %{bypass: bypass} do
+    put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+    ref = setup_bypass_envelope_collector(bypass)
+
+    TestEndpoint.child_instrumented_function("one")
+
+    [tx] = collect_sentry_transactions(ref, 1)
+
+    assert tx["event_id"]
+    assert tx["environment"] == "test"
+    assert tx["transaction_info"] == %{"source" => "custom"}
+    assert_valid_iso8601(tx["timestamp"])
+    assert_valid_iso8601(tx["start_timestamp"])
+    assert tx["timestamp"] > tx["start_timestamp"]
+    assert_valid_trace_id(tx["contexts"]["trace"]["trace_id"])
+    assert length(tx["spans"]) == 0
+  end
+
+  @tag span_storage: true
+  test "sends captured spans as transactions with child spans", %{bypass: bypass} do
+    put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+    ref = setup_bypass_envelope_collector(bypass)
+
+    TestEndpoint.instrumented_function()
+
+    [tx] = collect_sentry_transactions(ref, 1)
+
+    assert_valid_iso8601(tx["timestamp"])
+    assert_valid_iso8601(tx["start_timestamp"])
+    assert tx["timestamp"] > tx["start_timestamp"]
+    assert length(tx["spans"]) == 2
+
+    [child_span_one, child_span_two] = tx["spans"]
+    assert child_span_one["op"] == "child_instrumented_function_one"
+    assert child_span_two["op"] == "child_instrumented_function_two"
+    assert child_span_one["parent_span_id"] == tx["contexts"]["trace"]["span_id"]
+    assert child_span_two["parent_span_id"] == tx["contexts"]["trace"]["span_id"]
+
+    assert_valid_iso8601(child_span_one["timestamp"])
+    assert_valid_iso8601(child_span_one["start_timestamp"])
+    assert_valid_iso8601(child_span_two["timestamp"])
+    assert_valid_iso8601(child_span_two["start_timestamp"])
+
+    assert child_span_one["timestamp"] > child_span_one["start_timestamp"]
+    assert child_span_two["timestamp"] > child_span_two["start_timestamp"]
+    assert tx["timestamp"] >= child_span_one["timestamp"]
+    assert tx["timestamp"] >= child_span_two["timestamp"]
+    assert tx["start_timestamp"] <= child_span_one["start_timestamp"]
+    assert tx["start_timestamp"] <= child_span_two["start_timestamp"]
+
+    assert_valid_trace_id(tx["contexts"]["trace"]["trace_id"])
+    assert_valid_trace_id(child_span_one["trace_id"])
+    assert_valid_trace_id(child_span_two["trace_id"])
+  end
+
+  @tag span_storage: true
+  test "removes span records from storage after sending a transaction", %{
+    table_name: table_name,
+    bypass: bypass
+  } do
+    put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+    ref = setup_bypass_envelope_collector(bypass)
+
+    TestEndpoint.instrumented_function()
+
+    [tx] = collect_sentry_transactions(ref, 1)
+
+    assert SpanStorage.get_root_span(tx["contexts"]["trace"]["span_id"], table_name: table_name) ==
+             nil
+
+    assert [] ==
+             SpanStorage.get_child_spans(tx["contexts"]["trace"]["span_id"],
+               table_name: table_name
+             )
+  end
+
+  @tag span_storage: true
+  test "logs at the configured :log_level when the transaction cannot be sent", %{bypass: bypass} do
+    put_test_config(environment_name: "test", traces_sample_rate: 1.0, log_level: :info)
+
+    Bypass.expect(bypass, "POST", "/api/1/envelope/", fn conn ->
+      Plug.Conn.resp(conn, 500, ~s<{"error": "internal"}>)
+    end)
+
+    log =
+      capture_log([metadata: [:domain]], fn ->
+        TestEndpoint.child_instrumented_function("one")
+      end)
+
+    # Elixir < 1.15 pads the level, so the gap before the message is not always one space.
+    assert log =~ ~r/domain=(\w+\.)*sentry \[info\]\s+Failed to send transaction to Sentry/
+  end
+
+  defp assert_valid_iso8601(timestamp) do
+    case DateTime.from_iso8601(timestamp) do
+      {:ok, datetime, _offset} ->
+        assert datetime.year >= 2023, "Expected year to be 2023 or later, got: #{datetime.year}"
+        assert is_binary(timestamp), "Expected timestamp to be a string"
+        assert String.ends_with?(timestamp, "Z"), "Expected timestamp to end with 'Z'"
+
+      {:error, reason} ->
+        flunk("Invalid ISO8601 timestamp: #{timestamp}, reason: #{inspect(reason)}")
+    end
+  end
+
+  defp assert_valid_trace_id(trace_id) do
+    assert is_binary(trace_id), "Expected trace_id to be a string"
+    assert byte_size(trace_id) == 32, "Expected trace_id to be 32 characters long #{trace_id}"
+
+    assert String.match?(trace_id, ~r/^[a-f0-9]{32}$/),
+           "Expected trace_id to be a lowercase hex string"
+  end
+
+  describe "sampling behavior with root and child spans" do
+    @tag span_storage: true
+    test "drops entire trace when root span is not sampled", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 0.0)
+
+      original_sampler = Application.get_env(:opentelemetry, :sampler)
+      Application.put_env(:opentelemetry, :sampler, {Sentry.OpenTelemetry.Sampler, [drop: []]})
+
+      test_pid = self()
+
+      Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+        send(test_pid, :unexpected_envelope)
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      Enum.each(1..5, fn _ ->
+        TestEndpoint.instrumented_function()
+      end)
+
+      refute_receive :unexpected_envelope, 200
+
+      Application.put_env(:opentelemetry, :sampler, original_sampler)
+    end
+
+    @tag span_storage: true
+    test "samples entire trace when root span is sampled", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      TestEndpoint.instrumented_function()
+
+      [tx] = collect_sentry_transactions(ref, 1)
+      assert length(tx["spans"]) == 2
+
+      [child_span_one, child_span_two] = tx["spans"]
+      assert tx["contexts"]["trace"]["trace_id"] == child_span_one["trace_id"]
+      assert tx["contexts"]["trace"]["trace_id"] == child_span_two["trace_id"]
+    end
+
+    @tag span_storage: true
+    test "child spans inherit parent sampling decision", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 0.5)
+
+      original_sampler = Application.get_env(:opentelemetry, :sampler)
+      Application.put_env(:opentelemetry, :sampler, {Sentry.OpenTelemetry.Sampler, [drop: []]})
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Enum.each(1..10, fn _ ->
+        TestEndpoint.instrumented_function()
+      end)
+
+      Process.sleep(200)
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
+
+      Enum.each(transactions, fn tx ->
+        assert length(tx["spans"]) == 2
+
+        [child_span_one, child_span_two] = tx["spans"]
+        assert tx["contexts"]["trace"]["trace_id"] == child_span_one["trace_id"]
+        assert tx["contexts"]["trace"]["trace_id"] == child_span_two["trace_id"]
+      end)
+
+      Application.put_env(:opentelemetry, :sampler, original_sampler)
+    end
+
+    @tag span_storage: true
+    test "nested child spans maintain hierarchy", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "root_span" do
+        Tracer.with_span "level_1_child" do
+          Tracer.with_span "level_2_child" do
+            Process.sleep(1)
+          end
+
+          Tracer.with_span "level_2_sibling" do
+            Process.sleep(1)
+          end
+        end
+
+        Tracer.with_span "level_1_sibling" do
+          Process.sleep(1)
+        end
+      end
+
+      [tx] = collect_sentry_transactions(ref, 1)
+
+      assert length(tx["spans"]) == 4
+
+      trace_id = tx["contexts"]["trace"]["trace_id"]
+
+      Enum.each(tx["spans"], fn span ->
+        assert span["trace_id"] == trace_id
+      end)
+
+      span_names = Enum.map(tx["spans"], & &1["op"]) |> Enum.sort()
+      expected_names = ["level_1_child", "level_1_sibling", "level_2_child", "level_2_sibling"]
+      assert span_names == expected_names
+    end
+
+    @tag span_storage: true
+    test "child-only spans without root are handled correctly", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      TestEndpoint.child_instrumented_function("standalone")
+
+      [tx] = collect_sentry_transactions(ref, 1)
+
+      assert length(tx["spans"]) == 0
+      assert tx["transaction"] == "child_instrumented_function_standalone"
+    end
+
+    @tag span_storage: true
+    test "concurrent traces maintain independent sampling decisions", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 0.5)
+
+      original_sampler = Application.get_env(:opentelemetry, :sampler)
+      Application.put_env(:opentelemetry, :sampler, {Sentry.OpenTelemetry.Sampler, [drop: []]})
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      tasks =
+        Enum.map(1..20, fn i ->
+          Task.async(fn ->
+            Tracer.with_span "concurrent_root_#{i}" do
+              Tracer.with_span "concurrent_child_#{i}" do
+                Process.sleep(10)
+              end
+            end
+          end)
+        end)
+
+      Enum.each(tasks, &Task.await/1)
+
+      Process.sleep(200)
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
+
+      Enum.each(transactions, fn tx ->
+        assert length(tx["spans"]) == 1
+        [child_span] = tx["spans"]
+        assert child_span["trace_id"] == tx["contexts"]["trace"]["trace_id"]
+      end)
+
+      assert length(transactions) < 20
+
+      Application.put_env(:opentelemetry, :sampler, original_sampler)
+    end
+
+    @tag span_storage: true
+    test "span processor respects sampler drop configuration", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      original_sampler = Application.get_env(:opentelemetry, :sampler)
+
+      Application.put_env(
+        :opentelemetry,
+        :sampler,
+        {Sentry.OpenTelemetry.Sampler, [drop: ["child_instrumented_function_one"]]}
+      )
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "root_span" do
+        Tracer.with_span "child_instrumented_function_one" do
+          Process.sleep(10)
+        end
+
+        Tracer.with_span "allowed_child" do
+          Process.sleep(10)
+        end
+      end
+
+      Process.sleep(200)
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
+
+      Enum.each(transactions, fn tx ->
+        trace_id = tx["contexts"]["trace"]["trace_id"]
+
+        Enum.each(tx["spans"], fn span ->
+          assert span["trace_id"] == trace_id
+        end)
+      end)
+
+      Application.put_env(:opentelemetry, :sampler, original_sampler)
+    end
+
+    @tag span_storage: true
+    test "treats HTTP server request spans as transaction roots for distributed tracing", %{
+      bypass: bypass
+    } do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      # Simulate an incoming HTTP request with an external parent span ID (from browser/client)
+      # This represents a distributed trace where the client started the trace
+      external_trace_id = 0x1234567890ABCDEF1234567890ABCDEF
+      external_parent_span_id = 0xABCDEF1234567890
+
+      # Create a remote parent span context using :otel_tracer.from_remote_span
+      remote_parent = :otel_tracer.from_remote_span(external_trace_id, external_parent_span_id, 1)
+
+      ctx = Tracer.set_current_span(:otel_ctx.new(), remote_parent)
+
+      # Start an HTTP server span with the remote parent context
+      Tracer.with_span ctx, "POST /api/users", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :POST,
+          URLAttributes.url_path() => "/api/users",
+          "http.route" => "/api/users",
+          "server.address" => "localhost",
+          "server.port" => 4000
+        }
+      } do
+        # Simulate child spans (database queries, etc.)
+        Tracer.with_span "db.query:users", %{
+          kind: :client,
+          attributes: %{
+            "db.system" => :postgresql,
+            "db.statement" => "INSERT INTO users (name) VALUES ($1)"
+          }
+        } do
+          Process.sleep(10)
+        end
+
+        Tracer.with_span "db.query:notifications", %{
+          kind: :client,
+          attributes: %{
+            "db.system" => :postgresql,
+            "db.statement" => "INSERT INTO notifications (user_id) VALUES ($1)"
+          }
+        } do
+          Process.sleep(10)
+        end
+      end
+
+      # Should capture the HTTP request span as a transaction root despite having an external parent
+      [tx] = collect_sentry_transactions(ref, 1)
+
+      # Verify transaction properties
+      assert tx["transaction"] == "POST /api/users"
+      assert tx["transaction_info"] == %{"source" => "custom"}
+      assert length(tx["spans"]) == 2
+
+      # Verify child spans are properly included
+      span_ops = Enum.map(tx["spans"], & &1["op"]) |> Enum.sort()
+      assert span_ops == ["db", "db"]
+
+      # Verify child spans have detailed data (like SQL queries)
+      [span1, span2] = tx["spans"]
+      assert span1["description"] =~ "INSERT INTO"
+      assert span2["description"] =~ "INSERT INTO"
+      assert span1["data"]["db.system"] == "postgresql"
+      assert span2["data"]["db.system"] == "postgresql"
+      assert span1["data"]["db.statement"] =~ "INSERT INTO users"
+      assert span2["data"]["db.statement"] =~ "INSERT INTO notifications"
+
+      # Verify all spans share the same trace ID (from the external parent)
+      trace_id = tx["contexts"]["trace"]["trace_id"]
+
+      Enum.each(tx["spans"], fn span ->
+        assert span["trace_id"] == trace_id
+      end)
+
+      # The transaction should have the external parent's trace ID
+      assert tx["contexts"]["trace"]["trace_id"] ==
+               "1234567890abcdef1234567890abcdef"
+    end
+
+    @tag span_storage: true
+    test "cleans up HTTP server span and children after sending distributed trace transaction", %{
+      table_name: table_name,
+      bypass: bypass
+    } do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      # Simulate an incoming HTTP request with an external parent span ID (from browser/client)
+      external_trace_id = 0x1234567890ABCDEF1234567890ABCDEF
+      external_parent_span_id = 0xABCDEF1234567890
+
+      remote_parent = :otel_tracer.from_remote_span(external_trace_id, external_parent_span_id, 1)
+      ctx = Tracer.set_current_span(:otel_ctx.new(), remote_parent)
+
+      # Start an HTTP server span with the remote parent context
+      Tracer.with_span ctx, "POST /api/users", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :POST,
+          URLAttributes.url_path() => "/api/users"
+        }
+      } do
+        # Simulate child spans (database queries, etc.)
+        Tracer.with_span "db.query:users", %{
+          kind: :client,
+          attributes: %{
+            "db.system" => :postgresql,
+            "db.statement" => "INSERT INTO users (name) VALUES ($1)"
+          }
+        } do
+          Process.sleep(10)
+        end
+      end
+
+      # Should capture the HTTP request span as a transaction
+      [tx] = collect_sentry_transactions(ref, 1)
+
+      # Verify the HTTP server span was removed from storage
+      # (even though it was stored as a child span due to having a remote parent)
+      http_server_span_id = tx["contexts"]["trace"]["span_id"]
+      remote_parent_span_id_str = "abcdef1234567890"
+
+      # The HTTP server span should not exist in storage anymore
+      assert SpanStorage.get_root_span(http_server_span_id, table_name: table_name) == nil
+
+      # Check that it was also removed from child spans storage
+      # We can't directly check if a specific child was removed, but we can verify
+      # that get_child_spans for the remote parent returns empty (or doesn't include our span)
+      remaining_children =
+        SpanStorage.get_child_spans(remote_parent_span_id_str, table_name: table_name)
+
+      refute Enum.any?(remaining_children, fn span -> span.span_id == http_server_span_id end)
+
+      # Verify child spans of the HTTP server span were also removed
+      assert [] == SpanStorage.get_child_spans(http_server_span_id, table_name: table_name)
+    end
+  end
+
+  describe "get_op_description/1" do
+    @tag span_storage: true
+    test "HTTP server span with url.path includes path in description", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "GET /api/users", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :GET,
+          URLAttributes.url_path() => "/api/users"
+        }
+      } do
+        Process.sleep(1)
+      end
+
+      assert_sentry_transaction(ref,
+        contexts: %{"trace" => %{"op" => "http.server", "description" => "GET /api/users"}}
+      )
+    end
+
+    @tag span_storage: true
+    test "HTTP server span without url.path uses only method in description", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "GET", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :GET
+        }
+      } do
+        Process.sleep(1)
+      end
+
+      assert_sentry_transaction(ref,
+        contexts: %{"trace" => %{"op" => "http.server", "description" => "GET"}}
+      )
+    end
+
+    @tag span_storage: true
+    test "HTTP client span with url.path includes path in description", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "GET /external/api", %{
+        kind: :client,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :GET,
+          URLAttributes.url_path() => "/external/api"
+        }
+      } do
+        Process.sleep(1)
+      end
+
+      assert_sentry_transaction(ref,
+        contexts: %{"trace" => %{"op" => "http.client", "description" => "GET /external/api"}}
+      )
+    end
+
+    @tag span_storage: true
+    test "HTTP server span with client.address includes address in description", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "POST /api/login", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :POST,
+          URLAttributes.url_path() => "/api/login",
+          ClientAttributes.client_address() => "192.168.1.100"
+        }
+      } do
+        Process.sleep(1)
+      end
+
+      assert_sentry_transaction(ref,
+        contexts: %{
+          "trace" => %{
+            "op" => "http.server",
+            "description" => "POST /api/login from 192.168.1.100"
+          }
+        }
+      )
+    end
+
+    @tag span_storage: true
+    test "database span uses db op and query as description", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "SELECT users", %{
+        kind: :client,
+        attributes: %{
+          DBAttributes.db_system() => :postgresql,
+          "db.statement" => "SELECT * FROM users WHERE id = $1"
+        }
+      } do
+        Process.sleep(1)
+      end
+
+      assert_sentry_transaction(ref,
+        contexts: %{
+          "trace" => %{"op" => "db", "description" => "SELECT * FROM users WHERE id = $1"}
+        }
+      )
+    end
+
+    @tag span_storage: true
+    test "database span without statement has nil description", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "db.connect", %{
+        kind: :client,
+        attributes: %{
+          DBAttributes.db_system() => :postgresql
+        }
+      } do
+        Process.sleep(1)
+      end
+
+      assert_sentry_transaction(ref,
+        contexts: %{"trace" => %{"op" => "db", "description" => nil}}
+      )
+    end
+
+    @tag span_storage: true
+    test "Oban span uses queue.process op and worker as description", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "MyApp.Workers.EmailWorker process", %{
+        kind: :consumer,
+        attributes: %{
+          MessagingAttributes.messaging_system() => :oban,
+          "oban.job.worker" => "MyApp.Workers.EmailWorker"
+        }
+      } do
+        Process.sleep(1)
+      end
+
+      assert_sentry_transaction(ref,
+        contexts: %{
+          "trace" => %{"op" => "queue.process", "description" => "MyApp.Workers.EmailWorker"}
+        },
+        transaction: "MyApp.Workers.EmailWorker"
+      )
+    end
+
+    @tag span_storage: true
+    test "generic span uses span name for both op and description", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "custom_operation" do
+        Process.sleep(1)
+      end
+
+      assert_sentry_transaction(ref,
+        contexts: %{"trace" => %{"op" => "custom_operation", "description" => "custom_operation"}}
+      )
+    end
+
+    @tag span_storage: true
+    test "child HTTP span has correct op and description", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "parent_operation" do
+        Tracer.with_span "GET /external/service", %{
+          kind: :client,
+          attributes: %{
+            HTTPAttributes.http_request_method() => :GET,
+            URLAttributes.url_path() => "/external/service"
+          }
+        } do
+          Process.sleep(1)
+        end
+      end
+
+      [tx] = collect_sentry_transactions(ref, 1)
+
+      assert length(tx["spans"]) == 1
+      [child_span] = tx["spans"]
+
+      assert child_span["op"] == "http.client"
+      assert child_span["description"] == "GET /external/service"
+    end
+
+    @tag span_storage: true
+    test "child database span has correct op and description", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "parent_operation" do
+        Tracer.with_span "db.query", %{
+          kind: :client,
+          attributes: %{
+            DBAttributes.db_system() => :mysql,
+            "db.statement" => "INSERT INTO orders (user_id) VALUES (?)"
+          }
+        } do
+          Process.sleep(1)
+        end
+      end
+
+      [tx] = collect_sentry_transactions(ref, 1)
+
+      assert length(tx["spans"]) == 1
+      [child_span] = tx["spans"]
+
+      assert child_span["op"] == "db"
+      assert child_span["description"] == "INSERT INTO orders (user_id) VALUES (?)"
+    end
+  end
+
+  describe "race condition: parent finishes before child" do
+    @tag span_storage: true
+    test "in-progress child span is preserved and becomes transaction root when parent finishes first",
+         %{
+           table_name: table_name,
+           bypass: bypass
+         } do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      alias Sentry.OpenTelemetry.{SpanStorage, SpanRecord}
+
+      # === Simulate scenario using SpanRecord structs directly ===
+      # This bypasses OTel span creation complexity while testing the actual bug
+
+      # Parent HTTP span (started, then completed)
+      parent_span = %SpanRecord{
+        span_id: "parent_http_span",
+        parent_span_id: nil,
+        trace_id: "trace123abc",
+        name: "GET /dashboard",
+        kind: :server,
+        origin: "opentelemetry_phoenix",
+        start_time: "2024-01-01T00:00:00.000Z",
+        end_time: nil,
+        attributes: %{
+          "http.request.method" => :GET,
+          "url.path" => "/dashboard"
+        }
+      }
+
+      # Child LiveView span (started, still in-progress when parent finishes)
+      child_span = %SpanRecord{
+        span_id: "child_liveview_mount",
+        parent_span_id: "parent_http_span",
+        trace_id: "trace123abc",
+        name: "Phoenix.LiveView.mount",
+        kind: :server,
+        origin: "opentelemetry_phoenix",
+        start_time: "2024-01-01T00:00:00.100Z",
+        end_time: nil,
+        attributes: %{
+          "http.request.method" => :GET
+        }
+      }
+
+      # Store both spans (simulating on_start)
+      SpanStorage.store_span(parent_span, table_name: table_name)
+      SpanStorage.store_span(child_span, table_name: table_name)
+
+      # Verify both are stored
+      assert SpanStorage.span_exists?("parent_http_span", table_name: table_name)
+      assert SpanStorage.span_exists?("child_liveview_mount", table_name: table_name)
+
+      # === Parent finishes (child still in-progress) ===
+      completed_parent = %{parent_span | end_time: "2024-01-01T00:00:02.000Z"}
+      SpanStorage.update_span(completed_parent, table_name: table_name)
+
+      # Simulate what SpanProcessor.on_end does: get child spans, build transaction, remove
+      child_spans = SpanStorage.get_child_spans("parent_http_span", table_name: table_name)
+
+      # The child should still be in the list (it's stored as a child of parent)
+      assert length(child_spans) == 1
+
+      # Only COMPLETED children should be included in the transaction
+      completed_children = Enum.filter(child_spans, &(&1.end_time != nil))
+      assert completed_children == []
+
+      # Now remove the transaction root span (this is what caused the bug)
+      SpanStorage.remove_transaction_root_span("parent_http_span", nil, table_name: table_name)
+
+      # === KEY BUG CHECK: In-progress child should still exist ===
+      assert SpanStorage.span_exists?("child_liveview_mount", table_name: table_name),
+             "In-progress child span was prematurely deleted when parent finished!"
+
+      # Parent should be gone
+      refute SpanStorage.span_exists?("parent_http_span", table_name: table_name)
+
+      # === Later: child completes ===
+      completed_child = %{child_span | end_time: "2024-01-01T00:00:03.000Z"}
+      SpanStorage.update_span(completed_child, table_name: table_name)
+
+      # Verify child can still be retrieved and is now complete
+      retrieved_child = SpanStorage.get_span("child_liveview_mount", table_name: table_name)
+      assert retrieved_child != nil
+      assert retrieved_child.end_time == "2024-01-01T00:00:03.000Z"
+
+      # When child's on_end runs, it won't find its parent in storage,
+      # so it should become a transaction root itself (tested via has_local_parent_span?)
+      refute SpanStorage.span_exists?("parent_http_span", table_name: table_name)
+    end
+
+    @tag span_storage: true
+    test "completed child spans are removed when parent finishes", %{table_name: table_name} do
+      # Verify that completed child spans ARE correctly removed (not broken by the fix)
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+
+      alias Sentry.OpenTelemetry.{SpanStorage, SpanRecord}
+
+      # Parent span
+      parent_span = %SpanRecord{
+        span_id: "parent_span",
+        parent_span_id: nil,
+        trace_id: "trace456",
+        name: "GET /api/users",
+        kind: :server,
+        start_time: "2024-01-01T00:00:00.000Z",
+        end_time: nil,
+        attributes: %{}
+      }
+
+      # Completed child span (has end_time)
+      completed_child = %SpanRecord{
+        span_id: "completed_child",
+        parent_span_id: "parent_span",
+        trace_id: "trace456",
+        name: "db.query",
+        kind: :client,
+        start_time: "2024-01-01T00:00:00.100Z",
+        end_time: "2024-01-01T00:00:00.200Z",
+        attributes: %{}
+      }
+
+      SpanStorage.store_span(parent_span, table_name: table_name)
+      SpanStorage.store_span(completed_child, table_name: table_name)
+
+      # Parent finishes
+      completed_parent = %{parent_span | end_time: "2024-01-01T00:00:01.000Z"}
+      SpanStorage.update_span(completed_parent, table_name: table_name)
+
+      # Remove transaction root
+      SpanStorage.remove_transaction_root_span("parent_span", nil, table_name: table_name)
+
+      # Both should be gone - completed children should be removed
+      refute SpanStorage.span_exists?("parent_span", table_name: table_name)
+      refute SpanStorage.span_exists?("completed_child", table_name: table_name)
+    end
+  end
+
+  describe "span links" do
+    @tag span_storage: true
+    test "root span with links includes links in trace context", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      ref = setup_bypass_envelope_collector(bypass)
+
+      # Create a source span and capture its context
+      source_ctx =
+        Tracer.with_span "source_span" do
+          OpenTelemetry.Tracer.current_span_ctx()
+        end
+
+      link = OpenTelemetry.link(source_ctx)
+
+      # Create a new root span with a link to the source span
+      Tracer.with_span "GET /api/linked", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :GET,
+          URLAttributes.url_path() => "/api/linked"
+        },
+        links: [link]
+      } do
+        Process.sleep(10)
+      end
+
+      Process.sleep(200)
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
+
+      linked_tx = find_sentry_report!(transactions, transaction: "GET /api/linked")
+
+      trace_links = linked_tx["contexts"]["trace"]["links"]
+      assert is_list(trace_links)
+      assert length(trace_links) == 1
+
+      [span_link] = trace_links
+      assert String.match?(span_link["trace_id"], ~r/^[a-f0-9]{32}$/)
+      assert String.match?(span_link["span_id"], ~r/^[a-f0-9]{16}$/)
+      refute Map.has_key?(span_link, "attributes")
+    end
+
+    @tag span_storage: true
+    test "root span with links preserves link attributes", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      ref = setup_bypass_envelope_collector(bypass)
+
+      source_ctx =
+        Tracer.with_span "source_span" do
+          OpenTelemetry.Tracer.current_span_ctx()
+        end
+
+      link = OpenTelemetry.link(source_ctx, %{"my.key" => "my.value"})
+
+      Tracer.with_span "GET /api/linked", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :GET,
+          URLAttributes.url_path() => "/api/linked"
+        },
+        links: [link]
+      } do
+        Process.sleep(10)
+      end
+
+      Process.sleep(200)
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
+
+      linked_tx = find_sentry_report!(transactions, transaction: "GET /api/linked")
+
+      [span_link] = linked_tx["contexts"]["trace"]["links"]
+      assert span_link["attributes"] == %{"my.key" => "my.value"}
+    end
+
+    @tag span_storage: true
+    test "child span with links includes links in the span struct", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      ref = setup_bypass_envelope_collector(bypass)
+
+      source_ctx =
+        Tracer.with_span "source_span" do
+          OpenTelemetry.Tracer.current_span_ctx()
+        end
+
+      link = OpenTelemetry.link(source_ctx)
+
+      Tracer.with_span "GET /api/parent", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :GET,
+          URLAttributes.url_path() => "/api/parent"
+        }
+      } do
+        Tracer.with_span "child_with_link", %{links: [link]} do
+          Process.sleep(10)
+        end
+      end
+
+      Process.sleep(200)
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
+
+      parent_tx = find_sentry_report!(transactions, transaction: "GET /api/parent")
+
+      assert length(parent_tx["spans"]) == 1
+      [child_span] = parent_tx["spans"]
+
+      assert is_list(child_span["links"])
+      assert length(child_span["links"]) == 1
+
+      [span_link] = child_span["links"]
+      assert String.match?(span_link["trace_id"], ~r/^[a-f0-9]{32}$/)
+      assert String.match?(span_link["span_id"], ~r/^[a-f0-9]{16}$/)
+    end
+
+    @tag span_storage: true
+    test "spans without links have nil links", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      ref = setup_bypass_envelope_collector(bypass)
+
+      Tracer.with_span "GET /api/no-links", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :GET,
+          URLAttributes.url_path() => "/api/no-links"
+        }
+      } do
+        Tracer.with_span "child_span" do
+          Process.sleep(10)
+        end
+      end
+
+      [tx] = collect_sentry_transactions(ref, 1)
+
+      refute Map.has_key?(tx["contexts"]["trace"], "links")
+      assert [child_span] = tx["spans"]
+      assert child_span["links"] == nil
+    end
+
+    @tag span_storage: true
+    test "span with multiple links preserves all links", %{bypass: bypass} do
+      put_test_config(environment_name: "test", traces_sample_rate: 1.0)
+      ref = setup_bypass_envelope_collector(bypass)
+
+      source_ctx_1 =
+        Tracer.with_span "source_1" do
+          OpenTelemetry.Tracer.current_span_ctx()
+        end
+
+      source_ctx_2 =
+        Tracer.with_span "source_2" do
+          OpenTelemetry.Tracer.current_span_ctx()
+        end
+
+      link_1 = OpenTelemetry.link(source_ctx_1)
+      link_2 = OpenTelemetry.link(source_ctx_2, %{"order" => "second"})
+
+      Tracer.with_span "GET /api/multi-linked", %{
+        kind: :server,
+        attributes: %{
+          HTTPAttributes.http_request_method() => :GET,
+          URLAttributes.url_path() => "/api/multi-linked"
+        },
+        links: [link_1, link_2]
+      } do
+        Process.sleep(10)
+      end
+
+      Process.sleep(200)
+      transactions = collect_sentry_transactions(ref, 100, timeout: 500)
+
+      linked_tx = find_sentry_report!(transactions, transaction: "GET /api/multi-linked")
+
+      trace_links = linked_tx["contexts"]["trace"]["links"]
+      assert length(trace_links) == 2
+
+      # Both links should have valid trace/span IDs
+      Enum.each(trace_links, fn link ->
+        assert String.match?(link["trace_id"], ~r/^[a-f0-9]{32}$/)
+        assert String.match?(link["span_id"], ~r/^[a-f0-9]{16}$/)
+      end)
+
+      # The two links should point to different spans
+      span_ids = Enum.map(trace_links, & &1["span_id"])
+      assert length(Enum.uniq(span_ids)) == 2
+
+      # The link with attributes should preserve them
+      link_with_attrs = Enum.find(trace_links, &Map.has_key?(&1, "attributes"))
+      assert link_with_attrs["attributes"] == %{"order" => "second"}
+    end
+  end
+end

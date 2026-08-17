@@ -1,0 +1,339 @@
+defmodule Sentry.EnvelopeTest do
+  use Sentry.Case, async: false
+
+  import Sentry.TestHelpers
+
+  alias Sentry.{Attachment, CheckIn, ClientReport, Envelope, Event, LogEvent, Metric}
+
+  describe "to_binary/1" do
+    test "encodes an envelope" do
+      put_test_config(environment_name: "test")
+      event = Event.create_event([])
+
+      envelope = Envelope.from_event(event)
+
+      assert {:ok, encoded} = Envelope.to_binary(envelope)
+
+      assert [id_line, header_line, event_line] = String.split(encoded, "\n", trim: true)
+      assert decode!(id_line) == %{"event_id" => event.event_id}
+      assert %{"type" => "event", "length" => _} = decode!(header_line)
+
+      decoded_event = decode!(event_line)
+      assert decoded_event["event_id"] == event.event_id
+      assert decoded_event["breadcrumbs"] == []
+      assert decoded_event["environment"] == "test"
+      assert decoded_event["exception"] == []
+      assert decoded_event["extra"] == %{}
+      assert decoded_event["user"] == %{}
+      assert decoded_event["request"] == %{}
+    end
+
+    test "works without an event ID" do
+      envelope = Envelope.from_event(Event.create_event([]))
+      envelope = %Envelope{envelope | event_id: nil}
+
+      assert {:ok, encoded} = Envelope.to_binary(envelope)
+
+      assert [id_line, _header_line, _event_line] = String.split(encoded, "\n", trim: true)
+
+      assert id_line == "{{}}"
+    end
+
+    test "works with attachments" do
+      attachments = [
+        %Attachment{data: <<1, 2, 3>>, filename: "example.dat"},
+        %Attachment{data: "Hello!", filename: "example.txt", content_type: "text/plain"},
+        %Attachment{data: "{}", filename: "example.json", content_type: "application/json"},
+        %Attachment{data: "...", filename: "dump", attachment_type: "event.minidump"}
+      ]
+
+      event = %Event{Event.create_event([]) | attachments: attachments}
+
+      assert {:ok, encoded} = event |> Envelope.from_event() |> Envelope.to_binary()
+
+      assert [
+               id_line,
+               _event_header,
+               _event_data,
+               attachment1_header,
+               <<1, 2, 3>>,
+               attachment2_header,
+               "Hello!",
+               attachment3_header,
+               "{}",
+               attachment4_header,
+               "..."
+             ] = String.split(encoded, "\n", trim: true)
+
+      assert %{"event_id" => _} = decode!(id_line)
+
+      assert decode!(attachment1_header) == %{
+               "type" => "attachment",
+               "length" => 3,
+               "filename" => "example.dat"
+             }
+
+      assert decode!(attachment2_header) == %{
+               "type" => "attachment",
+               "length" => 6,
+               "filename" => "example.txt",
+               "content_type" => "text/plain"
+             }
+
+      assert decode!(attachment3_header) == %{
+               "type" => "attachment",
+               "length" => 2,
+               "filename" => "example.json",
+               "content_type" => "application/json"
+             }
+
+      assert decode!(attachment4_header) == %{
+               "type" => "attachment",
+               "length" => 3,
+               "filename" => "dump",
+               "attachment_type" => "event.minidump"
+             }
+    end
+
+    test "works with check-ins" do
+      put_test_config(environment_name: "test")
+      check_in_id = Sentry.UUID.uuid4_hex()
+      check_in = %CheckIn{check_in_id: check_in_id, monitor_slug: "test", status: :ok}
+
+      envelope = Envelope.from_check_in(check_in)
+
+      assert {:ok, encoded} = Envelope.to_binary(envelope)
+
+      assert [id_line, header_line, event_line] = String.split(encoded, "\n", trim: true)
+      assert %{"event_id" => _} = decode!(id_line)
+      assert %{"type" => "check_in", "length" => _} = decode!(header_line)
+
+      decoded_check_in = decode!(event_line)
+      assert decoded_check_in["check_in_id"] == check_in_id
+      assert decoded_check_in["monitor_slug"] == "test"
+      assert decoded_check_in["status"] == "ok"
+    end
+
+    test "works with transactions" do
+      put_test_config(environment_name: "test")
+
+      child_spans =
+        [
+          %Sentry.Interfaces.Span{
+            start_timestamp: 1_588_601_261.535_386,
+            timestamp: 1_588_601_261.544_196,
+            description: "Vue <App>",
+            op: "update",
+            span_id: "b980d4dec78d7344",
+            parent_span_id: "9312d0d18bf51736",
+            trace_id: "1e57b752bc6e4544bbaa246cd1d05dee"
+          }
+        ]
+
+      transaction =
+        create_transaction(%{
+          start_timestamp: 1_588_601_261.481_961,
+          timestamp: 1_588_601_261.488_901,
+          contexts: %{
+            trace: %{
+              trace_id: "1e57b752bc6e4544bbaa246cd1d05dee",
+              span_id: "b01b9f6349558cd1",
+              description: "GET /sockjs-node/info",
+              op: "http"
+            }
+          },
+          tags: %{"http.status_code" => "200"},
+          data: %{
+            "url" => "http://localhost:8080/sockjs-node/info?t=1588601703755",
+            "status_code" => 200,
+            "type" => "xhr",
+            "method" => "GET"
+          },
+          spans: child_spans,
+          transaction: "test-transaction"
+        })
+
+      envelope = Envelope.from_transaction(transaction)
+
+      assert {:ok, encoded} = Envelope.to_binary(envelope)
+
+      assert [_id_line, _header_line, transaction_line] = String.split(encoded, "\n", trim: true)
+
+      assert {:ok, decoded_transaction} = Jason.decode(transaction_line)
+      assert decoded_transaction["type"] == "transaction"
+      assert decoded_transaction["start_timestamp"] == transaction.start_timestamp
+      assert decoded_transaction["timestamp"] == transaction.timestamp
+
+      assert [span] = decoded_transaction["spans"]
+
+      assert span["start_timestamp"] == List.first(child_spans).start_timestamp
+      assert span["timestamp"] == List.first(child_spans).timestamp
+    end
+  end
+
+  test "works with client reports" do
+    put_test_config(environment_name: "test")
+
+    client_report = %ClientReport{
+      timestamp: "2024-10-12T13:21:13",
+      discarded_events: [%{reason: :event_processor, category: "error", quantity: 1}]
+    }
+
+    envelope = Envelope.from_client_report(client_report)
+
+    assert {:ok, encoded} = Envelope.to_binary(envelope)
+
+    assert [id_line, header_line, event_line] = String.split(encoded, "\n", trim: true)
+    assert %{"event_id" => _} = decode!(id_line)
+    assert %{"type" => "client_report", "length" => _} = decode!(header_line)
+
+    decoded_client_report = decode!(event_line)
+    assert decoded_client_report["timestamp"] == client_report.timestamp
+
+    assert decoded_client_report["discarded_events"] == [
+             %{"category" => "error", "reason" => "event_processor", "quantity" => 1}
+           ]
+  end
+
+  describe "item_count/1" do
+    test "counts log events in a log envelope" do
+      log_events =
+        Enum.map(1..5, fn _ ->
+          %LogEvent{
+            timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+            level: :info,
+            body: "test log"
+          }
+        end)
+
+      envelope = Envelope.from_log_events(log_events)
+      assert Envelope.item_count(envelope) == 5
+    end
+
+    test "counts single event envelope as 1" do
+      event = Event.create_event([])
+      envelope = Envelope.from_event(event)
+      assert Envelope.item_count(envelope) == 1
+    end
+
+    test "counts event with attachments" do
+      attachments = [
+        %Attachment{data: "a", filename: "a.txt"},
+        %Attachment{data: "b", filename: "b.txt"}
+      ]
+
+      event = %Event{Event.create_event([]) | attachments: attachments}
+      envelope = Envelope.from_event(event)
+      # 1 event + 2 attachments
+      assert Envelope.item_count(envelope) == 3
+    end
+
+    test "counts check-in envelope as 1" do
+      check_in = %CheckIn{
+        check_in_id: Sentry.UUID.uuid4_hex(),
+        monitor_slug: "test",
+        status: :ok
+      }
+
+      envelope = Envelope.from_check_in(check_in)
+      assert Envelope.item_count(envelope) == 1
+    end
+  end
+
+  test "returns correct data_category" do
+    assert Envelope.get_data_category(%Sentry.Event{
+             event_id: Sentry.UUID.uuid4_hex(),
+             timestamp: "2024-10-12T13:21:13"
+           }) == "error"
+  end
+
+  describe "from_metric_events/1" do
+    test "creates an envelope with metric batch" do
+      put_test_config(environment_name: "production", release: "1.0.0")
+
+      metrics = [
+        %Metric{
+          type: :counter,
+          name: "test.counter",
+          value: 1,
+          timestamp: 1_588_601_261.535_386
+        },
+        %Metric{
+          type: :gauge,
+          name: "test.gauge",
+          value: 42.5,
+          timestamp: 1_588_601_261.544_196,
+          unit: "ms"
+        }
+      ]
+
+      # Attach default attributes (as done in the Metrics module)
+      metrics = Enum.map(metrics, &Metric.attach_default_attributes/1)
+
+      envelope = Envelope.from_metric_events(metrics)
+
+      assert {:ok, encoded} = Envelope.to_binary(envelope)
+
+      assert [id_line, header_line, payload_line] = String.split(encoded, "\n", trim: true)
+      assert %{"event_id" => _} = decode!(id_line)
+
+      decoded_header = decode!(header_line)
+      assert decoded_header["type"] == "trace_metric"
+      assert decoded_header["item_count"] == 2
+      assert decoded_header["content_type"] == "application/vnd.sentry.items.trace-metric+json"
+
+      decoded_payload = decode!(payload_line)
+      assert %{"items" => items} = decoded_payload
+      assert length(items) == 2
+
+      [counter, gauge] = items
+
+      # Verify counter metric
+      assert counter["type"] == "counter"
+      assert counter["name"] == "test.counter"
+      assert counter["value"] == 1
+      assert counter["timestamp"] == 1_588_601_261.535_386
+      assert counter["unit"] == nil
+      assert is_map(counter["attributes"])
+      assert counter["attributes"]["sentry.environment"]["value"] == "production"
+      assert counter["attributes"]["sentry.release"]["value"] == "1.0.0"
+
+      # Verify gauge metric
+      assert gauge["type"] == "gauge"
+      assert gauge["name"] == "test.gauge"
+      assert gauge["value"] == 42.5
+      assert gauge["timestamp"] == 1_588_601_261.544_196
+      assert gauge["unit"] == "ms"
+      assert is_map(gauge["attributes"])
+    end
+
+    test "counts metric events in a metric envelope" do
+      metrics =
+        Enum.map(1..10, fn i ->
+          %Metric{
+            type: :counter,
+            name: "test.metric.#{i}",
+            value: i,
+            timestamp: System.system_time(:nanosecond) / 1_000_000_000
+          }
+        end)
+
+      envelope = Envelope.from_metric_events(metrics)
+      assert Envelope.item_count(envelope) == 10
+    end
+
+    test "returns trace_metric data category" do
+      metrics = [
+        %Metric{
+          type: :counter,
+          name: "test.counter",
+          value: 1,
+          timestamp: 1_588_601_261.535_386
+        }
+      ]
+
+      metric_batch = %Sentry.MetricBatch{metrics: metrics}
+      assert Envelope.get_data_category(metric_batch) == "trace_metric"
+    end
+  end
+end

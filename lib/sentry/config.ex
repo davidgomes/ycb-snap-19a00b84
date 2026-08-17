@@ -1,0 +1,1509 @@
+defmodule Sentry.Config do
+  @moduledoc false
+
+  @typedoc """
+  A function that determines the sample rate for transaction events.
+
+  The function receives a sampling context map and should return a boolean or a float between `0.0` and `1.0`.
+  """
+  @type traces_sampler_function :: (map() -> boolean() | float()) | {module(), atom()}
+
+  @typedoc """
+  A function that transforms an Oban job into a map of Sentry tags.
+
+  The function receives an Oban job struct and should return a map of tags and their values to be added to Sentry reported error.
+  """
+  @typedoc since: "12.0.0"
+  @type oban_tags_to_sentry_tags_function :: (map() -> map()) | {module(), atom()}
+
+  integrations_schema = [
+    max_expected_check_in_time: [
+      type: :integer,
+      default: 600_000,
+      doc: """
+      The time in milliseconds that a check-in ID will live after it has been created.
+
+      The SDK reports the start and end of each check-in. A check-in is used to track the
+      progress of a specific check-in event associated with cron job telemetry events that are a part
+      of the same job. However, to optimize performance and prevent potential memory issues,
+      if a check-in end event is reported after the specified `max_expected_check_in_time`,
+      the SDK will not report it. This behavior helps manage resource usage effectively while still
+      providing necessary tracking for your jobs.
+      *Available since 10.6.3*.
+      """
+    ],
+    monitor_config_defaults: [
+      type: :keyword_list,
+      default: [],
+      doc: """
+      Defaults to be used for the `monitor_config` when reporting cron jobs with one of the
+      integrations. This supports all the keys defined in the [Sentry
+      documentation](https://develop.sentry.dev/sdk/telemetry/check-ins/#monitor-upsert-support).
+      See also `Sentry.CheckIn.new/1`. *Available since v10.8.0*.
+      """
+    ],
+    oban: [
+      type: :keyword_list,
+      doc: """
+      Configuration for the [Oban](https://github.com/sorentwo/oban) integration. The Oban
+      integration requires at minumum Oban Pro v0.14 or Oban v.2.17.6. *Available
+      since v10.2.0*.
+      """,
+      keys: [
+        capture_errors: [
+          type: :boolean,
+          default: false,
+          doc: """
+          Whether to capture errors from Oban jobs. When enabled, the Sentry SDK will capture
+          errors that happen in Oban jobs, including when errors return `{:error, reason}`
+          tuples. *Available since 10.3.0*.
+          """
+        ],
+        oban_tags_to_sentry_tags: [
+          type: {:custom, __MODULE__, :__validate_oban_tags_to_sentry_tags__, []},
+          default: nil,
+          type_doc: "`t:oban_tags_to_sentry_tags_function/0` or `nil`",
+          doc: """
+          A function that determines the Sentry tags to be added based on the Oban job.
+          This function receives an `Oban.Job` struct and must return a map of tags
+          and their values to be sent to Sentry.
+
+          ```elixir
+          oban_tags_to_sentry_tags: fn job ->
+            Map.new(job.tags, fn tag -> {"oban_tags.\#{tag}", true} end)
+          end
+          ```
+
+          This example transforms all Oban job tags into Sentry tags prefixed
+          with `oban_tags.` and with a value of `true`. *Available since 12.0.0*.
+          """
+        ],
+        should_report_error_callback: [
+          type: {:or, [nil, {:fun, 2}]},
+          default: nil,
+          type_doc: "`(Oban.Worker.t() | nil, Oban.Job.t() -> boolean())` or `nil`",
+          doc: """
+          A function that determines whether to report errors for Oban jobs.
+          The function receives the worker module and the `Oban.Job` struct and should return
+          `true` to report the error or `false` to skip reporting.
+
+          ```elixir
+          should_report_error_callback: fn _worker, job ->
+            job.attempt >= job.max_attempts
+          end
+          ```
+
+          This example only reports errors on final retry attempts.
+          *Available since 12.0.0*.
+          """
+        ],
+        cron: [
+          doc: """
+          Configuration options for configuring [*crons*](https://docs.sentry.io/product/crons/)
+          for Oban.
+          """,
+          type: :keyword_list,
+          keys: [
+            enabled: [
+              type: :boolean,
+              default: false,
+              doc: """
+              Whether to enable the Oban integration. When enabled, the Sentry SDK will
+              capture check-ins for Oban jobs. *Available since v10.2.0*.
+              """
+            ],
+            monitor_slug_generator: [
+              type: {:tuple, [:atom, :atom]},
+              type_doc: "`{module(), atom()}`",
+              doc: """
+              A `{module, function}` tuple that generates a monitor name based on the `Oban.Job` struct.
+              The function is called with the `Oban.Job` as its arguments and must return a string.
+              This can be used to customize monitor slugs. *Available since v10.8.0*.
+              """
+            ]
+          ]
+        ]
+      ]
+    ],
+    quantum: [
+      type: :keyword_list,
+      doc: """
+      Configuration for the [Quantum](https://github.com/quantum-elixir/quantum-core) integration.
+      *Available since v10.2.0*.
+      """,
+      keys: [
+        cron: [
+          doc: """
+          Configuration options for configuring [*crons*](https://docs.sentry.io/product/crons/)
+          for Quantum.
+          """,
+          type: :keyword_list,
+          keys: [
+            enabled: [
+              type: :boolean,
+              default: false,
+              doc: """
+              Whether to enable the Quantum integration. When enabled, the Sentry SDK will
+              capture check-ins for Quantum jobs. *Available since v10.2.0*.
+              """
+            ]
+          ]
+        ]
+      ]
+    ],
+    telemetry: [
+      type: :keyword_list,
+      doc: """
+      Configuration for the [Telemetry](https://hexdocs.pm/telemetry) integration.
+      *Available since v10.10.0*.
+      """,
+      keys: [
+        report_handler_failures: [
+          type: :boolean,
+          default: false,
+          doc: """
+          Whether to report failures (to Sentry) that happen in telemetry handlers. These failures
+          result in the handlers being detached, so capturing them in Sentry can be useful
+          to detect and fix these issues as soon as possible.
+          """
+        ]
+      ]
+    ]
+  ]
+
+  basic_opts_schema = [
+    dsn: [
+      type: {:or, [nil, {:custom, Sentry.DSN, :parse, []}]},
+      default: nil,
+      type_doc: "`t:String.t/0` or `nil`",
+      doc: """
+      The DSN for your Sentry project. If this is not set, Sentry will not be enabled.
+      If the `SENTRY_DSN` environment variable is set, it will be used as the default value.
+      """
+    ],
+    environment_name: [
+      type: {:or, [:string, :atom]},
+      type_doc: "`t:String.t/0` or `t:atom/0`",
+      default: "production",
+      doc: """
+      The current environment name. This is used to specify the environment
+      that an event happened in. It can be any string shorter than 64 bytes,
+      except the string `"None"`. When Sentry receives an event with an environment,
+      it creates that environment if it doesn't exist yet.
+      If the `SENTRY_ENVIRONMENT` environment variable is set, it will
+      be used as the value for this option.
+      """
+    ],
+    traces_sample_rate: [
+      type: {:custom, __MODULE__, :__validate_traces_sample_rate__, []},
+      default: nil,
+      doc: """
+      The sample rate for transaction events. A value between `0.0` and `1.0` (inclusive).
+      A value of `0.0` means no transactions will be sampled, while `1.0` means all transactions
+      will be sampled.
+
+      This value is also used to determine if tracing is enabled: if it's not `nil`, tracing is enabled.
+
+      Tracing requires OpenTelemetry packages to work. See [the
+      OpenTelemetry setup documentation](https://opentelemetry.io/docs/languages/erlang/getting-started/)
+      for guides on how to set it up.
+      """
+    ],
+    traces_sampler: [
+      type: {:custom, __MODULE__, :__validate_traces_sampler__, []},
+      default: nil,
+      type_doc: "`t:traces_sampler_function/0` or `nil`",
+      doc: """
+      A function that determines the sample rate for transaction events. This function
+      receives a sampling context struct and should return a boolean or a float between `0.0` and `1.0`.
+
+      The sampling context contains:
+      - `:parent_sampled` - boolean indicating if the parent trace span was sampled (nil if no parent)
+      - `:transaction_context` - map with transaction information (name, op, etc.)
+
+      If both `:traces_sampler` and `:traces_sample_rate` are configured, `:traces_sampler` takes precedence.
+
+      Example:
+      ```elixir
+      traces_sampler: fn sampling_context ->
+        case sampling_context.transaction_context.op do
+          "http.server" -> 0.1  # Sample 10% of HTTP requests
+          "db.query" -> 0.01    # Sample 1% of database queries
+          _ -> false            # Don't sample other operations
+        end
+      end
+      ```
+
+      This value is also used to determine if tracing is enabled: if it's not `nil`, tracing is enabled.
+      """
+    ],
+    included_environments: [
+      type: {:or, [{:in, [:all]}, {:list, {:or, [:atom, :string]}}]},
+      deprecated: "Use :dsn to control whether to send events to Sentry.",
+      type_doc: "list of `t:atom/0` or `t:String.t/0`, or the atom `:all`",
+      doc: """
+      **Deprecated**. The environments in which Sentry can report events. If this is a list,
+      then `:environment_name` needs to be in this list for events to be reported.
+      If this is `:all`, then Sentry will report events regardless of the value
+      of `:environment_name`. *This will be removed in v11.0.0*.
+      """
+    ],
+    release: [
+      type: {:or, [:string, nil]},
+      default: nil,
+      type_doc: "`t:String.t/0` or `nil`",
+      doc: """
+      The release version of your application.
+      This is used to correlate events with source code. If the `SENTRY_RELEASE`
+      environment variable is set, it will be used as the default value.
+      """
+    ],
+    # TODO: deprecate this once we require Elixir 1.18+, when we can force users to use
+    # the JSON module.
+    json_library: [
+      type: {:custom, __MODULE__, :__validate_json_library__, []},
+      type_doc: "`t:module/0`",
+      default: if(Code.ensure_loaded?(JSON), do: JSON, else: Jason),
+      doc: """
+      A module that implements the "standard" Elixir JSON behaviour, that is, exports the
+      `encode/1` and `decode/1` functions.
+
+      Defaults to `Jason` if the `JSON` kernel module is not available (it was introduced
+      in Elixir 1.18.0). If you use the default configuration with Elixir version lower than
+      1.18, this option will default to `Jason`, but you will have to add
+      [`:jason`](https://hexa.pm/packages/jason) as a dependency of your application.
+      """
+    ],
+    send_client_reports: [
+      type: :boolean,
+      default: true,
+      doc: """
+      Send diagnostic client reports about discarded events, interval is set to send a report
+      once every 30 seconds if any discarded events exist.
+      See [Client Reports](https://develop.sentry.dev/sdk/client-reports/) in Sentry docs.
+      *Available since v10.8.0*.
+      """
+    ],
+    server_name: [
+      type: :string,
+      doc: """
+      The name of the server running the application. Not used by default.
+      """
+    ],
+    sample_rate: [
+      type: {:custom, __MODULE__, :__validate_sample_rate__, []},
+      default: 1.0,
+      type_doc: "`t:float/0`",
+      doc: """
+      The percentage of events to send to Sentry. A value of `0.0` will deny sending any events,
+      and a value of `1.0` will send 100% of events. Sampling is applied
+      **after** the `:before_send` callback. See where [the Sentry
+      documentation](https://develop.sentry.dev/sdk/sessions/#filter-order)
+      suggests this. Must be between `0.0` and `1.0` (included).
+      """
+    ],
+    tags: [
+      type: {:map, :any, :any},
+      default: %{},
+      doc: """
+      A map of tags to be sent with every event.
+      """
+    ],
+    extra: [
+      type: {:map, :atom, :any},
+      type_doc: "`t:Sentry.Context.extra/0`",
+      default: %{},
+      doc: """
+      A map of extra data to be sent with every event.
+      """
+    ],
+    max_breadcrumbs: [
+      type: :non_neg_integer,
+      default: 100,
+      doc: """
+      The maximum number of breadcrumbs to keep. See `Sentry.Context.add_breadcrumb/1`.
+      """
+    ],
+    max_stacktrace_arg_length: [
+      type: :non_neg_integer,
+      default: 10_000,
+      doc: """
+      The maximum length (in Unicode graphemes) of each inspected function argument reported in
+      the `vars` of a stacktrace frame. Arguments are inspected and then truncated to this
+      length. This guards against very large terms (such as big structs) blowing up the
+      size of an event. *Available since v13.2.0*.
+      """
+    ],
+    report_deps: [
+      type: :boolean,
+      default: true,
+      doc: """
+      Whether to report application dependencies of your application
+      alongside events. This list contains applications (alongside their version)
+      that are **loaded** when the `:sentry` application starts.
+      """
+    ],
+    log_level: [
+      type: {:in, [:debug, :info, :warning, :warn, :error]},
+      default: :warning,
+      doc: """
+      The level to use when Sentry fails to
+      send an event due to an API failure or other reasons.
+      """
+    ],
+    filter: [
+      type: :atom,
+      type_doc: "`t:module/0`",
+      default: Sentry.DefaultEventFilter,
+      doc: """
+      A module that implements the `Sentry.EventFilter`
+      behaviour. Defaults to `Sentry.DefaultEventFilter`. See the
+      [*Filtering Exceptions* section](#module-filtering-exceptions) below.
+      """
+    ],
+    dedup_events: [
+      type: :boolean,
+      default: true,
+      doc: """
+      Whether to **deduplicate** events before reporting them to Sentry. If this option is `true`,
+      then the SDK will store reported events for around 30 seconds after they're reported.
+      Any time the SDK is about to report an event, it will check if it has already reported
+      within the past 30 seconds. If it has, then it will not report the event again, and will
+      log a message instead. Events are deduplicated by comparing their message, exception,
+      stacktrace, and fingerprint. *Available since v10.0.0*.
+      """
+    ],
+    test_mode: [
+      type: :boolean,
+      default: false,
+      doc: """
+      Whether to enable *test mode*.
+
+      When `test_mode: true` is set, the SDK automatically activates per-test
+      configuration isolation and ensures the test registry is started at
+      application boot. See `Sentry.Test` for the full testing guide.
+      *Available since v10.8.0*.
+      """
+    ],
+    integrations: [
+      type: :keyword_list,
+      doc: """
+      Configuration for integrations with third-party libraries. Every integration has its own
+      option and corresponding configuration options.
+      """,
+      default: [],
+      keys: integrations_schema
+    ],
+    enable_logs: [
+      type: :boolean,
+      default: false,
+      doc: """
+      Whether to enable sending log events to Sentry. When enabled, the SDK will
+      automatically attach a `Sentry.LoggerHandler` to capture and send structured
+      log events according to the [Sentry Logs Protocol](https://develop.sentry.dev/sdk/telemetry/logs/).
+      The auto-attached handler also reports **crashes** to Sentry as captured events, and
+      can be configured (via the `:capture_log_messages` and `:capture_level` keys of the
+      `:logs` option) to report standalone `Logger` messages as captured events too, so you
+      do not need to add `Sentry.LoggerHandler` manually.
+      The handler is not added if a `Sentry.LoggerHandler` is already registered.
+      Use the `:logs` option to configure the auto-attached handler.
+      *Available since 12.0.0*.
+      """
+    ],
+    enable_metrics: [
+      type: :boolean,
+      default: true,
+      doc: """
+      Whether to enable sending metric events to Sentry. When enabled, the SDK will
+      capture and send metrics (counters, gauges, distributions) according to the
+      [Sentry Metrics Protocol](https://develop.sentry.dev/sdk/telemetry/metrics/).
+      Use `Sentry.Metrics` functions to record metrics.
+      *Available since 13.0.0*.
+      """
+    ],
+    logs: [
+      type: :keyword_list,
+      default: [],
+      doc: """
+      Configuration for the auto-attached logger handler. Only used when `:enable_logs`
+      is `true`. The `:level`, `:excluded_domains`, and `:metadata` keys configure the
+      **structured logs** sent to Sentry's Logs Protocol, while the `:capture_*` keys
+      (`:capture_log_messages`, `:capture_level`, `:capture_metadata`, and
+      `:capture_excluded_domains`) configure whether (and how) `Logger` messages are also
+      reported as captured Sentry events. *Available since 12.0.0*.
+      """,
+      keys: [
+        level: [
+          type:
+            {:in,
+             [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug]},
+          default: :info,
+          type_doc: "`t:Logger.level/0`",
+          doc: """
+          The minimum Logger level for log events sent to Sentry's Logs Protocol.
+          """
+        ],
+        excluded_domains: [
+          type: {:list, :atom},
+          default: [],
+          type_doc: "list of `t:atom/0`",
+          doc: """
+          Domains to exclude from logs sent to Sentry's Logs Protocol. This does not affect
+          captured Sentry events; use `:capture_excluded_domains` for those.
+          """
+        ],
+        metadata: [
+          type: {:or, [{:list, :atom}, {:in, [:all]}]},
+          default: [],
+          type_doc: "list of `t:atom/0`, or `:all`",
+          doc: """
+          Logger metadata keys to include as attributes in log events sent to Sentry's Logs
+          Protocol. If set to `:all`, all metadata will be included. This does not affect
+          captured Sentry events; use `:capture_metadata` for those.
+          """
+        ],
+        capture_log_messages: [
+          type: :boolean,
+          default: false,
+          doc: """
+          When `true`, the auto-attached handler also reports standalone log messages
+          (such as `Logger.error("oops")`) to Sentry as captured events, in addition to
+          crash reports. Crash reports are sent whether or not this option is enabled, so
+          you do not need to turn it on to capture crashes. Both crashes and messages are
+          gated by `:capture_level`. This mirrors the `:capture_log_messages` option of
+          `Sentry.LoggerHandler`. *Available since v13.3.0*.
+          """
+        ],
+        capture_level: [
+          type:
+            {:in,
+             [:emergency, :alert, :critical, :error, :warning, :warn, :notice, :info, :debug]},
+          default: :error,
+          type_doc: "`t:Logger.level/0`",
+          doc: """
+          The minimum Logger level for captured Sentry events, including crashes. At the default
+          `:error`, crashes (which are logged at `:error`) are reported; raising this above
+          `:error` suppresses crashes too, mirroring the `:level` option of
+          `Sentry.LoggerHandler`. When `:capture_log_messages` is `true`, this also gates
+          which standalone `Logger` messages become captured events. This is independent of
+          `:level`, which controls the level for structured logs sent to Sentry's Logs
+          Protocol. *Available since v13.3.0*.
+          """
+        ],
+        capture_metadata: [
+          type: {:or, [{:list, :atom}, {:in, [:all]}]},
+          default: [],
+          type_doc: "list of `t:atom/0`, or `:all`",
+          doc: """
+          Logger metadata keys to include in captured Sentry events from the auto-attached
+          handler, added under `:extra` as `logger_metadata`. If set to `:all`, all metadata
+          will be included. This is independent of `:metadata`, which controls metadata for
+          structured logs sent to Sentry's Logs Protocol. *Available since v13.3.0*.
+          """
+        ],
+        capture_excluded_domains: [
+          type: {:list, :atom},
+          default: [:cowboy],
+          type_doc: "list of `t:atom/0`",
+          doc: """
+          Domains to exclude from **error events** captured by the auto-attached handler.
+          Defaults to `[:cowboy]` to avoid double-reporting events already captured
+          by `Sentry.PlugCapture`. This is independent of `:excluded_domains`, which controls
+          structured logs sent to Sentry's Logs Protocol. *Available since v13.3.0*.
+          """
+        ]
+      ]
+    ],
+    org_id: [
+      type: {:custom, __MODULE__, :__validate_org_id__, []},
+      default: nil,
+      type_doc: "`t:String.t/0` or `nil`",
+      doc: """
+      An explicit organization ID for trace continuation validation. If not set, the SDK
+      will extract it from the DSN host (e.g., `o1234` from `o1234.ingest.sentry.io` gives `"1234"`).
+      This is useful for self-hosted Sentry or Relay setups where the org ID cannot be extracted
+      from the DSN. *Available since 12.1.0*.
+      """
+    ],
+    strict_trace_continuation: [
+      type: :boolean,
+      default: false,
+      doc: """
+      When `true`, both the SDK's org ID and the incoming baggage `sentry-org_id` must be present
+      and match for a trace to be continued. Traces with a missing org ID on either side are rejected
+      and a new trace is started. When `false` (the default), only a mismatch between two present
+      org IDs will cause a new trace to be started. See the
+      [SDK spec](https://develop.sentry.dev/sdk/foundations/trace-propagation/#strict-trace-continuation)
+      for the full decision matrix. *Available since 12.1.0*.
+      """
+    ],
+    telemetry_processor_categories: [
+      type: {:list, {:in, [:error, :check_in, :transaction, :log]}},
+      default: [],
+      doc: """
+      List of event categories that should be processed through the TelemetryProcessor.
+      Categories in this list use the TelemetryProcessor's ring buffer and weighted
+      round-robin scheduler, which provides prioritized scheduling and backpressure.
+      Categories not in this list use the original sender-based approach.
+
+      Log and metric events always use the TelemetryProcessor regardless of this setting.
+
+      Available categories:
+        * `:error` - Error events (critical priority, batch_size=1)
+        * `:check_in` - Cron check-ins (high priority, batch_size=1)
+        * `:transaction` - Performance transactions (medium priority, batch_size=1)
+        * `:log` - Log events (accepted for backward compatibility, logs always use
+          the TelemetryProcessor regardless of this setting)
+
+      *Available since 12.0.0*.
+      """
+    ],
+    namespace: [
+      type: {:custom, __MODULE__, :__validate_namespace__, []},
+      type_doc: "`{module(), atom()}`",
+      default: {Sentry.Config, :namespace},
+      doc: """
+      A `{module, function}` tuple that resolves scoped configuration overrides.
+      The function receives a config key and must return `{:ok, value}` to override
+      the global value, or `:default` to fall back to the global configuration.
+
+      The default resolver (`{Sentry.Config, :namespace}`) always returns `:default`,
+      meaning global configuration is used as-is.
+
+      When `test_mode: true` is enabled, the SDK automatically uses
+      `{Sentry.Test.Config, :namespace}` as the resolver to enable per-test
+      configuration isolation via `Sentry.Test.Config.put/1`.
+      """
+    ],
+    scrubber: [
+      type: :keyword_list,
+      default: [],
+      type_doc: "`t:keyword/0`",
+      doc: """
+      Configuration for how the SDK scrubs sensitive data out of captured events.
+
+      *Available since v13.2.0*.
+      """,
+      keys: [
+        conn_private_allow_list: [
+          type: {:list, :atom},
+          default: Sentry.Scrubber.default_private_allow_list(),
+          type_doc: "list of `t:atom/0`",
+          doc: """
+          A list of keys that are retained in a `%Plug.Conn{}`'s `:private` map when
+          a captured error embeds a connection (for example a `Phoenix.ActionClauseError`
+          reported via `Sentry.PlugCapture`). All other `:private` keys are dropped.
+
+          The `:private` map can hold framework internals and sensitive data (such as
+          the decoded session under `:plug_session`), so it is not safe to report
+          wholesale. By default the SDK keeps only Phoenix's routing and render
+          metadata — see `Sentry.Scrubber.default_private_allow_list/0` — which is
+          high-signal for triaging which controller/action failed. Set this option to
+          extend or replace that list.
+
+          *Available since v13.2.0*.
+          """
+        ]
+      ]
+    ]
+  ]
+
+  transport_opts_schema = [
+    send_result: [
+      type: {:in, [:none, :sync]},
+      default: :none,
+      type_doc: "`t:send_type/0`",
+      doc: """
+      Controls what to return when reporting exceptions to Sentry.
+      """
+    ],
+    client: [
+      type: :atom,
+      type_doc: "`t:module/0`",
+      default: Sentry.FinchClient,
+      doc: """
+      A module that implements the `Sentry.HTTPClient`
+      behaviour. The default client uses
+      [Finch](https://github.com/sneako/finch) as the HTTP client;
+      this *changed from Hackney to Finch in v12.0.0*.
+      """
+    ],
+    send_max_attempts: [
+      type: :pos_integer,
+      default: 4,
+      doc: """
+      The maximum number of attempts to send an event to Sentry.
+      """
+    ],
+    finch_pool_opts: [
+      type: :keyword_list,
+      default: [size: 50],
+      doc: """
+      Pool options to be passed to `Finch.start_link/1`. These options control
+      the connection pool behavior. Only applied if `:client` is set to
+      `Sentry.FinchClient`. See [Finch documentation](https://hexdocs.pm/finch/0.17.0/Finch.html#start_link/1)
+      for available options.
+      """
+    ],
+    finch_request_opts: [
+      type: :keyword_list,
+      default: [receive_timeout: 5000],
+      doc: """
+      Request options to be passed to `Finch.request/4`. These options control
+      individual request behavior. Only applied if `:client` is set to
+      `Sentry.FinchClient`. See [Finch documentation](https://hexdocs.pm/finch/0.17.0/Finch.html#request/4)
+      for available options.
+      """
+    ],
+    hackney_opts: [
+      type: :keyword_list,
+      default: [pool: :sentry_pool],
+      doc: """
+      **Deprecated**: Use Finch as the default HTTP client instead.
+
+      Options to be passed to `hackney`. Only
+      applied if `:client` is set to `Sentry.HackneyClient`.
+      """
+    ],
+    hackney_pool_timeout: [
+      type: :timeout,
+      default: 5000,
+      doc: """
+      **Deprecated**: Use Finch as the default HTTP client instead.
+
+      The maximum time to wait for a
+      connection to become available. Only applied if `:client` is set to
+      `Sentry.HackneyClient`.
+      """
+    ],
+    hackney_pool_max_connections: [
+      type: :pos_integer,
+      default: 50,
+      doc: """
+      **Deprecated**: Use Finch as the default HTTP client instead.
+
+      The maximum number of
+      connections to keep in the pool. Only applied if `:client` is set to
+      `Sentry.HackneyClient`.
+      """
+    ],
+    telemetry_buffer_capacities: [
+      type: {:map, {:in, [:error, :check_in, :transaction, :log, :metric]}, :pos_integer},
+      default: %{},
+      type_doc: "`%{category => pos_integer()}`",
+      doc: """
+      Overrides for the maximum number of items each telemetry buffer can hold.
+      When a buffer reaches capacity, oldest items are dropped to make room.
+      Default: error=100, check_in=100, transaction=1000, log=1000, metric=1000.
+      *Available since v12.0.0*.
+      """
+    ],
+    telemetry_scheduler_weights: [
+      type: {:map, {:in, [:critical, :high, :medium, :low]}, :pos_integer},
+      default: %{},
+      type_doc: "`%{priority => pos_integer()}`",
+      doc: """
+      Overrides for the weighted round-robin scheduler priority weights.
+      Higher weights mean more sending slots for that priority level.
+      Default: critical=5, high=4, medium=3, low=2.
+      *Available since v12.0.0*.
+      """
+    ],
+    transport_capacity: [
+      type: :pos_integer,
+      default: 1000,
+      doc: """
+      Maximum number of items the transport queue can hold. For log envelopes,
+      each log event counts as one item toward capacity. When the queue is full,
+      the scheduler stops dequeuing from buffers until space becomes available.
+      The transport queue processes one envelope at a time.
+      *Available since v12.0.0*.
+      """
+    ]
+  ]
+
+  source_code_context_opts_schema = [
+    enable_source_code_context: [
+      type: :boolean,
+      default: false,
+      doc: """
+      Whether to report source code context alongside events.
+      """
+    ],
+    root_source_code_paths: [
+      type: {:list, :string},
+      default: [],
+      type_doc: "list of `t:Path.t/0`",
+      doc: """
+      A list of paths to the root of
+      your application's source code. This is used to determine the relative
+      path of files in stack traces. Usually, you'll want to set this to
+      `[File.cwd!()]`. For umbrella apps, you should set this to all the application
+      paths in your umbrella (such as `[Path.join(File.cwd!(), "apps/app1"), ...]`).
+      **Required** if `:enabled_source_code_context` is `true`.
+      """
+    ],
+    source_code_path_pattern: [
+      type: :string,
+      default: "**/*.ex",
+      doc: """
+      A glob pattern used to
+      determine which files to report source code context for. The glob "starts"
+      from `:root_source_code_paths`.
+      """
+    ],
+    source_code_exclude_patterns: [
+      type: {:list, {:custom, __MODULE__, :__validate_source_code_exclude_pattern__, []}},
+      type_doc: "list of `t:Regex.t/0` or `t:String.t/0`",
+      doc: """
+      A list of regular expressions used to determine which files to
+      exclude from source code context. Each element can be either a compiled
+      `Regex` or a string pattern that will be compiled to a regex at runtime.
+
+      Using strings is required for OTP 28.0 compatibility, as compiled regexes
+      cannot be serialized in release config files.
+
+      If you're on OTP 28.1 or later, you must use `/E` modifier in your regexps.
+      """
+    ],
+    source_code_map_path: [
+      type: :string,
+      type_doc: "`t:Path.t/0`",
+      doc: """
+      The path to the source code map file. See
+      [`mix sentry.package_source_code`](`Mix.Tasks.Sentry.PackageSourceCode`).
+      Defaults to a private path inside Sentry's `priv` directory. *Available since v10.2.0*.
+      """
+    ],
+    context_lines: [
+      type: :pos_integer,
+      default: 3,
+      doc: """
+      The number of lines of source code
+      before and after the line that caused the exception to report.
+      """
+    ],
+    in_app_otp_apps: [
+      type: {:list, :atom},
+      default: [],
+      type_doc: "list of `t:atom/0`",
+      doc: """
+      A list of OTP application names that will be used to populate additional modules for the
+      `:in_app_module_allow_list` option. List your application (or the applications in your
+      umbrella project) for them to show as "in-app" in stacktraces in Sentry. We recommend using
+      this option over `:in_app_module_allow_list`, unless you need more control over the exact
+      modules to consider as "in-app".
+
+      *Available since v10.9.0*.
+      """
+    ],
+    in_app_module_allow_list: [
+      type: {:list, :atom},
+      default: [],
+      type_doc: "list of `t:module/0`",
+      doc: """
+      A list of modules that is used
+      to distinguish among stacktrace frames that belong to your app and ones that are
+      part of libraries or core Elixir. This is used to better display the significant part
+      of stacktraces. The logic is "greedy", so if your app's root module is `MyApp` and
+      you configure this option to `[MyApp]`, `MyApp` as well as any submodules
+      (like `MyApp.Submodule`) would be considered part of your app.
+
+      Usually, the `:in_app_otp_apps` option should be preferred as it's
+      simpler to work with.
+      """
+    ]
+  ]
+
+  hook_opts_schema = [
+    before_send: [
+      type: {:or, [{:fun, 1}, {:tuple, [:atom, :atom]}]},
+      type_doc: "`t:before_send_event_callback/0`",
+      doc: """
+      Allows performing operations on the event *before* it is sent as
+      well as filtering out the event altogether.
+      If the callback returns `nil` or `false`, the event is not reported. If it returns an
+      updated `Sentry.Event`, then the updated event is used instead. See the [*Event Callbacks*
+      section](#module-event-callbacks) below for more information.
+
+      `:before_send` is available *since v10.0.0*. Before, it was called `:before_send_event`.
+      """
+    ],
+    before_send_event: [
+      type: {:or, [{:fun, 1}, {:tuple, [:atom, :atom]}]},
+      type_doc: "`t:before_send_event_callback/0`",
+      deprecated: "Use :before_send instead.",
+      doc: """
+      Exactly the same as `:before_send`, but has been **deprecated since v10.0.0**.
+      """
+    ],
+    after_send_event: [
+      type: {:or, [{:fun, 2}, {:tuple, [:atom, :atom]}]},
+      type_doc: "`t:after_send_event_callback/0`",
+      doc: """
+      Callback that is called *after*
+      attempting to send an event. The result of the HTTP call as well as the event will
+      be passed as arguments. The return value of the callback is not returned. See the
+      [*Event Callbacks* section](#module-event-callbacks) below for more information.
+      """
+    ],
+    before_send_log: [
+      type: {:or, [{:fun, 1}, {:tuple, [:atom, :atom]}]},
+      type_doc: "`t:before_send_log_callback/0`",
+      doc: """
+      Allows performing operations on a log event *before* it is sent, as
+      well as filtering out the log event altogether.
+      If the callback returns `nil` or `false`, the log event is not reported. If it returns a
+      (potentially-updated) `Sentry.LogEvent`, then the updated log event is used instead.
+      *Available since v12.0.0*.
+      """
+    ],
+    before_send_metric: [
+      type: {:or, [nil, {:fun, 1}, {:tuple, [:atom, :atom]}]},
+      type_doc: "`t:before_send_metric_callback/0`",
+      doc: """
+      Allows performing operations on a metric *before* it is sent, as
+      well as filtering out the metric altogether.
+      If the callback returns `nil` or `false`, the metric is not reported. If it returns a
+      (potentially-updated) `Sentry.Metric`, then the updated metric is used instead.
+      *Available since v13.0.0*.
+      """
+    ]
+  ]
+
+  @basic_opts_schema NimbleOptions.new!(basic_opts_schema)
+  @transport_opts_schema NimbleOptions.new!(transport_opts_schema)
+  @source_code_context_opts_schema NimbleOptions.new!(source_code_context_opts_schema)
+  @hook_opts_schema NimbleOptions.new!(hook_opts_schema)
+
+  @raw_opts_schema Enum.concat([
+                     basic_opts_schema,
+                     transport_opts_schema,
+                     source_code_context_opts_schema,
+                     hook_opts_schema
+                   ])
+
+  @opts_schema NimbleOptions.new!(@raw_opts_schema)
+  @valid_keys Keyword.keys(@raw_opts_schema)
+
+  @spec validate!() :: keyword()
+  def validate! do
+    :sentry
+    |> Application.get_all_env()
+    |> validate!()
+  end
+
+  @spec validate!(keyword()) :: keyword()
+  def validate!(config) when is_list(config) do
+    config_opts =
+      config
+      |> Keyword.take(@valid_keys)
+      |> fill_in_from_env(:dsn, "SENTRY_DSN")
+      |> fill_in_from_env(:release, "SENTRY_RELEASE")
+      |> fill_in_from_env(:environment_name, "SENTRY_ENVIRONMENT")
+
+    case NimbleOptions.validate(config_opts, @opts_schema) do
+      {:ok, opts} ->
+        opts
+        |> validate_test_mode_env()
+        |> normalize_included_environments()
+        |> normalize_environment()
+        |> handle_deprecated_before_send()
+        |> warn_deprecated_hackney_options(config)
+        |> warn_traces_sample_rate_without_dependencies()
+
+      {:error, error} ->
+        raise ArgumentError, """
+        invalid configuration for the :sentry application, so we cannot start or update
+        its configuration. The error was:
+
+            #{Exception.message(error)}
+
+        See the documentation for the Sentry module for more information on configuration.
+        """
+    end
+  end
+
+  @spec persist(keyword()) :: :ok
+  def persist(config) when is_list(config) do
+    Enum.each(config, fn {key, value} ->
+      :persistent_term.put({:sentry_config, key}, value)
+    end)
+  end
+
+  @spec docs() :: String.t()
+  def docs do
+    """
+    #### Basic Options
+
+    #{NimbleOptions.docs(@basic_opts_schema)}
+
+    #### Hook Options
+
+    These options control hooks that this SDK can call before or after sending events.
+
+    #{NimbleOptions.docs(@hook_opts_schema)}
+
+    #### Transport Options
+
+    These options control how this Sentry SDK sends events to the Sentry server.
+
+    #{NimbleOptions.docs(@transport_opts_schema)}
+
+    #### Source Code Context Options
+
+    These options control how source code context is reported alongside events.
+
+    #{NimbleOptions.docs(@source_code_context_opts_schema)}
+    """
+  end
+
+  @spec dsn() :: nil | Sentry.DSN.t()
+  def dsn, do: get(:dsn)
+
+  # TODO: remove me on v11.0.0, :included_environments has been deprecated
+  # in v10.0.0.
+  @spec included_environments() :: :all | [String.t()]
+  def included_environments, do: fetch!(:included_environments)
+
+  @spec environment_name() :: String.t() | nil
+  def environment_name, do: fetch!(:environment_name)
+
+  @spec max_hackney_connections() :: pos_integer()
+  def max_hackney_connections, do: fetch!(:hackney_pool_max_connections)
+
+  @spec hackney_timeout() :: timeout()
+  def hackney_timeout, do: fetch!(:hackney_pool_timeout)
+
+  @spec tags() :: map()
+  def tags, do: fetch!(:tags)
+
+  @spec extra() :: map()
+  def extra, do: fetch!(:extra)
+
+  @spec release() :: String.t() | nil
+  def release, do: get(:release)
+
+  @spec server_name() :: String.t() | nil
+  def server_name, do: get(:server_name)
+
+  @spec source_code_map_path() :: Path.t() | nil
+  def source_code_map_path, do: get(:source_code_map_path)
+
+  @spec filter() :: module()
+  def filter, do: fetch!(:filter)
+
+  @spec client() :: module()
+  def client, do: fetch!(:client)
+
+  @spec enable_source_code_context?() :: boolean()
+  def enable_source_code_context?, do: fetch!(:enable_source_code_context)
+
+  @spec context_lines() :: pos_integer()
+  def context_lines, do: fetch!(:context_lines)
+
+  @spec in_app_module_allow_list() :: [atom()]
+  def in_app_module_allow_list, do: fetch!(:in_app_module_allow_list)
+
+  @spec scrubber() :: keyword()
+  def scrubber, do: fetch!(:scrubber)
+
+  @spec send_result() :: :none | :sync
+  def send_result, do: fetch!(:send_result)
+
+  @spec send_max_attempts() :: pos_integer()
+  def send_max_attempts, do: fetch!(:send_max_attempts)
+
+  @spec sample_rate() :: float()
+  def sample_rate, do: fetch!(:sample_rate)
+
+  @spec traces_sample_rate() :: nil | float()
+  def traces_sample_rate, do: fetch!(:traces_sample_rate)
+
+  @spec traces_sampler() :: traces_sampler_function() | nil
+  def traces_sampler, do: get(:traces_sampler)
+
+  @spec finch_pool_opts() :: keyword()
+  def finch_pool_opts, do: fetch!(:finch_pool_opts)
+
+  @spec finch_request_opts() :: keyword()
+  def finch_request_opts, do: fetch!(:finch_request_opts)
+
+  @spec hackney_opts() :: keyword()
+  def hackney_opts, do: fetch!(:hackney_opts)
+
+  @spec before_send() :: (Sentry.Event.t() -> Sentry.Event.t()) | {module(), atom()} | nil
+  def before_send, do: compose_send_callback(:before_send)
+
+  @spec after_send_event() ::
+          (Sentry.Event.t(), term() -> Sentry.Event.t()) | {module(), atom()} | nil
+  def after_send_event, do: get(:after_send_event)
+
+  @spec report_deps?() :: boolean()
+  def report_deps?, do: fetch!(:report_deps)
+
+  @spec in_app_otp_apps() :: [atom()]
+  def in_app_otp_apps, do: fetch!(:in_app_otp_apps)
+
+  @spec json_library() :: module()
+  def json_library, do: fetch!(:json_library)
+
+  @spec log_level() :: :debug | :info | :warning | :warn | :error
+  def log_level, do: fetch!(:log_level)
+
+  @spec max_breadcrumbs() :: non_neg_integer()
+  def max_breadcrumbs, do: fetch!(:max_breadcrumbs)
+
+  @spec max_stacktrace_arg_length() :: non_neg_integer()
+  def max_stacktrace_arg_length, do: fetch!(:max_stacktrace_arg_length)
+
+  @spec dedup_events?() :: boolean()
+  def dedup_events?, do: fetch!(:dedup_events)
+
+  @spec send_client_reports?() :: boolean()
+  def send_client_reports?, do: fetch!(:send_client_reports)
+
+  @spec integrations() :: keyword()
+  def integrations, do: fetch!(:integrations)
+
+  @spec tracing?() :: boolean()
+  def tracing? do
+    (Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() and
+       not is_nil(fetch!(:traces_sample_rate))) or not is_nil(get(:traces_sampler))
+  end
+
+  @doc deprecated: "Use Sentry.Test instead. This option will be removed in v13.0.0."
+  @spec test_mode?() :: boolean()
+  def test_mode?, do: fetch!(:test_mode)
+
+  @spec enable_logs?() :: boolean()
+  def enable_logs?, do: fetch!(:enable_logs)
+
+  @spec enable_metrics?() :: boolean()
+  def enable_metrics?, do: fetch!(:enable_metrics)
+
+  @spec logs() :: keyword()
+  def logs, do: fetch!(:logs)
+
+  @spec logs_level() :: Logger.level()
+  def logs_level, do: Keyword.fetch!(logs(), :level)
+
+  @spec logs_excluded_domains() :: [atom()]
+  def logs_excluded_domains, do: Keyword.fetch!(logs(), :excluded_domains)
+
+  @spec logs_metadata() :: [atom()] | :all
+  def logs_metadata, do: Keyword.fetch!(logs(), :metadata)
+
+  @spec logs_capture_log_messages?() :: boolean()
+  def logs_capture_log_messages?, do: Keyword.fetch!(logs(), :capture_log_messages)
+
+  @spec logs_capture_level() :: Logger.level()
+  def logs_capture_level, do: Keyword.fetch!(logs(), :capture_level)
+
+  @spec logs_capture_metadata() :: [atom()] | :all
+  def logs_capture_metadata, do: Keyword.fetch!(logs(), :capture_metadata)
+
+  @spec logs_capture_excluded_domains() :: [atom()]
+  def logs_capture_excluded_domains, do: Keyword.fetch!(logs(), :capture_excluded_domains)
+
+  @spec telemetry_buffer_capacities() :: %{Sentry.Telemetry.Category.t() => pos_integer()}
+  def telemetry_buffer_capacities, do: fetch!(:telemetry_buffer_capacities)
+
+  @spec telemetry_scheduler_weights() :: %{Sentry.Telemetry.Category.priority() => pos_integer()}
+  def telemetry_scheduler_weights, do: fetch!(:telemetry_scheduler_weights)
+
+  @spec transport_capacity() :: pos_integer()
+  def transport_capacity, do: fetch!(:transport_capacity)
+
+  @spec org_id() :: String.t() | nil
+  def org_id, do: get(:org_id)
+
+  @spec strict_trace_continuation?() :: boolean()
+  def strict_trace_continuation?, do: fetch!(:strict_trace_continuation)
+
+  @doc """
+  Returns the effective org ID, preferring the explicit `:org_id` config over the DSN-derived value.
+  """
+  @spec effective_org_id() :: String.t() | nil
+  def effective_org_id do
+    case org_id() do
+      nil ->
+        case dsn() do
+          %Sentry.DSN{org_id: org_id} -> org_id
+          _ -> nil
+        end
+
+      explicit ->
+        explicit
+    end
+  end
+
+  @spec telemetry_processor_categories() :: [atom()]
+  def telemetry_processor_categories, do: fetch!(:telemetry_processor_categories)
+
+  @spec telemetry_processor_category?(atom()) :: boolean()
+  def telemetry_processor_category?(category),
+    do: category in telemetry_processor_categories()
+
+  @spec before_send_log() ::
+          (Sentry.LogEvent.t() -> Sentry.LogEvent.t() | nil | false) | {module(), atom()} | nil
+  def before_send_log, do: compose_send_callback(:before_send_log)
+
+  @spec before_send_metric() ::
+          (Sentry.Metric.t() -> Sentry.Metric.t() | nil | false) | {module(), atom()} | nil
+  def before_send_metric, do: compose_send_callback(:before_send_metric)
+
+  # Composes the user-provided callback (under `key`) with an internal callback
+  # (under `internal_<key>`). In production/development the user-provided
+  # callback is dropped when there is no DSN, so callbacks never run for events
+  # that won't be sent. In test mode the user-provided callback is always
+  # honored — tests routinely use `dsn: nil` to assert callback behavior in
+  # isolation, and dropping there would break those contracts.
+  defp compose_send_callback(key) do
+    user_callback = if user_callbacks_enabled?(), do: get(key), else: nil
+    internal_callback = get(internal_callback_key(key))
+
+    case {user_callback, internal_callback} do
+      {nil, nil} -> nil
+      {user, nil} -> user
+      {nil, internal} -> internal
+      {user, internal} -> chain_send_callbacks(user, internal)
+    end
+  end
+
+  defp user_callbacks_enabled? do
+    not is_nil(dsn()) or test_mode?()
+  end
+
+  defp internal_callback_key(:before_send), do: :_internal_before_send
+  defp internal_callback_key(:before_send_log), do: :_internal_before_send_log
+  defp internal_callback_key(:before_send_metric), do: :_internal_before_send_metric
+
+  defp chain_send_callbacks(first, second) do
+    fn struct ->
+      case apply_send_callback(first, struct) do
+        result when result == nil or result == false -> result
+        result -> apply_send_callback(second, result)
+      end
+    end
+  end
+
+  defp apply_send_callback(fun, struct) when is_function(fun, 1), do: fun.(struct)
+  defp apply_send_callback({mod, fun}, struct), do: apply(mod, fun, [struct])
+
+  @spec put_config(atom(), term()) :: :ok
+  def put_config(key, value) when is_atom(key) do
+    unless key in @valid_keys do
+      raise ArgumentError, "unknown option #{inspect(key)}"
+    end
+
+    renamed_key =
+      case key do
+        :before_send_event -> :before_send
+        other -> other
+      end
+
+    [{key, value}]
+    |> validate!()
+    |> Keyword.take([renamed_key])
+    |> persist()
+  end
+
+  ## Helpers
+
+  defp fill_in_from_env(config, key, system_key) do
+    case System.get_env(system_key) do
+      nil -> config
+      value -> Keyword.put_new(config, key, value)
+    end
+  end
+
+  defp validate_test_mode_env(opts) do
+    if Keyword.fetch!(opts, :test_mode) and not Code.ensure_loaded?(ExUnit) do
+      raise ArgumentError, """
+      test_mode: true is only allowed in the test environment. \
+      Remove it from your non-test configuration.
+      """
+    end
+
+    opts
+  end
+
+  # TODO: remove me on v11.0.0, :included_environments has been deprecated
+  # in v10.0.0.
+  defp normalize_included_environments(config) do
+    Keyword.update(config, :included_environments, :all, fn
+      :all -> :all
+      envs when is_list(envs) -> Enum.map(envs, &to_string/1)
+    end)
+  end
+
+  # TODO: remove me on v11.0.0, :included_environments has been deprecated
+  # in v10.0.0.
+  defp handle_deprecated_before_send(opts) do
+    {before_send_event, opts} = Keyword.pop(opts, :before_send_event)
+
+    case Keyword.fetch(opts, :before_send) do
+      {:ok, _before_send} when not is_nil(before_send_event) ->
+        raise ArgumentError, """
+        you cannot configure both :before_send and :before_send_event. :before_send_event
+        is deprecated, so only use :before_send from now on.
+        """
+
+      {:ok, _before_send} ->
+        opts
+
+      :error when not is_nil(before_send_event) ->
+        Keyword.put(opts, :before_send, before_send_event)
+
+      :error ->
+        opts
+    end
+  end
+
+  @hackney_deprecated_options [
+    :hackney_opts,
+    :hackney_pool_timeout,
+    :hackney_pool_max_connections
+  ]
+
+  # Warn about deprecated hackney options only if the user explicitly provided them
+  # in their configuration. We check against the original config (before NimbleOptions
+  # fills in defaults) to avoid warning when users are using the default Finch client.
+  defp warn_deprecated_hackney_options(opts, original_config) do
+    Enum.each(@hackney_deprecated_options, fn opt ->
+      if Keyword.has_key?(original_config, opt) do
+        IO.warn(
+          "#{inspect(opt)} option is deprecated. Use Finch as the default HTTP client instead."
+        )
+      end
+    end)
+
+    opts
+  end
+
+  defp warn_traces_sample_rate_without_dependencies(opts) do
+    traces_sample_rate = Keyword.get(opts, :traces_sample_rate)
+
+    if not is_nil(traces_sample_rate) and
+         not Sentry.OpenTelemetry.VersionChecker.tracing_compatible?() do
+      Sentry.LoggerUtils.warning("""
+      Sentry tracing is configured with traces_sample_rate: #{inspect(traces_sample_rate)}, \
+      but the required OpenTelemetry dependencies are not satisfied. \
+      Tracing will be disabled. Please ensure you have compatible versions of: \
+      opentelemetry (>= 1.5.0), opentelemetry_api (>= 1.4.0), \
+      opentelemetry_exporter (>= 1.0.0), and opentelemetry_semantic_conventions (>= 1.27.0).
+      """)
+    end
+
+    opts
+  end
+
+  defp normalize_environment(config) do
+    Keyword.update!(config, :environment_name, &to_string/1)
+  end
+
+  @doc false
+  @spec namespace() :: {module(), atom()}
+  def namespace, do: fetch!(:namespace)
+
+  @doc """
+  Default scope resolver. Always returns `:default`, meaning the global
+  configuration stored in `:persistent_term` is used.
+  """
+  @spec namespace(atom()) :: :default
+  def namespace(_), do: :default
+
+  @compile {:inline, fetch!: 1}
+  defp fetch!(key) do
+    case resolve(key) do
+      {:ok, value} -> value
+      :default -> :persistent_term.get({:sentry_config, key})
+    end
+  rescue
+    ArgumentError ->
+      raise """
+      the Sentry configuration seems to be not available (while trying to fetch \
+      #{inspect(key)}). This is likely because the :sentry application has not been started yet. \
+      Make sure that you start the :sentry application before using any of its functions.
+      """
+  end
+
+  @compile {:inline, get: 1}
+  defp get(key) do
+    case resolve(key) do
+      {:ok, value} -> value
+      :default -> :persistent_term.get({:sentry_config, key}, nil)
+    end
+  end
+
+  defp resolve(:namespace), do: :default
+
+  defp resolve(key) do
+    case :persistent_term.get({:sentry_config, :namespace}, nil) do
+      {mod, fun} -> apply(mod, fun, [key])
+      nil -> :default
+    end
+  end
+
+  def __validate_path__(nil), do: {:ok, nil}
+
+  def __validate_path__(path) when is_binary(path) do
+    if File.exists?(path) do
+      {:ok, path}
+    else
+      {:error, "path does not exist"}
+    end
+  end
+
+  def __validate_sample_rate__(float) do
+    if is_float(float) and float >= 0.0 and float <= 1.0 do
+      {:ok, float}
+    else
+      {:error,
+       "expected :sample_rate to be a float between 0.0 and 1.0 (included), got: #{inspect(float)}"}
+    end
+  end
+
+  def __validate_traces_sample_rate__(value) do
+    if is_nil(value) or (is_float(value) and value >= 0.0 and value <= 1.0) do
+      {:ok, value}
+    else
+      {:error,
+       "expected :traces_sample_rate to be nil or a value between 0.0 and 1.0 (included), got: #{inspect(value)}"}
+    end
+  end
+
+  def __validate_traces_sampler__(nil), do: {:ok, nil}
+
+  def __validate_traces_sampler__(fun) when is_function(fun, 1) do
+    {:ok, fun}
+  end
+
+  def __validate_traces_sampler__({module, function})
+      when is_atom(module) and is_atom(function) do
+    if function_exported?(module, function, 1) do
+      {:ok, {module, function}}
+    else
+      {:error, "function #{module}.#{function}/1 is not exported"}
+    end
+  end
+
+  def __validate_traces_sampler__(other) do
+    {:error,
+     "expected :traces_sampler to be nil, a function with arity 1, or a {module, function} tuple, got: #{inspect(other)}"}
+  end
+
+  def __validate_json_library__(nil) do
+    {:error, "nil is not a valid value for the :json_library option"}
+  end
+
+  def __validate_json_library__(JSON), do: {:ok, JSON}
+
+  def __validate_json_library__(mod) when is_atom(mod) do
+    try do
+      with {:ok, %{}} <- mod.decode("{}"),
+           {:ok, "{}"} <- mod.encode(%{}) do
+        {:ok, mod}
+      else
+        _ ->
+          {:error,
+           "configured :json_library #{inspect(mod)} does not implement decode/1 and encode/1"}
+      end
+    rescue
+      UndefinedFunctionError ->
+        {:error,
+         """
+         configured :json_library #{inspect(mod)} is not available or does not implement decode/1 and encode/1.
+         Do you need to add #{inspect(mod)} to your mix.exs?
+         """}
+    end
+  end
+
+  def __validate_json_library__(other) do
+    {:error, "expected :json_library to be a module, got: #{inspect(other)}"}
+  end
+
+  def __validate_struct__(term, key, mod) do
+    if is_struct(term, mod) do
+      {:ok, term}
+    else
+      {:error, "expected #{inspect(key)} to be a #{inspect(mod)} struct, got: #{inspect(term)}"}
+    end
+  end
+
+  def __validate_source_code_exclude_pattern__(term) when is_struct(term, Regex) do
+    {:ok, term}
+  end
+
+  def __validate_source_code_exclude_pattern__(term) when is_binary(term) do
+    case Regex.compile(term) do
+      {:ok, _regex} ->
+        # Keep the string - it will be compiled at runtime in Sources
+        {:ok, term}
+
+      {:error, {reason, position}} ->
+        {:error, "invalid regex pattern #{inspect(term)}: #{reason} at position #{position}"}
+    end
+  end
+
+  def __validate_source_code_exclude_pattern__(term) do
+    {:error, "expected a Regex or a string pattern, got: #{inspect(term)}"}
+  end
+
+  def __validate_oban_tags_to_sentry_tags__(nil), do: {:ok, nil}
+
+  def __validate_oban_tags_to_sentry_tags__(fun) when is_function(fun, 1) do
+    {:ok, fun}
+  end
+
+  def __validate_oban_tags_to_sentry_tags__({module, function})
+      when is_atom(module) and is_atom(function) do
+    if function_exported?(module, function, 1) do
+      {:ok, {module, function}}
+    else
+      {:error, "function #{module}.#{function}/1 is not exported"}
+    end
+  end
+
+  def __validate_oban_tags_to_sentry_tags__(other) do
+    {:error,
+     "expected :oban_tags_to_sentry_tags to be nil, a function with arity 1, or a {module, function} tuple, got: #{inspect(other)}"}
+  end
+
+  def __validate_namespace__({mod, fun}) when is_atom(mod) and is_atom(fun) do
+    case Code.ensure_loaded(mod) do
+      {:module, ^mod} ->
+        if function_exported?(mod, fun, 1) do
+          {:ok, {mod, fun}}
+        else
+          {:error,
+           "namespace resolver #{inspect(mod)}.#{fun}/1 is not exported. " <>
+             "Ensure the module exports a function with arity 1."}
+        end
+
+      {:error, _reason} ->
+        {:error,
+         "namespace resolver module #{inspect(mod)} could not be loaded. " <>
+           "Ensure the module is compiled and available."}
+    end
+  end
+
+  def __validate_namespace__(other) do
+    {:error, "expected :namespace to be a {module, function} tuple, got: #{inspect(other)}"}
+  end
+
+  def __validate_org_id__(nil), do: {:ok, nil}
+
+  def __validate_org_id__(value) when is_binary(value) and value != "" do
+    {:ok, value}
+  end
+
+  def __validate_org_id__("") do
+    {:error, "expected :org_id to be a non-empty string or nil, got empty string"}
+  end
+
+  def __validate_org_id__(other) do
+    {:error, "expected :org_id to be a non-empty string or nil, got: #{inspect(other)}"}
+  end
+end

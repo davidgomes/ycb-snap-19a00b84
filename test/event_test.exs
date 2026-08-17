@@ -1,0 +1,587 @@
+defmodule Sentry.EventTest do
+  use Sentry.Case, async: false
+
+  import Sentry.TestHelpers
+
+  alias Sentry.Event
+  alias Sentry.Interfaces
+
+  defmodule SampleStruct do
+    defstruct [:name, :payload]
+  end
+
+  doctest Event, import: true
+
+  def event_generated_by_exception(extra \\ %{}) do
+    try do
+      apply(Event, :not_a_function, [1, 2, 3])
+    rescue
+      e -> Event.transform_exception(e, stacktrace: __STACKTRACE__, extra: extra)
+    end
+  end
+
+  defp event_with_stacktrace_args(args) do
+    try do
+      apply(Event, :not_a_function, args)
+    rescue
+      e -> Event.transform_exception(e, stacktrace: __STACKTRACE__)
+    end
+  end
+
+  defp vars_for_failing_frame(event) do
+    Enum.find_value(event.exception, fn %Interfaces.Exception{} = exception ->
+      Enum.find_value(exception.stacktrace.frames, fn frame ->
+        if frame.function == "Sentry.Event.not_a_function/1", do: frame.vars
+      end)
+    end)
+  end
+
+  test "parses error exception" do
+    put_test_config(enable_source_code_context: false)
+    event = event_generated_by_exception()
+
+    assert event.platform == :elixir
+    assert event.extra == %{}
+
+    assert [
+             %Interfaces.Exception{
+               type: "UndefinedFunctionError",
+               value: "function Sentry.Event.not_a_function/3 is undefined or private",
+               module: nil,
+               stacktrace: stacktrace
+             }
+           ] = event.exception
+
+    assert event.level == :error
+    assert event.message == nil
+
+    assert is_binary(event.server_name)
+
+    assert [
+             %Interfaces.Stacktrace.Frame{
+               context_line: nil,
+               filename: nil,
+               function: "Sentry.Event.not_a_function/3",
+               in_app: false,
+               lineno: nil,
+               module: Sentry.Event,
+               post_context: [],
+               pre_context: [],
+               vars: %{"arg0" => "1", "arg1" => "2", "arg2" => "3"}
+             },
+             %Interfaces.Stacktrace.Frame{
+               context_line: nil,
+               filename: "test/event_test.exs",
+               function: "Sentry.EventTest.event_generated_by_exception/1",
+               in_app: false,
+               lineno: _,
+               module: Sentry.EventTest,
+               post_context: [],
+               pre_context: [],
+               vars: %{}
+             }
+             | _rest
+           ] = Enum.reverse(stacktrace.frames)
+
+    assert event.tags == %{}
+    assert event.timestamp =~ ~r/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
+    assert is_binary(event.contexts.os.name)
+    assert is_binary(event.contexts.os.version)
+    assert is_binary(event.contexts.runtime.name)
+    assert is_binary(event.contexts.runtime.version)
+  end
+
+  describe "stacktrace args (vars)" do
+    test "bounds inspected args via inspect opts without hard truncation" do
+      put_test_config(enable_source_code_context: false, max_stacktrace_arg_length: 20)
+
+      long_string = String.duplicate("a", 1_000)
+      event = event_with_stacktrace_args([long_string])
+
+      assert %{"arg0" => arg0} = vars_for_failing_frame(event)
+      assert String.length(arg0) < 1_000
+    end
+
+    test "renders structs with their type rather than garbling them when truncated" do
+      put_test_config(enable_source_code_context: false, max_stacktrace_arg_length: 5_000)
+
+      struct = %SampleStruct{name: "test", payload: String.duplicate("x", 100)}
+      event = event_with_stacktrace_args([struct])
+
+      assert %{"arg0" => arg0} = vars_for_failing_frame(event)
+      assert String.starts_with?(arg0, "%Sentry.EventTest.SampleStruct{")
+    end
+
+    test "respects a higher :max_stacktrace_arg_length than the old 513 default" do
+      put_test_config(enable_source_code_context: false, max_stacktrace_arg_length: 5_000)
+
+      long_string = String.duplicate("a", 1_000)
+      event = event_with_stacktrace_args([long_string])
+
+      assert %{"arg0" => arg0} = vars_for_failing_frame(event)
+      assert String.length(arg0) > 513
+    end
+  end
+
+  test "respects extra information passed in" do
+    event = event_generated_by_exception(%{extra_data: "data"})
+    assert event.extra == %{extra_data: "data"}
+  end
+
+  test "scrubs sensitive data from Plug.Conn and map args in stacktrace frame vars" do
+    put_test_config(enable_source_code_context: false)
+
+    conn = %Plug.Conn{
+      req_headers: [
+        {"authorization", "Bearer leaky-token"},
+        {"cookie", "session=leaky-cookie"},
+        {"x-request-id", "ok-to-keep"}
+      ],
+      cookies: %{"session" => "leaky-cookie"},
+      params: %{"password" => "leaky-password", "name" => "Alice"}
+    }
+
+    stack = [
+      {SomeMod, :some_fun, [conn, %{"password" => "another-leak", "ok" => "fine"}],
+       [file: ~c"x.ex", line: 1]}
+    ]
+
+    exception = %FunctionClauseError{module: SomeMod, function: :some_fun, arity: 2}
+    event = Event.transform_exception(exception, stacktrace: stack)
+
+    %{vars: vars} = hd(hd(event.exception).stacktrace.frames)
+
+    refute vars["arg0"] =~ "leaky-token"
+    refute vars["arg0"] =~ "leaky-cookie"
+    refute vars["arg0"] =~ "leaky-password"
+    assert vars["arg0"] =~ "x-request-id"
+    assert vars["arg0"] =~ "Alice"
+
+    refute vars["arg1"] =~ "another-leak"
+    assert vars["arg1"] =~ "fine"
+  end
+
+  describe "create_event/1" do
+    test "uses all the right defaults when called without options" do
+      assert %Event{} = event = Event.create_event([])
+      assert is_binary(event.event_id)
+      assert is_binary(event.timestamp)
+      assert is_binary(event.server_name)
+      assert event.level == :error
+      assert event.breadcrumbs == []
+      assert %Interfaces.SDK{name: "sentry-elixir"} = event.sdk
+      assert %{} = event.user
+      assert %{} = event.request
+      assert %{} = event.contexts
+      assert event.release == nil
+      assert event.exception == []
+      assert event.message == nil
+      assert map_size(event.modules) > 0
+    end
+
+    test "includes the config defaults" do
+      put_test_config(
+        tags: %{"test-tag" => "test-value"},
+        extra: %{"some-data": "with-a-value"}
+      )
+
+      assert %Event{} = event = Event.create_event([])
+      assert event.tags == %{"test-tag" => "test-value"}
+      assert event.extra == %{"some-data": "with-a-value"}
+    end
+
+    test "fills in passed-in options" do
+      assert %Event{} = event = Event.create_event(level: :info)
+      assert event.level == :info
+    end
+
+    test "fills in passed-in options and merges them with the context" do
+      Sentry.Context.set_user_context(%{id: 1, username: "foo"})
+      Sentry.Context.set_extra_context(%{weather: "sunny", temperature: 95})
+      Sentry.Context.set_request_context(%{method: "GET", url: "https://a.com"})
+      Sentry.Context.set_tags_context(%{scm: "svn", build: "123"})
+
+      Sentry.Context.add_breadcrumb(level: :debug, message: "context1")
+      Sentry.Context.add_breadcrumb(level: :info, message: "context2")
+
+      assert %Event{} =
+               event =
+               Event.create_event(
+                 user: %{id: 2, email: "foo@example.com"},
+                 extra: %{weather: "rainy", humidity: 100},
+                 request: %{method: "POST", data: "yes"},
+                 tags: %{scm: "git", region: "eu"},
+                 breadcrumbs: [
+                   %{level: :info, message: "from create_event/1 1"},
+                   %{level: :fatal, message: "from create_event/1 2"}
+                 ]
+               )
+
+      assert event.user == %{id: 2, username: "foo", email: "foo@example.com"}
+
+      assert event.request == %Interfaces.Request{
+               method: "POST",
+               url: "https://a.com",
+               data: "yes"
+             }
+
+      assert event.extra == %{weather: "rainy", temperature: 95, humidity: 100}
+      assert event.tags == %{scm: "git", build: "123", region: "eu"}
+
+      assert [
+               %Interfaces.Breadcrumb{level: :info, message: "from create_event/1 1"},
+               %Interfaces.Breadcrumb{level: :fatal, message: "from create_event/1 2"},
+               %Interfaces.Breadcrumb{level: :debug, message: "context1"},
+               %Interfaces.Breadcrumb{level: :info, message: "context2"}
+             ] = event.breadcrumbs
+
+      for breadcrumb <- event.breadcrumbs, breadcrumb.message =~ "context" do
+        assert is_integer(breadcrumb.timestamp)
+      end
+    end
+
+    test "fills in `:tags` and `:extra` with precedence of options > context > config" do
+      put_test_config(
+        tags: %{
+          "not-overriden" => "config",
+          "overriden-by-context" => "config",
+          "overriden-by-options" => "config"
+        },
+        extra: %{
+          "not-overriden": "config",
+          "overriden-by-context": "config",
+          "overriden-by-options": "config"
+        }
+      )
+
+      Sentry.Context.set_tags_context(%{
+        "overriden-by-context" => "context",
+        "overriden-by-options" => "context"
+      })
+
+      Sentry.Context.set_extra_context(%{
+        "overriden-by-context": "context",
+        "overriden-by-options": "context"
+      })
+
+      assert %Event{} =
+               event =
+               Event.create_event(
+                 tags: %{"overriden-by-options" => "options"},
+                 extra: %{"overriden-by-options": "options"}
+               )
+
+      assert event.tags == %{
+               "not-overriden" => "config",
+               "overriden-by-context" => "context",
+               "overriden-by-options" => "options"
+             }
+
+      assert event.extra == %{
+               "not-overriden": "config",
+               "overriden-by-context": "context",
+               "overriden-by-options": "options"
+             }
+    end
+
+    test "supports the :fingerprint option" do
+      assert %Event{} = event = Event.create_event(fingerprint: ["foo", "bar"])
+      assert event.fingerprint == ["foo", "bar"]
+    end
+
+    test "fills in the exception interface when passing :exception and :stacktrace" do
+      {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
+
+      assert %Event{} =
+               event =
+               Event.create_event(
+                 exception: %RuntimeError{message: "foo"},
+                 stacktrace: stacktrace
+               )
+
+      assert [
+               %Interfaces.Exception{
+                 type: "RuntimeError",
+                 value: "foo",
+                 stacktrace: %Interfaces.Stacktrace{frames: [stacktrace_frame | _rest]}
+               }
+             ] = event.exception
+
+      assert %Interfaces.Stacktrace.Frame{} = stacktrace_frame
+      assert is_binary(stacktrace_frame.filename)
+      assert is_binary(stacktrace_frame.function)
+      assert is_integer(stacktrace_frame.lineno)
+    end
+
+    test "fills in the exception interface when passing :exception without :stacktrace" do
+      assert %Event{} =
+               event = Event.create_event(exception: %RuntimeError{message: "foo"})
+
+      assert event.exception == [
+               %Interfaces.Exception{
+                 type: "RuntimeError",
+                 value: "foo",
+                 mechanism: %Interfaces.Exception.Mechanism{handled: true}
+               }
+             ]
+    end
+
+    test "fills in the exception interface with the :handled option" do
+      assert %Event{} =
+               event =
+               Event.create_event(exception: %RuntimeError{message: "foo"}, handled: false)
+
+      assert event.exception == [
+               %Interfaces.Exception{
+                 type: "RuntimeError",
+                 value: "foo",
+                 mechanism: %Interfaces.Exception.Mechanism{handled: false}
+               }
+             ]
+    end
+
+    test "raises an error if passing :stacktrace without :exception" do
+      assert_raise ArgumentError, ~r/cannot provide a :stacktrace/, fn ->
+        Event.create_event(stacktrace: [])
+      end
+    end
+
+    test "fills in the message interface when passing the :message option without formatting params" do
+      put_test_config(environment_name: "my_env")
+
+      assert %Event{
+               breadcrumbs: [],
+               environment: "my_env",
+               exception: [],
+               extra: %{},
+               level: :error,
+               message: %Interfaces.Message{} = message,
+               platform: :elixir,
+               release: nil,
+               request: %{},
+               tags: %{},
+               user: %{},
+               contexts: %{os: %{name: _, version: _}, runtime: %{name: _, version: _}}
+             } = Event.create_event(message: "Test message")
+
+      assert message == %Interfaces.Message{formatted: "Test message"}
+    end
+
+    test "fills in the message interface when passing the :message option with formatting params" do
+      put_test_config(environment_name: "my_env")
+
+      assert %Event{
+               breadcrumbs: [],
+               environment: "my_env",
+               exception: [],
+               extra: %{},
+               level: :error,
+               message: %Interfaces.Message{} = message,
+               platform: :elixir,
+               release: nil,
+               request: %{},
+               tags: %{},
+               user: %{},
+               contexts: %{os: %{name: _, version: _}, runtime: %{name: _, version: _}}
+             } =
+               Event.create_event(
+                 message: "Interpolated string like %s and %s and '%s'",
+                 interpolation_parameters: ["this", 123, nil]
+               )
+
+      assert message == %Interfaces.Message{
+               formatted: "Interpolated string like this and 123 and ''",
+               params: ["this", 123, nil],
+               message: "Interpolated string like %s and %s and '%s'"
+             }
+    end
+
+    test "fills in the message and threads interfaces when passing the :message option with :stacktrace" do
+      {:current_stacktrace, stacktrace} = Process.info(self(), :current_stacktrace)
+      put_test_config(environment_name: "my_env")
+
+      assert %Event{
+               breadcrumbs: [],
+               environment: "my_env",
+               exception: [],
+               extra: %{},
+               level: :error,
+               message: message,
+               platform: :elixir,
+               release: nil,
+               request: %{},
+               tags: %{},
+               user: %{},
+               contexts: %{os: %{name: _, version: _}, runtime: %{name: _, version: _}},
+               threads: [%Interfaces.Thread{id: thread_id, stacktrace: thread_stacktrace}]
+             } = Event.create_event(message: "Test message", stacktrace: stacktrace)
+
+      assert message == %Sentry.Interfaces.Message{
+               message: nil,
+               params: nil,
+               formatted: "Test message"
+             }
+
+      assert is_binary(thread_id) and byte_size(thread_id) > 0
+
+      assert [
+               %Interfaces.Stacktrace.Frame{
+                 context_line: nil,
+                 in_app: false,
+                 lineno: _,
+                 post_context: [],
+                 pre_context: [],
+                 vars: %{}
+               }
+               | _rest
+             ] = thread_stacktrace.frames
+    end
+
+    test "fills in the :release field from the config" do
+      put_test_config(release: "3c9d0f1e7a89876258828fbb480fd5cdfb0467fa")
+      assert %Event{} = event = Event.create_event([])
+      assert event.release == "3c9d0f1e7a89876258828fbb480fd5cdfb0467fa"
+    end
+
+    test "fills in private (:__...__) fields" do
+      exception = %RuntimeError{message: "foo"}
+
+      assert %Event{} =
+               event = Event.create_event(exception: exception, event_source: :plug)
+
+      assert event.source == :plug
+      assert event.original_exception == exception
+    end
+
+    test "ignores unknown fields in :request" do
+      assert %Event{} = event = Event.create_event(request: %{method: "GET", bad_key: :indeed})
+      assert event.request == %Interfaces.Request{method: "GET"}
+    end
+  end
+
+  test "respects the max_breadcrumbs configuration" do
+    breadcrumbs = for x <- 1..150, do: %{message: "breadcrumb-#{x}"}
+
+    event = Event.create_event(message: "Test message", breadcrumbs: breadcrumbs)
+    assert length(event.breadcrumbs) == 100
+
+    assert event.breadcrumbs ==
+             breadcrumbs |> Enum.take(-100) |> Enum.map(&struct(Interfaces.Breadcrumb, &1))
+  end
+
+  test "only sending fingerprint when set" do
+    exception = RuntimeError.exception("error")
+    event = Sentry.Event.transform_exception(exception, fingerprint: ["hello", "world"])
+    assert event.fingerprint == ["hello", "world"]
+  end
+
+  test "not sending fingerprint when unset" do
+    exception = RuntimeError.exception("error")
+    event = Sentry.Event.transform_exception(exception, [])
+    assert event.fingerprint == ["{{ default }}"]
+  end
+
+  test "sets :in_app to true when configured" do
+    put_test_config(in_app_module_allow_list: [Sentry, :random, Sentry.Submodule])
+    exception = RuntimeError.exception("error")
+
+    event =
+      Sentry.Event.transform_exception(
+        exception,
+        stacktrace: [
+          {Elixir.Sentry.Fun, :method, 2, []},
+          {Elixir.Sentry, :other_method, 4, []},
+          {:other_module, :a_method, 8, []},
+          {:random, :uniform, 0, []},
+          {Sentry.Submodule.Fun, :this_method, 0, []}
+        ]
+      )
+
+    assert [
+             %Interfaces.Stacktrace.Frame{
+               module: Sentry.Submodule.Fun,
+               function: "Sentry.Submodule.Fun.this_method/0",
+               in_app: true,
+               filename: nil,
+               lineno: nil,
+               context_line: nil,
+               post_context: [],
+               pre_context: [],
+               vars: %{}
+             },
+             %Interfaces.Stacktrace.Frame{
+               module: :random,
+               function: ":random.uniform/0",
+               in_app: true,
+               filename: nil,
+               lineno: nil,
+               context_line: nil,
+               post_context: [],
+               pre_context: [],
+               vars: %{}
+             },
+             %Interfaces.Stacktrace.Frame{
+               module: :other_module,
+               function: ":other_module.a_method/8",
+               in_app: false,
+               filename: nil,
+               lineno: nil,
+               context_line: nil,
+               post_context: [],
+               pre_context: [],
+               vars: %{}
+             },
+             %Interfaces.Stacktrace.Frame{
+               module: Sentry,
+               function: "Sentry.other_method/4",
+               in_app: true,
+               filename: nil,
+               lineno: nil,
+               context_line: nil,
+               post_context: [],
+               pre_context: [],
+               vars: %{}
+             },
+             %Interfaces.Stacktrace.Frame{
+               filename: nil,
+               function: "Sentry.Fun.method/2",
+               module: Sentry.Fun,
+               lineno: nil,
+               in_app: true,
+               context_line: nil,
+               post_context: [],
+               pre_context: [],
+               vars: %{}
+             }
+           ] == hd(event.exception).stacktrace.frames
+  end
+
+  test "transforms loaded applications to map of application -> version" do
+    exception = RuntimeError.exception("error")
+    event = Sentry.Event.transform_exception(exception, [])
+
+    assert ["acceptor_pool", "asn1", "bandit", "bypass" | _rest] =
+             event.modules
+             |> Map.keys()
+             |> Enum.sort()
+  end
+
+  describe "interpolate/2" do
+    test "works with simple strings" do
+      assert Event.interpolate("Hello %s!", ["world"]) == "Hello world!"
+    end
+
+    test "ignores extra bindings" do
+      assert Event.interpolate("Hello %s", ["world", "extra"]) ==
+               "Hello world"
+    end
+
+    test "works with multiple bindings" do
+      assert Event.interpolate("Hello %s, %s!", ["world", "sup"]) == "Hello world, sup!"
+    end
+
+    test "ignores unknown bindings" do
+      assert Event.interpolate("Hello %s, %s", ["world"]) == "Hello world, %s"
+    end
+  end
+end
