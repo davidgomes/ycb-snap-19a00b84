@@ -3,6 +3,11 @@
 This is a major rewrite of the previously-existing [`sqlite_ecto`](https://github.com/jazzyb/sqlite_ecto) that adds support for Ecto 2.1+.
 
 
+## v2.1.0-dev
+
+* Add support for Ecto 2.2.
+
+
 ## v2.0.3
 
 _28 August 2017_
