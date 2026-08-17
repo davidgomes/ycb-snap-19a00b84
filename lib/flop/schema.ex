@@ -385,6 +385,11 @@ defprotocol Flop.Schema do
     the order direction to. It receives neither the query nor the direction. A
     custom field needs it to be sortable.
 
+  If `field_dynamic` is set and `filter` is not, `field_dynamic` is also used
+  to make the custom field filterable. Flop applies the filter operator
+  directly to the returned dynamic expression instead of using a filter
+  function.
+
   If runtime options are necessary (like the timezone of the request or the user
   ID of the current user), use the `extra_opts` option when calling Flop
   functions.
@@ -629,6 +634,8 @@ defprotocol Flop.Schema do
     that returns the field expression as an `Ecto.Query.dynamic_expr`. The
     function takes the options from the tuple as its only argument. Flop applies
     the order direction to the expression. Required if the field is sortable.
+    If `:filter` is not set, Flop also uses this to make the field filterable
+    by applying the filter operator directly to the returned expression.
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator
     and value validation is based on this option.
   - `:bindings` - If either callback requires certain named bindings to be

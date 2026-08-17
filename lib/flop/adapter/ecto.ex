@@ -268,13 +268,34 @@ defmodule Flop.Adapter.Ecto do
 
         apply(mod, fun, [query, filter, opts])
 
+      %FieldInfo{
+        ecto_type: ecto_type,
+        extra: %{
+          type: :custom,
+          filter: nil,
+          field_dynamic: {mod, fun, field_dynamic_opts}
+        }
+      } ->
+        field_dynamic_opts =
+          opts
+          |> Keyword.get(:extra_opts, [])
+          |> Keyword.merge(field_dynamic_opts)
+
+        base_dynamic = apply(mod, fun, [field_dynamic_opts])
+
+        Query.where(
+          query,
+          ^build_custom_field_op(base_dynamic, ecto_type, filter, dialect(opts))
+        )
+
       # only reachable with an unvalidated Flop struct
       %FieldInfo{extra: %{type: :custom}} ->
         raise ArgumentError, """
-        filtering by a custom field requires a filter function
+        filtering by a custom field requires a filter function or a
+        field_dynamic function
 
-        No filter function is configured for #{inspect(field)}, so it cannot be
-        used as a filter field.
+        No filter function or field_dynamic function is configured for
+        #{inspect(field)}, so it cannot be used as a filter field.
 
         Use Flop.validate/2 to turn this exception into a validation error.
         """
@@ -618,6 +639,132 @@ defmodule Flop.Adapter.Ecto do
   end
 
   ## Filter query builder
+
+  # Builds the filter condition for a custom field that has a field_dynamic
+  # function configured, but no filter function. The base dynamic returned by
+  # the field_dynamic function is used in place of `field(r, ^field)`.
+  defp build_custom_field_op(base, _ecto_type, %Filter{op: op, value: value}, _dialect)
+       when op in [:==, :!=, :>=, :<=, :>, :<] do
+    case op do
+      :== -> dynamic(^base == ^value)
+      :!= -> dynamic(^base != ^value)
+      :>= -> dynamic(^base >= ^value)
+      :<= -> dynamic(^base <= ^value)
+      :> -> dynamic(^base > ^value)
+      :< -> dynamic(^base < ^value)
+    end
+  end
+
+  defp build_custom_field_op(base, _ecto_type, %Filter{op: :in, value: value}, _dialect) do
+    dynamic(^base in ^value)
+  end
+
+  defp build_custom_field_op(
+         base,
+         _ecto_type,
+         %Filter{op: :not_in, value: value},
+         _dialect
+       ) do
+    reject_nil? = nil in value
+    processed_value = if reject_nil?, do: Enum.reject(value, &is_nil/1), else: value
+
+    dynamic(
+      ^base not in ^processed_value and
+        not (^reject_nil? and is_nil(^base))
+    )
+  end
+
+  defp build_custom_field_op(
+         base,
+         _ecto_type,
+         %Filter{op: :contains, value: value},
+         _dialect
+       ) do
+    dynamic(^value in ^base)
+  end
+
+  defp build_custom_field_op(
+         base,
+         _ecto_type,
+         %Filter{op: :not_contains, value: value},
+         _dialect
+       ) do
+    dynamic(^value not in ^base)
+  end
+
+  defp build_custom_field_op(
+         base,
+         _ecto_type,
+         %Filter{op: op, value: value},
+         %Dialect{ilike?: ilike?}
+       )
+       when op in [:like, :not_like, :=~, :ilike, :not_ilike] do
+    value = Flop.Misc.add_wildcard(value)
+    use_like? = op in [:like, :not_like] or !ilike?
+
+    condition =
+      if use_like? do
+        dynamic(fragment("? LIKE ? ESCAPE ?", ^base, ^value, ^"\\"))
+      else
+        dynamic(ilike(^base, ^value))
+      end
+
+    if op in [:not_like, :not_ilike], do: dynamic(not (^condition)), else: condition
+  end
+
+  defp build_custom_field_op(
+         base,
+         _ecto_type,
+         %Filter{op: op, value: value},
+         %Dialect{ilike?: ilike?}
+       )
+       when op in [:starts_with, :ends_with] do
+    value =
+      if op == :starts_with,
+        do: Flop.Misc.add_wildcard_suffix(value),
+        else: Flop.Misc.add_wildcard_prefix(value)
+
+    if ilike? do
+      dynamic(ilike(^base, ^value))
+    else
+      dynamic(fragment("? LIKE ? ESCAPE ?", ^base, ^value, ^"\\"))
+    end
+  end
+
+  defp build_custom_field_op(
+         base,
+         _ecto_type,
+         %Filter{op: op, value: value},
+         %Dialect{ilike?: ilike?}
+       )
+       when op in [:like_and, :like_or, :ilike_and, :ilike_or] do
+    combinator = if op in [:like_and, :ilike_and], do: :and, else: :or
+
+    values =
+      if is_binary(value),
+        do: Flop.Misc.split_search_text(value),
+        else: Enum.map(value, &Flop.Misc.add_wildcard/1)
+
+    use_like? = op in [:like_and, :like_or] or !ilike?
+
+    reduce_dynamic(combinator, values, fn substring ->
+      if use_like? do
+        dynamic(fragment("? LIKE ? ESCAPE ?", ^base, ^substring, ^"\\"))
+      else
+        dynamic(ilike(^base, ^substring))
+      end
+    end)
+  end
+
+  defp build_custom_field_op(
+         base,
+         _ecto_type,
+         %Filter{op: op, value: value},
+         _dialect
+       )
+       when op in [:empty, :not_empty] do
+    match_empty(dynamic(is_nil(^base)), op, value)
+  end
 
   for op <- [:like_and, :like_or, :ilike_and, :ilike_or] do
     {field_op, combinator} =

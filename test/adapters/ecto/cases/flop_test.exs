@@ -1046,6 +1046,35 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       end
     end
 
+    test "filters by a custom field with field_dynamic and no filter function" do
+      insert_custom_field_pets([30, 10, 40, 20])
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{
+            filters: [%Filter{field: :age_score, op: :>=, value: 40}],
+            order_by: [:age],
+            order_directions: [:asc]
+          },
+          for: CustomFieldPet
+        )
+
+      assert Enum.map(result, & &1.age) == [20, 30, 40]
+    end
+
+    test "raises when filtering by a custom field without filter or field_dynamic" do
+      assert_raise ArgumentError,
+                   ~r/filtering by a custom field requires a filter function or a\s+field_dynamic function/,
+                   fn ->
+                     Flop.all(
+                       Pet,
+                       %Flop{filters: [%Filter{field: :custom, op: :==, value: 1}]},
+                       for: Pet
+                     )
+                   end
+    end
+
     test "silently ignores nil values for field and value" do
       flop = %Flop{filters: [%Filter{op: :>=, value: 4}]}
       assert Flop.query(Pet, flop) == Pet
