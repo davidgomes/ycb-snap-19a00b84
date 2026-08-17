@@ -59,7 +59,7 @@ defmodule Tidewave.Router do
 
     conn
     |> Plug.Parsers.call(opts)
-    |> MCP.Server.handle_http_message()
+    |> handle_mcp_message()
     |> halt()
   end
 
@@ -92,6 +92,66 @@ defmodule Tidewave.Router do
     conn
     |> send_resp(404, "Not Found")
     |> halt()
+  end
+
+  defp handle_mcp_message(conn) do
+    require Logger
+
+    Logger.info("Received #{conn.method} message")
+    params = conn.body_params
+    conn = fetch_query_params(conn)
+    include_browser_tools? = conn.query_params["include_browser_tools"] != "false"
+    Logger.debug("Raw params: #{inspect(params, pretty: true)}")
+
+    case MCP.Server.validate_jsonrpc_message(params) do
+      {:ok, message} ->
+        case MCP.Server.handle_message(
+               message,
+               conn.private.tidewave_config,
+               include_browser_tools?
+             ) do
+          {:ok, nil} ->
+            # Notifications that don't return a response
+            conn |> put_status(202) |> send_mcp_json(%{status: "ok"})
+
+          {:ok, response} ->
+            Logger.debug("Sending HTTP response: #{inspect(response, pretty: true)}")
+            conn |> put_status(200) |> send_mcp_json(response)
+
+          {:error, error_response} ->
+            Logger.warning("Error handling message: #{inspect(error_response)}")
+            conn |> put_status(400) |> send_mcp_json(error_response)
+        end
+
+      {:error, :invalid_jsonrpc} ->
+        Logger.warning("Invalid JSON-RPC message format")
+        send_mcp_jsonrpc_error(conn, nil, -32600, "Could not parse message")
+    end
+  end
+
+  defp send_mcp_json(conn, data) do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(conn.status || 200, Jason.encode!(data))
+  end
+
+  defp send_mcp_jsonrpc_error(conn, id, code, message, data \\ nil) do
+    error = %{
+      code: code,
+      message: message
+    }
+
+    error = if data, do: Map.put(error, :data, data), else: error
+
+    response = %{
+      jsonrpc: "2.0",
+      id: id,
+      error: error
+    }
+
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, Jason.encode!(response))
   end
 
   defp check_remote_ip(conn, _opts) do
