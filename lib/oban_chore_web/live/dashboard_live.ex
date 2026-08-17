@@ -75,7 +75,7 @@ defmodule ObanChoreWeb.DashboardLive do
                 <button
                   phx-click="select_tab"
                   phx-value-tab={"job_#{job.id}"}
-                  data-role="job-tab"
+                  data-role={if job.state in [:completed, :discarded, :cancelled], do: "history-tab", else: "job-tab"}
                   data-job-id={job.id}
                   class={[
                     "oc-tab-item",
@@ -96,12 +96,26 @@ defmodule ObanChoreWeb.DashboardLive do
                       :executing -> "background-color: var(--oc-blue-500);"
                       :available -> "background-color: var(--oc-gray-400);"
                       :scheduled -> "background-color: var(--oc-amber-400);"
+                      :completed -> "background-color: var(--oc-emerald-500);"
+                      :discarded -> "background-color: var(--oc-rose-500);"
+                      :cancelled -> "background-color: var(--oc-rose-400);"
                       _ -> "background-color: var(--oc-gray-400);"
                     end
                   }></span>
                 </button>
               <% end %>
             </div>
+            <% history_count =
+              Map.get(@chore_jobs, @selected_chore_module, [])
+              |> Enum.count(fn job_id ->
+                job = @jobs[job_id]
+                job && job.state in [:completed, :discarded, :cancelled]
+              end) %>
+            <%= if history_count > 0 do %>
+              <p class="oc-mt-2 oc-text-xs oc-text-gray-500" data-role="history-hint">
+                Showing the <%= history_count %> most recent finished execution<%= if history_count != 1, do: "s" %>.
+              </p>
+            <% end %>
 
             <!-- Content Area -->
             <div class="oc-mt-8">
@@ -184,10 +198,12 @@ defmodule ObanChoreWeb.DashboardLive do
     # TODO: Avoid N+1 by fetching all active jobs in a single query and grouping them by chore.module
     {jobs, chore_jobs} =
       Enum.reduce(chores, {%{}, %{}}, fn chore, {jobs_acc, chore_jobs_acc} ->
-        jobs = ObanChore.list_active_jobs(chore.module)
+        active_jobs = ObanChore.list_active_jobs(chore.module)
+        history_jobs = ObanChore.list_history_jobs(chore.module)
+        jobs = active_jobs ++ history_jobs
 
         if connected?(socket) do
-          for job <- jobs do
+          for job <- active_jobs do
             Phoenix.PubSub.subscribe(pubsub, "oban_chore:logs:#{job.id}")
             Phoenix.PubSub.subscribe(pubsub, "oban_chore:status:#{job.id}")
           end

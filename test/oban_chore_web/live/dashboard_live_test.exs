@@ -278,6 +278,54 @@ defmodule ObanChoreWeb.DashboardLiveTest do
     end
   end
 
+  describe "history" do
+    test "shows past finished jobs alongside active ones" do
+      conn = build_conn()
+
+      chore_module = to_string(DashboardTestChore)
+
+      {:ok, completed_job} =
+        Oban.insert(
+          DashboardTestChore.new(%{username: "finished_user", admin: false})
+        )
+
+      completed_job
+      |> Ecto.Changeset.change(state: "completed", completed_at: DateTime.utc_now())
+      |> ObanChore.TestRepo.update!()
+
+      {:ok, discarded_job} =
+        Oban.insert(
+          DashboardTestChore.new(%{username: "failed_user", admin: false})
+        )
+
+      discarded_job
+      |> Ecto.Changeset.change(state: "discarded", discarded_at: DateTime.utc_now())
+      |> ObanChore.TestRepo.update!()
+
+      {:ok, view, _html} = live(conn, "/ops/chores")
+
+      view
+      |> element("button[data-role=chore-select][data-chore-module=\"#{chore_module}\"]")
+      |> render_click()
+
+      assert has_element?(
+               element(view, ~s(button[data-role="history-tab"][data-job-id="#{completed_job.id}"]))
+             )
+
+      assert has_element?(
+               element(view, ~s(button[data-role="history-tab"][data-job-id="#{discarded_job.id}"]))
+             )
+
+      html =
+        view
+        |> element(~s(button[data-role="history-tab"][data-job-id="#{completed_job.id}"]))
+        |> render_click()
+
+      assert html =~ "Completed"
+      assert has_element?(element(view, ~s(div[data-role="job-details"][data-job-id="#{completed_job.id}"])))
+    end
+  end
+
   describe "auth" do
     test "filters chores by module whitelist" do
       conn = build_conn()

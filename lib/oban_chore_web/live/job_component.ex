@@ -102,6 +102,9 @@ defmodule ObanChoreWeb.JobComponent do
       :discarded ->
         "background-color: var(--oc-rose-50); color: var(--oc-rose-900); box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.1);"
 
+      :cancelled ->
+        "background-color: var(--oc-rose-50); color: var(--oc-rose-900); box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.1);"
+
       _ ->
         "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
     end
