@@ -11,6 +11,13 @@ config :free_oban_ui,
   ecto_repos: [FreeObanUi.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+# Configure Oban's job queues and plugins.
+config :free_oban_ui, Oban,
+  engine: Oban.Engines.Basic,
+  repo: FreeObanUi.Repo,
+  plugins: [Oban.Plugins.Pruner],
+  queues: [default: 10]
+
 # Configures the endpoint
 config :free_oban_ui, FreeObanUiWeb.Endpoint,
   url: [host: "localhost"],
