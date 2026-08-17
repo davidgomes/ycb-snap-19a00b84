@@ -65,7 +65,13 @@ defmodule Hexpm.Repository.Policies do
 
     repositories =
       Enum.map(["hexpm", org_name], fn repository ->
-        Map.get(by_repository, repository, %{"repository" => repository})
+        case Map.fetch(by_repository, repository) do
+          {:ok, tab_params} ->
+            Map.put_new(tab_params, "overrides", [])
+
+          :error ->
+            %{"repository" => repository}
+        end
       end)
 
     Map.put(params, "repositories", repositories)
