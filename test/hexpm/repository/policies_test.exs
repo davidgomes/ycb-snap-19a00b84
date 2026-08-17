@@ -82,6 +82,40 @@ defmodule Hexpm.Repository.PoliciesTest do
       assert tab(updated, "hexpm").cooldown == "7d"
     end
 
+    test "removes all overrides from a tab when the submitted tab has none",
+         %{organization: org, audit_data: audit_data} do
+      {:ok, %{policy: policy}} =
+        Policies.create(
+          org,
+          %{
+            "name" => "pol1",
+            "visibility" => "public",
+            "repositories" => [
+              %{
+                "repository" => "hexpm",
+                "overrides" => [%{"action" => "deny", "package" => "badlib"}]
+              }
+            ]
+          },
+          audit: audit_data
+        )
+
+      assert %{id: hexpm_tab_id, overrides: [%{package: "badlib"}]} = tab(policy, "hexpm")
+
+      # Removing the last override row leaves no `overrides` key at all in the
+      # submitted tab, since there is nothing left to render a field for. The
+      # tab's id is submitted (as the dashboard form does via a hidden field)
+      # so this matches the existing tab rather than replacing it wholesale.
+      params = %{
+        "repositories" => [%{"id" => hexpm_tab_id, "repository" => "hexpm", "cooldown" => "7d"}]
+      }
+
+      assert {:ok, %{policy: updated}} = Policies.update(policy, params, audit: audit_data)
+
+      assert tab(updated, "hexpm").cooldown == "7d"
+      assert tab(updated, "hexpm").overrides == []
+    end
+
     test "preserves tabs when repositories are not submitted",
          %{organization: org, audit_data: audit_data} do
       {:ok, %{policy: policy}} =

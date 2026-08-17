@@ -65,11 +65,20 @@ defmodule Hexpm.Repository.Policies do
 
     repositories =
       Enum.map(["hexpm", org_name], fn repository ->
-        Map.get(by_repository, repository, %{"repository" => repository})
+        by_repository
+        |> Map.get(repository, %{"repository" => repository})
+        |> default_overrides()
       end)
 
     Map.put(params, "repositories", repositories)
   end
+
+  # Removing every override from a tab leaves no `overrides` param at all
+  # (there's nothing left to render a field for), which `cast_embed` treats as
+  # "untouched" rather than "now empty", so the existing overrides would
+  # survive the update. Defaulting the key to an empty list makes the removal
+  # explicit.
+  defp default_overrides(tab_params), do: Map.put_new(tab_params, "overrides", [])
 
   defp submitted_repositories(nil), do: []
   defp submitted_repositories(list) when is_list(list), do: list
