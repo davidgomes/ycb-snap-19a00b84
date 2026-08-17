@@ -9,7 +9,7 @@ defmodule MyApp.CustomFieldPet do
 
   @derive {
     Flop.Schema,
-    filterable: [],
+    filterable: [:age_score, :owner_age_score],
     sortable: [:age_score, :owner_age_score],
     adapter_opts: [
       custom_fields: [

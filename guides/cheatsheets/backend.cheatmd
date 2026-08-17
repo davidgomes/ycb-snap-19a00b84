@@ -153,4 +153,4 @@ Flop.validate_and_run(MyApp.Pet, params,
 | `default_order` | Also a schema option |
 | `count` | Known count, skips the count query |
 | `count_query` | Separate query for counting |
-| `extra_opts` | Passed on to custom filter functions |
+| `extra_opts` | Passed on to custom filter and `field_dynamic` functions |
