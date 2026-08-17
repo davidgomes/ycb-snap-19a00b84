@@ -8,9 +8,10 @@ A lightweight, persistent event bus for Elixir applications built on top of [Oba
 - 🔄 **Reliable** - Automatic retries on failure via Oban
 - ⚡ **Async** - Non-blocking execution of handlers
 - 🔗 **Transactional** - Works within database transactions for atomicity
-- 📊 **Observable** - Track event processing via Oban Web UI
+- 📊 **Observable** - Track event processing via Oban Web UI, plus automatic event metadata (`id`, `emitted_at`) for tracing
 - ✅ **Type-safe** - Compile-time validation of events
 - 🎯 **Decoupled** - Event emitters don't know about handlers
+- 🧪 **Testable** - `ObanEvents.Testing` helpers for asserting on emitted events
 
 ## Installation
 
@@ -144,6 +145,22 @@ Emit an event to all registered handlers.
 MyApp.Events.emit(:user_created, %{user_id: 123, email: "user@example.com"})
 ```
 
+### `emit/3`
+
+Same as `emit/2`, but accepts an additional metadata map that's merged into
+the event's automatically generated metadata (see
+[Event Metadata](#event-metadata) below).
+
+```elixir
+@spec emit(atom(), map(), map()) :: {:ok, [Oban.Job.t()]}
+
+MyApp.Events.emit(
+  :user_created,
+  %{user_id: 123, email: "user@example.com"},
+  %{source: "signup_form"}
+)
+```
+
 ### `get_handlers!/1`
 
 Get all handlers registered for an event.
@@ -175,6 +192,37 @@ Check if an event is registered.
 
 MyApp.Events.registered?(:user_created)
 # => true
+```
+
+## Event Metadata
+
+Every emitted event is wrapped in an `ObanEvents.Event` struct before being
+dispatched. In addition to the event `:name` and `:data` you provide,
+`ObanEvents` automatically attaches metadata to each event:
+
+- `:id` - a unique identifier for that event occurrence (a UUID), handy for
+  tracing an event through logs and the Oban Web UI
+- `:emitted_at` - the UTC timestamp the event was created
+
+Metadata is stored alongside `data` on the dispatched Oban job, so it's
+visible in the Oban Web UI and in job args:
+
+```elixir
+{:ok, [job]} = MyApp.Events.emit(:user_created, %{user_id: 123})
+
+job.args["metadata"]["id"]
+# => "5c9f7e2a-6c2a-4b0a-9f0a-6d2b6e8f9c0a"
+
+job.args["metadata"]["emitted_at"]
+# => "2024-01-15T10:30:00.000000Z"
+```
+
+Use `emit/3` to attach your own metadata (e.g. tracing context). Custom keys
+are merged with the generated `:id` and `:emitted_at`, which always take
+precedence:
+
+```elixir
+MyApp.Events.emit(:user_created, %{user_id: 123}, %{source: "signup_form"})
 ```
 
 ## Handler Implementation
@@ -359,10 +407,42 @@ After all old jobs have processed (check Oban Web UI), you can safely remove the
 
 ## Testing
 
-### Testing Event Emission
+### Testing Event Emission with `ObanEvents.Testing`
+
+`ObanEvents.Testing` provides `assert_event_emitted/1,2,3` and
+`refute_event_emitted/1,2,3` helpers that wrap `Oban.Testing`'s job
+assertions with knowledge of how `ObanEvents.DispatchWorker` job args are
+structured, so you don't have to spell out worker/args yourself:
 
 ```elixir
-use Oban.Testing, repo: MyApp.Repo
+use ObanEvents.Testing, repo: MyApp.Repo
+
+test "emits user_created event" do
+  {:ok, user} = Accounts.create_user(%{email: "test@example.com"})
+
+  assert_event_emitted(:user_created, %{"user_id" => user.id})
+end
+
+test "does not emit user_created event when signup fails" do
+  Accounts.create_user(%{email: "invalid"})
+
+  refute_event_emitted(:user_created)
+end
+```
+
+`data` is matched as a subset (only the keys you provide are checked), and
+you can scope the assertion to a specific handler:
+
+```elixir
+assert_event_emitted(:user_created, %{"user_id" => user.id}, handler: MyApp.EmailHandler)
+```
+
+`use ObanEvents.Testing, repo: MyApp.Repo` also configures `Oban.Testing` for
+you, so `assert_enqueued/1` and `refute_enqueued/1` remain available if you
+need to assert on Oban job internals directly:
+
+```elixir
+use ObanEvents.Testing, repo: MyApp.Repo
 
 test "emits user_created event" do
   {:ok, user} = Accounts.create_user(%{email: "test@example.com"})
