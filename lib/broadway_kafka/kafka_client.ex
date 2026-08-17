@@ -9,12 +9,15 @@ defmodule BroadwayKafka.KafkaClient do
            offset_commit_on_ack: boolean,
            topics: [:brod.topic()],
            group_config: keyword,
-           client_config: keyword
+           client_config: keyword,
+           shared_client: boolean(),
+           shared_client_id: atom() | nil
          }
 
   @typep offset_reset_policy :: :earliest | :latest
 
-  @callback init(opts :: any) :: {:ok, config} | {:error, any}
+  @callback init(opts :: any) ::
+              {:ok, [Supervisor.child_spec() | {module, any} | module], config} | {:error, any}
   @callback setup(
               stage_pid :: pid,
               client_id :: :brod.client(),
