@@ -846,7 +846,7 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "stale persistent_term prevention" do
+  describe "stale ETS entry prevention" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.99"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)

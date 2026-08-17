@@ -20,7 +20,9 @@ defmodule GRPC.Client.Connection do
   * The target string is resolved using a [Resolver](GRPC.Client.Resolver).
   * Depending on the target and service config, a load-balancing module is chosen
     (e.g. `PickFirst`, `RoundRobin`).
-  * The orchestrator periodically refreshes the LB decision to adapt to changes.
+  * The set of real channels and the load-balancing state are kept in a shared
+    ETS table so that `pick_channel/2` can perform an actual LB pick on every
+    request, from any process, without going through the orchestrator.
 
   ## Target syntax
 
@@ -70,7 +72,9 @@ defmodule GRPC.Client.Connection do
 
   ## Notes
 
-    * The orchestrator refreshes the LB pick every 15 seconds.
+    * The orchestrator periodically reconciles the set of real channels (e.g.
+      after DNS re-resolution), but the actual load-balancing pick happens
+      per-request in `pick_channel/2`.
   """
   use GenServer
   alias GRPC.Channel
@@ -80,6 +84,7 @@ defmodule GRPC.Client.Connection do
   @insecure_scheme "http"
   @secure_scheme "https"
   @refresh_interval 15_000
+  @table :grpc_client_connection_lb
   @default_resolve_interval 30_000
   @default_max_resolve_interval 300_000
   @default_min_resolve_interval 5_000
@@ -118,16 +123,33 @@ defmodule GRPC.Client.Connection do
     }
   end
 
+  @doc false
+  @spec init_ets_table() :: :ok
+  def init_ets_table do
+    case :ets.whereis(@table) do
+      :undefined ->
+        :ets.new(@table, [
+          :named_table,
+          :public,
+          :set,
+          read_concurrency: true,
+          write_concurrency: true
+        ])
+
+        :ok
+
+      _tid ->
+        :ok
+    end
+  end
+
   @impl GenServer
   def init(%__MODULE__{} = state) do
     Process.flag(:trap_exit, true)
 
-    # only now persist the chosen channel (which should already have adapter_payload
+    # only now publish the connection to ETS (which should already have adapter_payload
     # because build_initial_state connected real channels and set virtual_channel)
-    :persistent_term.put(
-      {__MODULE__, :lb_state, state.virtual_channel.ref},
-      state.virtual_channel
-    )
+    sync_ets(state)
 
     Process.send_after(self(), :refresh, @refresh_interval)
 
@@ -244,13 +266,68 @@ defmodule GRPC.Client.Connection do
   """
   @spec pick_channel(Channel.t(), keyword()) :: {:ok, Channel.t()} | {:error, term()}
   def pick_channel(%Channel{ref: ref} = _channel, _opts \\ []) do
-    case :persistent_term.get({__MODULE__, :lb_state, ref}, nil) do
-      nil ->
-        {:error, :no_connection}
+    case :ets.lookup(@table, {ref, :lb}) do
+      [{_, %{mod: lb_mod, state: lb_state}}] ->
+        lb_pick(ref, lb_mod, lb_state)
 
-      %Channel{} = channel ->
-        {:ok, channel}
+      [] ->
+        case :ets.lookup(@table, {ref, :channel}) do
+          [{_, %Channel{} = channel}] -> {:ok, channel}
+          [] -> {:error, :no_connection}
+        end
     end
+  end
+
+  # Performs a fresh load-balancing pick for every request, reading and
+  # updating the shared LB state directly in ETS.
+  defp lb_pick(ref, lb_mod, lb_state) do
+    case lb_mod.pick(lb_state) do
+      {:ok, {host, port}, new_lb_state} ->
+        :ets.insert(@table, {{ref, :lb}, %{mod: lb_mod, state: new_lb_state}})
+
+        channels = ets_channels(ref)
+        key = build_address_key(host, port)
+
+        case Map.get(channels, key) do
+          {:connected, %Channel{} = channel} -> {:ok, channel}
+          _ -> fallback_healthy_pick(channels)
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp fallback_healthy_pick(channels) do
+    case Enum.find_value(channels, fn {_k, v} -> match?({:connected, _}, v) && v end) do
+      {:connected, %Channel{} = channel} -> {:ok, channel}
+      nil -> {:error, :no_connection}
+    end
+  end
+
+  defp ets_channels(ref) do
+    case :ets.lookup(@table, {ref, :channels}) do
+      [{_, channels}] -> channels
+      [] -> %{}
+    end
+  end
+
+  # Publishes the current connection state (LB info and/or direct channel)
+  # to the shared ETS table so `pick_channel/2` can read it from any process.
+  defp sync_ets(%{lb_mod: nil} = state) do
+    :ets.insert(@table, {{state.virtual_channel.ref, :channel}, state.virtual_channel})
+  end
+
+  defp sync_ets(%{lb_mod: lb_mod, lb_state: lb_state} = state) do
+    ref = state.virtual_channel.ref
+    :ets.insert(@table, {{ref, :lb}, %{mod: lb_mod, state: lb_state}})
+    :ets.insert(@table, {{ref, :channels}, state.real_channels})
+  end
+
+  defp delete_ets(ref) do
+    :ets.delete(@table, {ref, :lb})
+    :ets.delete(@table, {ref, :channels})
+    :ets.delete(@table, {ref, :channel})
   end
 
   @doc """
@@ -280,7 +357,7 @@ defmodule GRPC.Client.Connection do
     end
 
     resp = {:ok, %Channel{channel | adapter_payload: %{conn_pid: nil}}}
-    :persistent_term.erase({__MODULE__, :lb_state, channel.ref})
+    delete_ets(channel.ref)
 
     if Map.has_key?(state, :real_channels) do
       Enum.map(state.real_channels, fn
@@ -303,8 +380,7 @@ defmodule GRPC.Client.Connection do
   @impl GenServer
   def handle_info(
         :refresh,
-        %{lb_mod: lb_mod, lb_state: lb_state, real_channels: channels, virtual_channel: vc} =
-          state
+        %{lb_mod: lb_mod, lb_state: lb_state, real_channels: channels} = state
       )
       when not is_nil(lb_mod) do
     {:ok, {prefer_host, prefer_port}, new_lb_state} = lb_mod.pick(lb_state)
@@ -313,14 +389,15 @@ defmodule GRPC.Client.Connection do
 
     case Map.get(channels, channel_key) do
       {:connected, %Channel{} = picked_channel} ->
-        :persistent_term.put({__MODULE__, :lb_state, vc.ref}, picked_channel)
+        new_state = %{state | lb_state: new_lb_state, virtual_channel: picked_channel}
+        sync_ets(new_state)
 
         Process.send_after(self(), :refresh, @refresh_interval)
-        {:noreply, %{state | lb_state: new_lb_state, virtual_channel: picked_channel}}
+        {:noreply, new_state}
 
       _nil_or_failed ->
         # LB picked a channel that is missing or in {:failed, _} state.
-        # Don't update persistent_term — keep serving from the current
+        # Don't update ETS — keep serving from the current
         # virtual_channel until re-resolution provides healthy backends.
         Logger.warning("LB picked #{channel_key}, but channel is unavailable")
 
@@ -378,7 +455,7 @@ defmodule GRPC.Client.Connection do
 
   @impl GenServer
   def terminate(_reason, %{virtual_channel: %{ref: ref}}) do
-    :persistent_term.erase({__MODULE__, :lb_state, ref})
+    delete_ets(ref)
   rescue
     _ -> :ok
   end
@@ -454,14 +531,15 @@ defmodule GRPC.Client.Connection do
 
           case Map.get(real_channels, key) do
             {:connected, picked_channel} ->
-              maybe_update_persistent_term(state.virtual_channel, picked_channel)
-
-              %{
+              new_state = %{
                 state
                 | real_channels: real_channels,
                   lb_state: picked_lb_state,
                   virtual_channel: picked_channel
               }
+
+              sync_ets(new_state)
+              new_state
 
             _ ->
               fallback_to_healthy_channel(state, real_channels, picked_lb_state)
@@ -480,28 +558,20 @@ defmodule GRPC.Client.Connection do
 
     case Enum.find_value(real_channels, fn {_k, v} -> match?({:connected, _}, v) && v end) do
       {:connected, healthy_channel} ->
-        maybe_update_persistent_term(state.virtual_channel, healthy_channel)
-
-        %{
+        new_state = %{
           state
           | real_channels: real_channels,
             lb_state: lb_state,
             virtual_channel: healthy_channel
         }
 
+        sync_ets(new_state)
+        new_state
+
       nil ->
         Logger.warning("No healthy channels available after re-resolution")
-        :persistent_term.erase({__MODULE__, :lb_state, ref})
+        delete_ets(ref)
         %{state | real_channels: real_channels, lb_state: lb_state}
-    end
-  end
-
-  defp maybe_update_persistent_term(current_channel, new_channel) do
-    if current_channel != new_channel do
-      :persistent_term.put(
-        {__MODULE__, :lb_state, new_channel.ref},
-        new_channel
-      )
     end
   end
 

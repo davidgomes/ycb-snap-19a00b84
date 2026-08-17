@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Enhancements
+
+  * `GRPC.Client.Connection` now backs its load-balancing state with a shared ETS table instead of `persistent_term`, and performs the LB pick on every request (`pick_channel/2`) rather than caching a single pick that was refreshed periodically.
+
 ## v1.0.0 (2026-06-15)
 
 ### Enhancements
