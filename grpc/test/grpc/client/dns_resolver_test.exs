@@ -846,7 +846,7 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "stale persistent_term prevention" do
+  describe "stale ETS entry prevention" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.99"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
@@ -1042,14 +1042,14 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "refresh handler with failed channels" do
+  describe "per-request pick with failed channels" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.2"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
       Map.put(ctx, :failing_adapter, GRPC.Test.FailingClientAdapter)
     end
 
-    test "GenServer survives when :refresh picks a failed channel", ctx do
+    test "repeated pick_channel calls survive round-robin landing on a failed channel", ctx do
       # Connect with 2 backends — one healthy, one failing
       expect(ctx.resolver, :resolve, fn _target ->
         {:ok,
@@ -1088,20 +1088,18 @@ defmodule GRPC.Client.ReResolveTest do
       state = get_state(ctx.ref)
       assert match?({:failed, _}, Map.get(state.real_channels, "10.0.0.2:50051"))
 
-      # Wait for several :refresh cycles (15s default, but we'll trigger manually).
-      # Round-robin will eventually pick 10.0.0.2. Without the fix, this crashes.
       pid = whereis_name(ctx.ref)
 
+      # Each pick_channel call performs its own round-robin pick. Some of
+      # these calls will land on the failed 10.0.0.2 backend; per-request
+      # picking must fall back to the healthy backend without crashing the
+      # connection GenServer.
       for _ <- 1..5 do
-        send(pid, :refresh)
+        assert {:ok, picked} = Connection.pick_channel(channel)
+        assert picked.host == "10.0.0.1"
       end
 
-      # Small sleep for messages to process
-      Process.sleep(50)
-
       assert Process.alive?(pid)
-      assert {:ok, picked} = Connection.pick_channel(channel)
-      assert picked.host == "10.0.0.1"
 
       disconnect_and_wait(channel)
     end
