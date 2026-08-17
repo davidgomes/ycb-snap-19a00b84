@@ -56,4 +56,92 @@ defmodule Oban.Console.JobsTest do
               }} = Storage.get_profile()
     end
   end
+
+  describe "debug_jobs/1" do
+    test "with an empty list of ids" do
+      assert :ok = Jobs.debug_jobs([])
+    end
+
+    test "with a list of ids" do
+      Mimic.stub(Oban, :config, fn Oban -> :oban_config end)
+      Mimic.expect(Oban.Repo, :get, 1, fn :oban_config, Oban.Job, 102_030 -> %Oban.Job{} end)
+      Mimic.expect(Oban.Repo, :get, 1, fn :oban_config, Oban.Job, 102_040 -> %Oban.Job{} end)
+
+      assert :ok = Jobs.debug_jobs([102_030, 102_040])
+    end
+
+    test "with a single ids" do
+      Mimic.stub(Oban, :config, fn Oban -> :oban_config end)
+      Mimic.expect(Oban.Repo, :get, 1, fn :oban_config, Oban.Job, 102_040 -> %Oban.Job{} end)
+
+      assert :ok = Jobs.debug_jobs(102_040)
+    end
+
+    test "with an invalid id" do
+      assert :ok = Jobs.debug_jobs("jose")
+    end
+
+    test "with a missing job" do
+      Mimic.stub(Oban, :config, fn Oban -> :oban_config end)
+      Mimic.expect(Oban.Repo, :get, 1, fn :oban_config, Oban.Job, 1 -> nil end)
+
+      assert :ok = Jobs.debug_jobs(1)
+    end
+  end
+
+  describe "cancel_jobs/1" do
+    test "with an empty list of ids" do
+      assert :ok = Jobs.cancel_jobs([])
+    end
+
+    test "with a list of ids" do
+      Mimic.expect(Oban, :cancel_job, 1, fn 102_030 -> :ok end)
+      Mimic.expect(Oban, :cancel_job, 1, fn 102_040 -> :ok end)
+
+      assert :ok = Jobs.cancel_jobs([102_030, 102_040])
+    end
+
+    test "with a single ids" do
+      Mimic.expect(Oban, :cancel_job, 1, fn 102_040 -> :ok end)
+
+      assert :ok = Jobs.cancel_jobs(102_040)
+    end
+
+    test "with an invalid id" do
+      assert :ok = Jobs.cancel_jobs("jose")
+    end
+  end
+
+  describe "retry_jobs/1" do
+    test "with an empty list of ids" do
+      assert :ok = Jobs.retry_jobs([])
+    end
+
+    test "with a list of ids" do
+      Mimic.expect(Oban, :retry_job, 1, fn 102_030 -> :ok end)
+      Mimic.expect(Oban, :retry_job, 1, fn 102_040 -> :ok end)
+
+      assert :ok = Jobs.retry_jobs([102_030, 102_040])
+    end
+
+    test "with a single ids" do
+      Mimic.expect(Oban, :retry_job, 1, fn 102_040 -> :ok end)
+
+      assert :ok = Jobs.retry_jobs(102_040)
+    end
+
+    test "with an invalid id" do
+      assert :ok = Jobs.retry_jobs("jose")
+    end
+  end
+
+  describe "clean_storage/0" do
+    test "clears last jobs opts" do
+      Storage.set_last_jobs_opts(limit: 50, states: ["scheduled"])
+
+      Jobs.clean_storage()
+
+      assert [] = Storage.get_last_jobs_opts()
+    end
+  end
 end
