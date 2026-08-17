@@ -1,0 +1,11 @@
+/_build
+/cover
+/deps
+/doc
+/.fetch
+erl_crash.dump
+*.ez
+*.beam
+/priv/static
+dump.rdb
+.elixir_ls
