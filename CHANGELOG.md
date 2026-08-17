@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.3.3] (2025-09-17)
+
+### Changed
+
+* Code janitoring to be compliant with elixir 1.18
+
 ## [2.3.2] (2023-08-04)
 
 ### Changed
@@ -107,3 +113,5 @@
 
 
 [2.3.1]: https://github.com/kbrw/ewebmachine/compare/v2.3.0...v2.3.1
+[2.3.2]: https://github.com/kbrw/ewebmachine/compare/v2.3.1...v2.3.2
+[2.3.3]: https://github.com/kbrw/ewebmachine/compare/v2.3.2...v2.3.3
