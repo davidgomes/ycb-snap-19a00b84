@@ -1,0 +1,1522 @@
+defmodule PetalComponents.FieldTest do
+  use ComponentCase
+  import PetalComponents.Field
+
+  test "field as text" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          field={@form[:name]}
+          placeholder="eg. Sally"
+          class="!w-max"
+          itemid="something"
+          value="John"
+          help_text="Help text"
+          label_class="label-class"
+        />
+      </.form>
+      """)
+
+    assert html =~ "label"
+    assert html =~ "Name"
+    assert html =~ "input"
+    assert html =~ "Sally"
+    assert html =~ "user[name]"
+    assert html =~ "itemid"
+    assert html =~ "something"
+    refute html =~ " disabled "
+    assert html =~ "pc-text-input"
+    assert html =~ "!w-max"
+    assert html =~ ~s|value="John"|
+    assert html =~ "Help text"
+    assert html =~ "label-class"
+  end
+
+  test "Unedited field as text with field errors" do
+    assigns = %{
+      field: %Phoenix.HTML.FormField{
+        errors: [
+          {"can't be blank", [validation: :required]},
+          {"too short!", [validation: :length]}
+        ],
+        name: "name",
+        value: "",
+        field: :name,
+        id: "name",
+        form: %Phoenix.HTML.Form{
+          params: %{"_unused_name" => ""}
+        }
+      }
+    }
+
+    html =
+      rendered_to_string(~H"""
+      <.field field={@field} />
+      """)
+
+    assert html =~ "name"
+    assert html =~ "Name"
+    refute html =~ "pc-form-field-error"
+    refute html =~ html_escape("can't be blank")
+    refute html =~ html_escape("too short!")
+  end
+
+  test "Edited field as text with field errors" do
+    assigns = %{
+      field: %Phoenix.HTML.FormField{
+        errors: [
+          {"can't be blank", [validation: :required]},
+          {"too short!", [validation: :length]}
+        ],
+        name: "name",
+        value: "",
+        field: :name,
+        id: "name",
+        form: %Phoenix.HTML.Form{
+          params: %{"name" => ""}
+        }
+      }
+    }
+
+    html =
+      rendered_to_string(~H"""
+      <.field field={@field} />
+      """)
+
+    assert html =~ "name"
+    assert html =~ "Name"
+    assert html =~ "pc-form-field-error"
+    assert html =~ html_escape("can't be blank")
+    assert html =~ html_escape("too short!")
+  end
+
+  test "field as text with custom errors" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          label="Name"
+          value=""
+          name="name"
+          errors={[
+            "can't be blank",
+            "too short!"
+          ]}
+        />
+      </.form>
+      """)
+
+    assert html =~ "pc-form-field-error"
+    assert html =~ html_escape("can't be blank")
+    assert html =~ html_escape("too short!")
+  end
+
+  test "field standard inputs" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field field={@form[:name]} type="color" />
+        <.field field={@form[:name]} type="date" />
+        <.field field={@form[:name]} type="datetime-local" />
+        <.field field={@form[:name]} type="email" />
+        <.field field={@form[:name]} type="file" />
+        <.field field={@form[:name]} type="hidden" />
+        <.field field={@form[:name]} type="month" />
+        <.field field={@form[:name]} type="number" />
+        <.field field={@form[:name]} type="password" />
+        <.field field={@form[:name]} type="range" />
+        <.field field={@form[:name]} type="search" />
+        <.field field={@form[:name]} type="tel" />
+        <.field field={@form[:name]} type="text" />
+        <.field field={@form[:name]} type="time" />
+        <.field field={@form[:name]} type="url" />
+        <.field field={@form[:name]} type="week" />
+      </.form>
+      """)
+
+    assert html =~ "input"
+    assert html =~ ~s|type="color"|
+    assert html =~ ~s|type="date"|
+    assert html =~ ~s|type="datetime-local"|
+    assert html =~ ~s|type="email"|
+    assert html =~ ~s|type="file"|
+    assert html =~ ~s|type="hidden"|
+    assert html =~ ~s|type="month"|
+    assert html =~ ~s|type="number"|
+    assert html =~ ~s|type="password"|
+    assert html =~ ~s|type="range"|
+    assert html =~ ~s|type="search"|
+    assert html =~ ~s|type="tel"|
+    assert html =~ ~s|type="text"|
+    assert html =~ ~s|type="time"|
+    assert html =~ ~s|type="url"|
+    assert html =~ ~s|type="week"|
+  end
+
+  test "field range routes through the input and supports fill" do
+    assigns = %{form: to_form(%{}, as: :prefs)}
+
+    plain =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field type="range" field={@form[:volume]} label="Volume" min="0" max="100" />
+      </.form>
+      """)
+
+    assert plain =~ ~s|type="range"|
+    assert plain =~ "pc-range-input"
+    assert plain =~ "Volume"
+    refute plain =~ "pc-range-input--fill"
+
+    filled =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field type="range" field={@form[:volume]} label="Volume" min="0" max="100" fill />
+      </.form>
+      """)
+
+    assert filled =~ "pc-range-input--fill"
+    assert filled =~ ~s|phx-hook="PetalRangeFill"|
+  end
+
+  test "bare field without value or label renders instead of raising" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.field type="file" name="upload" />
+      """)
+
+    assert html =~ ~s|type="file"|
+    # label humanises from the name when neither field nor label is given
+    assert html =~ "Upload"
+
+    labelled =
+      rendered_to_string(~H"""
+      <.field type="tel" name="phone" label="Phone" />
+      """)
+
+    assert labelled =~ ~s|type="tel"|
+    assert labelled =~ "Phone"
+  end
+
+  test "field text disabled" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field disabled field={@form[:name]} />
+      </.form>
+      """)
+
+    assert html =~ "input"
+    assert html =~ "user[name]"
+    assert html =~ "disabled"
+  end
+
+  test "field checkbox" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field type="checkbox" field={@form[:read_terms]} itemid="something" />
+      </.form>
+      """)
+
+    assert html =~ "checkbox"
+    assert html =~ "user[read_terms]"
+    assert html =~ "itemid"
+
+    # It includes a hidden field for when the switch is not checked
+    assert html =~ ~s|<input type="hidden" name="user[read_terms]" value="false">|
+  end
+
+  test "field switch without value renders unchecked instead of crashing" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.field type="switch" name="plain_switch" label="Plain" />
+      """)
+
+    assert html =~ "pc-switch"
+    refute html =~ ~s( checked)
+  end
+
+  test "field checkbox without value renders unchecked instead of crashing" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.field type="checkbox" name="plain" label="Plain" />
+      """)
+
+    assert html =~ ~s(type="checkbox")
+    assert html =~ "pc-checkbox"
+    refute html =~ ~s( checked)
+  end
+
+  test "field checkbox honours an explicit checked without a value" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.field type="checkbox" name="on" label="On" checked />
+      """)
+
+    assert html =~ ~s( checked)
+  end
+
+  test "field checkbox disabled omits the hidden false input" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field type="checkbox" field={@form[:read_terms]} disabled />
+      </.form>
+      """)
+
+    assert html =~ ~s(type="checkbox")
+    assert html =~ "disabled"
+    refute html =~ ~s|<input type="hidden" name="user[read_terms]" value="false">|
+  end
+
+  test "field switch disabled omits the hidden false input" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field type="switch" field={@form[:read_terms]} disabled />
+      </.form>
+      """)
+
+    assert html =~ ~s(type="checkbox")
+    assert html =~ "disabled"
+    refute html =~ ~s|<input type="hidden" name="user[read_terms]" value="false">|
+  end
+
+  test "field checkbox-group disabled omits the hidden empty input" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="checkbox-group"
+          field={@form[:roles]}
+          options={[{"Admin", "admin"}, {"User", "user"}]}
+          disabled
+        />
+      </.form>
+      """)
+
+    assert html =~ "disabled"
+    refute html =~ ~s|<input type="hidden" name="user[roles][]" value="">|
+  end
+
+  test "field select" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="select"
+          class="custom-class"
+          field={@form[:role]}
+          options={[Admin: "admin", User: "user"]}
+          itemid="something"
+        />
+      </.form>
+      """)
+
+    assert html =~ "<select"
+    assert html =~ "user[role]"
+    assert html =~ "itemid"
+    assert html =~ "<option"
+    assert html =~ "admin"
+    assert html =~ "Admin"
+    assert html =~ "custom-class"
+  end
+
+  test "field select selected attributes" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="select"
+          class="custom-class"
+          field={@form[:role]}
+          options={[Admin: "admin", User: "user"]}
+          itemid="something"
+          selected="admin"
+        />
+      </.form>
+      """)
+
+    assert html =~ "option selected"
+  end
+
+  test "field textarea" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="textarea"
+          field={@form[:description]}
+          itemid="something"
+          placeholder="dummy text"
+          rows="8"
+        />
+      </.form>
+      """)
+
+    assert html =~ "<textarea"
+    assert html =~ "user[description]"
+    assert html =~ "itemid"
+    assert html =~ "placeholder"
+    assert html =~ "dummy text"
+    assert html =~ "custom-class"
+    assert html =~ "rows=\"8\""
+  end
+
+  test "field checkbox-group" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="checkbox-group"
+          field={@form[:roles]}
+          options={[{"Read", "read"}, {"Write", "write"}]}
+        />
+      </.form>
+      """)
+
+    assert html =~ "checkbox"
+    assert html =~ "user[roles][]"
+    assert html =~ "Read"
+    assert html =~ "Write"
+    refute html =~ " checked "
+    assert html =~ "hidden"
+    assert html =~ "custom-class"
+  end
+
+  test "field checkbox-group disabled_options" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="checkbox-group"
+          field={@form[:roles]}
+          options={[{"Option 1", "1"}, {"Option 2", "2"}, {"Option 3", "3"}]}
+          disabled_options={["1", "3"]}
+        />
+      </.form>
+      """)
+
+    assert html =~ "disabled"
+    count_disabled = length(String.split(html, "disabled")) - 1
+    assert count_disabled == 2
+  end
+
+  test "field checkbox-group checked" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="checkbox-group"
+          checked={["read"]}
+          field={@form[:roles]}
+          options={[{"Read", "read"}, {"Write", "write"}]}
+        />
+      </.form>
+      """)
+
+    assert html =~ " checked "
+
+    assigns = %{form: to_form(%{"roles" => ["read"]}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="checkbox-group"
+          field={@form[:roles]}
+          options={[{"Read", "read"}, {"Write", "write"}]}
+        />
+      </.form>
+      """)
+
+    assert html =~ " checked "
+  end
+
+  test "field checkbox-group group_layout" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="checkbox-group"
+          checked={["read"]}
+          field={@form[:roles]}
+          group_layout="col"
+          options={[{"Read", "read"}, {"Write", "write"}]}
+        />
+      </.form>
+      """)
+
+    assert html =~ "pc-checkbox-group--col"
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="checkbox-group"
+          checked={["read"]}
+          field={@form[:roles]}
+          group_layout="row"
+          options={[{"Read", "read"}, {"Write", "write"}]}
+        />
+      </.form>
+      """)
+
+    assert html =~ "pc-checkbox-group--row"
+  end
+
+  test "field checkbox-group empty options" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="checkbox-group"
+          checked={["read"]}
+          field={@form[:roles]}
+          options={[]}
+          empty_message="No options"
+        />
+      </.form>
+      """)
+
+    assert html =~ "No options"
+
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="checkbox-group"
+          checked={["read"]}
+          field={@form[:roles]}
+          options={[{"Read", "read"}, {"Write", "write"}]}
+          empty_message="No options"
+        />
+      </.form>
+      """)
+
+    refute html =~ "No options"
+  end
+
+  test "field radio-group" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="radio-group"
+          field={@form[:roles]}
+          options={[{"Read", "read"}, {"Write", "write"}]}
+        />
+      </.form>
+      """)
+
+    assert html =~ "radio"
+    assert html =~ "user[roles]"
+    assert html =~ "Read"
+    assert html =~ "Write"
+    refute html =~ " checked "
+    assert html =~ "hidden"
+    assert html =~ "custom-class"
+  end
+
+  test "field radio-group checked on form field" do
+    assigns = %{form: to_form(%{"roles" => "write"}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="radio-group"
+          field={@form[:roles]}
+          options={[{"Read", "read"}, {"Write", "write"}]}
+        />
+      </.form>
+      """)
+
+    assert html =~ ~s|value="write" checked|
+
+    # Test when value is an integer
+    assigns = %{form: to_form(%{"roles" => 2}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="radio-group"
+          field={@form[:roles]}
+          options={[{"Read", "1"}, {"Write", "2"}]}
+        />
+      </.form>
+      """)
+
+    assert html =~ ~s|value="2" checked|
+  end
+
+  test "field radio-group checked attr" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="radio-group"
+          field={@form[:roles]}
+          checked="write"
+          options={[{"Read", "read"}, {"Write", "write"}]}
+        />
+      </.form>
+      """)
+
+    assert html =~ ~s|value="write" checked|
+  end
+
+  test "field radio-group empty options" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="radio-group"
+          field={@form[:roles]}
+          options={[]}
+          empty_message="No options"
+        />
+      </.form>
+      """)
+
+    assert html =~ "No options"
+    assert html =~ "pc-radio-group--empty-message"
+
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="radio-group"
+          field={@form[:roles]}
+          options={[{"Read", "read"}, {"Write", "write"}]}
+          empty_message="No options"
+        />
+      </.form>
+      """)
+
+    refute html =~ "No options"
+  end
+
+  test "field radio-card" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="radio-card"
+          group_layout="col"
+          field={@form[:plans]}
+          options={[
+            %{label: "Basic Plan", value: "basic"},
+            %{label: "Pro Plan", value: "pro", description: "Most popular choice"}
+          ]}
+        />
+      </.form>
+      """)
+
+    assert html =~ "radio"
+    assert html =~ "user[plans]"
+    assert html =~ "pc-radio-card-group--col"
+    assert html =~ "Basic Plan"
+    assert html =~ "Pro Plan"
+    refute html =~ " checked "
+    assert html =~ "hidden"
+    assert html =~ "custom-class"
+  end
+
+  test "field radio-card indicator positions and option visuals" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    default_end =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="radio-card"
+          field={@form[:plan]}
+          indicator
+          options={[%{label: "Pro", value: "pro"}]}
+        />
+      </.form>
+      """)
+
+    corner =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="radio-card"
+          field={@form[:plan]}
+          indicator
+          indicator_position="corner"
+          options={[%{label: "Pro", value: "pro", icon: "hero-credit-card"}]}
+        />
+      </.form>
+      """)
+
+    imaged =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="radio-card"
+          field={@form[:reviewer]}
+          options={[%{label: "Sarah", value: "sarah", image: "/avatars/s.jpg"}]}
+        />
+      </.form>
+      """)
+
+    # default "end": dot inside the content row, no corner modifier
+    assert default_end =~ "pc-radio-card__dot"
+    assert default_end =~ "pc-radio-card--indicator-end"
+    refute default_end =~ "pc-radio-card__dot--corner"
+
+    # corner: floating dot + icon circle
+    assert corner =~ "pc-radio-card__dot--corner"
+    assert corner =~ "pc-radio-card__icon"
+    assert has_icon?(corner, "hero-credit-card")
+
+    # image option renders the thumbnail and forces the row layout without indicator
+    assert imaged =~ "pc-radio-card__image"
+    assert imaged =~ ~s|src="/avatars/s.jpg"|
+    assert imaged =~ "pc-radio-card--indicator"
+    refute imaged =~ "pc-radio-card__dot"
+  end
+
+  test "field radio-card group-wide disabled greys every card" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="radio-card"
+          field={@form[:plans]}
+          disabled
+          options={[
+            %{label: "Basic Plan", value: "basic"},
+            %{label: "Pro Plan", value: "pro"}
+          ]}
+        />
+      </.form>
+      """)
+
+    # both cards carry the disabled style, not just per-option disabled ones
+    assert length(String.split(html, "pc-radio-card--disabled")) == 3
+    assert html =~ ~s|disabled|
+  end
+
+  test "field radio-card group_layout attr" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field type="radio-card" field={@form[:plans]} />
+      </.form>
+      """)
+
+    assert html =~ "pc-radio-card-group--row"
+  end
+
+  test "field radio-card checked on form field" do
+    assigns = %{form: to_form(%{"plans" => "pro"}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="radio-card"
+          field={@form[:plans]}
+          options={[
+            %{label: "Basic Plan", value: "basic"},
+            %{label: "Pro Plan", value: "pro", description: "Most popular choice"}
+          ]}
+        />
+      </.form>
+      """)
+
+    assert html =~ ~s|value="pro" checked|
+
+    # Test when value is an integer
+    assigns = %{form: to_form(%{"plans" => 2}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="radio-card"
+          field={@form[:plans]}
+          options={[
+            %{label: "Basic Plan", value: "1"},
+            %{label: "Pro Plan", value: "2", description: "Most popular choice"}
+          ]}
+        />
+      </.form>
+      """)
+
+    assert html =~ ~s|value="2" checked|
+  end
+
+  test "field radio-card checked attr" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="radio-card"
+          field={@form[:plans]}
+          checked="pro"
+          options={[
+            %{label: "Basic Plan", value: "basic"},
+            %{label: "Pro Plan", value: "pro", description: "Most popular choice"}
+          ]}
+        />
+      </.form>
+      """)
+
+    assert html =~ ~s|value="pro" checked|
+  end
+
+  test "field radio-card empty options" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field type="radio-card" field={@form[:plans]} empty_message="No options" />
+      </.form>
+      """)
+
+    assert html =~ "No options"
+
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          class="custom-class"
+          type="radio-card"
+          field={@form[:plans]}
+          options={[
+            %{label: "Basic Plan", value: "basic"},
+            %{label: "Pro Plan", value: "pro", description: "Most popular choice"}
+          ]}
+          empty_message="No options"
+        />
+      </.form>
+      """)
+
+    refute html =~ "No options"
+  end
+
+  test "field switch and size" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field type="switch" field={@form[:read_terms]} data-extra="true" />
+      </.form>
+      """)
+
+    assert html =~ "checkbox"
+    assert html =~ "user[read_terms]"
+    assert html =~ "data-extra"
+
+    # It includes a hidden field for when the switch is not checked
+    assert html =~ ~s|<input type="hidden" name="user[read_terms]" value="false">|
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field type="switch" size="xs" field={@form[:read_terms]} data-extra="true" />
+      </.form>
+      """)
+
+    assert html =~ "pc-switch pc-switch--xs"
+  end
+
+  test "field radio group" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="radio-group"
+          field={@form[:read_terms]}
+          options={[{"Read", "read"}, {"Write", "write"}]}
+          data-extra="true"
+        />
+      </.form>
+      """)
+
+    assert html =~ "checkbox"
+    assert html =~ "user[read_terms]"
+    assert html =~ "data-extra"
+  end
+
+  test "field with copyable" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          field={@form[:text]}
+          placeholder="This is just a placeholder"
+          value="https://example.com/invite/your-invite-code"
+          label="Copyable"
+          copyable
+        />
+      </.form>
+      """)
+
+    assert html =~ "<label"
+    assert html =~ "Copyable"
+    assert html =~ "<input"
+    assert html =~ ~s|type="text"|
+    assert html =~ "readonly"
+    assert html =~ ~s|value="https://example.com/invite/your-invite-code"|
+    assert html =~ "pc-copyable-field-button"
+    assert html =~ "hero-clipboard-document"
+    refute html =~ "clipboard-document-solid"
+    assert html =~ "pc-copyable-field-icon"
+    # success state: check glyph in the success colour, announced politely
+    assert html =~ "pc-copyable-field-icon--done"
+    assert has_icon?(html, "hero-check")
+    assert html =~ ~s|aria-label="Copy to clipboard"|
+    assert html =~ ~s|aria-live="polite"|
+    assert html =~ ~s|phx-hook="PetalCopyInput"|
+    assert html =~ "data-pc-copy-input"
+    assert html =~ "data-pc-copy-btn"
+    refute html =~ "x-data"
+  end
+
+  test "field with viewable" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          type="password"
+          field={@form[:password]}
+          label="Viewable"
+          placeholder="Placeholder"
+          viewable
+        />
+      </.form>
+      """)
+
+    assert html =~ "<label"
+    assert html =~ "Viewable"
+    assert html =~ "<input"
+    assert html =~ ~s|phx-hook="PetalPasswordToggle"|
+    assert html =~ "data-pc-password-input"
+    assert html =~ "data-pc-password-toggle"
+    refute html =~ "x-data"
+    assert html =~ "pc-password-field-toggle-button"
+    assert has_icon?(html, "hero-eye")
+    refute html =~ "hero-eye-solid"
+    assert html =~ ~s|aria-label="Show password"|
+    assert html =~ ~s|aria-pressed="false"|
+    assert html =~ "pc-password-field-toggle-icon"
+  end
+
+  test "field with clearable" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field field={@form[:text]} placeholder="Enter text" label="Clearable" type="text" clearable />
+      </.form>
+      """)
+
+    assert html =~ "<label"
+    assert html =~ "Clearable"
+    assert html =~ "<input"
+    assert html =~ ~s|type="text"|
+    assert html =~ "pc-clearable-field-button"
+    assert html =~ "hero-x-mark-solid"
+    assert html =~ "pc-clearable-field-icon"
+    assert html =~ ~s|phx-hook="PetalClearableInput"|
+    assert html =~ "data-pc-clear-input"
+    assert html =~ "data-pc-clear-btn"
+    refute html =~ "x-data"
+  end
+
+  test "field_help_text" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.field_help_text help_text="Inline" />
+      """)
+
+    assert html =~ "Inline"
+
+    html =
+      rendered_to_string(~H"""
+      <.field_help_text>Utilising slot</.field_help_text>
+      """)
+
+    assert html =~ "Utilising slot"
+
+    html =
+      rendered_to_string(~H"""
+      <.field_help_text class="mt-1" help_text="Test class" />
+      """)
+
+    assert html =~ "Test class"
+    assert html =~ "mt-1"
+
+    html =
+      rendered_to_string(~H"""
+      <.field_help_text />
+      """)
+
+    refute html =~ "pc-form-help-text"
+  end
+
+  test "required fields" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field required type="textarea" field={@form[:textarea]} />
+        <.field required type="text" field={@form[:text]} />
+        <.field required type="switch" field={@form[:switch]} />
+        <.field required type="checkbox" field={@form[:checkbox]} />
+        <.field required type="color" field={@form[:color]} />
+        <.field required type="date" field={@form[:date]} />
+        <.field required type="datetime-local" field={@form[:datetime_local]} />
+        <.field required type="email" field={@form[:email]} />
+        <.field required type="file" field={@form[:file]} />
+        <.field required type="month" field={@form[:month]} />
+        <.field required type="number" field={@form[:number]} />
+        <.field required type="password" field={@form[:password]} />
+        <.field required type="range" field={@form[:range]} />
+        <.field required type="search" field={@form[:search]} />
+        <.field required type="tel" field={@form[:tel]} />
+        <.field required type="time" field={@form[:time]} />
+        <.field required type="url" field={@form[:url]} />
+        <.field required type="week" field={@form[:week]} />
+        <.field required type="select" field={@form[:select]} options={["1"]} />
+        <.field required type="checkbox-group" field={@form[:checkbox_group]} options={["1"]} />
+        <.field required type="radio-group" field={@form[:radio_group]} options={["1"]} />
+      </.form>
+      """)
+
+    assert count_substring(html, "pc-label--required") == 21
+
+    # Check for setting the `required` attribute on the element
+    # We check for 19 because `checkbox-group` and `radio-group` have multiple inputs so we don't put `required` on any of them
+    assert count_substring(html, " required") == 19
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field type="textarea" field={@form[:textarea]} />
+        <.field type="text" field={@form[:text]} />
+        <.field type="switch" field={@form[:switch]} />
+        <.field type="checkbox" field={@form[:checkbox]} />
+        <.field type="color" field={@form[:color]} />
+        <.field type="date" field={@form[:date]} />
+        <.field type="datetime-local" field={@form[:datetime_local]} />
+        <.field type="email" field={@form[:email]} />
+        <.field type="file" field={@form[:file]} />
+        <.field type="month" field={@form[:month]} />
+        <.field type="number" field={@form[:number]} />
+        <.field type="password" field={@form[:password]} />
+        <.field type="range" field={@form[:range]} />
+        <.field type="search" field={@form[:search]} />
+        <.field type="tel" field={@form[:tel]} />
+        <.field type="time" field={@form[:time]} />
+        <.field type="url" field={@form[:url]} />
+        <.field type="week" field={@form[:week]} />
+        <.field type="select" field={@form[:select]} options={["1"]} />
+        <.field type="checkbox-group" field={@form[:checkbox_group]} options={["1"]} />
+        <.field type="radio-group" field={@form[:radio_group]} options={["1"]} />
+      </.form>
+      """)
+
+    assert count_substring(html, "pc-label--required") == 0
+    assert count_substring(html, " required") == 0
+  end
+
+  test "field with copyable and custom icons" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          field={@form[:text]}
+          value="test"
+          label="Custom Icons"
+          copyable
+          copy_icon="hero-document-duplicate"
+          copied_icon="hero-check"
+        />
+      </.form>
+      """)
+
+    assert html =~ "hero-document-duplicate"
+    assert html =~ "hero-check"
+    refute html =~ "hero-clipboard-document-solid"
+    refute html =~ "hero-clipboard-document-check-solid"
+  end
+
+  test "multiple select renders hidden input for used_input?" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          field={@form[:roles]}
+          type="select"
+          multiple
+          options={["admin", "user", "editor"]}
+          label="Roles"
+        />
+      </.form>
+      """)
+
+    assert html =~ ~s|type="hidden"|
+    assert html =~ ~s|name="user[roles][]"|
+    assert html =~ "multiple"
+  end
+
+  test "single select does not render hidden input" do
+    assigns = %{form: to_form(%{}, as: :user)}
+
+    html =
+      rendered_to_string(~H"""
+      <.form for={@form}>
+        <.field
+          field={@form[:role]}
+          type="select"
+          options={["admin", "user"]}
+          label="Role"
+        />
+      </.form>
+      """)
+
+    refute html =~ ~s|type="hidden"|
+  end
+
+  test "range-dual field renders with label and slider" do
+    assigns = %{form: to_form(%{"price_min" => 20, "price_max" => 80}, as: :filters)}
+
+    html =
+      rendered_to_string(~H"""
+      <.field
+        type="range-dual"
+        min_field={@form[:price_min]}
+        max_field={@form[:price_max]}
+        range_min={0}
+        range_max={100}
+      />
+      """)
+
+    assert html =~ "pc-dual-range"
+    assert html =~ "pc-form-field-wrapper"
+    assert html =~ "pc-label"
+    assert html =~ "Price min"
+    assert html =~ "filters[price_min]"
+    assert html =~ "filters[price_max]"
+  end
+
+  test "range-dual field with explicit label" do
+    assigns = %{form: to_form(%{}, as: :filters)}
+
+    html =
+      rendered_to_string(~H"""
+      <.field
+        type="range-dual"
+        label="Price Range"
+        min_field={@form[:price_min]}
+        max_field={@form[:price_max]}
+      />
+      """)
+
+    assert html =~ "Price Range"
+    refute html =~ "Price min"
+  end
+
+  test "range-dual field shows no errors when field has not been used" do
+    assigns = %{
+      min_field: %Phoenix.HTML.FormField{
+        errors: [{"must be >= 0", [validation: :number]}],
+        name: "filters[price_min]",
+        value: "",
+        field: :price_min,
+        id: "filters_price_min",
+        form: %Phoenix.HTML.Form{params: %{"_unused_filters_price_min" => ""}}
+      },
+      max_field: %Phoenix.HTML.FormField{
+        errors: [],
+        name: "filters[price_max]",
+        value: "",
+        field: :price_max,
+        id: "filters_price_max",
+        form: %Phoenix.HTML.Form{params: %{}}
+      }
+    }
+
+    html =
+      rendered_to_string(~H"""
+      <.field type="range-dual" min_field={@min_field} max_field={@max_field} />
+      """)
+
+    refute html =~ "pc-form-field-error"
+    refute html =~ "must be >= 0"
+  end
+
+  test "range-dual field shows errors from min_field when touched" do
+    assigns = %{
+      min_field: %Phoenix.HTML.FormField{
+        errors: [{"must be >= 0", [validation: :number]}],
+        name: "filters[price_min]",
+        value: "-5",
+        field: :price_min,
+        id: "filters_price_min",
+        form: %Phoenix.HTML.Form{params: %{"price_min" => "-5"}}
+      },
+      max_field: %Phoenix.HTML.FormField{
+        errors: [],
+        name: "filters[price_max]",
+        value: "80",
+        field: :price_max,
+        id: "filters_price_max",
+        form: %Phoenix.HTML.Form{params: %{}}
+      }
+    }
+
+    html =
+      rendered_to_string(~H"""
+      <.field type="range-dual" min_field={@min_field} max_field={@max_field} />
+      """)
+
+    assert html =~ "pc-form-field-error"
+    assert html =~ html_escape("must be >= 0")
+  end
+
+  test "range-dual field shows errors from both fields, deduplicated" do
+    assigns = %{
+      min_field: %Phoenix.HTML.FormField{
+        errors: [{"invalid range", []}],
+        name: "filters[price_min]",
+        value: "",
+        field: :price_min,
+        id: "filters_price_min",
+        form: %Phoenix.HTML.Form{params: %{"price_min" => ""}}
+      },
+      max_field: %Phoenix.HTML.FormField{
+        errors: [{"invalid range", []}, {"too large", []}],
+        name: "filters[price_max]",
+        value: "",
+        field: :price_max,
+        id: "filters_price_max",
+        form: %Phoenix.HTML.Form{params: %{"price_max" => ""}}
+      }
+    }
+
+    html =
+      rendered_to_string(~H"""
+      <.field type="range-dual" min_field={@min_field} max_field={@max_field} />
+      """)
+
+    assert html =~ "invalid range"
+    assert html =~ "too large"
+    assert length(String.split(html, "invalid range")) == 2
+  end
+
+  test "range-dual field renders help text" do
+    assigns = %{form: to_form(%{}, as: :filters)}
+
+    html =
+      rendered_to_string(~H"""
+      <.field
+        type="range-dual"
+        min_field={@form[:price_min]}
+        max_field={@form[:price_max]}
+        help_text="Drag to set your price range"
+      />
+      """)
+
+    assert html =~ "Drag to set your price range"
+    assert html =~ "pc-form-help-text"
+  end
+
+  test "range-dual field passes prefix and suffix to input" do
+    assigns = %{form: to_form(%{"price_min" => 10, "price_max" => 90}, as: :filters)}
+
+    html =
+      rendered_to_string(~H"""
+      <.field
+        type="range-dual"
+        min_field={@form[:price_min]}
+        max_field={@form[:price_max]}
+        range_min={0}
+        range_max={100}
+        value_prefix="$"
+        value_suffix="%"
+      />
+      """)
+
+    assert html =~ ~s|data-value-prefix="$"|
+    assert html =~ ~s|data-value-suffix="%"|
+  end
+
+  describe "combobox field" do
+    test "renders label, combobox, errors and help under the wrapper" do
+      assigns = %{
+        form:
+          Phoenix.Component.to_form(%{"city" => "syd"},
+            as: :user,
+            errors: [city: {"is invalid", []}],
+            action: :validate
+          )
+      }
+
+      html =
+        rendered_to_string(~H"""
+        <.field
+          type="combobox"
+          field={@form[:city]}
+          label="City"
+          help_text="Pick one"
+          options={[{"Sydney", "syd"}]}
+          clearable
+        />
+        """)
+
+      assert html =~ "pc-combo-box"
+      assert html =~ "City"
+      assert html =~ "Pick one"
+      assert html =~ "is invalid"
+      assert html =~ "pc-form-field-wrapper--error"
+      assert html =~ ~s|name="user[city]"|
+      # the chosen value flowed from the form field
+      assert html =~ ~s|data-has-value="true"|
+      # clearable rode @rest through the include list
+      assert html =~ "pc-combo-box__clear"
+    end
+
+    test "multiple appends [] once and adds the empty hidden input" do
+      assigns = %{form: Phoenix.Component.to_form(%{}, as: :user)}
+
+      html =
+        rendered_to_string(~H"""
+        <.field type="combobox" field={@form[:tags]} multiple options={[{"A", "a"}]} />
+        """)
+
+      assert html =~ ~s|type="hidden" name="user[tags][]" value=""|
+      refute html =~ "user[tags][][]"
+    end
+
+    test "a bare-name multiple posts one shape: hidden input and select share the [] name" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <.field type="combobox" name="tags" value={[]} label="Tags" multiple options={[{"A", "a"}]} />
+        """)
+
+      assert html =~ ~s|type="hidden" name="tags[]" value=""|
+      assert html =~ ~s|<select id="combo_box_tags-select" name="tags[]"|
+    end
+
+    test "size maps the field family onto the combobox family; combo_variant reaches the anatomy" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <.field
+          type="combobox"
+          name="who"
+          value={nil}
+          label="Who"
+          size="xs"
+          combo_variant="trigger"
+          options={[{"A", "a"}]}
+        />
+        """)
+
+      assert html =~ "pc-combo-box--sm"
+      assert html =~ "pc-combo-box__trigger"
+    end
+
+    test "the label names the focusable control, not the wrapper div" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <.field type="combobox" name="city" value={nil} label="City" options={[{"Sydney", "syd"}]} />
+        """)
+
+      # for= used to point at @id, which lands on the combobox WRAPPER -
+      # a roleless div, so clicking the label focused nothing
+      assert html =~ ~s|for="combo_box_city-input"|
+      assert html =~ ~r/<input[^>]*id="combo_box_city-input"[^>]*aria-label="City"/s
+    end
+
+    test "the trigger anatomy's label points at the trigger button" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <.field
+          type="combobox"
+          name="city"
+          value={nil}
+          label="City"
+          combo_variant="trigger"
+          options={[{"Sydney", "syd"}]}
+        />
+        """)
+
+      # a button is a labelable element, so this is a real association -
+      # and it is the control that is focusable while the panel is shut
+      assert html =~ ~s|for="combo_box_city-trigger"|
+      assert html =~ ~s|id="combo_box_city-trigger"|
+    end
+
+    test "an explicit id still owns the association" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <.field
+          type="combobox"
+          id="picker"
+          name="city"
+          value={nil}
+          label="City"
+          options={[{"Sydney", "syd"}]}
+        />
+        """)
+
+      assert html =~ ~s|for="picker-input"|
+      assert html =~ ~s|id="picker-input"|
+    end
+
+    test ~s|type="combobox" compiles without an attr warning| do
+      # ComponentCase only IMPORTS Phoenix.Component, so attr validation
+      # never runs in this suite - it runs in the consumer's module. Compile
+      # a caller the way a consumer project does and read stderr, or the
+      # missing values: entry goes unnoticed again (it shipped once).
+      warn = fn type ->
+        ExUnit.CaptureIO.capture_io(:stderr, fn ->
+          Code.compile_string("""
+          defmodule FieldTypeProbe#{:erlang.unique_integer([:positive])} do
+            use Phoenix.Component
+            import PetalComponents.Field
+
+            def render(assigns) do
+              ~H\"\"\"
+              <.field type="#{type}" name="city" value={nil} label="City" options={[]} />
+              \"\"\"
+            end
+          end
+          """)
+        end)
+      end
+
+      refute warn.("combobox") =~ "must be one of"
+      # the probe itself has to be able to fail
+      assert warn.("not-a-real-type") =~ "must be one of"
+    end
+
+    test "a nil or empty name raises combo_box's own identity error, never a constant id" do
+      # the old fallback minted the same "combo_box_" id for EVERY
+      # identityless instance - two on a page meant duplicate ids and
+      # ambiguous label targets. With the fallback gone, the identityless
+      # call flows into resolve_id/1's deliberate ArgumentError: a form
+      # control with no identity is a programming error and says so,
+      # loudly, instead of silently colliding. (A field with the :name
+      # key MISSING entirely is a pre-existing KeyError for every type.)
+      for name <- [nil, ""] do
+        assigns = %{name: name}
+
+        assert_raise ArgumentError, ~r/needs an :id, a :field or a :name/, fn ->
+          rendered_to_string(~H"""
+          <.field type="combobox" name={@name} value={nil} label="City" options={[{"Sydney", "syd"}]} />
+          """)
+        end
+      end
+    end
+  end
+end
