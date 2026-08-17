@@ -14,7 +14,7 @@ defmodule Ewebmachine.Mixfile do
     [
       app: :ewebmachine,
       version: version(),
-      elixir: ">= 1.13.4",
+      elixir: ">= 1.14.0",
       docs: docs(),
       deps: deps(),
       description: @description,

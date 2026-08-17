@@ -100,11 +100,26 @@ defmodule Ewebmachine.Builder.Handlers do
   defp sig_to_sigwhen({name,_,_}), do: {name,[quote(do: _),quote(do: _)],true}
 
   defp handler_quote(name,body,guard,conn_match,state_match) do
+    conn_var = quote(do: conn)
+    state_var = quote(do: state)
+
+    {conn_match, conn_var} =
+      case conn_match do
+        {:conn, _, _} -> {conn_match, conn_match}
+        _ -> {quote(do: unquote(conn_match) = var!(conn)), conn_var}
+      end
+
+    {state_match, state_var} =
+      case state_match do
+        {:state, _, _} -> {state_match, state_match}
+        _ -> {quote(do: unquote(state_match) = var!(state)), state_var}
+      end
+
     quote do
       @resource_handlers Map.put(@resource_handlers,unquote(name),__MODULE__)
-      def unquote(name)(unquote(conn_match)=var!(conn),unquote(state_match)=var!(state)) when unquote(guard) do
+      def unquote(name)(unquote(conn_match),unquote(state_match)) when unquote(guard) do
         res = unquote(body)
-        wrap_response(res,var!(conn),var!(state))
+        wrap_response(res,var!(unquote(conn_var)),var!(unquote(state_var)))
       end
     end 
   end
@@ -141,14 +156,12 @@ defmodule Ewebmachine.Builder.Handlers do
     handler_quote(name, do_block[:do], guard, conn_match, state_match)
   end
 
-  for resource_fun_name<-@resource_fun_names do
-    Module.eval_quoted(Ewebmachine.Builder.Handlers, quote do
-      @doc "see `Ewebmachine.Handlers.#{unquote(resource_fun_name)}/2`"
-      defmacro unquote(resource_fun_name)(do_block) do
-        name = unquote(resource_fun_name)
-        handler_quote(name,do_block[:do])
-      end
-    end)
+  for resource_fun_name <- @resource_fun_names do
+    @doc "see `Ewebmachine.Handlers.#{resource_fun_name}/2`"
+    defmacro unquote(resource_fun_name)(do_block) do
+      name = unquote(resource_fun_name)
+      handler_quote(name, do_block[:do])
+    end
   end
 
   @doc false

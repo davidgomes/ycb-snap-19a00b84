@@ -177,7 +177,7 @@ defmodule Ewebmachine.Core do
     p_types = for {type,_fun} <- ct_provided, do: normalize_mtype(type)
     case get_header_val(conn, "accept") do
       nil ->
-	conn = set_metadata(conn, :'content-type', hd(p_types))
+	conn = set_metadata(conn, :"content-type", hd(p_types))
 	v3d4(conn, state)
       _ ->
 	v3c4(conn, state)
@@ -192,7 +192,7 @@ defmodule Ewebmachine.Core do
       nil ->
 	respond(conn, state, 406)
       type ->
-	conn = set_metadata(conn, :'content-type', type)
+	conn = set_metadata(conn, :"content-type", type)
 	v3d4(conn, state)
     end
   end
@@ -242,8 +242,8 @@ defmodule Ewebmachine.Core do
   ## Accept-Encoding exists?
   ## also, set content-type header here, now that charset is chosen)
   decision v3f6(conn, state) do
-    {type, subtype, params} = get_metadata(conn, :'content-type')
-    char = get_metadata(conn, :'chosen-charset')
+    {type, subtype, params} = get_metadata(conn, :"content-type")
+    char = get_metadata(conn, :"chosen-charset")
     params = char && Map.put(params, :charset, char) || params
     conn = set_resp_header(conn, "content-type", format_mtype({type,subtype,params}))
     case get_header_val(conn, "accept-encoding") do
@@ -572,7 +572,7 @@ defmodule Ewebmachine.Core do
       
       {base_uri, conn, state} = resource_call(conn, state, :base_uri)
       base_uri = if String.last(base_uri) == "/" do
-	String.slice(base_uri,0..-2)
+	String.slice(base_uri,0..-2//1)
       else
 	base_uri
       end
@@ -631,7 +631,7 @@ defmodule Ewebmachine.Core do
       {etag, conn, state} = resource_call(conn, state, :generate_etag)
       conn = if etag, do: set_resp_header(conn, "etag", quoted_string(etag)), else: conn
 
-      ct = get_metadata(conn, :'content-type')
+      ct = get_metadata(conn, :"content-type")
 
       {lm, conn, state} = resource_call(conn, state, :last_modified)
       conn = if lm, do: set_resp_header(conn, "last-modified", rfc1123_date(lm)), else: conn
@@ -739,7 +739,7 @@ defmodule Ewebmachine.Core do
   end
   
   def encode_body(conn, state, body) do
-    chosen_cset = get_metadata(conn, :'chosen-charset')
+    chosen_cset = get_metadata(conn, :"chosen-charset")
     {charsetter, conn, state} = case resource_call(conn, state, :charsets_provided) do
 				  {:no_charset, c, s} ->
 				    {&(&1), c, s}
@@ -749,7 +749,7 @@ defmodule Ewebmachine.Core do
 				    end) || &(&1)
 				    {cs, c, s}
 				end
-    chosen_enc = get_metadata(conn, :'content-encoding')
+    chosen_enc = get_metadata(conn, :"content-encoding")
     {enc_provided, conn, state} = resource_call(conn, state, :encodings_provided)
     encoder = Enum.find_value(enc_provided,
       fn {enc,f} -> (to_string(enc) == chosen_enc) && f end) || &(&1)
@@ -761,7 +761,7 @@ defmodule Ewebmachine.Core do
 	   end
     {body, conn, state}
   end
-  
+
   def choose_encoding(conn, state, acc_enc_hdr) do
     {enc_provided, conn, state} = resource_call(conn, state, :encodings_provided)
     encs = for {enc, _} <- enc_provided, do: to_string(enc)
@@ -771,10 +771,10 @@ defmodule Ewebmachine.Core do
     else
       conn
     end
-    conn = set_metadata(conn, :'content-encoding', chosen_enc)
+    conn = set_metadata(conn, :"content-encoding", chosen_enc)
     {chosen_enc, conn, state}
   end
-  
+
   def choose_charset(conn, state, acc_char_hdr) do
     case resource_call(conn, state, :charsets_provided) do
       {:no_charset, conn, state} ->
@@ -783,7 +783,7 @@ defmodule Ewebmachine.Core do
         charsets = for {cset,_f} <- cl, do: to_string(cset)
 	charset = choose_charset(charsets, acc_char_hdr)
         conn = if (charset) do
-          set_metadata(conn, :'chosen-charset', charset)
+          set_metadata(conn, :"chosen-charset", charset)
 	else
 	  conn
         end

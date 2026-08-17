@@ -81,13 +81,11 @@ defmodule Ewebmachine.Builder.Handlers do
   ]
 
   for resource_fun_name<-@resource_fun_names do
-    Module.eval_quoted(Ewebmachine.Builder.Handlers, quote do
-      @doc "see `Ewebmachine.Handlers.#{unquote(resource_fun_name)}/2`"
-      defmacro unquote(resource_fun_name)(do_block) do
-        name = unquote(resource_fun_name)
-        handler_quote(name,do_block[:do])
-      end
-    end)
+    @doc "see `Ewebmachine.Handlers.#{unquote(resource_fun_name)}/2`"
+    defmacro unquote(resource_fun_name)(do_block) do
+      name = unquote(resource_fun_name)
+      handler_quote(name,do_block[:do])
+    end
   end
 
   # [...]
@@ -104,7 +102,7 @@ defmodule Ewebmachine.Builder.Handlers do
   defp handler_quote(name,body,guard,conn_match,state_match) do
     quote do
       @resource_handlers Map.put(@resource_handlers,unquote(name),__MODULE__)
-      def unquote(name)(unquote(conn_match)=var!(conn),unquote(state_match)=var!(state)) when unquote(guard) do
+      def unquote(name)(unquote(conn_match),unquote(state_match)) when unquote(guard) do
         res = unquote(body)
         wrap_response(res,var!(conn),var!(state))
       end
