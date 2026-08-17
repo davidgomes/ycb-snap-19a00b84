@@ -9,3 +9,8 @@
 #
 # We recommend using the bang functions (`insert!`, `update!`
 # and so on) as they will fail if something goes wrong.
+
+# Enqueue a sample badge render job. The job is executed by
+# `BadgeForge.Workers.PythonBadgeRenderer`, which shells out to the Python
+# script in `priv/python/render_badge.py`.
+{:ok, _job} = BadgeForge.Badges.enqueue_render("build", "passing")
