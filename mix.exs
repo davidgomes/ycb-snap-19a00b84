@@ -33,6 +33,7 @@ defmodule ObanEvents.MixProject do
   defp deps do
     [
       {:oban, "~> 2.0"},
+      {:uuidv7, "~> 0.2 or ~> 1.0"},
       # Postgrex needed for Oban in test environment
       {:postgrex, ">= 0.0.0", only: :test},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},

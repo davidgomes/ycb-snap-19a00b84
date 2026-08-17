@@ -9,7 +9,7 @@ defmodule ObanEventsTest do
     use ObanEvents.Handler
 
     @impl true
-    def handle_event(_event, _data), do: :ok
+    def handle_event(_event, %Event{}), do: :ok
   end
 
   # Test event bus with handlers registered (uses defaults)
@@ -63,6 +63,46 @@ defmodule ObanEventsTest do
       assert job.args["event"] == "investment_status_changed"
       assert job.args["handler"] == "Elixir.ObanEventsTest.TestHandler"
       assert job.args["data"] == event_data
+      assert is_binary(job.args["event_id"])
+      assert is_binary(job.args["idempotency_key"])
+    end
+
+    test "shares event_id across handlers and unique idempotency keys" do
+      defmodule MultiHandlerA do
+        use ObanEvents.Handler
+        def handle_event(_event, %Event{}), do: :ok
+      end
+
+      defmodule MultiHandlerB do
+        use ObanEvents.Handler
+        def handle_event(_event, %Event{}), do: :ok
+      end
+
+      defmodule MultiHandlerBus do
+        use ObanEvents
+
+        @event_handlers %{
+          shared_event: [
+            ObanEventsTest.MultiHandlerA,
+            ObanEventsTest.MultiHandlerB
+          ]
+        }
+      end
+
+      assert {:ok, [job1, job2]} = MultiHandlerBus.emit(:shared_event, %{"x" => 1})
+      assert job1.args["event_id"] == job2.args["event_id"]
+      assert job1.args["idempotency_key"] != job2.args["idempotency_key"]
+    end
+
+    test "passes optional causation_id and correlation_id" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{"test" => "data"},
+                 causation_id: "parent-event-id",
+                 correlation_id: "corr-123"
+               )
+
+      assert job.args["causation_id"] == "parent-event-id"
+      assert job.args["correlation_id"] == "corr-123"
     end
 
     test "creates multiple jobs when multiple handlers are registered" do

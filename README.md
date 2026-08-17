@@ -59,17 +59,17 @@ defmodule MyApp.EmailHandler do
   require Logger
 
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, %Event{data: data, idempotency_key: key}) do
     %{"user_id" => user_id, "email" => email} = data
 
-    Logger.info("Sending welcome email to #{email}")
+    Logger.info("Sending welcome email to #{email} (#{key})")
     MyApp.Mailer.send_welcome_email(email)
 
     :ok
   end
 
   @impl true
-  def handle_event(_event, _data), do: :ok
+  def handle_event(_event, %Event{}), do: :ok
 end
 ```
 
@@ -106,6 +106,89 @@ flowchart TD
     D -->|4. dispatch| F[AnalyticsHandler]
 ```
 
+## Event Metadata
+
+Handlers receive an `ObanEvents.Event` struct containing your data plus metadata for deduplication, tracing, and correlation:
+
+```elixir
+%Event{
+  data: %{"user_id" => 123},                                    # Your event data
+  event_id: "01933b7e-8a3f-7f6f-9e42-6c8f3a0b2d1e",           # Unique per emit
+  idempotency_key: "01933b7e-9f2c-7a1b-8d4e-3c5f6a7b8c9d",    # Unique per job
+  causation_id: "01933b7e-7f4a-7c2d-9b3e-4d5f6a7b8c9d",       # Optional: parent event_id
+  correlation_id: "01933b7e-6e3b-7d5f-8c4e-5d6f7a8b9c0d"      # Optional: business operation grouping
+}
+```
+
+### Metadata Fields
+
+#### `event_id` - Emit Identifier
+
+- **Generated**: Once per `emit` call (UUIDv7)
+- **Shared**: All handlers for the same emit get the same `event_id`
+- **Use**: Track which emit created jobs, pass as `causation_id` in child emits
+
+```elixir
+def handle_event(:user_created, %Event{event_id: id, data: data}) do
+  Events.emit(:send_welcome_email, data, causation_id: id)
+  Events.emit(:create_user_profile, data, causation_id: id)
+end
+```
+
+#### `idempotency_key` - Job Deduplication
+
+- **Generated**: Unique per handler job (UUIDv7)
+- **Use**: Outbox pattern, prevent duplicate processing on retry
+
+```elixir
+def handle_event(:send_email, %Event{idempotency_key: key, data: data}) do
+  OutboxEmail.insert(%{
+    idempotency_key: key,
+    user_id: data["user_id"],
+    status: :pending
+  }, on_conflict: :nothing, conflict_target: :idempotency_key)
+end
+```
+
+#### `causation_id` - Event Chains (Optional)
+
+- **Provided**: User passes parent's `event_id` when emitting
+- **Use**: Build audit trails, understand "why did this happen?"
+
+```elixir
+# Event chain:
+user_registered
+  event_id: "01933b7e-1111-...", causation_id: nil
+  └─> send_welcome_email
+        event_id: "01933b7e-2222-...", causation_id: "01933b7e-1111-..."
+      └─> email_delivered
+            event_id: "01933b7e-3333-...", causation_id: "01933b7e-2222-..."
+```
+
+#### `correlation_id` - Business Operation Grouping (Optional)
+
+- **Provided**: User generates and passes to related emits
+- **Use**: Group all events from a single business operation
+
+```elixir
+correlation_id = UUIDv7.generate()
+
+Events.emit(:subscription_upgraded, data, correlation_id: correlation_id)
+Events.emit(:old_subscription_cancelled, data, correlation_id: correlation_id)
+Events.emit(:payment_processed, data, correlation_id: correlation_id)
+Events.emit(:invoice_generated, data, correlation_id: correlation_id)
+```
+
+### When to use what
+
+| Metadata | Always Auto-Generated | User Can Override | Primary Use Case |
+|----------|----------------------|-------------------|------------------|
+| `data` | No | Yes (required) | Your event payload |
+| `event_id` | Yes | No | Event causation tracking |
+| `idempotency_key` | Yes | No | Prevent duplicate processing |
+| `causation_id` | No | Yes (optional) | Build event chains |
+| `correlation_id` | No | Yes (optional) | Group business operations |
+
 ## Configuration Options
 
 When using `ObanEvents`, you can configure:
@@ -133,15 +216,17 @@ end
 
 Your event bus module provides these functions:
 
-### `emit/2`
+### `emit/2` and `emit/3`
 
-Emit an event to all registered handlers.
+Emit an event to all registered handlers, with optional metadata in the third argument.
 
 ```elixir
 @spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+@spec emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
 
 # Raises ArgumentError if event is not registered
 MyApp.Events.emit(:user_created, %{user_id: 123, email: "user@example.com"})
+MyApp.Events.emit(:user_created, %{user_id: 123}, correlation_id: UUIDv7.generate())
 ```
 
 ### `get_handlers!/1`
@@ -179,21 +264,21 @@ MyApp.Events.registered?(:user_created)
 
 ## Handler Implementation
 
-Handlers must implement the `handle_event/2` callback:
+Handlers must implement the `handle_event/2` callback. The second argument is an `ObanEvents.Event` struct:
 
 ```elixir
 defmodule MyApp.AnalyticsHandler do
   use ObanEvents.Handler
 
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, %Event{data: data}) do
     %{"user_id" => user_id} = data
     MyApp.Analytics.track("User Created", user_id: user_id)
     :ok
   end
 
   @impl true
-  def handle_event(:user_updated, data) do
+  def handle_event(:user_updated, %Event{data: data}) do
     %{"user_id" => user_id, "changes" => changes} = data
     MyApp.Analytics.track("User Updated", user_id: user_id, changes: changes)
     :ok
@@ -201,7 +286,7 @@ defmodule MyApp.AnalyticsHandler do
 
   # Ignore other events
   @impl true
-  def handle_event(_event, _data), do: :ok
+  def handle_event(_event, %Event{}), do: :ok
 end
 ```
 
@@ -237,7 +322,7 @@ end)
 Handlers may be retried. Design them to be safe to run multiple times:
 
 ```elixir
-def handle_event(:user_created, %{"user_id" => user_id}) do
+def handle_event(:user_created, %Event{data: %{"user_id" => user_id}}) do
   # Use upsert instead of insert to handle retries
   %UserProfile{user_id: user_id}
   |> Repo.insert(
@@ -296,7 +381,7 @@ def handle_event(_other, _data), do: :ok  # ignore rest
 ### 6. Return Errors for Retriable Failures
 
 ```elixir
-def handle_event(:send_notification, data) do
+def handle_event(:send_notification, %Event{data: data}) do
   case NotificationService.send(data) do
     {:ok, _} -> :ok
     {:error, :rate_limited} -> {:error, :rate_limited}  # Will retry
@@ -323,7 +408,7 @@ defmodule MyApp.Notifications.EmailHandler do
   use ObanEvents.Handler
 
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, %Event{data: data}) do
     # Your handler logic
     :ok
   end
@@ -332,7 +417,7 @@ end
 # 2. Keep the old module as an alias
 defmodule MyApp.EmailHandler do
   @moduledoc false
-  defdelegate handle_event(event, data), to: MyApp.Notifications.EmailHandler
+  defdelegate handle_event(event, event_struct), to: MyApp.Notifications.EmailHandler
 end
 
 # 3. Update your event registry to use the new name
@@ -380,12 +465,29 @@ end
 
 ### Testing Handlers
 
-```elixir
-test "EmailHandler sends welcome email" do
-  data = %{"user_id" => 123, "email" => "test@example.com"}
+Use `ObanEvents.Testing` to create Event structs for testing:
 
-  assert :ok = MyApp.EmailHandler.handle_event(:user_created, data)
-  assert_email_sent(to: "test@example.com", subject: "Welcome!")
+```elixir
+defmodule MyApp.EmailHandlerTest do
+  use ExUnit.Case
+  import ObanEvents.Testing
+
+  test "sends welcome email" do
+    event = build_event(%{"user_id" => 123, "email" => "test@example.com"})
+
+    assert :ok = MyApp.EmailHandler.handle_event(:user_created, event)
+    assert_email_sent(to: "test@example.com", subject: "Welcome!")
+  end
+
+  test "with custom metadata" do
+    event = build_event(
+      %{"user_id" => 123},
+      causation_id: "parent-event-id",
+      correlation_id: "test-correlation"
+    )
+
+    assert :ok = MyApp.EmailHandler.handle_event(:user_created, event)
+  end
 end
 ```
 
