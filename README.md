@@ -11,7 +11,7 @@ Add PlugRailsCookieSessionStore as a dependency to your `mix.exs` file:
 
 ```elixir
 def deps do
-  [{:plug_rails_cookie_session_store, "~> 0.1"}]
+  [{:plug_rails_cookie_session_store, "~> 0.3"}]
 end
 ```
 
@@ -26,7 +26,15 @@ There are 4 things to copy:
 * signing_salt
 * encryption_salt
 * session_key
- 
+
+Since Rails 5.2, `secret_key_base` in test and development is derived as a MD5 hash of the application's name. To fetch key value you can run:
+
+```
+Rails.application.secret_key_base
+```
+
+https://www.rubydoc.info/github/rails/rails/Rails%2FApplication:secret_key_base
+
 The `secret_key_base` can be found usually in the Rails' `secrets.yml` file and should be copied to Phoenix's `config.exs` file. There should already be a key named like that and you should override it.
 
 The other three values can be found somewhere in the initializers directory of your Rails project. Some people don't set the `signing_salt` and `encryption_salt`. If you don't find them, set them like so:
