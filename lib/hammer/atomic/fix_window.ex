@@ -91,7 +91,7 @@ defmodule Hammer.Atomic.FixWindow do
   """
   @spec hit(
           table :: atom(),
-          key :: String.t(),
+          key :: term(),
           scale :: pos_integer(),
           limit :: pos_integer(),
           increment :: pos_integer()
@@ -114,7 +114,10 @@ defmodule Hammer.Atomic.FixWindow do
         end
 
       [] ->
-        :ets.insert_new(table, {full_key, :atomics.new(2, signed: false)})
+        atomic = :atomics.new(2, signed: false)
+        :atomics.exchange(atomic, 2, expires_at)
+
+        :ets.insert_new(table, {full_key, atomic})
         hit(table, key, scale, limit, increment)
     end
   end
@@ -124,7 +127,7 @@ defmodule Hammer.Atomic.FixWindow do
   """
   @spec inc(
           table :: atom(),
-          key :: String.t(),
+          key :: term(),
           scale :: pos_integer(),
           increment :: pos_integer()
         ) ::
@@ -150,7 +153,7 @@ defmodule Hammer.Atomic.FixWindow do
   """
   @spec set(
           table :: atom(),
-          key :: String.t(),
+          key :: term(),
           scale :: pos_integer(),
           count :: non_neg_integer()
         ) ::
@@ -175,7 +178,7 @@ defmodule Hammer.Atomic.FixWindow do
   @doc """
   Returns the count of requests for a given key within the last <scale> seconds.
   """
-  @spec get(table :: atom(), key :: String.t(), scale :: pos_integer()) :: non_neg_integer()
+  @spec get(table :: atom(), key :: term(), scale :: pos_integer()) :: non_neg_integer()
   def get(table, key, scale) do
     window = div(Atomic.now(), scale)
     full_key = {key, window}

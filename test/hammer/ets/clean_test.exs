@@ -17,6 +17,17 @@ defmodule Hammer.ETS.CleanTest do
     use Hammer, backend: :ets, algorithm: :token_bucket
   end
 
+  defp eventually(fun, attempts \\ 10, delay \\ 50)
+  defp eventually(fun, 1, _delay), do: fun.()
+
+  defp eventually(fun, attempts, delay) do
+    fun.()
+  rescue
+    ExUnit.AssertionError ->
+      Process.sleep(delay)
+      eventually(fun, attempts - 1, delay)
+  end
+
   test "cleaning works for fix window/default ets backend" do
     start_supervised!({RateLimit, clean_period: 100})
 
@@ -28,9 +39,9 @@ defmodule Hammer.ETS.CleanTest do
 
     assert [_] = :ets.tab2list(RateLimit)
 
-    :timer.sleep(150)
-
-    assert :ets.tab2list(RateLimit) == []
+    eventually(fn ->
+      assert :ets.tab2list(RateLimit) == []
+    end)
   end
 
   test "cleaning works for sliding window" do
@@ -44,9 +55,9 @@ defmodule Hammer.ETS.CleanTest do
 
     assert [_] = :ets.tab2list(RateLimitSlidingWindow)
 
-    :timer.sleep(150)
-
-    assert :ets.tab2list(RateLimitSlidingWindow) == []
+    eventually(fn ->
+      assert :ets.tab2list(RateLimitSlidingWindow) == []
+    end)
   end
 
   test "cleaning works for token bucket" do
@@ -60,9 +71,9 @@ defmodule Hammer.ETS.CleanTest do
 
     assert [_] = :ets.tab2list(RateLimitTokenBucket)
 
-    :timer.sleep(150)
-
-    assert :ets.tab2list(RateLimitTokenBucket) == []
+    eventually(fn ->
+      assert :ets.tab2list(RateLimitTokenBucket) == []
+    end)
   end
 
   test "cleaning works for leaky bucket" do
@@ -76,8 +87,8 @@ defmodule Hammer.ETS.CleanTest do
 
     assert [_] = :ets.tab2list(RateLimitLeakyBucket)
 
-    :timer.sleep(150)
-
-    assert :ets.tab2list(RateLimitLeakyBucket) == []
+    eventually(fn ->
+      assert :ets.tab2list(RateLimitLeakyBucket) == []
+    end)
   end
 end

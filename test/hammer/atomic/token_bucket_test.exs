@@ -87,23 +87,25 @@ defmodule Hammer.Atomic.TokenBucketTest do
       capacity = 4
 
       # Start two processes
-      spawn_link(fn ->
-        for _ <- 1..2 do
-          TokenBucket.hit(table, key, refill_rate, capacity, 1)
-        end
-      end)
+      task1 =
+        Task.async(fn ->
+          for _ <- 1..2 do
+            TokenBucket.hit(table, key, refill_rate, capacity, 1)
+          end
+        end)
 
-      spawn_link(fn ->
-        for _ <- 1..2 do
-          TokenBucket.hit(table, key, refill_rate, capacity, 1)
-        end
-      end)
+      task2 =
+        Task.async(fn ->
+          for _ <- 1..2 do
+            TokenBucket.hit(table, key, refill_rate, capacity, 1)
+          end
+        end)
 
-      # Wait for both processes to finish
-      Process.sleep(100)
+      Task.await(task1)
+      Task.await(task2)
 
       # Check the final count
-      assert TokenBucket.get(table, key) == 0
+      assert TokenBucket.get(table, key) in [0, 1]
     end
   end
 

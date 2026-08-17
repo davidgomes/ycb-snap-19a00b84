@@ -108,7 +108,7 @@ defmodule Hammer.Atomic.TokenBucket do
   """
   @spec hit(
           table :: atom(),
-          key :: String.t(),
+          key :: term(),
           refill_rate :: pos_integer(),
           capacity :: pos_integer(),
           cost :: pos_integer()
@@ -140,10 +140,10 @@ defmodule Hammer.Atomic.TokenBucket do
 
       [] ->
         atomic = :atomics.new(2, signed: false)
+        :atomics.exchange(atomic, 1, capacity)
+        :atomics.exchange(atomic, 2, now)
 
-        if :ets.insert_new(table, {key, atomic}) do
-          :atomics.exchange(atomic, 1, capacity)
-        end
+        :ets.insert_new(table, {key, atomic})
 
         hit(table, key, refill_rate, capacity, cost)
     end
@@ -152,7 +152,7 @@ defmodule Hammer.Atomic.TokenBucket do
   @doc """
   Returns the current level of the bucket for a given key.
   """
-  @spec get(table :: atom(), key :: String.t()) :: non_neg_integer()
+  @spec get(table :: atom(), key :: term()) :: non_neg_integer()
   def get(table, key) do
     case :ets.lookup(table, key) do
       [] ->
