@@ -109,6 +109,9 @@ defmodule Flop.NimbleSchemas do
               type: {:tuple, [:atom, :atom, :keyword_list]},
               required: true
             ],
+            order_by: [
+              type: {:tuple, [:atom, :atom, :keyword_list]}
+            ],
             ecto_type: [type: :any],
             bindings: [type: {:list, :atom}],
             operators: [type: {:list, :atom}]

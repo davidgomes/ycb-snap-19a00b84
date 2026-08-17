@@ -12,6 +12,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Support SQLite.
 - Support MySQL.
+- Support ordering by custom fields by adding an `:order_by` option to the
+  custom field configuration.
 
 ### Fixed
 

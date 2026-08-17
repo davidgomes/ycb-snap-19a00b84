@@ -29,11 +29,21 @@ defmodule Flop.ValidationTest do
 
     @derive {Flop.Schema,
              filterable: [],
-             sortable: [:name, :full_name, :thing_count],
+             sortable: [:name, :full_name, :thing_count, :custom_name],
              adapter_opts: [
                compound_fields: [full_name: [:family_name, :given_name]],
-               alias_fields: [:thing_count]
+               alias_fields: [:thing_count],
+               custom_fields: [
+                 custom_name: [
+                   filter: {__MODULE__, :custom_name_filter, []},
+                   order_by: {__MODULE__, :custom_name_order_by, []},
+                   ecto_type: :string
+                 ]
+               ]
              ]}
+
+    def custom_name_filter(query, _filter, _opts), do: query
+    def custom_name_order_by(query, _direction, _opts), do: query
 
     schema "things" do
       field :name, :string
@@ -764,12 +774,19 @@ defmodule Flop.ValidationTest do
       assert {:error, changeset} = validate(params, for: Thing)
 
       assert errors_on(changeset)[:order_by] == [
-               "cursor pagination is not supported for compound and alias fields"
+               "cursor pagination is not supported for compound, alias " <>
+                 "and custom fields"
              ]
     end
 
     test "rejects an alias field as cursor order field" do
       params = %{first: 2, after: @cursor, order_by: [:thing_count]}
+      assert {:error, changeset} = validate(params, for: Thing)
+      assert errors_on(changeset)[:order_by] != nil
+    end
+
+    test "rejects a custom field as cursor order field" do
+      params = %{first: 2, after: @cursor, order_by: [:custom_name]}
       assert {:error, changeset} = validate(params, for: Thing)
       assert errors_on(changeset)[:order_by] != nil
     end

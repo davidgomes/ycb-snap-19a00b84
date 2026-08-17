@@ -170,6 +170,20 @@ defmodule Flop.Adapters.Ecto.FlopTest do
              ) == Enum.reverse(expected)
     end
 
+    test "orders by custom fields with an order_by function" do
+      pets = insert_list(20, :pet)
+      expected = Enum.sort_by(pets, & &1.age)
+
+      assert Flop.all(Pet, %Flop{order_by: [:custom_age]}, for: Pet) ==
+               expected
+
+      assert Flop.all(
+               Pet,
+               %Flop{order_by: [:custom_age], order_directions: [:desc]},
+               for: Pet
+             ) == Enum.reverse(expected)
+    end
+
     test "warns if query passed to Flop already included ordering" do
       query = from p in Pet, order_by: :species
 

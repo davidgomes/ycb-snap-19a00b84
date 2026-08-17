@@ -384,8 +384,6 @@ defprotocol Flop.Schema do
   ID of the current user), use the `extra_opts` option when calling Flop
   functions.
 
-  Note that as of now, custom fields only support filtering, not sorting.
-
   Schema:
 
       @derive {
@@ -443,6 +441,50 @@ defprotocol Flop.Schema do
   `:bindings` option to specify them. Then, using `Flop.with_named_bindings/4`,
   these bindings can be conditionally added to your query based on filter
   conditions.
+
+  ### Sorting
+
+  To make a custom field sortable, add it to the `:sortable` list and define
+  an `:order_by` function reference in addition to the `:filter` function
+  reference. The referenced function receives the Ecto query, the order
+  direction (e.g. `:asc`, `:desc`, `:asc_nulls_last`), and the options from the
+  tuple as arguments, and needs to return the updated query.
+
+      @derive {
+        Flop.Schema,
+        filterable: [:inserted_at_date],
+        sortable: [:inserted_at_date],
+        adapter_opts: [
+          custom_fields: [
+            inserted_at_date: [
+              filter: {CustomFilters, :date_filter, [source: :inserted_at]},
+              order_by: {CustomFilters, :date_order_by, [source: :inserted_at]},
+              ecto_type: :date,
+              operators: [:<=, :>=]
+            ]
+          ]
+        ]
+      }
+
+      defmodule CustomFilters do
+        import Ecto.Query
+
+        def date_order_by(query, direction, opts) do
+          source = Keyword.fetch!(opts, :source)
+
+          expr =
+            dynamic(
+              [r],
+              fragment("(? AT TIME ZONE 'utc')::date", field(r, ^source))
+            )
+
+          order_by(query, [r], [{^direction, ^expr}])
+        end
+      end
+
+  Custom fields without an `:order_by` function cannot be added to the
+  `:sortable` list. Note that, like compound and alias fields, custom fields
+  cannot be used as pagination cursors.
 
   ## Ecto type option
 
@@ -540,8 +582,9 @@ defprotocol Flop.Schema do
     Supports fields from the Ecto schema, join fields, compound fields and
     custom fields. Alias fields are not supported.
   - `:sortable` (required) - A list of fields that can be used for sorting.
-    Supports fields from the Ecto schema, join fields, and alias fields. Custom
-    fields and compound fields are not supported.
+    Supports fields from the Ecto schema, join fields, alias fields, and
+    custom fields that define an `:order_by` function. Compound fields are
+    not supported.
   - `:default_limit` - The default limit applied if no `limit`, `page_size`,
     `first` or `last` parameter is set. Set to `false` to not set any default
     limit.
@@ -605,6 +648,10 @@ defprotocol Flop.Schema do
   - `:filter` (required) - A module/function/options tuple referencing a
     custom filter function. The function must take the Ecto query, the
     `Flop.Filter` struct, and the options from the tuple as arguments.
+  - `:order_by` - A module/function/options tuple referencing a custom order
+    function. The function must take the Ecto query, the order direction, and
+    the options from the tuple as arguments. Required if the field is added
+    to the `:sortable` list.
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator
     and value validation is based on this option.
   - `:bindings` - If the custom filter function requires certain named bindings
@@ -620,6 +667,7 @@ defprotocol Flop.Schema do
   """
   @type custom_field_option ::
           {:filter, {module, atom, keyword}}
+          | {:order_by, {module, atom, keyword}}
           | {:ecto_type, ecto_type()}
           | {:bindings, [atom]}
           | {:operators, [Flop.Filter.op()]}
@@ -702,6 +750,7 @@ defprotocol Flop.Schema do
         extra: %{
           type: :custom,
           filter: {MyApp.Pet, :reverse_name_filter, []},
+          order_by: nil,
           bindings: []
         }
       }

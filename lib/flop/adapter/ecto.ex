@@ -112,6 +112,9 @@ defmodule Flop.Adapter.Ecto do
               type: {:tuple, [:atom, :atom, :keyword_list]},
               required: true
             ],
+            order_by: [
+              type: {:tuple, [:atom, :atom, :keyword_list]}
+            ],
             ecto_type: [type: :any, required: true],
             bindings: [type: {:list, :atom}],
             operators: [type: {:list, :atom}]
@@ -362,6 +365,17 @@ defmodule Flop.Adapter.Ecto do
       field_info = Flop.Schema.field_info(struct, field)
       apply_order_by_field(acc_query, {direction, field}, field_info, struct)
     end)
+  end
+
+  defp apply_order_by_field(
+         q,
+         {order_direction, _},
+         %FieldInfo{
+           extra: %{type: :custom, order_by: {mod, fun, order_by_opts}}
+         },
+         _
+       ) do
+    apply(mod, fun, [q, order_direction, order_by_opts])
   end
 
   defp apply_order_by_field(
@@ -873,6 +887,7 @@ defmodule Flop.Adapter.Ecto do
   defp normalize_custom_field_opts({name, opts}) when is_list(opts) do
     opts = %{
       filter: Keyword.fetch!(opts, :filter),
+      order_by: Keyword.get(opts, :order_by),
       ecto_type: Keyword.fetch!(opts, :ecto_type),
       operators: Keyword.get(opts, :operators),
       bindings: Keyword.get(opts, :bindings, [])
@@ -986,19 +1001,20 @@ defmodule Flop.Adapter.Ecto do
 
     illegal_fields =
       custom_fields
-      |> Map.keys()
-      |> Enum.filter(&(&1 in sortable))
+      |> Enum.filter(fn {field, field_opts} ->
+        field in sortable && is_nil(field_opts.order_by)
+      end)
+      |> Enum.map(fn {field, _} -> field end)
 
     if illegal_fields != [] do
       raise ArgumentError, """
-      cannot sort by custom fields
+      cannot sort by custom fields without an order_by function
 
-      Custom fields are not allowed to be sortable. These custom fields were
-      configured as sortable:
+      Custom fields are only allowed to be sortable if the :order_by option
+      is set. These custom fields were configured as sortable, but have no
+      :order_by function:
 
           #{inspect(illegal_fields)}
-
-      Use alias fields if you want to implement custom sorting.
       """
     end
 
