@@ -820,6 +820,9 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
     assert Connection.quote_name(~s{has`tick}, ?`) |> IO.iodata_to_binary() ==
              ~s{`has\\`tick`}
 
+    assert Connection.quote_name(~s{has'single}, ?') |> IO.iodata_to_binary() ==
+             ~s{'has\\'single'}
+
     query = insert(nil, ~s{schema"quoted}, [~s{field"quoted}], [], :raise, [])
 
     assert query == ~s{INSERT INTO "schema\\"quoted"("field\\"quoted")}
@@ -828,7 +831,7 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
   test "quoted identifier escape matches the byte-wise oracle for every byte pair" do
     value = for left <- 0..255, right <- 0..255, into: <<>>, do: <<left, right>>
 
-    for quoter <- [?", ?`] do
+    for quoter <- [?", ?`, ?'] do
       expected =
         for <<byte <- value>>, into: <<>> do
           if byte in [?\\, quoter], do: <<?\\, byte>>, else: <<byte>>
@@ -3088,7 +3091,7 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
        ]}
 
     assert execute_ddl(create) == [
-             ~s{CREATE TABLE "posts" ("user_id" UInt64 COMMENT 'user''s id') ENGINE=MergeTree}
+             ~s{CREATE TABLE "posts" ("user_id" UInt64 COMMENT 'user\\'s id') ENGINE=MergeTree}
            ]
   end
 

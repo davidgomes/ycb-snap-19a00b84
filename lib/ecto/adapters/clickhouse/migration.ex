@@ -381,7 +381,7 @@ defmodule Ecto.Adapters.ClickHouse.Migration do
   defp null_expr(_), do: []
 
   defp comment_expr(nil), do: []
-  defp comment_expr(comment), do: [" COMMENT '", @conn.escape_string(comment), ?']
+  defp comment_expr(comment), do: [" COMMENT ", @conn.quote_name(comment, ?')]
 
   @dialyzer {:no_improper_lists, default_expr: 2}
   defp default_expr({:ok, nil}, _type) do
