@@ -1,0 +1,18 @@
+[
+  {
+    "url": "https://hexdocs.pm/elixir/quote-and-unquote.html",
+    "description": "Getting Started - quoting"
+  },
+  {
+    "url": "https://dorgan.ar/posts/2021/04/the_elixir_ast/",
+    "description": "Introduction to Elixir AST by Lucas San Román"
+  },
+  {
+    "url": "https://hexdocs.pm/elixir/Code.html",
+    "description": "The Code module"
+  },
+  {
+    "url": "https://hexdocs.pm/elixir/Macro.html",
+    "description": "The Macro module"
+  }
+]

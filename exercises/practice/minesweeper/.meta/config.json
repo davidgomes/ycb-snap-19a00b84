@@ -1,0 +1,34 @@
+{
+  "authors": [],
+  "contributors": [
+    "andrewsardone",
+    "angelikatyborska",
+    "Cohen-Carlisle",
+    "dalexj",
+    "devonestes",
+    "jinyeow",
+    "kytrinyx",
+    "lpil",
+    "neenjaw",
+    "parkerl",
+    "petehuang",
+    "pminten",
+    "rubysolo",
+    "sotojuan",
+    "Teapane",
+    "tjcelaya",
+    "waiting-for-dev"
+  ],
+  "files": {
+    "solution": [
+      "lib/minesweeper.ex"
+    ],
+    "test": [
+      "test/minesweeper_test.exs"
+    ],
+    "example": [
+      ".meta/example.ex"
+    ]
+  },
+  "blurb": "Add the numbers to a minesweeper board."
+}

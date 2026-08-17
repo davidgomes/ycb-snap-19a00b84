@@ -1,0 +1,95 @@
+# How to implement an Elixir Concept Exercise
+
+This document describes how to implement a Concept Exercise for the Elixir track.
+
+**Please please please read the docs before starting.** Posting PRs without reading these docs will be a lot more frustrating for you during the review cycle, and exhaust Exercism's maintainers' time. So, before diving into the implementation, please read the following documents:
+
+- [The features of v3][docs-features-of-v3].
+- [Rationale for v3][docs-rationale-for-v3].
+- [What are concepts and how they are structured?][anatomy-of-a-concept]
+- [What are concept exercise and how they are structured?][anatomy-of-a-concept-exercise]
+
+Please also watch the following video:
+
+- [The Anatomy of a Concept Exercise][anatomy-of-a-concept-exercise-video].
+
+As this document is generic, the following placeholders are used:
+
+- `$slug`: the name of the exercise in snake_case (e.g. `calculator-conundrum`).
+- `$elixir_slug`: `$slug` converted to snake_case from kebab-case,
+- `$concepts`: the Concepts the exercise is about (e.g. `loops`),
+- `$concept-1`: a single Concept slug,
+- `$prerequisite-n`: a single Concept slug,
+- `$uuid`: a _new_ v4 UUID (random! and unique to all other concept and practice exercises)
+- `$first-and-last-name`: your first and last name (e.g. `Tim Austin`)
+- `$git-email`: the email address you use for git (e.g. `tim@neenjaw.com`)
+
+Before implementing the exercise, please make sure you have a good understanding of what the exercise should be teaching (and what not). This information can be found in the exercise's GitHub issue. If you have come up with something completely new, create a new issue _first_ so we can discuss the Concept Exercise.
+
+To implement a Concept Exercise, the following files must be added:
+
+```text
+elixir
+├── concepts
+|   └── $concept-1
+|       ├── about.md
+|       ├── introduction.md
+|       └── links.json
+└── exercises
+    └── concept
+        └── $slug
+            ├── .docs
+            │   ├── instructions.md
+            │   ├── introduction.md
+            │   └── hints.md
+            ├── .meta
+            │   ├── config.json
+            │   ├── design.md
+            │   └── exemplar.ex
+            ├── lib
+            │   └── $elixir_slug.ex
+            ├── mix.exs
+            ├── mix.lock
+            └── test
+                ├── $elixir_slug_test.exs
+                └── test_helper.exs
+```
+
+## Step 1: Add code files
+
+The configuration files may be copied from another exercise. But it would be recommended to use `mix new $elixir_slug` (where `$elixir_slug` exchanges underscores `_` in the place of `$slug`'s dashes `-`) for file generation, then move the generated structure to the `$slug` directory to match the structure in this guide.
+
+Now create the following three files:
+
+- `lib/$elixir_slug.ex`. the stub implementation file, which is the starting point for students to work on the exercise.
+- `test/$elixir_slug_test.exs`: the test suite.
+- `.meta/exemplar.ex`: an exemplar implementation that passes all the tests.
+
+## Step 2: Add documentation files
+
+How to create the files common to all tracks is described in the [how to implement a concept exercise document][how-to-implement-a-concept-exercise].
+
+## Step 3: Add analyzer (optional)
+
+Some exercises could benefit from having an exercise-specific [analyzer][analyzer]. If so, specify what analysis rules should be applied to this exercise and why.
+
+_Skip this step if you're not sure what to do._
+
+## Inspiration
+
+When implementing an exercise, it can be very useful to look at the exercises the track has already implemented. You can also check the exercise's [general concepts documents][reference] to see if other languages that have already an exercise for that Concept.
+
+## Help
+
+If you have any questions regarding implementing the exercise, please post them as comments in the exercise's GitHub issue.
+
+[analyzer]: https://github.com/exercism/elixir-analyzer
+[representer]: https://github.com/exercism/elixir-representer
+[how-to-implement-a-concept-exercise]: https://github.com/exercism/v3/blob/main/docs/maintainers/generic-how-to-implement-a-concept-exercise.md
+[docs-rationale-for-v3]: https://github.com/exercism/v3/blob/main/docs/rationale-for-v3.md
+[docs-features-of-v3]: https://github.com/exercism/v3/blob/main/docs/features-of-v3.md
+[anatomy-of-a-concept]: https://github.com/exercism/docs/blob/main/building/tracks/concepts.md
+[anatomy-of-a-concept-exercise]: https://github.com/exercism/docs/blob/main/building/tracks/concept-exercises.md
+[anatomy-of-a-concept-exercise-video]: https://www.youtube.com/watch?v=gkbBqd7hPrA
+[reference]: https://github.com/exercism/v3/blob/main/reference/README.md
+[config-json]: https://github.com/exercism/docs/blob/main/anatomy/tracks/config-json.md

@@ -1,0 +1,21 @@
+{
+  "authors": [
+    "neenjaw"
+  ],
+  "contributors": [
+    "angelikatyborska",
+    "Cohen-Carlisle"
+  ],
+  "files": {
+    "solution": [
+      "lib/date_parser.ex"
+    ],
+    "test": [
+      "test/date_parser_test.exs"
+    ],
+    "exemplar": [
+      ".meta/exemplar.ex"
+    ]
+  },
+  "blurb": "Learn about regular expressions by parsing dates."
+}

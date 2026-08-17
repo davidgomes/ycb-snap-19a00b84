@@ -1,0 +1,14 @@
+[
+  {
+    "url": "https://hexdocs.pm/elixir/enumerable-and-streams.html#enumerables",
+    "description": "Getting Started - Enumerables"
+  },
+  {
+    "url": "https://hexdocs.pm/elixir/Enum.html",
+    "description": "Documentation - Enum"
+  },
+  {
+    "url": "https://angelika.me/elixir-enum-cheatsheet/",
+    "description": "Enum Cheatsheet"
+  }
+]
