@@ -4,6 +4,10 @@ defmodule ObanDoctor.Check.Worker.MissingQueue do
 
   Workers should only use queues that are configured in the application's Oban setup.
   Using an undefined queue means the job will never be processed.
+
+  ## Documentation
+
+  See [Oban Queues Configuration](https://hexdocs.pm/oban/Oban.html#module-queues).
   """
 
   use ObanDoctor.Check, category: :worker

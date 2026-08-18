@@ -109,6 +109,69 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       assert issues == []
     end
 
+    test "does not flag workers using named state groups (:incomplete, :scheduled, :successful)" do
+      for state_group <- [:incomplete, :scheduled, :successful] do
+        workers = [
+          %{
+            module: MyApp.Workers.NamedGroupWorker,
+            file: "lib/my_app/workers/named_group_worker.ex",
+            line: 1,
+            queue: :default,
+            unique: [fields: [:args], states: state_group],
+            max_attempts: nil
+          }
+        ]
+
+        context = %{workers: workers}
+
+        issues = UniquenessMissingStates.run(context)
+
+        assert issues == [], "Expected no issues for states: #{inspect(state_group)}"
+      end
+    end
+
+    test "does not flag workers using named state groups as a list" do
+      for state_group <- [:incomplete, :scheduled, :successful] do
+        workers = [
+          %{
+            module: MyApp.Workers.NamedGroupWorker,
+            file: "lib/my_app/workers/named_group_worker.ex",
+            line: 1,
+            queue: :default,
+            unique: [fields: [:args], states: [state_group]],
+            max_attempts: nil
+          }
+        ]
+
+        context = %{workers: workers}
+
+        issues = UniquenessMissingStates.run(context)
+
+        assert issues == [], "Expected no issues for states: #{inspect([state_group])}"
+      end
+    end
+
+    test "flags worker using partial explicit list missing retryable" do
+      workers = [
+        %{
+          module: MyApp.Workers.PartialWorker,
+          file: "lib/my_app/workers/partial_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: [:available, :scheduled, :executing]],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = UniquenessMissingStates.run(context)
+
+      assert length(issues) == 1
+      [issue] = issues
+      assert issue.meta.missing_states == [:retryable]
+    end
+
     test "detects workers missing only some states" do
       workers = [
         %{
