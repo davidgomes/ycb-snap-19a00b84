@@ -63,11 +63,12 @@ Options:
 
 ### Config Checks
 
-| Check                                                                                                    | Description                                                                   |
-| -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| [InsertTriggerEnabled](https://hexdocs.pm/oban_doctor/ObanDoctor.Check.Config.InsertTriggerEnabled.html) | Detects Oban instances without `insert_trigger: false` (performance overhead) |
-| [MissingPruner](https://hexdocs.pm/oban_doctor/ObanDoctor.Check.Config.MissingPruner.html)               | Detects Oban instances without a pruner plugin (jobs accumulate indefinitely) |
-| [NoReindexer](https://hexdocs.pm/oban_doctor/ObanDoctor.Check.Config.NoReindexer.html)                   | Detects Oban instances without the Reindexer plugin (index bloat)             |
+| Check                                                                                                                        | Description                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| [InsertTriggerEnabled](https://hexdocs.pm/oban_doctor/ObanDoctor.Check.Config.InsertTriggerEnabled.html)                     | Detects Oban instances without `insert_trigger: false` (performance overhead) |
+| [MissingPruner](https://hexdocs.pm/oban_doctor/ObanDoctor.Check.Config.MissingPruner.html)                                   | Detects Oban instances without a pruner plugin (jobs accumulate indefinitely) |
+| [NoReindexer](https://hexdocs.pm/oban_doctor/ObanDoctor.Check.Config.NoReindexer.html)                                       | Detects Oban instances without the Reindexer plugin (index bloat)             |
+| [SmartEngineNotConfigured](https://hexdocs.pm/oban_doctor/ObanDoctor.Check.Config.SmartEngineNotConfigured.html)             | Detects Oban Pro instances not using Smart Engine                             |
 
 ## Runtime Plugins
 

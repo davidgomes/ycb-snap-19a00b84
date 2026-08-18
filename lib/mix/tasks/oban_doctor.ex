@@ -30,6 +30,7 @@ defmodule Mix.Tasks.ObanDoctor do
     * **InsertTriggerEnabled** - Detects instances without insert_trigger disabled
     * **MissingPruner** - Detects instances without a pruner plugin
     * **NoReindexer** - Detects instances without the Reindexer plugin
+    * **SmartEngineNotConfigured** - Detects instances not using Smart Engine with Oban Pro
 
   ## Configuration
 
@@ -51,6 +52,7 @@ defmodule Mix.Tasks.ObanDoctor do
   alias ObanDoctor.Check.Config.InsertTriggerEnabled
   alias ObanDoctor.Check.Config.MissingPruner
   alias ObanDoctor.Check.Config.NoReindexer
+  alias ObanDoctor.Check.Config.SmartEngineNotConfigured
   alias ObanDoctor.CLI.Output
 
   @worker_checks [
@@ -64,7 +66,8 @@ defmodule Mix.Tasks.ObanDoctor do
   @config_checks [
     InsertTriggerEnabled,
     MissingPruner,
-    NoReindexer
+    NoReindexer,
+    SmartEngineNotConfigured
   ]
 
   @impl Mix.Task
@@ -103,6 +106,7 @@ defmodule Mix.Tasks.ObanDoctor do
     IO.puts("")
     IO.puts("Discovering Oban configurations...")
     oban_configs = ObanDiscovery.discover_oban_configs(project_root)
+    has_oban_pro = ObanDiscovery.has_oban_pro?(project_root)
     IO.puts("Found #{length(oban_configs)} Oban instance(s)")
 
     for oban_config <- oban_configs do
@@ -122,6 +126,7 @@ defmodule Mix.Tasks.ObanDoctor do
 
     config_context = %{
       oban_configs: oban_configs,
+      has_oban_pro: has_oban_pro,
       project_root: project_root,
       config: config
     }

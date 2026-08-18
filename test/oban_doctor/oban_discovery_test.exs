@@ -602,6 +602,47 @@ defmodule ObanDoctor.ObanDiscoveryTest do
       # repo from config.exs should be preserved
       assert config.repo == MyApp.Repo
     end
+
+    test "extracts and merges engine configuration" do
+      tmp_dir = create_temp_project()
+
+      config_content = """
+      import Config
+
+      config :my_app, Oban,
+        engine: Oban.Engines.Basic,
+        queues: [default: 10]
+      """
+
+      runtime_content = """
+      import Config
+
+      config :my_app, Oban,
+        engine: Oban.Pro.Engines.Smart
+      """
+
+      write_config(tmp_dir, "config/config.exs", config_content)
+      write_config(tmp_dir, "config/runtime.exs", runtime_content)
+
+      assert [config] = ObanDiscovery.discover_oban_configs(tmp_dir)
+      assert config.engine == Oban.Pro.Engines.Smart
+    end
+
+    test "returns nil when engine is not configured" do
+      tmp_dir = create_temp_project()
+
+      config_content = """
+      import Config
+
+      config :my_app, Oban,
+        queues: [default: 10]
+      """
+
+      write_config(tmp_dir, "config/config.exs", config_content)
+
+      assert [config] = ObanDiscovery.discover_oban_configs(tmp_dir)
+      assert config.engine == nil
+    end
   end
 
   # Helper functions
