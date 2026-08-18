@@ -10,7 +10,9 @@ import Config
 config :badge_forge, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
-  queues: [default: 10],
+  # The `badges` queue is intentionally absent, it's processed by the Python
+  # workers in `python/badge_forge`.
+  queues: [default: 10, printing: 10],
   repo: BadgeForge.Repo
 
 config :badge_forge,
