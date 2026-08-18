@@ -53,6 +53,24 @@ defmodule PetalComponents.Table do
     how the data table patches per-column sort URLs in link mode.
     """
 
+  attr :selectable, :boolean,
+    default: false,
+    doc: "render a leading checkbox column; the header checkbox is tri-state across `rows`"
+
+  attr :selected, :list, default: [], doc: "ids (per row_id) of the currently selected rows"
+
+  attr :on_select, :any,
+    default: nil,
+    doc:
+      "event name (or JS command) fired when a row's checkbox toggles; receives phx-value-id (row_id(row)) and phx-value-checked (the next state)"
+
+  attr :on_select_all, :any,
+    default: nil,
+    doc:
+      "event name (or JS command) fired when the header checkbox toggles; receives phx-value-checked (the next state)"
+
+  attr :select_target, :any, default: nil, doc: "phx-target for on_select / on_select_all"
+
   slot :col do
     attr :label, :string
     attr :class, :any
@@ -78,7 +96,19 @@ defmodule PetalComponents.Table do
         assign(assigns, row_id: assigns.row_id || fn {id, _item} -> id end)
       end
 
+    if assigns.selectable and is_nil(assigns.row_id) do
+      raise ArgumentError, "table needs row_id when selectable is set"
+    end
+
     assigns = assign_new(assigns, :id, fn -> "table_#{Ecto.UUID.generate()}" end)
+
+    {all_selected?, indeterminate?} = selection_state(assigns)
+
+    assigns =
+      assigns
+      |> assign(:all_selected?, all_selected?)
+      |> assign(:indeterminate?, indeterminate?)
+      |> assign(:colspan, length(assigns.col) + if(assigns.selectable, do: 1, else: 0))
 
     ~H"""
     <table
@@ -93,6 +123,19 @@ defmodule PetalComponents.Table do
       <%= if @col != [] do %>
         <thead>
           <.tr>
+            <.th :if={@selectable} class="pc-table__th--select">
+              <input
+                type="checkbox"
+                class="pc-checkbox"
+                checked={@all_selected?}
+                data-indeterminate={@indeterminate? && "true"}
+                data-pc-dt-select-all
+                phx-click={@on_select_all}
+                phx-value-checked={to_string(!@all_selected?)}
+                phx-target={@select_target}
+                aria-label="Select all rows"
+              />
+            </.th>
             <.th
               :for={col <- @col}
               class={[col[:class], @sticky_header && "pc-table__th--sticky"]}
@@ -122,7 +165,7 @@ defmodule PetalComponents.Table do
           >
             <.td
               :for={empty_state <- @empty_state}
-              colspan={length(@col)}
+              colspan={@colspan}
               class={empty_state[:row_class]}
             >
               {render_slot(empty_state)}
@@ -133,6 +176,18 @@ defmodule PetalComponents.Table do
             id={@row_id && @row_id.(row)}
             class={["group", @row_click && "pc-table__tr--row-click"]}
           >
+            <.td :if={@selectable} class="pc-table__td--select">
+              <input
+                type="checkbox"
+                class="pc-checkbox"
+                checked={@row_id.(row) in @selected}
+                phx-click={@on_select}
+                phx-value-id={@row_id.(row)}
+                phx-value-checked={to_string(@row_id.(row) not in @selected)}
+                phx-target={@select_target}
+                aria-label="Select row"
+              />
+            </.td>
             <.td
               :for={{col, i} <- Enum.with_index(@col)}
               phx-click={@row_click && @row_click.(row)}
@@ -160,6 +215,23 @@ defmodule PetalComponents.Table do
 
   defp resolve_on_sort(on_sort, key) when is_function(on_sort, 1), do: on_sort.(key)
   defp resolve_on_sort(on_sort, _key), do: on_sort
+
+  # the header checkbox's tri-state: checked when every current row is
+  # selected, indeterminate when only some are - native <input> has no
+  # indeterminate HTML attribute, so data-indeterminate is a hand-off to
+  # the PetalDataTable hook, which sets the DOM property on mount/update
+  defp selection_state(%{selectable: false}), do: {false, false}
+
+  defp selection_state(%{selectable: true, rows: rows, row_id: row_id, selected: selected}) do
+    ids = Enum.map(rows, row_id)
+    selected_count = Enum.count(ids, &(&1 in selected))
+
+    cond do
+      ids == [] or selected_count == 0 -> {false, false}
+      selected_count == length(ids) -> {true, false}
+      true -> {false, true}
+    end
+  end
 
   defp sort_key(col), do: col[:sort_key] || String.downcase(col[:label] || "")
 
