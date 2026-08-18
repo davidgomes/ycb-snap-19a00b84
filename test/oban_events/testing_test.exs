@@ -4,6 +4,8 @@ defmodule ObanEvents.TestingTest do
 
   alias ObanEvents.Event
 
+  doctest ObanEvents.Testing
+
   defmodule MetadataHandler do
     @moduledoc false
     use ObanEvents.Handler

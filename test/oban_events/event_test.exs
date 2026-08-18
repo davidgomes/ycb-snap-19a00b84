@@ -3,6 +3,8 @@ defmodule ObanEvents.EventTest do
 
   alias ObanEvents.Event
 
+  doctest ObanEvents.Event
+
   defmodule TestHandler do
     @moduledoc false
     use ObanEvents.Handler
