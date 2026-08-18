@@ -134,5 +134,46 @@ defmodule Sentry.Transport.RateLimiterTest do
     end
   end
 
+  describe "rate_limited_for_category?/1" do
+    test "checks primary data category and global limit" do
+      now = System.system_time(:second)
+      :ets.insert(table_name(), {"error", now + 60})
+
+      assert RateLimiter.rate_limited_for_category?(:error) == true
+      assert RateLimiter.rate_limited_for_category?(:check_in) == false
+      assert RateLimiter.rate_limited_for_category?(:transaction) == false
+    end
+
+    test "checks log_item and log_byte for :log category" do
+      now = System.system_time(:second)
+
+      assert RateLimiter.rate_limited_for_category?(:log) == false
+
+      :ets.insert(table_name(), {"log_byte", now + 60})
+      assert RateLimiter.rate_limited_for_category?(:log) == true
+
+      :ets.delete(table_name(), "log_byte")
+      assert RateLimiter.rate_limited_for_category?(:log) == false
+
+      :ets.insert(table_name(), {"log_item", now + 60})
+      assert RateLimiter.rate_limited_for_category?(:log) == true
+    end
+
+    test "checks trace_metric and trace_metric_byte for :metric category" do
+      now = System.system_time(:second)
+
+      assert RateLimiter.rate_limited_for_category?(:metric) == false
+
+      :ets.insert(table_name(), {"trace_metric_byte", now + 60})
+      assert RateLimiter.rate_limited_for_category?(:metric) == true
+
+      :ets.delete(table_name(), "trace_metric_byte")
+      assert RateLimiter.rate_limited_for_category?(:metric) == false
+
+      :ets.insert(table_name(), {"trace_metric", now + 60})
+      assert RateLimiter.rate_limited_for_category?(:metric) == true
+    end
+  end
+
   defp table_name, do: Process.get(:rate_limiter_table_name)
 end

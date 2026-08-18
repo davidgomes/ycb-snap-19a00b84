@@ -272,11 +272,22 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       items = decode_envelope!(body)
       assert [{%{"type" => "client_report"}, client_report}] = items
 
-      cache_overflow =
-        Enum.find(client_report["discarded_events"], &(&1["reason"] == "cache_overflow"))
+      cache_overflow_item =
+        Enum.find(
+          client_report["discarded_events"],
+          &(&1["reason"] == "cache_overflow" and &1["category"] == "log_item")
+        )
 
-      assert cache_overflow["category"] == "log_item"
-      assert cache_overflow["quantity"] == 1
+      cache_overflow_byte =
+        Enum.find(
+          client_report["discarded_events"],
+          &(&1["reason"] == "cache_overflow" and &1["category"] == "log_byte")
+        )
+
+      assert cache_overflow_item["category"] == "log_item"
+      assert cache_overflow_item["quantity"] == 1
+      assert cache_overflow_byte["category"] == "log_byte"
+      assert cache_overflow_byte["quantity"] > 0
 
       :sys.resume(scheduler)
     end
@@ -397,6 +408,21 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       assert Buffer.size(log_buffer) == 0
     end
 
+    test "drops rate-limited log events when log_byte is rate limited", ctx do
+      Bypass.stub(ctx.bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
+
+      :ets.insert(ctx.rate_limiter_table, {"log_byte", System.system_time(:second) + 60})
+
+      assert {:ok, {:rate_limited, "log_item"}} =
+               TelemetryProcessor.add(ctx.processor, make_log_event("pre-buffer-drop-byte"))
+
+      assert Buffer.size(log_buffer) == 0
+    end
+
     test "drops rate-limited error events before they enter the buffer", ctx do
       put_test_config(telemetry_processor_categories: [:error, :log])
 
@@ -481,6 +507,23 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       assert {:ok, {:rate_limited, "trace_metric"}} =
                TelemetryProcessor.add(ctx.processor, make_metric("pre-buffer-drop", 1))
+
+      assert Buffer.size(metric_buffer) == 0
+    end
+
+    test "drops rate-limited metric events when trace_metric_byte is rate limited", ctx do
+      Bypass.stub(ctx.bypass, "POST", "/api/1/envelope/", fn conn ->
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      put_test_config(telemetry_processor_categories: [])
+
+      metric_buffer = TelemetryProcessor.get_buffer(ctx.processor, :metric)
+
+      :ets.insert(ctx.rate_limiter_table, {"trace_metric_byte", System.system_time(:second) + 60})
+
+      assert {:ok, {:rate_limited, "trace_metric"}} =
+               TelemetryProcessor.add(ctx.processor, make_metric("pre-buffer-drop-byte", 1))
 
       assert Buffer.size(metric_buffer) == 0
     end

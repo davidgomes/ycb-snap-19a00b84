@@ -6,7 +6,20 @@ defmodule Sentry.ClientReport.Sender do
 
   use GenServer
 
-  alias Sentry.{Client, ClientReport, Config, Envelope, Transaction}
+  alias Sentry.{
+    Attachment,
+    CheckIn,
+    Client,
+    ClientReport,
+    Config,
+    Envelope,
+    Event,
+    LogBatch,
+    LogEvent,
+    Metric,
+    MetricBatch,
+    Transaction
+  }
 
   @send_interval 30_000
 
@@ -35,11 +48,15 @@ defmodule Sentry.ClientReport.Sender do
 
   @spec record_discarded_events(atom(), [item], GenServer.server()) :: :ok
         when item:
-               Sentry.Attachment.t()
-               | Sentry.CheckIn.t()
+               Attachment.t()
+               | CheckIn.t()
                | ClientReport.t()
-               | Sentry.Event.t()
-               | Sentry.Transaction.t()
+               | Event.t()
+               | LogBatch.t()
+               | LogEvent.t()
+               | Metric.t()
+               | MetricBatch.t()
+               | Transaction.t()
   def record_discarded_events(reason, event_items, genserver)
       when is_list(event_items) do
     # We silently ignore events whose reasons aren't valid because we have to add it to the allowlist in Snuba
@@ -65,8 +82,40 @@ defmodule Sentry.ClientReport.Sender do
     [{Envelope.get_data_category(transaction), 1}, {"span", span_count}]
   end
 
-  defp data_categories(item) do
+  defp data_categories(%LogEvent{} = log_event) do
+    [
+      {Envelope.get_data_category(log_event), 1},
+      {"log_byte", LogEvent.byte_size(log_event)}
+    ]
+  end
+
+  defp data_categories(%LogBatch{log_events: log_events} = log_batch) do
+    [
+      {Envelope.get_data_category(log_batch), length(log_events)},
+      {"log_byte", LogBatch.byte_size(log_batch)}
+    ]
+  end
+
+  defp data_categories(%Metric{} = metric) do
+    [
+      {Envelope.get_data_category(metric), 1},
+      {"trace_metric_byte", Metric.byte_size(metric)}
+    ]
+  end
+
+  defp data_categories(%MetricBatch{metrics: metrics} = metric_batch) do
+    [
+      {Envelope.get_data_category(metric_batch), length(metrics)},
+      {"trace_metric_byte", MetricBatch.byte_size(metric_batch)}
+    ]
+  end
+
+  defp data_categories(item) when is_struct(item) do
     [{Envelope.get_data_category(item), 1}]
+  end
+
+  defp data_categories(_item) do
+    []
   end
 
   ## Callbacks
@@ -103,22 +152,21 @@ defmodule Sentry.ClientReport.Sender do
   defp send_pending_reports(state) do
     _result =
       if map_size(state) != 0 and Config.dsn() != nil and Config.send_client_reports?() do
-        client_report =
-          %ClientReport{
-            timestamp:
-              DateTime.utc_now()
-              |> DateTime.truncate(:second)
-              |> DateTime.to_iso8601()
-              |> String.trim_trailing("Z"),
-            discarded_events:
-              Enum.map(state, fn {{reason, category}, quantity} ->
-                %{
-                  reason: reason,
-                  category: category,
-                  quantity: quantity
-                }
-              end)
-          }
+        client_report = %ClientReport{
+          timestamp:
+            DateTime.utc_now()
+            |> DateTime.truncate(:second)
+            |> DateTime.to_iso8601()
+            |> String.trim_trailing("Z"),
+          discarded_events:
+            Enum.map(state, fn {{reason, category}, quantity} ->
+              %{
+                reason: reason,
+                category: category,
+                quantity: quantity
+              }
+            end)
+        }
 
         Client.send_client_report(client_report)
       end

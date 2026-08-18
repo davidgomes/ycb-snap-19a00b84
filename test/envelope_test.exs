@@ -117,18 +117,17 @@ defmodule Sentry.EnvelopeTest do
     test "works with transactions" do
       put_test_config(environment_name: "test")
 
-      child_spans =
-        [
-          %Sentry.Interfaces.Span{
-            start_timestamp: 1_588_601_261.535_386,
-            timestamp: 1_588_601_261.544_196,
-            description: "Vue <App>",
-            op: "update",
-            span_id: "b980d4dec78d7344",
-            parent_span_id: "9312d0d18bf51736",
-            trace_id: "1e57b752bc6e4544bbaa246cd1d05dee"
-          }
-        ]
+      child_spans = [
+        %Sentry.Interfaces.Span{
+          start_timestamp: 1_588_601_261.535_386,
+          timestamp: 1_588_601_261.544_196,
+          description: "Vue <App>",
+          op: "update",
+          span_id: "b980d4dec78d7344",
+          parent_span_id: "9312d0d18bf51736",
+          trace_id: "1e57b752bc6e4544bbaa246cd1d05dee"
+        }
+      ]
 
       transaction =
         create_transaction(%{
@@ -245,6 +244,28 @@ defmodule Sentry.EnvelopeTest do
              event_id: Sentry.UUID.uuid4_hex(),
              timestamp: "2024-10-12T13:21:13"
            }) == "error"
+
+    assert Envelope.get_data_category(%Sentry.LogEvent{
+             timestamp: 1_700_000_000,
+             level: :info,
+             body: "hello"
+           }) == "log_item"
+
+    assert Envelope.get_data_category(%Sentry.LogBatch{
+             log_events: []
+           }) == "log_item"
+
+    assert Envelope.get_data_category(%Sentry.Metric{
+             type: :counter,
+             name: "m",
+             value: 1,
+             timestamp: 1_700_000_000,
+             attributes: %{}
+           }) == "trace_metric"
+
+    assert Envelope.get_data_category(%Sentry.MetricBatch{
+             metrics: []
+           }) == "trace_metric"
   end
 
   describe "from_metric_events/1" do
@@ -334,6 +355,7 @@ defmodule Sentry.EnvelopeTest do
 
       metric_batch = %Sentry.MetricBatch{metrics: metrics}
       assert Envelope.get_data_category(metric_batch) == "trace_metric"
+      assert Envelope.get_data_category(hd(metrics)) == "trace_metric"
     end
   end
 end

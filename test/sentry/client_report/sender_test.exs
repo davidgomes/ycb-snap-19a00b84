@@ -113,8 +113,7 @@ defmodule Sentry.ClientReportTest do
             end
         })
 
-      assert :ok =
-               Sender.record_discarded_events(:before_send, [transaction], :test_span_report)
+      assert :ok = Sender.record_discarded_events(:before_send, [transaction], :test_span_report)
 
       assert :sys.get_state(:test_span_report) == %{
                {:before_send, "transaction"} => 1,
@@ -137,6 +136,120 @@ defmodule Sentry.ClientReportTest do
       assert :sys.get_state(:test_empty_span_report) == %{
                {:before_send, "transaction"} => 1,
                {:before_send, "span"} => 1
+             }
+    end
+
+    test "records log_item and log_byte outcomes when a LogEvent is discarded" do
+      start_supervised!({Sender, name: :test_log_event_report})
+
+      log_event = %Sentry.LogEvent{
+        timestamp: 1_700_000_000,
+        level: :info,
+        body: "test log event"
+      }
+
+      byte_size = Sentry.LogEvent.byte_size(log_event)
+      assert byte_size > 0
+
+      assert :ok =
+               Sender.record_discarded_events(
+                 :ratelimit_backoff,
+                 [log_event],
+                 :test_log_event_report
+               )
+
+      assert :sys.get_state(:test_log_event_report) == %{
+               {:ratelimit_backoff, "log_item"} => 1,
+               {:ratelimit_backoff, "log_byte"} => byte_size
+             }
+    end
+
+    test "records log_item and log_byte outcomes when a LogBatch is discarded" do
+      start_supervised!({Sender, name: :test_log_batch_report})
+
+      log_events = [
+        %Sentry.LogEvent{timestamp: 1_700_000_000, level: :info, body: "log 1"},
+        %Sentry.LogEvent{timestamp: 1_700_000_001, level: :warn, body: "log 2"}
+      ]
+
+      log_batch = %Sentry.LogBatch{log_events: log_events}
+      byte_size = Sentry.LogBatch.byte_size(log_batch)
+      assert byte_size > 0
+
+      assert :ok =
+               Sender.record_discarded_events(
+                 :queue_overflow,
+                 [log_batch],
+                 :test_log_batch_report
+               )
+
+      assert :sys.get_state(:test_log_batch_report) == %{
+               {:queue_overflow, "log_item"} => 2,
+               {:queue_overflow, "log_byte"} => byte_size
+             }
+    end
+
+    test "records trace_metric and trace_metric_byte outcomes when a Metric is discarded" do
+      start_supervised!({Sender, name: :test_metric_report})
+
+      metric = %Sentry.Metric{
+        type: :counter,
+        name: "test.counter",
+        value: 1,
+        timestamp: 1_700_000_000,
+        attributes: %{}
+      }
+
+      byte_size = Sentry.Metric.byte_size(metric)
+      assert byte_size > 0
+
+      assert :ok =
+               Sender.record_discarded_events(
+                 :ratelimit_backoff,
+                 [metric],
+                 :test_metric_report
+               )
+
+      assert :sys.get_state(:test_metric_report) == %{
+               {:ratelimit_backoff, "trace_metric"} => 1,
+               {:ratelimit_backoff, "trace_metric_byte"} => byte_size
+             }
+    end
+
+    test "records trace_metric and trace_metric_byte outcomes when a MetricBatch is discarded" do
+      start_supervised!({Sender, name: :test_metric_batch_report})
+
+      metrics = [
+        %Sentry.Metric{
+          type: :counter,
+          name: "metric 1",
+          value: 1,
+          timestamp: 1_700_000_000,
+          attributes: %{}
+        },
+        %Sentry.Metric{
+          type: :gauge,
+          name: "metric 2",
+          value: 42,
+          timestamp: 1_700_000_001,
+          attributes: %{}
+        }
+      ]
+
+      metric_batch = %Sentry.MetricBatch{metrics: metrics}
+      byte_size = Sentry.MetricBatch.byte_size(metric_batch)
+      assert byte_size > 0
+
+      assert :ok =
+               Sender.record_discarded_events(
+                 :send_error,
+                 [metric_batch],
+                 :test_metric_batch_report
+               )
+
+      assert :sys.get_state(:test_metric_batch_report) == %{
+               {:send_error, "trace_metric"} => 2,
+               {:send_error, "trace_metric_byte"} => byte_size
              }
     end
   end

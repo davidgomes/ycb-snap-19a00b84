@@ -42,7 +42,7 @@ defmodule Sentry.Telemetry.Buffer do
           capacity: pos_integer(),
           batch_size: pos_integer(),
           timeout: pos_integer() | nil,
-          on_item: (-> any()) | nil,
+          on_item: (() -> any()) | nil,
           last_flush_time: integer(),
           items: :queue.queue(),
           size: non_neg_integer()
@@ -178,11 +178,11 @@ defmodule Sentry.Telemetry.Buffer do
 
   defp offer(%Buffer{size: size, capacity: capacity} = state, item)
        when size >= capacity do
-    {{:value, _dropped}, items} = :queue.out(state.items)
+    {{:value, dropped}, items} = :queue.out(state.items)
 
     ClientReport.Sender.record_discarded_events(
       :cache_overflow,
-      Category.data_category(state.category)
+      [dropped]
     )
 
     %{state | items: :queue.in(item, items)}

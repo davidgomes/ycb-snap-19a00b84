@@ -126,7 +126,9 @@ defmodule Sentry.Envelope do
           | ClientReport.t()
           | Event.t()
           | LogBatch.t()
+          | LogEvent.t()
           | MetricBatch.t()
+          | Metric.t()
           | Transaction.t()
         ) ::
           String.t()
@@ -136,7 +138,9 @@ defmodule Sentry.Envelope do
   def get_data_category(%ClientReport{}), do: "internal"
   def get_data_category(%Event{}), do: "error"
   def get_data_category(%LogBatch{}), do: "log_item"
+  def get_data_category(%LogEvent{}), do: "log_item"
   def get_data_category(%MetricBatch{}), do: "trace_metric"
+  def get_data_category(%Metric{}), do: "trace_metric"
 
   @doc """
   Returns the total number of payload items in the envelope.

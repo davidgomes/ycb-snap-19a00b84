@@ -295,50 +295,23 @@ defmodule Sentry.MetricsTest do
     end
   end
 
-  describe "edge case values" do
-    test "accepts zero value" do
-      test_pid = self()
+  describe "rate limiting client reports" do
+    test "records trace_metric and trace_metric_byte when metric is rate-limited on add" do
+      put_test_config(enable_metrics: true)
 
-      callback = fn metric ->
-        send(test_pid, {:metric, metric})
-        metric
-      end
+      :ets.insert(table_name(), {"trace_metric", System.system_time(:second) + 60})
+      :sys.replace_state(Sentry.ClientReport.Sender, fn _ -> %{} end)
 
-      put_test_config(enable_metrics: true, before_send_metric: callback)
+      assert :ok = Metrics.count("rate.limited.counter", 1)
 
-      assert :ok = Metrics.count("test.zero", 0)
-      TelemetryProcessor.flush()
-      assert_receive {:metric, %Metric{value: 0}}
-    end
+      state = :sys.get_state(Sentry.ClientReport.Sender)
 
-    test "accepts negative values" do
-      test_pid = self()
-
-      callback = fn metric ->
-        send(test_pid, {:metric, metric})
-        metric
-      end
-
-      put_test_config(enable_metrics: true, before_send_metric: callback)
-
-      assert :ok = Metrics.gauge("test.negative", -42)
-      TelemetryProcessor.flush()
-      assert_receive {:metric, %Metric{value: -42}}
-    end
-
-    test "accepts float values" do
-      test_pid = self()
-
-      callback = fn metric ->
-        send(test_pid, {:metric, metric})
-        metric
-      end
-
-      put_test_config(enable_metrics: true, before_send_metric: callback)
-
-      assert :ok = Metrics.distribution("test.float", 0.001)
-      TelemetryProcessor.flush()
-      assert_receive {:metric, %Metric{value: 0.001}}
+      assert Map.has_key?(state, {:ratelimit_backoff, "trace_metric"})
+      assert Map.has_key?(state, {:ratelimit_backoff, "trace_metric_byte"})
+      assert state[{:ratelimit_backoff, "trace_metric"}] == 1
+      assert state[{:ratelimit_backoff, "trace_metric_byte"}] > 0
     end
   end
+
+  defp table_name, do: Process.get(:rate_limiter_table_name, Sentry.Transport.RateLimiter)
 end

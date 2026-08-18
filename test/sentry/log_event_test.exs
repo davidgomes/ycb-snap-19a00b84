@@ -356,4 +356,24 @@ defmodule Sentry.LogEventTest do
       assert result.attributes["active"] == %{value: true, type: "boolean"}
     end
   end
+
+  describe "byte_size/1" do
+    test "returns the byte size of the json-encoded log event" do
+      log_event = %LogEvent{
+        level: :info,
+        body: "test message",
+        timestamp: 1_000_000.5,
+        attributes: %{key: "val"}
+      }
+
+      assert LogEvent.byte_size(log_event) > 0
+
+      {:ok, encoded} =
+        log_event
+        |> LogEvent.to_map()
+        |> Sentry.JSON.encode(Sentry.Config.json_library())
+
+      assert LogEvent.byte_size(log_event) == Kernel.byte_size(encoded)
+    end
+  end
 end
