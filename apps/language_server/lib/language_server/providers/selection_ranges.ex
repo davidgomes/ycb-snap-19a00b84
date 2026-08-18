@@ -145,10 +145,9 @@ defmodule ElixirLS.LanguageServer.Providers.SelectionRanges do
   end
 
   # Outer/inner ranges for delimiter pairs - `()`/`[]`/`{}`/`%{}`/`<<>>` and `do`/`end` blocks -
-  # derived from the toxic2 `closing:` / `do:` / `end:` node metadata. This replaces the old
-  # tokenizer-driven token-pair pass (FoldingRange.Token/TokenPair). String/heredoc/sigil ranges,
-  # which the old special-token pass produced, already come from `ast_node_ranges` (the toxic AST
-  # nodes carry `range:`), so they are not reproduced here.
+  # derived from the toxic2 `closing:` / `do:` / `end:` node metadata. String/heredoc/sigil ranges
+  # already come from `ast_node_ranges` (the toxic AST nodes carry `range:`), so they are not
+  # reproduced here.
   def delimiter_pair_ranges({:ok, ast}, lines, line, character) do
     ast = ElixirSense.Core.Parser.neutralize_errors(ast, [], true)
 
@@ -283,7 +282,7 @@ defmodule ElixirLS.LanguageServer.Providers.SelectionRanges do
   # pair the inner is the body lines (line-based); for a `..keyword` pair the inner runs from the
   # END of the first keyword to the next keyword. The `do`/`end` positions come from the node meta;
   # the `else`/`catch`/`rescue`/`after` positions come from the section keys in the node's args
-  # (wrapped with `range:` by the literal_encoder). This mirrors the old token-pair behavior.
+  # (wrapped with `range:` by the literal_encoder).
   defp do_block_ranges({_form, meta, _args} = node, lines, line, character) do
     [line: do_line1, column: do_col1] = Keyword.fetch!(meta, :do)
     [line: end_line1, column: end_col1] = Keyword.fetch!(meta, :end)

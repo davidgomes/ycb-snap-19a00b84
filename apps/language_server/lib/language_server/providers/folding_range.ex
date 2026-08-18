@@ -36,8 +36,7 @@ defmodule ElixirLS.LanguageServer.Providers.FoldingRange do
   (`range: true`): `do`/`end` blocks, delimited containers/calls
   (`()`/`[]`/`{}`/`<<>>`/`fn`), and strings/heredocs/sigils. A string argument of
   `@doc`/`@moduledoc`/`@typedoc`/`@shortdoc` folds as `kind: "comment"`; the rest
-  are `kind: "region"`. This replaces the previous token-pair and special-token
-  passes.
+  are `kind: "region"`.
 
   ## Notes
 
@@ -47,7 +46,6 @@ defmodule ElixirLS.LanguageServer.Providers.FoldingRange do
   alias __MODULE__
 
   @type input :: %{
-          tokens: [FoldingRange.Token.t()],
           lines: [FoldingRange.Line.t()]
         }
 
@@ -80,11 +78,10 @@ defmodule ElixirLS.LanguageServer.Providers.FoldingRange do
 
   defp do_provide(text) do
     # The structural (do/end, delimiters, heredocs) and comment ranges come from the error-tolerant
-    # toxic2 parser - node source ranges (`range: true`) replace the old token-pair/special-token
-    # passes, and comments come from `Toxic2.string_to_quoted_with_comments`. The indentation pass
-    # stays (it is pure line analysis and provides the assignment / clause folds that have no single
-    # closing token). Priorities mirror the original: AST regions (3) override indentation (1) at a
-    # shared start line, exactly as the token-pair pass used to.
+    # toxic2 parser - node source ranges (`range: true`) and the comments returned by
+    # `Toxic2.string_to_quoted_with_comments`. The indentation pass is pure line analysis and
+    # provides the assignment / clause folds that have no single closing token, so AST regions (3)
+    # override it (1) at a shared start line.
     {ast, diagnostics, comments} =
       Toxic2.string_to_quoted_with_comments(text,
         token_metadata: true,
@@ -107,15 +104,12 @@ defmodule ElixirLS.LanguageServer.Providers.FoldingRange do
 
   def convert_text_to_input(text) do
     %{
-      tokens: FoldingRange.Token.format_string(text),
       lines: FoldingRange.Line.format_string(text)
     }
   end
 
   defp indentation_ranges(lines) do
-    # Indentation only reads `:lines`, but its spec takes the full input map; pass empty tokens
-    # rather than run the (unused) tokenizer.
-    {:ok, ranges} = FoldingRange.Indentation.provide_ranges(%{tokens: [], lines: lines})
+    {:ok, ranges} = FoldingRange.Indentation.provide_ranges(%{lines: lines})
     ranges
   end
 
@@ -190,7 +184,7 @@ defmodule ElixirLS.LanguageServer.Providers.FoldingRange do
   end
 
   # `@doc`/`@moduledoc`/... with a string/heredoc argument: remember that string's range so its fold
-  # is marked `:comment` rather than `:region` (matching the old special-token pass).
+  # is marked `:comment` rather than `:region`.
   defp collect_doc_string({:@, _, [{attr, _, [arg]}]}, doc_ranges) when attr in @doc_attributes do
     case string_range(arg) do
       nil -> doc_ranges
@@ -209,7 +203,7 @@ defmodule ElixirLS.LanguageServer.Providers.FoldingRange do
   # A fold for a node spans from its start line to the last line that stays visible when collapsed:
   # the line before a closing `end`/`)`/`]`/`}`/`>>` or heredoc terminator. Only do/end blocks,
   # delimited containers/calls, and strings/heredocs fold here; everything else (assignments, clause
-  # bodies, pipelines) is left to the indentation pass, which mirrors the original behavior.
+  # bodies, pipelines) is left to the indentation pass.
   defp fold_for({_form, meta, _args}) when is_list(meta) do
     case Keyword.get(meta, :range) do
       {{start_line, _}, {end_line, _}} = range ->
