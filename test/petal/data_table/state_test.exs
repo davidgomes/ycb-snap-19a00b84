@@ -140,6 +140,56 @@ defmodule PetalComponents.DataTable.StateTest do
     end
   end
 
+  describe "selection" do
+    test "toggle_selection/2 adds and removes, stringifying ids" do
+      state = State.toggle_selection(%State{}, 7)
+      assert state.selected == ["7"]
+      assert State.selected?(state, 7)
+      assert State.selected?(state, "7")
+      assert State.toggle_selection(state, "7").selected == []
+    end
+
+    test "toggle_page/2 selects the rest, then deselects a fully selected page" do
+      state = State.put_selection(%State{}, [1, 2])
+
+      # partly selected: the mixed header promises "select the rest"
+      state = State.toggle_page(state, ["2", "3"])
+      assert state.selected == ["1", "2", "3"]
+
+      # fully selected: the same click clears just that page
+      state = State.toggle_page(state, ["2", "3"])
+      assert state.selected == ["1"]
+    end
+
+    test "toggle_page/2 reads the comma-joined string the header posts" do
+      assert State.toggle_page(%State{}, "3,1,3").selected == ["3", "1"]
+      assert State.toggle_page(%State{selected: ["9"]}, "") == %State{selected: ["9"]}
+    end
+
+    test "put_selection/2 replaces wholesale - how link mode survives a patch" do
+      assert State.put_selection(%State{selected: ["1"]}, [2, 3]).selected == ["2", "3"]
+    end
+
+    test "deselect_ids/2 and clear_selection/1" do
+      state = %State{selected: ["1", "2", "3"]}
+      assert State.deselect_ids(state, ["1", "3"]).selected == ["2"]
+      assert State.clear_selection(state).selected == []
+    end
+
+    test "paging and sorting never disturb the selection" do
+      state = %State{selected: ["1"], page: 1}
+      assert State.toggle_sort(state, :name).selected == ["1"]
+      assert State.put_search(state, "amy").selected == ["1"]
+      assert State.put_filter(state, :name, :eq, "a").selected == ["1"]
+    end
+
+    test "a selection is never a query param" do
+      state = %State{selected: ["1", "2"]}
+      assert State.to_params(state) == %{}
+      assert State.from_params(%{"selected" => "1"}, fields: @fields).selected == []
+    end
+  end
+
   describe "handle_op/3" do
     @opts [fields: [:name, :amount, :status]]
 
@@ -159,9 +209,21 @@ defmodule PetalComponents.DataTable.StateTest do
       assert State.handle_op(filtered, %{"op" => "clear_filters"}, @opts).filters == []
     end
 
+    test "speaks the selection ops" do
+      state = State.handle_op(%State{}, %{"op" => "select", "id" => "3"}, @opts)
+      assert state.selected == ["3"]
+
+      state = State.handle_op(state, %{"op" => "select_page", "ids" => "3,4"}, @opts)
+      assert state.selected == ["3", "4"]
+
+      assert State.handle_op(state, %{"op" => "clear_selection"}, @opts).selected == []
+    end
+
     test "unknown ops and non-whitelisted fields leave the state unchanged" do
       state = %State{}
       assert State.handle_op(state, %{"op" => "drop_tables"}, @opts) == state
+      # an id can only honestly be a string or an integer
+      assert State.handle_op(state, %{"op" => "select", "id" => %{"a" => 1}}, @opts) == state
       assert State.handle_op(state, %{"op" => "sort", "field" => "secret"}, @opts) == state
 
       assert State.handle_op(

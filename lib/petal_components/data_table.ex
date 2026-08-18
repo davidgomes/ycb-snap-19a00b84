@@ -224,7 +224,9 @@ defmodule PetalComponents.DataTable do
         else: []
 
     selected = MapSet.new(assigns.state.selected)
-    on_page_selected = Enum.count(page_ids, &MapSet.member?(selected, &1))
+    on_page = Enum.count(page_ids, &MapSet.member?(selected, &1))
+    all_selected? = page_ids != [] and on_page == length(page_ids)
+    some_selected? = on_page > 0 and not all_selected?
 
     assigns =
       assigns
@@ -241,8 +243,8 @@ defmodule PetalComponents.DataTable do
       |> assign(:selected_count, length(assigns.state.selected))
       |> assign(:selection_mode?, assigns.selectable and assigns.state.selected != [])
       |> assign(:page_ids, Enum.join(page_ids, ","))
-      |> assign(:all_page_selected?, page_ids != [] and on_page_selected == length(page_ids))
-      |> assign(:some_page_selected?, on_page_selected > 0 and on_page_selected < length(page_ids))
+      |> assign(:all_page_selected?, all_selected?)
+      |> assign(:some_page_selected?, some_selected?)
       |> assign(
         :nav_template,
         link_mode? && (url_wiring? or filter_cols != []) &&

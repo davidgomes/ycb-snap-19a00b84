@@ -1439,8 +1439,9 @@ defmodule Dev.PlaygroundLive do
     do: {:noreply, update(socket, :combo, &%{&1 | chosen: value})}
 
   # the data table's event-mode op grammar: State.handle_op speaks all of
-  # it (sort/page/search/page_size/filter/clear_filters), so the whole
-  # backend is one call plus a re-run through the free engine
+  # it (sort/page/search/page_size/filter/clear_filters plus the selection
+  # ops), so the whole backend is one call plus a re-run through the free
+  # engine
   def handle_event("pg_table", params, socket) do
     alias PetalComponents.DataTable.State
     {state, _rows} = socket.assigns.dt
@@ -7305,10 +7306,11 @@ defmodule Dev.PlaygroundLive do
     <div class="max-w-3xl px-4 py-8 mx-auto sm:px-8 sm:py-10">
       <h1 class="text-3xl font-bold tracking-tight">Data table</h1>
       <p class="mt-2 mb-6 text-gray-600 dark:text-gray-300">
-        Sortable, paged and filter-aware, driven by one State struct. This live demo runs
-        EVENT mode: every interaction pushes a single op-grammar event, the handler applies it
-        with State helpers and re-runs the free in-memory engine. Link mode does the same
-        through patch URLs - state you can curl.
+        Sortable, paged, filter-aware and selectable, driven by one State struct. This live demo
+        runs EVENT mode: every interaction pushes a single op-grammar event, the handler applies
+        it with State helpers and re-runs the free in-memory engine. Link mode does the same
+        through patch URLs - state you can curl. Tick a row to watch the toolbar morph; the
+        selection survives sorting, searching and paging.
       </p>
 
       <div class="border border-gray-200 dark:border-gray-400/20 rounded-xl p-6">
@@ -7320,6 +7322,7 @@ defmodule Dev.PlaygroundLive do
           on_change="pg_table"
           striped
           searchable
+          selectable
           page_size_options={[5, 10, 20]}
         >
           <:col :let={row} field={:name} sortable>{row.name}</:col>
@@ -7354,7 +7357,7 @@ defmodule Dev.PlaygroundLive do
           ex <-
             examples_for(
               PetalComponents.Showcase.DataTable,
-              ~w(basic loading empty)a
+              ~w(basic selection loading empty)a
             )
         }
         class="mt-10"

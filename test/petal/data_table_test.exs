@@ -348,6 +348,155 @@ defmodule PetalComponents.DataTableTest do
     refute html =~ "tab=all?"
   end
 
+  test "selectable renders a tri-state header and one checkbox per row" do
+    rows = [
+      %{id: 1, name: "Amy", email: "amy@x.com", amount: 300},
+      %{id: 2, name: "Bea", email: "bea@x.com", amount: 40}
+    ]
+
+    assigns = base(%{rows: rows, state: %State{total: 74, selected: ["1"]}})
+
+    partial =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    # header: mixed, because one of the page's two rows is selected
+    assert partial =~ ~s(data-pc-dt-select-all)
+    assert partial =~ ~s(data-indeterminate="true")
+    assert partial =~ ~s(aria-checked="mixed")
+    assert partial =~ ~s(phx-value-op="select_page")
+    assert partial =~ ~s(phx-value-ids="1,2")
+    # rows: the selected one is checked, the other posts its own toggle
+    assert partial =~ ~s(phx-value-op="select")
+    assert partial =~ ~s(phx-value-id="1")
+    assert partial =~ ~s(aria-label="Select row 2")
+    # the hook mounts for the indeterminate property alone
+    assert partial =~ ~s(phx-hook="PetalDataTable")
+
+    assigns = base(%{rows: rows, state: %State{total: 74, selected: ["1", "2"]}})
+
+    all =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    refute all =~ "data-indeterminate"
+    refute all =~ "aria-checked"
+  end
+
+  test "the toolbar morphs into the selection bar while rows are selected" do
+    rows = [%{id: 1, name: "Amy"}, %{id: 2, name: "Bea"}]
+    assigns = base(%{rows: rows, state: %State{total: 74, selected: ["1", "2"]}})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        path={@path}
+        on_select="select"
+        selectable
+        searchable
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:bulk_action :let={ids}>
+          <button type="button">Archive {length(ids)}</button>
+        </:bulk_action>
+      </.data_table>
+      """)
+
+    assert html =~ "pc-data-table__toolbar--selection"
+    assert html =~ "2 selected"
+    assert html =~ "Archive 2"
+    assert html =~ "Clear selection"
+    assert html =~ ~s(phx-value-op="clear_selection")
+    # the morph is a swap: the search input is gone while selecting
+    refute html =~ "data-pc-dt-search"
+
+    assigns = base(%{rows: rows, state: %State{total: 74}})
+
+    idle =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        path={@path}
+        on_select="select"
+        selectable
+        searchable
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:bulk_action :let={ids}>
+          <button type="button">Archive {length(ids)}</button>
+        </:bulk_action>
+      </.data_table>
+      """)
+
+    refute idle =~ "pc-data-table__toolbar--selection"
+    refute idle =~ "Clear selection"
+    refute idle =~ "Archive"
+    assert idle =~ "data-pc-dt-search"
+  end
+
+  test "row_id picks the id off any row shape; loading skips the checkboxes" do
+    rows = [%{key: "a-1", name: "Amy"}]
+    assigns = base(%{rows: rows, state: %State{total: 74}})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        row_id={& &1.key}
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert html =~ ~s(phx-value-id="a-1")
+    assert html =~ ~s(phx-value-ids="a-1")
+
+    loading =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        row_id={& &1.key}
+        loading
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    refute loading =~ ~s(phx-value-op="select")
+    assert loading =~ "data-pc-dt-select-all"
+  end
+
+  test "selectable raises in link mode without an on_select event" do
+    assigns = base()
+
+    assert_raise ArgumentError, ~r/on_select/, fn ->
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} path={@path} selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+    end
+  end
+
   test "action slot renders a trailing column" do
     assigns = base()
 

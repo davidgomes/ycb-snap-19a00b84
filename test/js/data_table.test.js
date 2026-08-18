@@ -264,6 +264,23 @@ describe("PetalDataTable", () => {
     expect(wrap.style.display).toBe("none");
   });
 
+  it("mirrors the select-all header's mixed state onto the checkbox property", () => {
+    const { hook, el } = mountBase({});
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.setAttribute("data-pc-dt-select-all", "");
+    box.dataset.indeterminate = "true";
+    el.appendChild(box);
+
+    hook.updated();
+    expect(box.indeterminate).toBe(true);
+
+    // a full page (or an empty one) is a plain two-state checkbox again
+    delete box.dataset.indeterminate;
+    hook.updated();
+    expect(box.indeterminate).toBe(false);
+  });
+
   it("destroyed cancels a pending search patch", () => {
     const { hook, el, patched } = mount({
       navTemplate: "/orders?search=:term",

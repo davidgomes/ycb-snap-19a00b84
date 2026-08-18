@@ -52,6 +52,28 @@
   `min-w-0 max-w-full` so flex/grid parents can't size it to the
   table's min-content; footer children shrink and wrap. Wide tables
   scroll inside `pc-data-table__scroll`, never the page.
+- **`<.data_table>` row selection (4.12 data table, milestone 3).**
+  `selectable` adds the selection column: one checkbox per row plus a
+  tri-state header that reads the current page (checked / mixed /
+  unchecked) and toggles it as a unit - `State.toggle_page/2`'s
+  grammar, so a partly selected page selects the rest and a full one
+  clears it. Picks live in `state.selected` as string ids and survive
+  sorting, filtering and paging, so a selection can span pages. While
+  anything is selected the toolbar morphs into a selection bar: the
+  count, the new `:bulk_action` slot (`:let` receives the selected
+  ids), and the way out. Selection is socket state rather than URL
+  state, so it always travels by event (`on_select`, defaulting to
+  `on_change`) - `select`, `select_page` and `clear_selection` are
+  `State.handle_op/3` grammar like everything else, and link-mode
+  tables carry the selection across patches with
+  `State.put_selection/2` (`selected?/2`, `toggle_selection/2`,
+  `deselect_ids/2` and `clear_selection/1` round out the API). The
+  header's mixed state is a checkbox property no attribute can set, so
+  the `PetalDataTable` hook mirrors it after every patch.
+- **`table` `:col` `label` accepts any renderable**, not just a string -
+  how a header can carry a control (the data table's tri-state
+  select-all checkbox). Sortable columns without a `sort_key` still
+  fall back to the label when it is a string.
 - **`table` `on_sort` accepts a 1-arity function** of the sort key -
   per-column events/JS, how the data table patches sort URLs.
 - **`pagination` event mode grows up**: `event` accepts a custom event
