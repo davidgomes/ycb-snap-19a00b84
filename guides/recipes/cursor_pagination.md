@@ -107,33 +107,6 @@ This is also why `Flop.push_order/3`, and the table component in `Flop.Phoenix`
 that uses it, put a newly selected field in front of the existing order instead
 of replacing it. Replacing the order could drop the field that made it unique.
 
-## Nullable fields
-
-Ordering by a nullable column loses the rows where it is `NULL`.
-
-```elixir
-%{first: 2, order_by: [:age, :id]}
-```
-
-| page | rows |
-|---|---|
-| 1 | Bo 1, Ada 3 |
-| 2 | Ada 5, Ada 7 |
-| 3 | — |
-
-Cy and Dee never appear, and page 3 reports `has_next_page?: false`. PostgreSQL
-sorts them last, but the cursor comparison is `age > 7`, and no comparison with
-`NULL` is ever true. A second order field does not help, because the `NULL` is
-in the first one.
-
-Until Flop builds null-aware predicates, order by a column that has no `NULL`,
-or sort on a computed field that substitutes a value, as in the [computed fields
-recipe](computed_and_embedded_fields.md):
-
-```sql
-SELECT coalesce(age, -1) AS age_sortable
-```
-
 ## Reading the cursor value
 
 Flop reads the cursor value of each order field from the returned row with

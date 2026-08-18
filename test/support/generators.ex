@@ -49,7 +49,7 @@ defmodule Flop.Generators do
             family_names <- uniq_list_of_strings(length),
             given_names <- uniq_list_of_strings(length),
             owners <- uniq_list_of_owners(length),
-            ages <- uniq_list_of(integer(1..500), length: length),
+            ages <- uniq_list_of(one_of([integer(1..500), constant(nil)]), length: length),
             species <- uniq_list_of_strings(length) do
       [names, ages, species, family_names, given_names, owners]
       |> Enum.zip()
@@ -68,7 +68,7 @@ defmodule Flop.Generators do
 
   def uniq_list_of_owners(len) do
     gen all names <- uniq_list_of_strings(len),
-            ages <- uniq_list_of(integer(1..500), length: len),
+            ages <- uniq_list_of(one_of([integer(1..500), constant(nil)]), length: len),
             emails <- uniq_list_of_strings(len) do
       [names, ages, emails]
       |> Enum.zip()

@@ -2124,7 +2124,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
         )
     end
 
-    test "nil values for cursors are ignored when using for option" do
+    test "handles nil values for cursors when using for option" do
       check all pets <- uniq_list_of_pets(length: 2..2),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}) do
@@ -2197,7 +2197,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                "cursor pagination is not supported for alias fields"
     end
 
-    test "nil values for cursors are ignored when not using for option" do
+    test "handles nil values for cursors when not using for option" do
       check all pets <- uniq_list_of_pets(length: 2..2),
                 directions <- order_directions(%Pet{}) do
         checkin_checkout()
@@ -2254,6 +2254,64 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                  %Flop{first: 1, after: end_cursor, order_by: [:trip]},
                  for: MyApp.WalkingDistances
                )
+    end
+
+    test "cursor pagination works across pages with nullable columns" do
+      Repo.delete_all(Pet)
+      Repo.delete_all(Owner)
+
+      o1 = Repo.insert!(%Owner{name: "Owner 1", age: nil})
+      o2 = Repo.insert!(%Owner{name: "Owner 2", age: 30})
+
+      _p1 = Repo.insert!(%Pet{name: "A", age: nil, owner_id: o1.id})
+      _p2 = Repo.insert!(%Pet{name: "B", age: 10, owner_id: o2.id})
+      _p3 = Repo.insert!(%Pet{name: "C", age: 20, owner_id: nil})
+      _p4 = Repo.insert!(%Pet{name: "D", age: nil, owner_id: o2.id})
+
+      # Test asc (nulls last by default)
+      all_asc =
+        Pet
+        |> join(:left, [p], o in assoc(p, :owner), as: :owner)
+        |> preload(:owner)
+        |> Flop.all(%Flop{order_by: [:age, :name], order_directions: [:asc, :asc]}, for: Pet)
+
+      # Walk page by page with first: 2
+      {:ok, {page1, meta1}} =
+        Pet
+        |> join(:left, [p], o in assoc(p, :owner), as: :owner)
+        |> preload(:owner)
+        |> Flop.validate_and_run(%Flop{first: 2, order_by: [:age, :name], order_directions: [:asc, :asc]}, for: Pet)
+
+      assert meta1.has_next_page? == true
+
+      {:ok, {page2, meta2}} =
+        Pet
+        |> join(:left, [p], o in assoc(p, :owner), as: :owner)
+        |> preload(:owner)
+        |> Flop.validate_and_run(%Flop{first: 2, after: meta1.end_cursor, order_by: [:age, :name], order_directions: [:asc, :asc]}, for: Pet)
+
+      assert page1 ++ page2 == all_asc
+
+      # Test asc_nulls_first
+      all_nulls_first =
+        Pet
+        |> join(:left, [p], o in assoc(p, :owner), as: :owner)
+        |> preload(:owner)
+        |> Flop.all(%Flop{order_by: [:age, :name], order_directions: [:asc_nulls_first, :asc]}, for: Pet)
+
+      {:ok, {nf_page1, nf_meta1}} =
+        Pet
+        |> join(:left, [p], o in assoc(p, :owner), as: :owner)
+        |> preload(:owner)
+        |> Flop.validate_and_run(%Flop{first: 2, order_by: [:age, :name], order_directions: [:asc_nulls_first, :asc]}, for: Pet)
+
+      {:ok, {nf_page2, _nf_meta2}} =
+        Pet
+        |> join(:left, [p], o in assoc(p, :owner), as: :owner)
+        |> preload(:owner)
+        |> Flop.validate_and_run(%Flop{first: 2, after: nf_meta1.end_cursor, order_by: [:age, :name], order_directions: [:asc_nulls_first, :asc]}, for: Pet)
+
+      assert nf_page1 ++ nf_page2 == all_nulls_first
     end
   end
 
