@@ -5,13 +5,17 @@ defmodule GenQueue.Adapters.Oban do
   `Oban` is not started with your application. Instead, the `GenQueue` module
   using this adapter must be placed within your supervision tree. Any `Oban`
   option can be placed alongside the `:adapter` option of your `GenQueue`
-  config.
+  config, and is passed through to `Oban` untouched.
 
       config :my_app, Enqueuer, [
         adapter: GenQueue.Adapters.Oban,
         repo: MyApp.Repo,
         queues: [default: 10]
       ]
+
+  This includes the `:name` used to register the `Oban` supervisor, which
+  jobs are pushed to. It defaults to `Oban` - the same default `Oban` itself
+  uses.
   """
 
   use GenQueue.JobAdapter
@@ -33,7 +37,7 @@ defmodule GenQueue.Adapters.Oban do
     * `{:ok, pid}` if the supervisor was started
     * `{:error, reason}` if there was an error
   """
-  @spec start_link(gen_queue :: GenQueue.t(), opts :: Keyword.t()) :: Supervisor.on_start()
+  @spec start_link(gen_queue :: GenQueue.t(), opts :: Keyword.t()) :: GenServer.on_start()
   def start_link(gen_queue, opts) do
     gen_queue
     |> build_config(opts)
