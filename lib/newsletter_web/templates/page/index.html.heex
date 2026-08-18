@@ -1,6 +1,7 @@
 <section class="phx-hero">
   <h1><%= gettext "Welcome to %{name}!", name: "Phoenix" %></h1>
   <p>Peace of mind from prototype to production</p>
+  <p><%= link "Subscribe to the newsletter", to: Routes.subscriber_path(@conn, :new) %></p>
 </section>
 
 <section class="row">

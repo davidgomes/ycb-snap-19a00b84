@@ -18,6 +18,8 @@ defmodule NewsletterWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :index
+    get "/subscribe", SubscriberController, :new
+    post "/subscribe", SubscriberController, :create
   end
 
   # Other scopes may use custom stacks.
