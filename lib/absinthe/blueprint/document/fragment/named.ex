@@ -8,6 +8,7 @@ defmodule Absinthe.Blueprint.Document.Fragment.Named do
   defstruct [
     :name,
     :type_condition,
+    :description,
     selections: [],
     directives: [],
     source_location: nil,

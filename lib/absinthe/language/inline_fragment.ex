@@ -4,12 +4,14 @@ defmodule Absinthe.Language.InlineFragment do
   alias Absinthe.{Blueprint, Language}
 
   defstruct type_condition: nil,
+            description: nil,
             directives: [],
             selection_set: nil,
             loc: %{line: nil}
 
   @type t :: %__MODULE__{
           type_condition: nil | Language.NamedType.t(),
+          description: nil | String.t(),
           directives: [Language.Directive.t()],
           selection_set: Language.SelectionSet.t(),
           loc: Language.loc_t()
@@ -18,6 +20,7 @@ defmodule Absinthe.Language.InlineFragment do
   defimpl Blueprint.Draft do
     def convert(node, doc) do
       %Blueprint.Document.Fragment.Inline{
+        description: node.description,
         type_condition: Blueprint.Draft.convert(node.type_condition, doc),
         selections: Blueprint.Draft.convert(node.selection_set.selections, doc),
         directives: Blueprint.Draft.convert(node.directives, doc),

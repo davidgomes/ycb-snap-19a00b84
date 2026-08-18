@@ -6,6 +6,7 @@ defmodule Absinthe.Blueprint.Document.Fragment.Inline do
   @enforce_keys [:type_condition]
   defstruct [
     :type_condition,
+    :description,
     selections: [],
     directives: [],
     source_location: nil,

@@ -21,6 +21,25 @@ defmodule Absinthe.Language.FragmentTest do
                ]
              } = from_input(@query)
     end
+
+    @query """
+    "Description for FooFields"
+    fragment FooFields on Foo {
+      foo
+      bar
+    }
+    """
+    test "builds a Document.Fragment.Named.t with description" do
+      assert %Blueprint.Document.Fragment.Named{
+               name: "FooFields",
+               description: "Description for FooFields",
+               type_condition: %Blueprint.TypeReference.Name{name: "Foo"},
+               selections: [
+                 %Blueprint.Document.Field{name: "foo"},
+                 %Blueprint.Document.Field{name: "bar"}
+               ]
+             } = from_input(@query)
+    end
   end
 
   defp from_input(text) do

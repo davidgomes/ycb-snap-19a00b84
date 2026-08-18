@@ -281,6 +281,46 @@ defmodule Absinthe.Language.RenderTest do
     assert_rendered(@sdl)
   end
 
+  test "for operations with descriptions" do
+    assert_rendered("""
+    "A simple query description"
+    query SimpleQuery {
+      version
+    }
+    """)
+
+    assert_rendered("""
+    \"\"\"
+    A multiline description
+    for an operation
+    \"\"\"
+    mutation DoSomething($input: String!) {
+      doSomething(input: $input)
+    }
+    """)
+  end
+
+  test "for fragments with descriptions" do
+    assert_rendered("""
+    "User fragment description"
+    fragment userFragment on User {
+      id
+      name
+    }
+    """)
+
+    assert_rendered("""
+    \"\"\"
+    Multiline description
+    for a fragment
+    \"\"\"
+    fragment pageFragment on Page @defer {
+      id
+      title
+    }
+    """)
+  end
+
   defp assert_rendered(graphql) do
     {:ok, blueprint} = Absinthe.Phase.Parse.run(graphql, [])
     rendered_graphql = inspect(blueprint.input, pretty: true)

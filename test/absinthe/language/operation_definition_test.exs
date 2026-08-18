@@ -53,6 +53,24 @@ defmodule Absinthe.Language.OperationDefinitionTest do
                ]
              } = from_input(@query)
     end
+
+    @query """
+    "A description for Foo"
+    query Foo {
+      foo
+    }
+    """
+    test "builds an Operation.t with description" do
+      assert %Blueprint.Document.Operation{
+               name: "Foo",
+               type: :query,
+               description: "A description for Foo",
+               source_location: %Blueprint.SourceLocation{line: 2},
+               selections: [
+                 %Blueprint.Document.Field{name: "foo"}
+               ]
+             } = from_input(@query)
+    end
   end
 
   defp from_input(text) do

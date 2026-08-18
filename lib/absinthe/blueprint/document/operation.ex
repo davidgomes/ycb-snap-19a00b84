@@ -7,6 +7,7 @@ defmodule Absinthe.Blueprint.Document.Operation do
   defstruct [
     :name,
     :type,
+    :description,
     current: false,
     selections: [],
     directives: [],
