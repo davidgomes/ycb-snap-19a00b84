@@ -3,6 +3,21 @@
 
 #### Fixed
 
+- **`data_table`'s filter and column menus sit in the page again.**
+  They rode the popover's top-layer mode, where the panel is painted
+  outside the document and JavaScript has to re-anchor it against the
+  viewport on every scroll, resize and patch - a chase that flashed at
+  0,0 before it started, lost its place under LiveView patches, and
+  drifted when a mobile keyboard resized the visual viewport. Each of
+  those got its own fix; the menus now avoid the whole class by being
+  ordinary anchored popovers, positioned by CSS next to their trigger
+  and scrolling with the toolbar. Long lists still cap and scroll
+  inside the panel. In event mode the Apply that pushes the filter now
+  closes its own editor, so filter columns no longer mount
+  `PetalDataTable` - the hook is link mode's URL wiring plus the
+  tri-state selection checkbox, nothing else. (`top_layer` itself is
+  unchanged and still the answer for a popover inside an
+  `overflow: hidden` container.)
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to

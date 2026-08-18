@@ -4772,14 +4772,9 @@ export const PetalDataTable = {
     // popover, navigate
     this.onSubmit = (e) => {
       const form = e.target.closest(".pc-data-table__filter-form");
-      if (!form) return;
-
-      // event mode: the form pushes its own phx-submit - only the
-      // popover close is ours
-      if (!form.hasAttribute("data-pc-dt-filter")) {
-        this.closePopover(form);
-        return;
-      }
+      // event mode's editors push and close themselves from one JS
+      // command, and go unmarked - only link mode's Apply is ours
+      if (!form || !form.hasAttribute("data-pc-dt-filter")) return;
 
       e.preventDefault();
       clearTimeout(this.searchTimer);
@@ -4854,15 +4849,6 @@ export const PetalDataTable = {
   closePopover(form) {
     const panel = form.closest(".pc-popover__panel");
     if (!panel) return;
-    if (
-      panel.hasAttribute("popover") &&
-      typeof panel.hidePopover === "function"
-    ) {
-      // top-layer panels close through the native API, which also
-      // restores focus and light-dismiss state
-      panel.hidePopover();
-      return;
-    }
     panel.style.display = "none";
     const trigger = document.getElementById(`${panel.id}-trigger`);
     if (trigger) trigger.setAttribute("aria-expanded", "false");

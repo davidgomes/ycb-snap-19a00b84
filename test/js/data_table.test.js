@@ -221,7 +221,7 @@ describe("PetalDataTable", () => {
     expect(url).toContain("filters[0][field]=email");
   });
 
-  it("closes a top-layer panel through the native popover API", () => {
+  it("closing an editor collapses its trigger too", () => {
     const { el, patched, form } = mountWithFilter({
       navTemplate: "/orders?:filters",
       filters: [],
@@ -233,17 +233,19 @@ describe("PetalDataTable", () => {
       `,
     });
 
-    const panel = el.querySelector(".pc-popover__panel");
-    panel.setAttribute("popover", "auto");
-    const hidden = [];
-    panel.hidePopover = () => hidden.push(true);
+    const trigger = document.createElement("button");
+    trigger.id = "pop-trigger";
+    trigger.setAttribute("aria-expanded", "true");
+    document.body.appendChild(trigger);
 
     submit(form);
-    expect(hidden).toEqual([true]);
+    expect(el.querySelector(".pc-popover__panel").style.display).toBe("none");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(patched).toHaveLength(1);
+    trigger.remove();
   });
 
-  it("event mode: submit only closes the popover - no interception, no navigation", () => {
+  it("event mode: an unmarked form is none of the hook's business", () => {
     const { el, patched } = mountBase({});
     delete el.dataset.navTemplate;
     const wrap = document.createElement("div");
@@ -259,9 +261,10 @@ describe("PetalDataTable", () => {
     const e = new Event("submit", { bubbles: true, cancelable: true });
     form.dispatchEvent(e);
 
+    // the form's own phx-submit pushes and closes it
     expect(e.defaultPrevented).toBe(false);
     expect(patched).toEqual([]);
-    expect(wrap.style.display).toBe("none");
+    expect(wrap.style.display).toBe("");
   });
 
   it("mirrors the indeterminate stamp onto the DOM property on mount and update", () => {

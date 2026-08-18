@@ -108,11 +108,12 @@ defmodule PetalComponents.DataTableTest do
     # active trigger reads the predicate; its clear button posts removal
     assert html =~ "Status is any of Pending, Paid"
     assert html =~ ~s(aria-label="Clear Status filter")
-    # event mode carries the op grammar in hidden inputs; the hook mounts
-    # only to close top-layer popovers - no URL wiring
+    # event mode carries the op grammar in hidden inputs, and Apply closes
+    # its own in-page editor - no hook, no top-layer panel, no URL wiring
     assert html =~ ~s(name="op" value="filter")
-    assert html =~ ~s(phx-hook="PetalDataTable")
-    assert html =~ ~s(popover="auto")
+    assert Regex.match?(~r/phx-submit="[^"]*push[^"]*hide[^"]*"/, html)
+    refute html =~ "PetalDataTable"
+    refute html =~ ~s(popover="auto")
     refute html =~ "data-nav-template"
     refute html =~ "data-filters="
   end
