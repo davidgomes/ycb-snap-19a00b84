@@ -112,7 +112,12 @@ defmodule PetalComponents.DataTableTest do
     # only to close top-layer popovers - no URL wiring
     assert html =~ ~s(name="op" value="filter")
     assert html =~ ~s(phx-hook="PetalDataTable")
-    assert html =~ ~s(popover="auto")
+    # in-page menu anatomy: trigger and panel are siblings under a
+    # relatively positioned wrapper, so the page carries them together
+    assert html =~ ~s(data-pc-menu-trigger="t-filter-email")
+    assert html =~ ~s(<div class="pc-popover">)
+    assert html =~ ~s(hidden data-pc-menu)
+    refute html =~ ~s(popover="auto")
     refute html =~ "data-nav-template"
     refute html =~ "data-filters="
   end
@@ -334,6 +339,9 @@ defmodule PetalComponents.DataTableTest do
 
     # the hidden column leaves the table but stays listed in the dropdown
     refute html =~ "amy@x.com"
+    # the Columns trigger is hook-driven; without the hook it is a dead button
+    assert html =~ ~s(phx-hook="PetalDataTable")
+    assert html =~ ~s(data-pc-menu-trigger="t-columns")
     assert html =~ ~s(phx-value-op="toggle_column")
     assert html =~ ~s(phx-value-field="email")
     # the last visible column's checkbox is disabled - a table needs one
