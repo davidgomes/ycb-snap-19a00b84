@@ -237,6 +237,100 @@ defmodule PetalComponents.TableTest do
     assert html =~ "pc-table__th--sticky"
   end
 
+  test "selectable renders a header checkbox and a checkbox per row, checked from `selected`" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.table
+        rows={[%{id: 1, name: "Ada"}, %{id: 2, name: "Bea"}]}
+        row_id={& &1.id}
+        selectable
+        selected={[1]}
+      >
+        <:col :let={r} label="Name">{r.name}</:col>
+      </.table>
+      """)
+
+    assert html =~ "data-pc-dt-select-all"
+    assert html =~ ~s(pc-table__th--select)
+    assert html =~ ~s(pc-table__td--select)
+    assert Enum.count(String.split(html, "type=\"checkbox\"")) - 1 == 3
+    assert html =~ ~s(phx-value-id="1")
+    assert html =~ ~s(phx-value-id="2")
+  end
+
+  test "selectable header checkbox is checked when every row is selected, else indeterminate" do
+    assigns = %{}
+
+    select_all_input = fn html ->
+      html |> Regex.run(~r/<input[^>]*data-pc-dt-select-all[^>]*>/) |> List.first()
+    end
+
+    # the bare `checked` attribute (not `phx-value-checked="..."`)
+    bare_checked? = fn tag -> Regex.match?(~r/(?<!-)\bchecked(?!=)/, tag) end
+
+    all_selected =
+      rendered_to_string(~H"""
+      <.table rows={[%{id: 1}, %{id: 2}]} row_id={& &1.id} selectable selected={[1, 2]}>
+        <:col :let={r} label="Id">{r.id}</:col>
+      </.table>
+      """)
+      |> select_all_input.()
+
+    assert bare_checked?.(all_selected)
+    refute all_selected =~ "data-indeterminate"
+
+    some_selected =
+      rendered_to_string(~H"""
+      <.table rows={[%{id: 1}, %{id: 2}]} row_id={& &1.id} selectable selected={[1]}>
+        <:col :let={r} label="Id">{r.id}</:col>
+      </.table>
+      """)
+      |> select_all_input.()
+
+    refute bare_checked?.(some_selected)
+    assert some_selected =~ ~s(data-indeterminate="true")
+
+    none_selected =
+      rendered_to_string(~H"""
+      <.table rows={[%{id: 1}, %{id: 2}]} row_id={& &1.id} selectable selected={[]}>
+        <:col :let={r} label="Id">{r.id}</:col>
+      </.table>
+      """)
+      |> select_all_input.()
+
+    refute bare_checked?.(none_selected)
+    refute none_selected =~ "data-indeterminate"
+  end
+
+  test "selectable widens the empty-state colspan by one" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.table rows={[]} row_id={& &1.id} selectable>
+        <:col :let={r} label="Name">{r.name}</:col>
+        <:col :let={r} label="Email">{r.email}</:col>
+        <:empty_state>Nothing here</:empty_state>
+      </.table>
+      """)
+
+    assert html =~ ~s(colspan="3")
+  end
+
+  test "selectable requires row_id" do
+    assigns = %{}
+
+    assert_raise ArgumentError, ~r/row_id/, fn ->
+      rendered_to_string(~H"""
+      <.table rows={[%{id: 1}]} selectable>
+        <:col :let={r} label="Id">{r.id}</:col>
+      </.table>
+      """)
+    end
+  end
+
   test "footer slot renders a tfoot totals row" do
     assigns = %{}
 

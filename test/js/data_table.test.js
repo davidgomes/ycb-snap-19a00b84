@@ -275,4 +275,30 @@ describe("PetalDataTable", () => {
     expect(patched).toEqual([]);
     el.remove();
   });
+
+  it("mount and update sync the header checkbox's indeterminate DOM property", () => {
+    const el = document.createElement("div");
+    el.className = "pc-data-table";
+    el.innerHTML = `<input type="checkbox" data-pc-dt-select-all data-indeterminate="true" />`;
+    document.body.appendChild(el);
+
+    const hook = Object.create(hooks.PetalDataTable);
+    hook.el = el;
+    hook.mounted();
+
+    const box = el.querySelector("[data-pc-dt-select-all]");
+    expect(box.indeterminate).toBe(true);
+
+    box.dataset.indeterminate = "false";
+    hook.updated();
+    expect(box.indeterminate).toBe(false);
+
+    hook.destroyed();
+    el.remove();
+  });
+
+  it("syncSelectAll is a no-op without a select-all checkbox in the DOM", () => {
+    const { hook } = mount({});
+    expect(() => hook.updated()).not.toThrow();
+  });
 });

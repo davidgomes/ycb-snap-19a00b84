@@ -363,6 +363,86 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "pc-data-table__actions"
   end
 
+  test "selectable renders the tri-state header checkbox and per-row checkboxes" do
+    assigns = base(%{state: %State{total: 74}})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        path={@path}
+        selectable
+        row_id={& &1.name}
+        selected={["Amy"]}
+        on_select="select"
+        on_select_all="select_all"
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert html =~ "data-pc-dt-select-all"
+    assert html =~ ~s(phx-click="select_all")
+    assert html =~ ~s(phx-value-id="Amy")
+    assert html =~ ~s(phx-value-id="Bea")
+    assert html =~ ~s(phx-hook="PetalDataTable")
+  end
+
+  test "the toolbar morphs into a selection bar once a row is selected" do
+    assigns = base(%{state: %State{total: 74}})
+
+    unselected =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} path={@path} selectable row_id={& &1.name}>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    refute unselected =~ "pc-data-table__toolbar--selecting"
+
+    selecting =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        path={@path}
+        selectable
+        searchable
+        row_id={& &1.name}
+        selected={["Amy", "Bea"]}
+        on_select_all="select_all"
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:bulk_actions :let={selected}>
+          <button type="button">Delete {length(selected)}</button>
+        </:bulk_actions>
+      </.data_table>
+      """)
+
+    assert selecting =~ "pc-data-table__toolbar--selecting"
+    assert selecting =~ "2 selected"
+    assert selecting =~ "Clear selection"
+    assert selecting =~ ~s(phx-value-checked="false")
+    assert selecting =~ "Delete 2"
+    # the normal toolbar's search/filter chrome is swapped out, not stacked
+    refute selecting =~ "pc-data-table__search"
+  end
+
+  test "selectable requires row_id" do
+    assigns = base(%{state: %State{total: 74}})
+
+    assert_raise ArgumentError, ~r/row_id/, fn ->
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} path={@path} selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+    end
+  end
+
   test "raises without either wiring mode" do
     assigns = base(%{path: nil})
 
