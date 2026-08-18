@@ -572,7 +572,7 @@ defmodule Ewebmachine.Core do
       
       {base_uri, conn, state} = resource_call(conn, state, :base_uri)
       base_uri = if String.last(base_uri) == "/" do
-	String.slice(base_uri,0..-2)
+	String.slice(base_uri,0..-2//1)
       else
 	base_uri
       end

@@ -44,7 +44,7 @@ defmodule Hello do
     resources_plugs nomatch_404: true
     
     resource "/hello/:name" do %{name: name} after 
-      content_types_provided do: ['application/xml': :to_xml]
+      content_types_provided do: ["application/xml": :to_xml]
       defh to_xml(conn, state), do: {"<Person><name>#{state.name}</name></Person>", conn, state}
     end
     
@@ -52,7 +52,7 @@ defmodule Hello do
       plug ApiCommon # this is also a plug pipeline
       
       allowed_methods do: ["GET", "PUT", "DELETE"]
-      content_types_accepted do: ['application/json': :from_json]
+      content_types_accepted do: ["application/json": :from_json]
 
       defh resource_exists(conn, state) do
 	case Hello.Db.get(state.name) do
@@ -74,7 +74,7 @@ defmodule Hello do
       plug ApiCommon #this is also a plug pipeline
       
       allowed_methods do: ["POST"]
-      content_types_accepted do: ['application/json': :from_json]
+      content_types_accepted do: ["application/json": :from_json]
       post_is_create do: true
 
       defh create_path(conn, state), do: {state.newpath, conn, state}
@@ -91,7 +91,7 @@ defmodule Hello do
       plug ApiCommon #this is also a plug pipeline
       
       allowed_methods do: ["POST"]
-      content_types_accepted do: ['application/json': :from_json]
+      content_types_accepted do: ["application/json": :from_json]
       post_is_create do: true
       
       defh create_path(conn, state), do: {state.newpath, conn, state}

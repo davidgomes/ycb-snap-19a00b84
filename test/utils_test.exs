@@ -36,7 +36,7 @@ defmodule Ewebmachine.Core.UtilsTest do
 
   test "rfc1123 date parsing" do
     assert {{2009,12,30},{14,39,2}} = convert_request_date("Wed, 30 Dec 2009 14:39:02 GMT")
-    assert :bad_date = convert_request_date(:toto)
+    assert :bad_date = convert_request_date("toto")
   end
 
   test "content type normalization roundtrip" do
