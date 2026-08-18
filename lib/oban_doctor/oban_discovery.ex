@@ -28,6 +28,7 @@ defmodule ObanDoctor.ObanDiscovery do
           repo: MyApp.Repo,               # Repo module (nil if not found)
           queues: [:default, :emails],    # Queue names (merged from all configs)
           plugins: [Oban.Plugins.Pruner], # Plugin modules (merged from all configs)
+          engine: Oban.Engines.Basic,     # Engine module (nil if not set)
           insert_trigger: false,          # insert_trigger setting (nil if never set)
           file: "config/config.exs",      # Primary source file (first definition)
           line: 95                        # Line number of first definition
@@ -70,6 +71,7 @@ defmodule ObanDoctor.ObanDiscovery do
       repo: merge_value(earlier.repo, later.repo),
       queues: merge_value(earlier.queues, later.queues),
       plugins: merge_value(earlier.plugins, later.plugins),
+      engine: merge_value(earlier.engine, later.engine),
       insert_trigger: merge_value(earlier.insert_trigger, later.insert_trigger),
       # Keep the first file/line as the "primary" location
       file: earlier.file,
@@ -162,6 +164,7 @@ defmodule ObanDoctor.ObanDiscovery do
       repo: extract_repo(opts),
       queues: extract_queues(opts),
       plugins: extract_plugins(opts),
+      engine: extract_engine(opts),
       insert_trigger: extract_insert_trigger(opts),
       file: file_path,
       line: Keyword.get(meta, :line)
@@ -191,6 +194,19 @@ defmodule ObanDoctor.ObanDiscovery do
 
       repo when is_atom(repo) and not is_nil(repo) ->
         repo
+
+      _ ->
+        nil
+    end
+  end
+
+  defp extract_engine(opts) do
+    case Keyword.get(opts, :engine) do
+      {:__aliases__, _, parts} ->
+        Module.concat(parts)
+
+      engine when is_atom(engine) and not is_nil(engine) ->
+        engine
 
       _ ->
         nil
