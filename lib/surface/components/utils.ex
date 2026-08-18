@@ -75,15 +75,6 @@ defmodule Surface.Components.Utils do
     Keyword.delete(opts, :csrf_token)
   end
 
-  def opts_to_phx_opts(opts) do
-    for {key, value} <- opts do
-      case key do
-        :trigger_action -> {:"phx-trigger-action", value}
-        _ -> {key, value}
-      end
-    end
-  end
-
   def events_to_opts(assigns) do
     [
       event_to_opts(assigns.capture_click, :"phx-capture-click"),

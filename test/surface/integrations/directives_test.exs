@@ -831,6 +831,23 @@ defmodule Surface.DirectivesTest do
       assert js_attribute(doc, "phx-click") == [["push", %{"event" => "ok"}]]
     end
 
+    test "as a literal string on the newly supported events" do
+      html =
+        render_surface do
+          ~F"""
+          <div
+            :on-auto-recover="recover"
+            :on-viewport-top="prepend"
+            :on-viewport-bottom="append"
+          />
+          """
+        end
+
+      assert html =~ ~s(phx-auto-recover="recover")
+      assert html =~ ~s(phx-viewport-top="prepend")
+      assert html =~ ~s(phx-viewport-bottom="append")
+    end
+
     defmodule LiveComponentUsingOnEvent do
       use Surface.LiveComponent
 
