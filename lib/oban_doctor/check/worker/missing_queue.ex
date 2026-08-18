@@ -4,9 +4,15 @@ defmodule ObanDoctor.Check.Worker.MissingQueue do
 
   Workers should only use queues that are configured in the application's Oban setup.
   Using an undefined queue means the job will never be processed.
+
+  ## References
+
+  - [Oban Queues Configuration](https://hexdocs.pm/oban/Oban.html#module-queues)
   """
 
   use ObanDoctor.Check, category: :worker
+
+  @doc_url "https://hexdocs.pm/oban/Oban.html#module-queues"
 
   @impl true
   def id, do: :missing_queue
@@ -41,12 +47,14 @@ defmodule ObanDoctor.Check.Worker.MissingQueue do
     Issue.new(
       check: __MODULE__,
       severity: default_severity(),
-      message: "Worker #{inspect(worker.module)} uses undefined queue :#{worker.queue}",
+      message:
+        "Worker #{inspect(worker.module)} uses undefined queue :#{worker.queue}. See #{@doc_url}",
       file: worker.file,
       line: worker.line,
       meta: %{
         worker: worker.module,
-        queue: worker.queue
+        queue: worker.queue,
+        doc_url: @doc_url
       }
     )
   end

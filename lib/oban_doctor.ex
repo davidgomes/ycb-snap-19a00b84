@@ -23,8 +23,10 @@ defmodule ObanDoctor do
   ### Worker Checks
 
     * `MissingQueue` - Workers using queues not defined in Oban config
-
-  More checks coming soon.
+    * `StateGroupUsage` - Workers using unsafe state groups (:all, :final, :historical) in unique config
+    * `UniquenessMissingStates` - Workers with unique config missing recommended states
+    * `UniqueWithoutKeys` - Workers with unique on :args without explicit keys
+    * `NoMaxAttempts` - Workers using default max_attempts (20)
   """
 
   alias ObanDoctor.WorkerDiscovery

@@ -25,6 +25,8 @@ defmodule ObanDoctor.Check.Worker.UniqueWithoutKeysTest do
       assert issue.severity == :info
       assert issue.check == UniqueWithoutKeys
       assert issue.message =~ "without explicit keys"
+      assert issue.message =~ "https://hexdocs.pm/oban/Oban.Worker.html#module-unique-jobs"
+      assert issue.meta.doc_url == "https://hexdocs.pm/oban/Oban.Worker.html#module-unique-jobs"
     end
 
     test "returns no issues when worker has unique with keys" do

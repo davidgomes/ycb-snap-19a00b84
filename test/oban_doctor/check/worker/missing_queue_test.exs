@@ -28,8 +28,10 @@ defmodule ObanDoctor.Check.Worker.MissingQueueTest do
       assert issue.severity == :error
       assert issue.check == MissingQueue
       assert issue.message =~ "undefined queue :undefined_queue"
+      assert issue.message =~ "https://hexdocs.pm/oban/Oban.html#module-queues"
       assert issue.meta.worker == MyApp.Workers.BadWorker
       assert issue.meta.queue == :undefined_queue
+      assert issue.meta.doc_url == "https://hexdocs.pm/oban/Oban.html#module-queues"
     end
 
     test "returns no issues when worker uses defined queue" do

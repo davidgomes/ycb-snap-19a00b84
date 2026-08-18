@@ -25,6 +25,8 @@ defmodule ObanDoctor.Check.Worker.NoMaxAttemptsTest do
       assert issue.severity == :info
       assert issue.check == NoMaxAttempts
       assert issue.message =~ "default max_attempts (20)"
+      assert issue.message =~ "https://hexdocs.pm/oban/Oban.Worker.html#module-defining-workers"
+      assert issue.meta.doc_url == "https://hexdocs.pm/oban/Oban.Worker.html#module-defining-workers"
     end
 
     test "returns no issues when worker has explicit max_attempts" do

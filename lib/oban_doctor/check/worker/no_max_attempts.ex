@@ -18,9 +18,15 @@ defmodule ObanDoctor.Check.Worker.NoMaxAttempts do
 
   Explicit reasonable limit:
       use Oban.Worker, queue: :default, max_attempts: 3
+
+  ## References
+
+  - [Oban Worker Options Documentation](https://hexdocs.pm/oban/Oban.Worker.html#module-defining-workers)
   """
 
   use ObanDoctor.Check, category: :worker
+
+  @doc_url "https://hexdocs.pm/oban/Oban.Worker.html#module-defining-workers"
 
   @impl true
   def id, do: :no_max_attempts
@@ -49,11 +55,13 @@ defmodule ObanDoctor.Check.Worker.NoMaxAttempts do
     Issue.new(
       check: __MODULE__,
       severity: default_severity(),
-      message: "Worker #{inspect(worker.module)} uses default max_attempts (20)",
+      message:
+        "Worker #{inspect(worker.module)} uses default max_attempts (20). See #{@doc_url}",
       file: worker.file,
       line: worker.line,
       meta: %{
-        worker: worker.module
+        worker: worker.module,
+        doc_url: @doc_url
       }
     )
   end

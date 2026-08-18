@@ -25,7 +25,53 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsageTest do
       assert issue.severity == :error
       assert issue.check == StateGroupUsage
       assert issue.message =~ ":all state group"
-      assert issue.message =~ "cannot be re-enqueued"
+      assert issue.message =~ "terminal state"
+      assert issue.message =~ "https://hexdocs.pm/oban/Oban.Worker.html#module-unique-jobs"
+      assert issue.meta.doc_url == "https://hexdocs.pm/oban/Oban.Worker.html#module-unique-jobs"
+    end
+
+    test "returns error when worker uses states: :final" do
+      workers = [
+        %{
+          module: MyApp.Workers.BadWorker,
+          file: "lib/my_app/workers/bad_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :final],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = StateGroupUsage.run(context)
+
+      assert length(issues) == 1
+      [issue] = issues
+      assert issue.severity == :error
+      assert issue.message =~ ":final state group"
+    end
+
+    test "returns error when worker uses states: :historical" do
+      workers = [
+        %{
+          module: MyApp.Workers.BadWorker,
+          file: "lib/my_app/workers/bad_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :historical],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = StateGroupUsage.run(context)
+
+      assert length(issues) == 1
+      [issue] = issues
+      assert issue.severity == :error
+      assert issue.message =~ ":historical state group"
     end
 
     test "returns error when worker uses states: [:all]" do
@@ -64,6 +110,25 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsageTest do
       issues = StateGroupUsage.run(context)
 
       assert length(issues) == 1
+    end
+
+    test "returns no issues when worker uses :active state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.ActiveWorker,
+          file: "lib/my_app/workers/active_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :active],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = StateGroupUsage.run(context)
+
+      assert issues == []
     end
 
     test "returns no issues when worker uses explicit states" do

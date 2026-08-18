@@ -15,9 +15,15 @@ defmodule ObanDoctor.Check.Worker.UniqueWithoutKeys do
 
   Better - explicit about which args matter:
       unique: [fields: [:args], keys: [:user_id, :action]]
+
+  ## References
+
+  - [Oban Unique Jobs Documentation](https://hexdocs.pm/oban/Oban.Worker.html#module-unique-jobs)
   """
 
   use ObanDoctor.Check, category: :worker
+
+  @doc_url "https://hexdocs.pm/oban/Oban.Worker.html#module-unique-jobs"
 
   @impl true
   def id, do: :unique_without_keys
@@ -53,12 +59,13 @@ defmodule ObanDoctor.Check.Worker.UniqueWithoutKeys do
       check: __MODULE__,
       severity: default_severity(),
       message:
-        "Worker #{inspect(worker.module)} has unique constraint on :args without explicit keys",
+        "Worker #{inspect(worker.module)} has unique constraint on :args without explicit keys. See #{@doc_url}",
       file: worker.file,
       line: worker.line,
       meta: %{
         worker: worker.module,
-        unique_config: worker.unique
+        unique_config: worker.unique,
+        doc_url: @doc_url
       }
     )
   end
