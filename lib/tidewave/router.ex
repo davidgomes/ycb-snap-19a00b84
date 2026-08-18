@@ -59,7 +59,7 @@ defmodule Tidewave.Router do
 
     conn
     |> Plug.Parsers.call(opts)
-    |> MCP.Server.handle_http_message()
+    |> MCP.Transport.HTTP.handle_http_message()
     |> halt()
   end
 
