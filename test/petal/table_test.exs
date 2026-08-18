@@ -222,6 +222,21 @@ defmodule PetalComponents.TableTest do
     assert html =~ "pc-table__sort-icon--active"
   end
 
+  test "a col's header renders markup in place of the label" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.table rows={[%{name: "Ada"}]}>
+        <:col :let={u} label="" header={Phoenix.HTML.raw(~s|<input type="checkbox" />|)}>
+          {u.name}
+        </:col>
+      </.table>
+      """)
+
+    assert html =~ ~s(<input type="checkbox" />)
+  end
+
   test "density, striped and sticky header classes" do
     assigns = %{}
 

@@ -4602,8 +4602,10 @@ export const PetalComboBox = {
 };
 
 // Link-mode wiring for the data table's quick search and rows-per-page
-// select. Event mode posts through plain phx-change forms and never
-// mounts this hook; link mode has no events by design (handle_params is
+// select, plus the two jobs no wiring mode can do in markup alone:
+// closing a top-layer filter popover after an Apply, and the select-all
+// box's indeterminate property. Event mode posts through plain
+// phx-change forms; link mode has no events by design (handle_params is
 // the whole backend), so state changes must become patch URLs. The
 // component renders URL templates (:term / :page_size placeholders,
 // assembled around the already-encoded rest of the query) and a hidden
@@ -4659,6 +4661,23 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+    this.syncTriState();
+  },
+
+  updated() {
+    this.syncTriState();
+  },
+
+  // The select-all box's third state is a DOM property, not an
+  // attribute, so patched markup can never carry it: the server stamps
+  // data-pc-dt-mixed (which paints the dash in CSS) and this mirrors it
+  // onto the property, which is what assistive tech reads as "mixed".
+  // Always assign, never toggle - a box that stops being mixed has to
+  // lose the property too.
+  syncTriState() {
+    this.el.querySelectorAll(".pc-data-table__select-all").forEach((box) => {
+      box.indeterminate = box.dataset.pcDtMixed === "true";
+    });
   },
 
   destroyed() {

@@ -2695,6 +2695,52 @@
     @apply w-4! h-4!;
   }
 
+  /* Row selection: a hairline leading column, the tri-state header box,
+     and the toolbar's selection mode */
+  .pc-data-table__select-th,
+  .pc-data-table__select-td {
+    @apply w-px pr-0;
+  }
+  .pc-data-table__select-all,
+  .pc-data-table__select-row {
+    @apply block;
+  }
+  /* The mixed state paints server-side - a dash instead of a tick, no JS
+     needed for the visual (the hook only mirrors the same attribute onto
+     the indeterminate property, so the two can never disagree). Same
+     token story as the tick: a theme whose primary-600 resolves light
+     swaps --pc-checkbox-dash for a dark-dash URI. */
+  .pc-data-table__select-all[data-pc-dt-mixed="true"] {
+    @apply border-primary-600 bg-primary-600 bg-center bg-no-repeat;
+    background-image: var(
+      --pc-checkbox-dash,
+      url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M4.5 8h7'/%3e%3c/svg%3e")
+    );
+    background-size: 100% 100%;
+  }
+  /* the morph: same box, tinted, so the row of controls reads as one
+     surface that changed mode rather than a bar that appeared */
+  .pc-data-table__toolbar--selecting {
+    @apply rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 dark:border-primary-400/20 dark:bg-primary-400/10;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pc-data-table__toolbar--selecting {
+      animation: pc-dt-selection-in 0.15s ease-out;
+    }
+  }
+  @keyframes pc-dt-selection-in {
+    from {
+      opacity: 0;
+      transform: translateY(-0.25rem);
+    }
+  }
+  .pc-data-table__selection-count {
+    @apply text-sm font-medium tabular-nums text-gray-700 dark:text-gray-200;
+  }
+  .pc-data-table__selection-clear {
+    @apply ml-auto;
+  }
+
   /* Avatars - sizes */
 
   /* dense contexts: chips, table cells - the reui/shadcn size-4/5 band */

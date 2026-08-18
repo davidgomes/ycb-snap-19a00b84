@@ -10,6 +10,12 @@ defmodule PetalComponents.DataTableTest do
     %{name: "Bea", email: "bea@x.com", amount: 40}
   ]
 
+  # selection reads ids off the rows, so its rows carry them
+  @id_rows [
+    %{id: 1, name: "Amy", email: "amy@x.com", amount: 300},
+    %{id: 2, name: "Bea", email: "bea@x.com", amount: 40}
+  ]
+
   defp base(assigns \\ %{}) do
     Map.merge(%{rows: @rows, state: %State{total: 74}, path: "/orders"}, assigns)
   end
@@ -346,6 +352,168 @@ defmodule PetalComponents.DataTableTest do
 
     assert html =~ "/orders?tab=all&amp;" or html =~ "/orders?tab=all&"
     refute html =~ "tab=all?"
+  end
+
+  test "selectable renders a leading checkbox column with a mixed header" do
+    assigns = base(%{rows: @id_rows, selected: [1]})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        path={@path}
+        selectable
+        selected={@selected}
+        on_select="select"
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    # one row of two selected: the header is mixed, not checked
+    assert html =~ ~s(data-pc-dt-mixed="true")
+    assert html =~ ~s(phx-value-op="select_page")
+    # a mixed header fills the page in rather than clearing it
+    assert html =~ ~s(phx-value-op="select_page" phx-value-checked="true")
+    assert html =~ ~s(phx-value-op="select" phx-value-id="1" phx-value-checked="false")
+    assert html =~ ~s(phx-value-op="select" phx-value-id="2" phx-value-checked="true")
+    assert html =~ "pc-data-table__select-th"
+    # selection is event state in link mode too, so the hook rides along
+    assert html =~ ~s(phx-hook="PetalDataTable")
+  end
+
+  test "a fully selected page checks the header and offers the way back" do
+    # "1"/"2" are what phx-value sends back, and they still line up
+    assigns = base(%{rows: @id_rows, selected: ["1", "2"]})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        selected={@selected}
+        on_select="select"
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    refute html =~ "data-pc-dt-mixed"
+    assert html =~ ~s(phx-value-op="select_page" phx-value-checked="false")
+  end
+
+  test "row_id picks the selection id; ids compare as the strings params carry" do
+    assigns = base(%{selected: ["amy@x.com"]})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        path={@path}
+        selectable
+        selected={@selected}
+        row_id={& &1.email}
+        on_select="select"
+      >
+        <:col :let={row} field={:email}>{row.email}</:col>
+      </.data_table>
+      """)
+
+    assert html =~ ~s(phx-value-id="amy@x.com" phx-value-checked="false")
+    assert html =~ ~s(phx-value-id="bea@x.com" phx-value-checked="true")
+  end
+
+  test "the toolbar morphs while a selection is live" do
+    assigns = base(%{rows: @id_rows, selected: [1, 2]})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        searchable
+        selectable
+        selected={@selected}
+        on_select="select"
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:selection_action :let={selected}>
+          <button type="button">Archive {length(selected)}</button>
+        </:selection_action>
+      </.data_table>
+      """)
+
+    assert html =~ "pc-data-table__toolbar--selecting"
+    assert html =~ "2 selected"
+    assert html =~ "Archive 2"
+    assert html =~ ~s(phx-value-op="clear_selection")
+    assert html =~ "Clear selection"
+    # the morph replaces the normal controls, it does not stack with them
+    refute html =~ "pc-data-table__search-input"
+  end
+
+  test "an empty selection leaves the toolbar alone, and no rows disable the header" do
+    assigns = base(%{rows: []})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} path={@path} selectable on_select="select">
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:selection_action>
+          <button type="button">Archive</button>
+        </:selection_action>
+      </.data_table>
+      """)
+
+    refute html =~ "pc-data-table__toolbar--selecting"
+    refute html =~ "Archive"
+    refute html =~ "Clear selection"
+    assert html =~ ~s(pc-data-table__select-all" disabled)
+  end
+
+  test "loading selects nothing: skeleton rows carry no checkboxes" do
+    assigns = base(%{rows: @id_rows, selected: [1]})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        path={@path}
+        loading
+        selectable
+        selected={@selected}
+        on_select="select"
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    refute html =~ "pc-data-table__select-row"
+    refute html =~ "data-pc-dt-mixed"
+    assert html =~ "pc-data-table__select-th"
+  end
+
+  test "raises when selectable has no on_select" do
+    assigns = base()
+
+    assert_raise ArgumentError, ~r/on_select/, fn ->
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} path={@path} selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+    end
   end
 
   test "action slot renders a trailing column" do

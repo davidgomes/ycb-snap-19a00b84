@@ -264,6 +264,37 @@ describe("PetalDataTable", () => {
     expect(wrap.style.display).toBe("none");
   });
 
+  it("mirrors the mixed attribute onto the select-all box's indeterminate property", () => {
+    const el = document.createElement("div");
+    el.className = "pc-data-table";
+    el.innerHTML = `
+      <input
+        type="checkbox"
+        class="pc-checkbox pc-data-table__select-all"
+        data-pc-dt-mixed="true"
+      />
+    `;
+    document.body.appendChild(el);
+
+    const hook = Object.create(hooks.PetalDataTable);
+    hook.el = el;
+    hook.mounted();
+    mounted.push(hook);
+
+    const box = el.querySelector(".pc-data-table__select-all");
+    expect(box.indeterminate).toBe(true);
+
+    // a page that stops being mixed has to lose the property too - the
+    // attribute is the only thing a patch can carry
+    delete box.dataset.pcDtMixed;
+    hook.updated();
+    expect(box.indeterminate).toBe(false);
+
+    box.dataset.pcDtMixed = "true";
+    hook.updated();
+    expect(box.indeterminate).toBe(true);
+  });
+
   it("destroyed cancels a pending search patch", () => {
     const { hook, el, patched } = mount({
       navTemplate: "/orders?search=:term",
