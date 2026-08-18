@@ -2,6 +2,8 @@ defmodule PetalComponents.PopoverTest do
   use ComponentCase
   import PetalComponents.Popover
 
+  alias Phoenix.LiveView.JS
+
   test "renders trigger and hidden panel with default bottom placement" do
     assigns = %{}
 
@@ -97,6 +99,20 @@ defmodule PetalComponents.PopoverTest do
     assert html =~ "pc-popover__panel--top-layer"
     refute html =~ ~s(style="display: none;")
     refute html =~ "phx-click-away"
+  end
+
+  test "hide_popover closes the panel and resets the trigger, composed onto the caller's JS" do
+    assigns = %{close: JS.push("save") |> hide_popover("pop-close")}
+
+    html =
+      rendered_to_string(~H"""
+      <button phx-click={@close}>Save</button>
+      """)
+
+    assert html =~ "save"
+    assert html =~ "#pop-close"
+    assert html =~ "pop-close-trigger"
+    assert html =~ "aria-expanded"
   end
 
   test "passes through custom classes" do

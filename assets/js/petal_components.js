@@ -4738,12 +4738,13 @@ export const PetalComboBox = {
   },
 };
 
-// Link-mode wiring for the data table's quick search and rows-per-page
-// select. Event mode posts through plain phx-change forms and never
-// mounts this hook; link mode has no events by design (handle_params is
-// the whole backend), so state changes must become patch URLs. The
-// component renders URL templates (:term / :page_size placeholders,
-// assembled around the already-encoded rest of the query) and a hidden
+// Link-mode wiring for the data table's quick search, rows-per-page
+// select and filter editors. Event mode posts through plain phx-change
+// forms and mounts this hook only for the selection stamp below; link
+// mode has no events by design (handle_params is the whole backend), so
+// state changes must become patch URLs. The component renders URL
+// templates (:term / :page_size / :filters placeholders, assembled
+// around the already-encoded rest of the query) and a hidden
 // data-phx-link anchor; the hook fills a template in and clicks the
 // anchor so navigation stays LiveView's own.
 export const PetalDataTable = {
@@ -4768,18 +4769,13 @@ export const PetalDataTable = {
 
     // link mode has no events, so a filter editor's Apply becomes a
     // patch built from the form's inputs: replace this field's entry in
-    // the committed filter list (an empty editor removes it), close the
-    // popover, navigate
+    // the committed filter list (an empty editor removes it), navigate.
+    // Closing the editor is not ours in either mode - the form's own
+    // phx-submit hides the panel, so LiveView keeps it hidden across
+    // the patch this navigation triggers.
     this.onSubmit = (e) => {
       const form = e.target.closest(".pc-data-table__filter-form");
-      if (!form) return;
-
-      // event mode: the form pushes its own phx-submit - only the
-      // popover close is ours
-      if (!form.hasAttribute("data-pc-dt-filter")) {
-        this.closePopover(form);
-        return;
-      }
+      if (!form || !form.hasAttribute("data-pc-dt-filter")) return;
 
       e.preventDefault();
       clearTimeout(this.searchTimer);
@@ -4789,7 +4785,6 @@ export const PetalDataTable = {
       const next = this.readFilter(form, field);
       if (next) filters.push(next);
 
-      this.closePopover(form);
       this.patchTo(this.navUrl(filters));
     };
 
@@ -4849,23 +4844,6 @@ export const PetalDataTable = {
     }
 
     return value === "" ? null : { field, op, value };
-  },
-
-  closePopover(form) {
-    const panel = form.closest(".pc-popover__panel");
-    if (!panel) return;
-    if (
-      panel.hasAttribute("popover") &&
-      typeof panel.hidePopover === "function"
-    ) {
-      // top-layer panels close through the native API, which also
-      // restores focus and light-dismiss state
-      panel.hidePopover();
-      return;
-    }
-    panel.style.display = "none";
-    const trigger = document.getElementById(`${panel.id}-trigger`);
-    if (trigger) trigger.setAttribute("aria-expanded", "false");
   },
 
   // Both placeholders resolve from the live DOM in one pass, so

@@ -1,8 +1,32 @@
 # Changelog
 ### Unreleased
 
+#### Added
+
+- **`hide_popover/2` closes an anchored popover by id**, for panel
+  content that acts and then dismisses - a form's Apply, a menu item
+  that navigates: `phx-click={JS.push("save") |> hide_popover("settings")}`.
+  Closing has to go through LiveView's JS rather than a hook writing
+  `style.display`, because `JS.toggle` records the display it set and
+  every patch replays that record.
+
 #### Fixed
 
+- **The data table's menus are in the page again.** Its filter editors
+  and Columns dropdown were top-layer popovers, and the top layer is a
+  viewport-fixed world: the panel leaves the page's coordinate space,
+  so JavaScript has to re-anchor it on every scroll, resize,
+  visual-viewport change and LiveView patch - and any pass that misses
+  leaves a panel stranded away from the button that opened it. They
+  are ordinary anchored popovers now, which the browser keeps glued to
+  their trigger, scrolling with the page for free. Applying a filter
+  closes its editor through LiveView's own display toggle (replayed by
+  the patch that follows, so it stays closed), which leaves event mode
+  needing no JavaScript at all - the `PetalDataTable` hook now mounts
+  only for link mode's URL wiring and the selection header checkbox's
+  indeterminate property. The trade is the one the top layer bought
+  off: an `overflow: hidden` ancestor clips these panels again, and
+  `<.popover top_layer>` remains for the cases that need the escape.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to
