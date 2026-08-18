@@ -3,6 +3,30 @@
 
 #### Fixed
 
+- **`dropdown` panels flip above the trigger when the viewport leaves no
+  room below.** The panel is CSS-anchored under its button, so a menu
+  opened from the last row of a table, a sticky footer bar or an avatar in
+  a bottom tab bar ran straight off the fold - and because the panel hangs
+  off the end of the document there was nothing left to scroll to, so
+  those items were simply unreachable. The new `PetalDropdown` hook
+  measures the room on open and stamps `data-pc-flip="top"` when the menu
+  does not fit below and there is more space above, the same vocabulary
+  the data table's filter panels already use; when NEITHER side can hold
+  the whole menu it caps the panel to the winning side and lets it scroll,
+  so no item ever lands off-screen. It never flips into less room than it
+  came from - a trigger at the top of a short viewport keeps its downward
+  menu and scrolls instead. Opening is not an event a hook can listen for
+  (`JS.toggle` writes `display` from inside nested animation frames, so a
+  command chained after it measures a panel that is still hidden, and
+  `phx:show-end` only lands once the menu has animated in at the wrong end
+  of the trigger), so the hook watches the panel's inline style and
+  measures in the microtask after that write - before the frame paints, so
+  nothing flashes downward first. The flip needs the bundled hooks
+  registered: the documented `hooks: { ...PetalComponents }` spread picks
+  it up, cherry-picked setups should add `PetalDropdown`, and without it
+  the menu opens downward exactly as before. `user_dropdown_menu`,
+  `language_select` and the colour-scheme dropdown compose the same panel,
+  so they flip too.
 - **`command_dialog` now locks background scroll while the palette is
   open.** A native modal `<dialog>` hands you the top layer, the focus
   trap and Escape, but it does not stop the page underneath from

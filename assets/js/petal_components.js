@@ -1662,6 +1662,123 @@ export const PetalPopover = {
   },
 };
 
+// Keeps a dropdown menu inside the viewport. The panel is CSS-anchored
+// under its trigger, which is right until the trigger sits low on the
+// screen: the menu then opens past the bottom edge, and because it hangs
+// off the end of the document there is nothing left to scroll to. On open
+// this hook measures the room and stamps `data-pc-flip="top"` when the
+// panel does not fit below and there is more room above - the CSS does the
+// moving, so an app that never registers hooks keeps today's downward menu.
+//
+// Opening is not an event we can listen for: `JS.toggle` writes `display`
+// from inside nested animation frames, so a command chained after it
+// measures a panel that is still hidden, and `phx:show-end` only lands
+// once the menu has finished animating in at the wrong end of the trigger.
+// A MutationObserver on the style attribute fires as a microtask straight
+// after that write - before the frame paints, so the first frame the user
+// sees is already the flipped one.
+export const PetalDropdown = {
+  mounted() {
+    this.open = false;
+
+    // One-shot geometry, like the data table's panels: an absolutely
+    // positioned menu travels with its trigger, so a scroll has nothing
+    // to chase. Only a resize can change the answer while it is open.
+    this.onResize = () => {
+      if (this.open) this.position();
+    };
+    window.addEventListener("resize", this.onResize);
+
+    this.observer = new MutationObserver(() => this.sync());
+    this.observer.observe(this.el, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+
+    this.sync();
+  },
+
+  // A patch re-renders the panel from the server, dropping the flip stamp
+  // and the height cap this hook owns (the server renders neither) while
+  // LiveView's sticky display keeps an open menu open.
+  updated() {
+    if (this.open) this.position();
+  },
+
+  destroyed() {
+    this.observer.disconnect();
+    window.removeEventListener("resize", this.onResize);
+  },
+
+  // `display` IS the open state: the server renders the panel
+  // `display: none` and the trigger's JS.toggle writes it both ways.
+  sync() {
+    const open = this.el.style.display !== "none";
+    if (open === this.open) return;
+    this.open = open;
+    if (open) this.position();
+    else this.reset();
+  },
+
+  // Cleared on close rather than on open, so a menu keeps the side it
+  // opened on for the whole of its fade-out.
+  reset() {
+    this.el.removeAttribute("data-pc-flip");
+    this.el.style.maxHeight = "";
+    this.el.style.overflowY = "";
+  },
+
+  // The box the menu must stay inside: the visible region when a keyboard
+  // or pinch-zoom has shrunk it, otherwise the window.
+  viewport() {
+    const vv = window.visualViewport;
+
+    return vv
+      ? {
+          top: vv.offsetTop,
+          height: vv.height,
+        }
+      : {
+          top: 0,
+          height: window.innerHeight,
+        };
+  },
+
+  position() {
+    const anchor = this.el.closest(".pc-dropdown");
+    if (!anchor) return;
+
+    // measure with the flip and the cap cleared, so natural height decides
+    this.reset();
+
+    // offsetHeight, not the bounding rect: the open transition scales the
+    // panel to 95%, and a rect read mid-transition under-reads the very
+    // height this decision turns on
+    const height = this.el.offsetHeight;
+    const t = anchor.getBoundingClientRect();
+    if (!height || (!t.top && !t.bottom)) return; // jsdom / not laid out yet
+
+    const vp = this.viewport();
+    // the mt-2/mb-2 the CSS puts between trigger and panel, plus the same
+    // breathing room at the viewport edge the popover keeps
+    const gap = 8;
+    const pad = 8;
+    const below = vp.top + vp.height - t.bottom - gap - pad;
+    const above = t.top - vp.top - gap - pad;
+
+    const flip = height > below && above > below;
+    if (flip) this.el.setAttribute("data-pc-flip", "top");
+
+    // No floor: when the roomier side is a sliver, a scrollable sliver of
+    // menu still beats items rendered past the edge of the screen.
+    const room = flip ? above : below;
+    if (height > room) {
+      this.el.style.maxHeight = `${Math.max(Math.round(room), 0)}px`;
+      this.el.style.overflowY = "auto";
+    }
+  },
+};
+
 // Command palette: client-side filtering + WAI-ARIA combobox keyboard model.
 // Items are hidden, never reordered - the server owns DOM order, so the
 // palette stays safe under LiveView patches. Scoring: value prefix beats
@@ -5467,6 +5584,7 @@ export default {
   PetalTypingEffect,
   PetalInputOTP,
   PetalPopover,
+  PetalDropdown,
   PetalCommand,
   PetalCommandTrigger,
   PetalAurora,

@@ -87,6 +87,25 @@ defmodule PetalComponents.DropdownTest do
       refute html =~ "x-show"
       assert_attribute(html, "phx-click")
     end
+
+    test "the menu panel mounts the flip hook", %{assigns: assigns} do
+      html =
+        rendered_to_string(~H"""
+        <.dropdown label="Dropdown">
+          <.dropdown_menu_item label="Option" />
+        </.dropdown>
+        """)
+
+      # the hook measures the room on open and flips the panel above the
+      # trigger when the viewport leaves none below it
+      hooks =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query(".pc-dropdown__menu-items-wrapper")
+        |> LazyHTML.attribute("phx-hook")
+
+      assert hooks == ["PetalDropdown"]
+    end
   end
 
   describe "dropdown/1 - placement options" do
