@@ -225,7 +225,7 @@ defmodule Phoenix.LiveView.UploadConfig do
           raise ArgumentError, """
           invalid :max_entries_mode value provided to allow_upload.
 
-          Only :selected and :total are supported (Defaults to #{inspect(@default_max_entries_mode)}). Got:
+          Only :selected and :total are supported (Defaults to :selected). Got:
 
           #{inspect(other)}
           """
