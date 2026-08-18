@@ -75,6 +75,15 @@ defmodule Paginator.Config do
     end
   end
 
+  @doc """
+  Returns the key a cursor field is stored under in a cursor.
+
+  Expression cursor fields carry the function building the expression
+  alongside their key, but only the key makes it into the cursor.
+  """
+  def cursor_field_key({key, expression}) when is_function(expression, 0), do: key
+  def cursor_field_key(cursor_field), do: cursor_field
+
   defp cursor_values_match_cursor_fields?(nil = _cursor_values, _cursor_fields), do: true
 
   defp cursor_values_match_cursor_fields?(cursor_values, _cursor_fields)
@@ -96,7 +105,14 @@ defmodule Paginator.Config do
         when is_atom(schema) and is_atom(field) and value in @order_directions ->
           {schema, field}
 
+        {{field, expression}, value}
+        when is_function(expression, 0) and value in @order_directions ->
+          field
+
         field when is_atom(field) ->
+          field
+
+        {field, expression} when is_function(expression, 0) ->
           field
 
         {schema, field} when is_atom(schema) and is_atom(field) ->

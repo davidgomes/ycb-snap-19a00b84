@@ -71,7 +71,9 @@ defmodule Paginator do
     * `:before` - Fetch the records before this cursor.
     * `:cursor_fields` - The fields with sorting direction used to determine the
     cursor. In most cases, this should be the same fields as the ones used for sorting in the query.
-    When you use named bindings in your query they can also be provided.
+    When you use named bindings in your query they can also be provided. A field can also be an
+    expression, written as `{key, fn -> dynamic(...) end}`, when the query sorts on a computed
+    value rather than on a column.
     * `:fetch_cursor_value_fun` function of arity 2 to lookup cursor values on returned records.
     Defaults to `Paginator.default_fetch_cursor_value/2`
     * `:include_total_count` - Set this to true to return the total number of
@@ -166,6 +168,39 @@ defmodule Paginator do
         limit: 50
       )
 
+  ## Example with sorting on an expression
+
+  Sometimes a query sorts on a value it computes rather than on a column. Such
+  a cursor field is written as `{key, fn -> dynamic(...) end}`, where the
+  function builds the expression to compare against and `key` is the name the
+  value is stored under, both in the cursor and on the returned record.
+
+      from(
+        c in Customer,
+        as: :customers,
+        left_join: p in assoc(c, :payments),
+        as: :payments,
+        group_by: c.id,
+        select_merge: %{payment_count: count(p.id)},
+        order_by: [
+          {:asc, count(p.id)},
+          {:asc, c.id}
+        ]
+      )
+
+      Repo.paginate(query,
+        cursor_fields: [
+          {{:payment_count, fn -> dynamic([payments: p], count(p.id)) end}, :asc},
+          id: :asc
+        ],
+        limit: 50
+      )
+
+  Because the expression is not a column, the query has to make its value
+  available on the returned records, here by selecting it into the
+  `:payment_count` virtual field. Otherwise a `:fetch_cursor_value_fun` has to
+  be supplied to read the value some other way.
+
   """
   @callback paginate(queryable :: Ecto.Query.t(), opts :: Keyword.t(), repo_opts :: Keyword.t()) ::
               Paginator.Page.t()
@@ -209,8 +244,8 @@ defmodule Paginator do
   """
   @spec cursor_for_record(
           any(),
-          [atom() | {atom(), atom()}],
-          (map(), atom() | {atom(), atom()} -> any())
+          [atom() | {atom(), atom()} | {atom(), (() -> any())}],
+          (map(), atom() | {atom(), atom()} | {atom(), (() -> any())} -> any())
         ) :: binary()
   def cursor_for_record(
         record,
@@ -232,6 +267,10 @@ defmodule Paginator do
   the value of joined column by using the named binding as the name of the
   relationship on the original Ecto.Schema.
 
+  When using an expression it will look the value up under the key the
+  expression was given, so the query has to select the expression into a field
+  of that name.
+
   ### Example
 
       iex> Paginator.default_fetch_cursor_value(%Paginator.Customer{id: 1}, :id)
@@ -239,9 +278,17 @@ defmodule Paginator do
 
       iex> Paginator.default_fetch_cursor_value(%Paginator.Customer{id: 1, address: %Paginator.Address{city: "London"}}, {:address, :city})
       "London"
+
+      iex> Paginator.default_fetch_cursor_value(%Paginator.Customer{payment_count: 3}, {:payment_count, fn -> nil end})
+      3
   """
 
-  @spec default_fetch_cursor_value(map(), atom() | {atom(), atom()}) :: any()
+  @spec default_fetch_cursor_value(map(), atom() | {atom(), atom()} | {atom(), (() -> any())}) ::
+          any()
+  def default_fetch_cursor_value(schema, {field, expression}) when is_function(expression, 0) do
+    Map.get(schema, field)
+  end
+
   def default_fetch_cursor_value(schema, {binding, field})
       when is_atom(binding) and is_atom(field) do
     case Map.get(schema, field) do
@@ -309,8 +356,13 @@ defmodule Paginator do
        }) do
     cursor_fields
     |> Enum.map(fn
+      # `cursor_for_record/3` takes cursor fields as given, so an expression
+      # field may still be missing its sorting direction here.
+      {_field, expression} = cursor_field when is_function(expression, 0) ->
+        {Config.cursor_field_key(cursor_field), fetch_cursor_value_fun.(schema, cursor_field)}
+
       {cursor_field, _order} ->
-        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+        {Config.cursor_field_key(cursor_field), fetch_cursor_value_fun.(schema, cursor_field)}
 
       cursor_field when is_atom(cursor_field) ->
         {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}

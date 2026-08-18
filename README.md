@@ -140,6 +140,50 @@ cursor_before = metadata.before
 IO.puts "total count: #{metadata.total_count}"
 ```
 
+### Paginating on an expression
+
+Sometimes the value a query sorts on is computed rather than stored in a
+column, so it can't be named in `:cursor_fields`. For those cases a cursor
+field can be given as `{key, fn -> dynamic(...) end}`: the function builds the
+expression the pagination filters compare against, and `key` is the name the
+value is stored under in the cursor.
+
+```elixir
+payment_counts =
+  from(p in Payment,
+    group_by: p.customer_id,
+    select: %{customer_id: p.customer_id, count: count(p.id)}
+  )
+
+query =
+  from(c in Customer,
+    left_join: pc in subquery(payment_counts),
+    on: pc.customer_id == c.id,
+    as: :payment_counts,
+    select_merge: %{payment_count: coalesce(pc.count, 0)},
+    order_by: [{:asc, coalesce(pc.count, 0)}, {:asc, c.id}]
+  )
+
+%{entries: entries, metadata: metadata} =
+  Repo.paginate(
+    query,
+    cursor_fields: [
+      {{:payment_count, fn -> dynamic([payment_counts: pc], coalesce(pc.count, 0)) end}, :asc},
+      id: :asc
+    ],
+    limit: 50
+  )
+```
+
+Since the expression is not a column, Paginator can't read its value off the
+returned records on its own. Either select it into a field of the same name as
+the key, as above with the `:payment_count` virtual field, or pass a
+`:fetch_cursor_value_fun` that knows how to look it up.
+
+Note that the expression ends up in a `WHERE` clause, so it has to be valid
+there. Aggregates such as `count(p.id)` are not, which is why the example above
+computes the count in a subquery it joins on.
+
 ## Security Considerations
 
 `Repo.paginate/4` will throw an `ArgumentError` should it detect an executable term in the cursor parameters passed to it (`before`, `after`).

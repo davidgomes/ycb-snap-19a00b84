@@ -875,6 +875,108 @@ defmodule PaginatorTest do
            end) == encode_cursor(%{charged_at: "10", id: p1.id})
   end
 
+  describe "paginate a collection of customers, sorting on an expression" do
+    setup :add_extra_payments
+
+    test "sorts ascending without cursors", %{customers: {c1, c2, c3}} do
+      %Page{entries: entries, metadata: metadata} =
+        customers_by_payment_count()
+        |> Repo.paginate(cursor_fields: payment_count_cursor_fields(:asc), limit: 50)
+
+      assert to_ids(entries) == to_ids([c2, c1, c3])
+      assert metadata == %Metadata{after: nil, before: nil, limit: 50}
+    end
+
+    test "sorts ascending with after cursor", %{customers: {c1, c2, c3}} do
+      %Page{entries: entries, metadata: metadata} =
+        customers_by_payment_count()
+        |> Repo.paginate(
+          cursor_fields: payment_count_cursor_fields(:asc),
+          after: encode_cursor(%{payment_count: 4, id: c2.id}),
+          limit: 1
+        )
+
+      assert to_ids(entries) == to_ids([c1])
+
+      assert metadata == %Metadata{
+               after: encode_cursor(%{payment_count: 5, id: c1.id}),
+               before: encode_cursor(%{payment_count: 5, id: c1.id}),
+               limit: 1
+             }
+
+      %Page{entries: entries} =
+        customers_by_payment_count()
+        |> Repo.paginate(
+          cursor_fields: payment_count_cursor_fields(:asc),
+          after: metadata.after,
+          limit: 1
+        )
+
+      assert to_ids(entries) == to_ids([c3])
+    end
+
+    test "sorts ascending with before cursor", %{customers: {c1, _c2, c3}} do
+      %Page{entries: entries, metadata: metadata} =
+        customers_by_payment_count()
+        |> Repo.paginate(
+          cursor_fields: payment_count_cursor_fields(:asc),
+          before: encode_cursor(%{payment_count: 6, id: c3.id}),
+          limit: 1
+        )
+
+      assert to_ids(entries) == to_ids([c1])
+
+      assert metadata == %Metadata{
+               after: encode_cursor(%{payment_count: 5, id: c1.id}),
+               before: encode_cursor(%{payment_count: 5, id: c1.id}),
+               limit: 1
+             }
+    end
+
+    test "sorts descending with after cursor", %{customers: {c1, c2, c3}} do
+      %Page{entries: entries, metadata: metadata} =
+        customers_by_payment_count(:desc)
+        |> Repo.paginate(
+          cursor_fields: payment_count_cursor_fields(:desc),
+          after: encode_cursor(%{payment_count: 6, id: c3.id}),
+          limit: 50
+        )
+
+      assert to_ids(entries) == to_ids([c1, c2])
+      assert metadata.after == nil
+    end
+
+    test "builds the cursor from the value the expression was selected into", %{
+      customers: {_c1, c2, _c3}
+    } do
+      %Page{entries: [customer]} =
+        customers_by_payment_count()
+        |> Repo.paginate(
+          cursor_fields: payment_count_cursor_fields(:asc),
+          after: encode_cursor(%{payment_count: 4, id: c2.id}),
+          limit: 1
+        )
+
+      assert customer.payment_count == 5
+
+      assert Paginator.cursor_for_record(customer, payment_count_cursor_fields(:asc)) ==
+               encode_cursor(%{payment_count: 5, id: customer.id})
+    end
+
+    test "raises when the cursor does not match the expression fields", %{customers: {c1, _, _}} do
+      assert_raise Paginator.Config.ArgumentError,
+                   "expected `:after` cursor to match `:cursor_fields`",
+                   fn ->
+                     customers_by_payment_count()
+                     |> Repo.paginate(
+                       cursor_fields: payment_count_cursor_fields(:asc),
+                       after: encode_cursor(%{name: "Bob", id: c1.id}),
+                       limit: 1
+                     )
+                   end
+    end
+  end
+
   test "sorts on two different directions with before cursor", %{
     payments: {_p1, _p2, _p3, p4, p5, p6, p7, _p8, _p9, _p10, _p11, _p12}
   } do
@@ -1104,6 +1206,43 @@ defmodule PaginatorTest do
         {^payment_id_direction, p.id}
       ]
     )
+  end
+
+  # The payment count is only available as an expression over a joined
+  # subquery, so it can't be named as a column in `cursor_fields`.
+  defp customers_by_payment_count(direction \\ :asc) do
+    payment_counts =
+      from(
+        p in Payment,
+        group_by: p.customer_id,
+        select: %{customer_id: p.customer_id, count: count(p.id)}
+      )
+
+    from(
+      c in Customer,
+      as: :customers,
+      left_join: pc in subquery(payment_counts),
+      on: pc.customer_id == c.id,
+      as: :payment_counts,
+      select_merge: %{payment_count: coalesce(pc.count, 0)},
+      order_by: [{^direction, coalesce(pc.count, 0)}, {^direction, c.id}]
+    )
+  end
+
+  defp payment_count_cursor_fields(direction) do
+    [
+      {{:payment_count, fn -> dynamic([payment_counts: pc], coalesce(pc.count, 0)) end},
+       direction},
+      {:id, direction}
+    ]
+  end
+
+  defp add_extra_payments(%{customers: {c1, _c2, c3}}) do
+    insert(:payment, customer: c1, charged_at: days_ago(1))
+    insert(:payment, customer: c3, charged_at: days_ago(1))
+    insert(:payment, customer: c3, charged_at: days_ago(1))
+
+    :ok
   end
 
   defp customer_payments_by_charged_at_and_amount(customer, direction \\ :asc) do
