@@ -5,11 +5,11 @@ defmodule EctoShorts.QueryBuilder do
   @type accumulator_query :: Ecto.Query.t
 
   @doc "Adds to accumulator query with filter_type and value"
-  @callback create_schema_filter(filter_tuple, accumulator_query) :: Ecto.Query.t
+  @callback create_schema_filter(query :: accumulator_query, filter_tuple) :: Ecto.Query.t
 
-  @spec create_schema_filter(module, filter_tuple, accumulator_query) :: Ecto.Query.t
-  def create_schema_filter(builder, filter_tuple, query) do
-    builder.create_schema_filter(filter_tuple, query)
+  @spec create_schema_filter(module, accumulator_query, filter_tuple) :: Ecto.Query.t
+  def create_schema_filter(builder, query, filter_tuple) do
+    builder.create_schema_filter(query, filter_tuple)
   end
 
   @spec query_schema(Ecto.Queryable.t) :: Ecto.Queryable.t()
