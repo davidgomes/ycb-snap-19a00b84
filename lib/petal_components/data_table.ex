@@ -200,12 +200,13 @@ defmodule PetalComponents.DataTable do
 
     link_mode? = is_nil(assigns.on_change)
 
-    # link mode: URL wiring. Either mode: filter popovers are native
-    # top-layer popovers the hook closes after an Apply, and the
-    # tri-state header needs its indeterminate DOM property set.
-    hooked? =
-      (link_mode? and (assigns.searchable or assigns.page_size_options != [])) or
-        filter_cols != [] or assigns.selectable
+    # only link mode turns controls into patch URLs; the hook also mounts
+    # for jobs no wiring mode can do in markup - closing a top-layer
+    # filter popover, and the tri-state header's indeterminate property
+    url_wired? =
+      link_mode? and (assigns.searchable or assigns.page_size_options != [] or filter_cols != [])
+
+    hooked? = url_wired? or filter_cols != [] or assigns.selectable
 
     row_id = assigns.row_id || fn row -> Map.get(row, :id) end
 
@@ -234,7 +235,7 @@ defmodule PetalComponents.DataTable do
       |> assign(:selecting?, assigns.selectable and assigns.selected != [])
       |> assign(
         :nav_template,
-        link_mode? && hooked? && nav_template(assigns.path, assigns.state, assigns, filter_cols)
+        url_wired? && nav_template(assigns.path, assigns.state, assigns, filter_cols)
       )
       |> assign(
         :filters_json,

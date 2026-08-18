@@ -52,8 +52,30 @@
   `min-w-0 max-w-full` so flex/grid parents can't size it to the
   table's min-content; footer children shrink and wrap. Wide tables
   scroll inside `pc-data-table__scroll`, never the page.
+- **`<.data_table>` row selection (4.12 data table, milestone 3).**
+  `selectable` renders the leading checkbox column, its header
+  tri-state over the rendered page: none, some (a dash), all. A mixed
+  header fills the page in rather than clearing it, and while rows are
+  selected the toolbar morphs in place into the count, the new
+  `:selection_action` bulk buttons and the way out. The selected ids
+  live in your own assign and never in a URL, which is exactly what
+  makes a selection survive link mode - every sort and page change
+  rebuilds the state from params and leaves the picks alone. The new
+  `DataTable.Selection.handle_op/3` speaks the whole grammar
+  (`select` / `select_page` / `clear_selection`) against the ids the
+  page currently holds, so the `"7"` a checkbox posts resolves back to
+  `7` and an id your rows never had is dropped. `row_id` says what an
+  id is, `on_select` is the one event in both wiring modes, and every
+  word localizes (`selected_label`, `clear_selection_label`,
+  `select_all_label`, `select_row_label`). The mixed dash paints in
+  CSS with no JS at all; the `PetalDataTable` hook mirrors the same
+  attribute onto the DOM `indeterminate` property, the part assistive
+  tech announces.
 - **`table` `on_sort` accepts a 1-arity function** of the sort key -
   per-column events/JS, how the data table patches sort URLs.
+- **`table` `:col` gains `header`** - renderable header content in
+  place of the string `label`, which is how the data table gets a
+  tri-state checkbox into a `th`.
 - **`pagination` event mode grows up**: `event` accepts a custom event
   name (string) and `event_values` adds phx-value-* pairs - page
   clicks can speak any consumer's event grammar.

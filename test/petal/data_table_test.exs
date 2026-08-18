@@ -3,6 +3,7 @@ defmodule PetalComponents.DataTableTest do
 
   import PetalComponents.DataTable
 
+  alias PetalComponents.DataTable.Selection
   alias PetalComponents.DataTable.State
 
   @rows [
@@ -380,8 +381,10 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ ~s(phx-value-op="select" phx-value-id="1" phx-value-checked="false")
     assert html =~ ~s(phx-value-op="select" phx-value-id="2" phx-value-checked="true")
     assert html =~ "pc-data-table__select-th"
-    # selection is event state in link mode too, so the hook rides along
+    # selection is event state in link mode too: the hook rides along for
+    # the header's indeterminate property, but nothing is URL-wired
     assert html =~ ~s(phx-hook="PetalDataTable")
+    refute html =~ "data-nav-template"
   end
 
   test "a fully selected page checks the header and offers the way back" do
@@ -502,6 +505,43 @@ defmodule PetalComponents.DataTableTest do
     refute html =~ "pc-data-table__select-row"
     refute html =~ "data-pc-dt-mixed"
     assert html =~ "pc-data-table__select-th"
+  end
+
+  test "the header's payload walks the page from none to all and back" do
+    ids = Enum.map(@id_rows, & &1.id)
+
+    # what a click on the tri-state header would push, read off the
+    # rendered box - so the component and Selection can't drift apart
+    header_op = fn selected ->
+      assigns = base(%{rows: @id_rows, selected: selected})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          path={@path}
+          selectable
+          selected={@selected}
+          on_select="select"
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      [_, checked] =
+        Regex.run(~r/pc-data-table__select-all"[^>]*phx-value-checked="(\w+)"/, html)
+
+      %{"op" => "select_page", "checked" => checked}
+    end
+
+    all = Selection.handle_op([], header_op.([]), ids: ids)
+    assert all == ids
+
+    # the mixed header fills the page in rather than clearing it
+    assert Selection.handle_op([1], header_op.([1]), ids: ids) == ids
+    assert Selection.handle_op(all, header_op.(all), ids: ids) == []
   end
 
   test "raises when selectable has no on_select" do

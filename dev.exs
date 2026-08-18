@@ -747,7 +747,9 @@ defmodule Dev.PlaygroundLive do
        select: %{disabled: false, error: false, help: false},
        combo: %{disabled: false, chosen: nil},
        rich: %{labels: ~w(feat bug imp des), team: ~w(amelia jonah)},
-       dt: PetalComponents.DataTable.State |> struct(page_size: 5) |> run_dt(),
+       dt: PetalComponents.DataTable.State |> struct(page_size: 5) |> run_dt(dt_all_rows()),
+       dt_all: dt_all_rows(),
+       dt_selected: [],
        radio: %{
          style: "cards",
          variant: "outline",
@@ -1446,16 +1448,37 @@ defmodule Dev.PlaygroundLive do
     {state, _rows} = socket.assigns.dt
 
     state = State.handle_op(state, params, fields: [:name, :email, :status, :amount])
-    {:noreply, assign(socket, :dt, run_dt(state))}
+    {:noreply, assign(socket, :dt, run_dt(state, socket.assigns.dt_all))}
   end
 
-  defp run_dt(state) do
-    {rows, state} =
-      PetalComponents.DataTable.Engine.List.run(
-        PetalComponents.Showcase.DataTable.sample_rows(),
-        state
-      )
+  # the selection's own grammar, kept in the page's own assign - which is
+  # why sorting, filtering and paging above never drop it
+  def handle_event("pg_select", params, socket) do
+    alias PetalComponents.DataTable.Selection
+    {_state, rows} = socket.assigns.dt
+    ids = Enum.map(rows, & &1.id)
 
+    selected = Selection.handle_op(socket.assigns.dt_selected, params, ids: ids)
+    {:noreply, assign(socket, :dt_selected, selected)}
+  end
+
+  # a real bulk action: the page owns the row list, so the selection can
+  # actually delete out of it
+  def handle_event("pg_select_delete", _params, socket) do
+    {state, _rows} = socket.assigns.dt
+    all = Enum.reject(socket.assigns.dt_all, &(&1.id in socket.assigns.dt_selected))
+
+    {:noreply,
+     socket
+     |> assign(:dt_all, all)
+     |> assign(:dt_selected, [])
+     |> assign(:dt, run_dt(state, all))}
+  end
+
+  defp dt_all_rows, do: PetalComponents.Showcase.DataTable.sample_rows()
+
+  defp run_dt(state, rows) do
+    {rows, state} = PetalComponents.DataTable.Engine.List.run(rows, state)
     {state, rows}
   end
 
@@ -7308,7 +7331,8 @@ defmodule Dev.PlaygroundLive do
         Sortable, paged and filter-aware, driven by one State struct. This live demo runs
         EVENT mode: every interaction pushes a single op-grammar event, the handler applies it
         with State helpers and re-runs the free in-memory engine. Link mode does the same
-        through patch URLs - state you can curl.
+        through patch URLs - state you can curl. Selection rides alongside in its own assign:
+        tick rows, watch the toolbar morph, and note the picks surviving a sort or a page turn.
       </p>
 
       <div class="border border-gray-200 dark:border-gray-400/20 rounded-xl p-6">
@@ -7321,6 +7345,9 @@ defmodule Dev.PlaygroundLive do
           striped
           searchable
           page_size_options={[5, 10, 20]}
+          selectable
+          selected={@dt_selected}
+          on_select="pg_select"
         >
           <:col :let={row} field={:name} sortable>{row.name}</:col>
           <:col :let={row} field={:email} filterable="text">{row.email}</:col>
@@ -7346,6 +7373,11 @@ defmodule Dev.PlaygroundLive do
           <:col :let={row} field={:amount} sortable align="right" filterable="number">
             ${row.amount}
           </:col>
+          <:selection_action :let={selected}>
+            <.button size="sm" variant="outline" color="danger" phx-click="pg_select_delete">
+              Delete {length(selected)}
+            </.button>
+          </:selection_action>
         </.data_table>
       </div>
 
@@ -7354,7 +7386,7 @@ defmodule Dev.PlaygroundLive do
           ex <-
             examples_for(
               PetalComponents.Showcase.DataTable,
-              ~w(basic loading empty)a
+              ~w(basic selection loading empty)a
             )
         }
         class="mt-10"

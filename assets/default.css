@@ -2695,15 +2695,27 @@
     @apply w-4! h-4!;
   }
 
-  /* Row selection: a hairline leading column, the tri-state header box,
-     and the toolbar's selection mode */
+  /* Row selection: a shrink-to-content leading column (the actions
+     column's trick), the tri-state header box, and the toolbar's
+     selection mode */
   .pc-data-table__select-th,
   .pc-data-table__select-td {
-    @apply w-px pr-0;
+    @apply w-px;
   }
+  /* block, not inline: no baseline gap to centre around in the cell */
   .pc-data-table__select-all,
   .pc-data-table__select-row {
     @apply block;
+  }
+  /* the checkbox now sits in the cell the table emphasises as its first
+     column, so hand that emphasis to the first real data column. Doubled
+     selector because pc-table__td--first-col sits later in this file at
+     equal specificity. */
+  .pc-data-table__select-td.pc-data-table__select-td {
+    @apply font-normal;
+  }
+  .pc-data-table__select-td + .pc-table__td {
+    @apply font-semibold;
   }
   /* The mixed state paints server-side - a dash instead of a tick, no JS
      needed for the visual (the hook only mirrors the same attribute onto
