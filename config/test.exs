@@ -2,7 +2,8 @@ import Config
 
 config :warehouse,
   events: Warehouse.MockEvents,
-  producer: {Broadway.DummyProducer, []}
+  producer: {Broadway.DummyProducer, []},
+  warmup?: false
 
 config :warehouse, Warehouse.Repo,
   username: "root",

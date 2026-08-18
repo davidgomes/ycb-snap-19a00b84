@@ -4,6 +4,7 @@ config :warehouse,
   env: Mix.env(),
   ecto_repos: [Warehouse.Repo],
   events: Warehouse.Events,
+  warmup?: true,
   exluded_picking_locations: [
     # shipping
     208,
