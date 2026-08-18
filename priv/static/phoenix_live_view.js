@@ -193,7 +193,9 @@ var LiveView = (() => {
       this.uploadChannel.leave();
       this.errored = true;
       this.chunkTimer != null && clearTimeout(this.chunkTimer);
-      this.entry.error(reason);
+      if (reason !== "writer_error") {
+        this.entry.error(reason);
+      }
     }
     upload() {
       this.uploadChannel.onError((reason) => this.error(reason));
