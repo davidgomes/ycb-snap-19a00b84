@@ -91,6 +91,30 @@ defmodule Sentry.Transport.RateLimiter do
   end
 
   @doc """
+  Checks if a telemetry category is rate-limited, taking into account both its primary
+  data category (e.g., `"log_item"`, `"trace_metric"`) and its byte-based companion category
+  (e.g., `"log_byte"`, `"trace_metric_byte"`), as well as global rate limits.
+  """
+  @doc since: "13.4.0"
+  @spec rate_limited_for_category?(Sentry.Telemetry.Category.t()) :: boolean()
+  def rate_limited_for_category?(category) when is_atom(category) do
+    data_category = Sentry.Telemetry.Category.data_category(category)
+
+    case category do
+      :log ->
+        rate_limited?(data_category) or
+          rate_limited?(Sentry.Telemetry.Category.byte_data_category(:log))
+
+      :metric ->
+        rate_limited?(data_category) or
+          rate_limited?(Sentry.Telemetry.Category.byte_data_category(:metric))
+
+      _other ->
+        rate_limited?(data_category)
+    end
+  end
+
+  @doc """
   Updates global rate limit from a `Retry-After` header value.
 
   This is a fallback for when `X-Sentry-Rate-Limits` is not present.

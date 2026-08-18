@@ -7,7 +7,7 @@ defmodule Sentry.MetricBatch do
   """
   @moduledoc since: "13.0.0"
 
-  alias Sentry.Metric
+  alias Sentry.{Config, Metric}
 
   @type t() :: %__MODULE__{
           metrics: [Metric.t()]
@@ -15,4 +15,19 @@ defmodule Sentry.MetricBatch do
 
   @enforce_keys [:metrics]
   defstruct [:metrics]
+
+  @doc """
+  Calculates the byte size of a metric batch payload when encoded to JSON.
+  """
+  @doc since: "13.4.0"
+  @spec byte_size(t()) :: non_neg_integer()
+  def byte_size(%__MODULE__{metrics: metrics}) do
+    items = Enum.map(metrics, &Metric.to_map/1)
+    payload = %{items: items}
+
+    case Sentry.JSON.encode(payload, Config.json_library()) do
+      {:ok, encoded} -> Kernel.byte_size(encoded)
+      {:error, _reason} -> 0
+    end
+  end
 end

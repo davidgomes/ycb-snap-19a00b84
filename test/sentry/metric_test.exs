@@ -175,4 +175,25 @@ defmodule Sentry.MetricTest do
       assert is_binary(result.attributes["tuple"].value)
     end
   end
+
+  describe "byte_size/1" do
+    test "returns the byte size of the json-encoded metric" do
+      metric = %Metric{
+        type: :counter,
+        name: "test.counter",
+        value: 1,
+        timestamp: 1_234_567_890.0,
+        attributes: %{"key" => "val"}
+      }
+
+      assert Metric.byte_size(metric) > 0
+
+      {:ok, encoded} =
+        metric
+        |> Metric.to_map()
+        |> Sentry.JSON.encode(Sentry.Config.json_library())
+
+      assert Metric.byte_size(metric) == Kernel.byte_size(encoded)
+    end
+  end
 end

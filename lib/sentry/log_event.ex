@@ -135,6 +135,18 @@ defmodule Sentry.LogEvent do
     }
   end
 
+  @doc """
+  Calculates the byte size of a log event when encoded to JSON.
+  """
+  @doc since: "13.4.0"
+  @spec byte_size(t()) :: non_neg_integer()
+  def byte_size(%__MODULE__{} = log_event) do
+    case log_event |> to_map() |> Sentry.JSON.encode(Config.json_library()) do
+      {:ok, encoded} -> Kernel.byte_size(encoded)
+      {:error, _reason} -> 0
+    end
+  end
+
   ## Helpers
 
   # Interpolates placeholders in a message template with parameters

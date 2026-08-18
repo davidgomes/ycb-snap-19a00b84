@@ -220,13 +220,11 @@ defmodule Sentry.LoggerHandler.LogsTest do
     } do
       :ok = :logger.remove_handler(handler_name)
 
-      inherit_handler_name =
-        :"sentry_logs_handler_inherit_#{System.unique_integer([:positive])}"
+      inherit_handler_name = :"sentry_logs_handler_inherit_#{System.unique_integer([:positive])}"
 
       put_test_config(enable_logs: true)
 
-      assert :ok =
-               :logger.add_handler(inherit_handler_name, Sentry.LoggerHandler, %{config: %{}})
+      assert :ok = :logger.add_handler(inherit_handler_name, Sentry.LoggerHandler, %{config: %{}})
 
       on_exit(fn -> _ = :logger.remove_handler(inherit_handler_name) end)
 
@@ -236,8 +234,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
     end
 
     test "runtime handler config update disables structured logs", %{handler_name: handler_name} do
-      assert :ok =
-               :logger.update_handler_config(handler_name, :config, %{enable_logs: false})
+      assert :ok = :logger.update_handler_config(handler_name, :config, %{enable_logs: false})
 
       initial_size = TelemetryProcessor.buffer_size(:log)
 
@@ -275,8 +272,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
     test "rejects non-boolean :enable_logs in handler config", %{handler_name: handler_name} do
       :ok = :logger.remove_handler(handler_name)
 
-      invalid_handler_name =
-        :"sentry_logs_handler_invalid_#{System.unique_integer([:positive])}"
+      invalid_handler_name = :"sentry_logs_handler_invalid_#{System.unique_integer([:positive])}"
 
       assert {:error, {:handler_not_added, {:callback_crashed, {:error, error, _stack}}}} =
                :logger.add_handler(invalid_handler_name, Sentry.LoggerHandler, %{
@@ -575,6 +571,21 @@ defmodule Sentry.LoggerHandler.LogsTest do
 
       TelemetryProcessor.flush()
       assert SentryTest.pop_sentry_logs() == []
+    end
+
+    test "records log_item and log_byte client report when logs are rate-limited" do
+      table_name = Process.get(:rate_limiter_table_name, Sentry.Transport.RateLimiter)
+      :ets.insert(table_name, {"log_item", System.system_time(:second) + 60})
+      :sys.replace_state(Sentry.ClientReport.Sender, fn _ -> %{} end)
+
+      Logger.info("Rate-limited log message")
+
+      state = :sys.get_state(Sentry.ClientReport.Sender)
+
+      assert Map.has_key?(state, {:ratelimit_backoff, "log_item"})
+      assert Map.has_key?(state, {:ratelimit_backoff, "log_byte"})
+      assert state[{:ratelimit_backoff, "log_item"}] == 1
+      assert state[{:ratelimit_backoff, "log_byte"}] > 0
     end
   end
 
