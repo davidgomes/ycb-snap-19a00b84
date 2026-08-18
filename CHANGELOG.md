@@ -2,6 +2,7 @@
 
 ## 7.2.0 - 2026-02-03
 
+- Add optional `:before_clean` callback on ETS and Atomic bucket expiry (#140, #177)
 - Fix race condition in `TokenBucket` and `LeakyBucket` atomics backends by using compare-and-swap (CAS) with packed 64-bit values (#169)
 - Drop Elixir 1.14 support (#169)
 - Add Elixir 1.19 / OTP 28 support (#169)
