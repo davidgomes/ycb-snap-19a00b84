@@ -12,8 +12,9 @@ if Mix.env() === :test do
   config :ecto_shorts, :sql_sandbox, true
   config :ecto_shorts, EctoShorts.Support.Repo,
     username: "postgres",
+    password: "postgres",
     database: "ecto_shorts_test",
-    hostname: "localhost",
+    hostname: "127.0.0.1",
     show_sensitive_data_on_connection_error: true,
     log: :debug,
     stacktrace: true,

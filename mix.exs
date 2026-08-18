@@ -44,16 +44,18 @@ defmodule EctoShorts.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ecto, "~> 3.0"},
-      {:ecto_sql, "~> 3.10"},
-      {:postgrex, ">= 0.0.0", optional: true},
-
-      {:error_message, "~> 0.1"},
-
-      {:credo, ">= 0.0.0", only: [:dev, :test]},
-      {:excoveralls, ">= 0.0.0", only: [:dev, :test]},
-      {:ex_doc, ">= 0.0.0", only: :dev},
-      {:dialyxir, "~> 1.1", only: :test, runtime: false}
+      {:ecto, "~> 3.0", path: "deps/ecto", override: true},
+      {:ecto_sql, "~> 3.10", path: "deps/ecto_sql", override: true},
+      {:postgrex, ">= 0.0.0", path: "deps/postgrex", optional: true, override: true},
+      {:db_connection, ">= 0.0.0", path: "deps/db_connection", override: true},
+      {:decimal, ">= 0.0.0", path: "deps/decimal", override: true},
+      {:jason, ">= 0.0.0", path: "deps/jason", override: true},
+      {:telemetry, ">= 0.0.0", path: "deps/telemetry", override: true},
+      {:connection, ">= 0.0.0", path: "deps/connection", override: true},
+      {:error_message, "~> 0.1", path: "deps/error_message", override: true},
+      {:plug, ">= 0.0.0", path: "deps/plug", override: true},
+      {:plug_crypto, ">= 0.0.0", path: "deps/plug_crypto", override: true},
+      {:mime, ">= 0.0.0", path: "deps/mime", override: true}
     ]
   end
 
