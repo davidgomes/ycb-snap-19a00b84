@@ -77,6 +77,19 @@ defmodule ErrorTracker do
   ```
 
   Breadcrumbs can be viewed in the dashboard on the details page of an occurrence.
+
+  ## Muting errors
+
+  Some errors are known and expected, but you may still want to keep track of
+  them without being notified every time they happen.
+
+  Muting an error (either from the dashboard or using `mute/1`) keeps storing its
+  occurrences, but stops emitting `ErrorTracker.Telemetry` events for them. As
+  notifications and other integrations are built on top of those events, muted
+  errors become silent.
+
+  If you would rather not store those errors at all, take a look at the
+  `ErrorTracker.Ignorer` behaviour.
   """
 
   @typedoc """
@@ -175,6 +188,38 @@ defmodule ErrorTracker do
 
     with {:ok, updated_error} <- Repo.update(changeset) do
       Telemetry.unresolved_error(updated_error)
+      {:ok, updated_error}
+    end
+  end
+
+  @doc """
+  Mutes an error.
+
+  Occurrences of a muted error are still tracked and stored, but no Telemetry
+  events are emitted for them. This allows to keep track of noisy errors without
+  being notified about them.
+  """
+  @spec mute(Error.t()) :: {:ok, Error.t()} | {:error, Ecto.Changeset.t()}
+  def mute(error = %Error{muted: false}) do
+    changeset = Ecto.Changeset.change(error, muted: true)
+
+    with {:ok, updated_error} <- Repo.update(changeset) do
+      Telemetry.muted_error(updated_error)
+      {:ok, updated_error}
+    end
+  end
+
+  @doc """
+  Unmutes an error.
+
+  Once unmuted, Telemetry events are emitted again for the error occurrences.
+  """
+  @spec unmute(Error.t()) :: {:ok, Error.t()} | {:error, Ecto.Changeset.t()}
+  def unmute(error = %Error{muted: true}) do
+    changeset = Ecto.Changeset.change(error, muted: false)
+
+    with {:ok, updated_error} <- Repo.update(changeset) do
+      Telemetry.unmuted_error(updated_error)
       {:ok, updated_error}
     end
   end
@@ -300,8 +345,12 @@ defmodule ErrorTracker do
   end
 
   defp upsert_error!(error, stacktrace, context, breadcrumbs, reason) do
-    existing_status =
-      Repo.one(from e in Error, where: [fingerprint: ^error.fingerprint], select: e.status)
+    existing_error =
+      Repo.one(
+        from e in Error,
+          where: [fingerprint: ^error.fingerprint],
+          select: %{status: e.status, muted: e.muted}
+      )
 
     {:ok, {error, occurrence}} =
       Repo.transaction(fn ->
@@ -319,6 +368,10 @@ defmodule ErrorTracker do
               )
           end)
 
+        # The upsert does not modify the muted flag, so the value returned by the
+        # database is not reflected on the struct we have just inserted.
+        error = if existing_error, do: %{error | muted: existing_error.muted}, else: error
+
         occurrence =
           error
           |> Ecto.build_assoc(:occurrences)
@@ -333,17 +386,20 @@ defmodule ErrorTracker do
         {error, occurrence}
       end)
 
-    # If the error existed and was marked as resolved before this exception,
-    # sent a Telemetry event
-    # If it is a new error, sent a Telemetry event
-    case existing_status do
-      :resolved -> Telemetry.unresolved_error(error)
-      :unresolved -> :noop
-      nil -> Telemetry.new_error(error)
-    end
+    # Muted errors keep storing occurrences but do not emit any Telemetry event
+    unless error.muted do
+      # If the error existed and was marked as resolved before this exception,
+      # sent a Telemetry event
+      # If it is a new error, sent a Telemetry event
+      case existing_error do
+        %{status: :resolved} -> Telemetry.unresolved_error(error)
+        %{status: :unresolved} -> :noop
+        nil -> Telemetry.new_error(error)
+      end
 
-    # Always send a new occurrence Telemetry event
-    Telemetry.new_occurrence(occurrence)
+      # Always send a new occurrence Telemetry event
+      Telemetry.new_occurrence(occurrence)
+    end
 
     {error, occurrence}
   end

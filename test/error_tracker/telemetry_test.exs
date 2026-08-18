@@ -42,4 +42,38 @@ defmodule ErrorTracker.TelemetryTest do
     assert_receive {:telemetry_event, [:error_tracker, :error, :unresolved], _,
                     %{error: %Error{}}}
   end
+
+  test "events are emitted for muted and unmuted errors" do
+    %Occurrence{error: error = %Error{}} = report_error(fn -> raise "This is a test" end)
+
+    # The muted event will be emitted
+    {:ok, muted = %Error{}} = ErrorTracker.mute(error)
+    assert_receive {:telemetry_event, [:error_tracker, :error, :muted], _, %{error: %Error{}}}
+
+    # The unmuted event will be emitted
+    {:ok, _unmuted} = ErrorTracker.unmute(muted)
+    assert_receive {:telemetry_event, [:error_tracker, :error, :unmuted], _, %{error: %Error{}}}
+  end
+
+  test "no events are emitted for occurrences of muted errors" do
+    %Occurrence{error: error = %Error{}} = report_error(fn -> raise "This is a test" end)
+
+    # Consume the events emitted by the first occurrence, as it was not muted yet
+    assert_receive {:telemetry_event, [:error_tracker, :error, :new], _, _}
+    assert_receive {:telemetry_event, [:error_tracker, :occurrence, :new], _, _}
+
+    {:ok, muted = %Error{}} = ErrorTracker.mute(error)
+    assert_receive {:telemetry_event, [:error_tracker, :error, :muted], _, _}
+
+    report_error(fn -> raise "This is a test" end)
+
+    refute_receive {:telemetry_event, [:error_tracker, :occurrence, :new], _, _}, 150
+
+    # Once unmuted, the events are emitted again
+    {:ok, _unmuted} = ErrorTracker.unmute(muted)
+    report_error(fn -> raise "This is a test" end)
+
+    assert_receive {:telemetry_event, [:error_tracker, :occurrence, :new], _,
+                    %{occurrence: %Occurrence{}}}
+  end
 end

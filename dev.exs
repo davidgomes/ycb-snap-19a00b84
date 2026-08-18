@@ -294,6 +294,8 @@ ErrorTrackerDev.Repo.migrate()
     [:error_tracker, :error, :new],
     [:error_tracker, :error, :resolved],
     [:error_tracker, :error, :unresolved],
+    [:error_tracker, :error, :muted],
+    [:error_tracker, :error, :unmuted],
     [:error_tracker, :occurrence, :new]
   ],
   &ErrorTrackerDev.Telemetry.handle_event/4,
