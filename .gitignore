@@ -25,3 +25,12 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 badge_forge-*.tar
 
+# Generated badges from the Python workers.
+/priv/badges/
+
+# Python artifacts.
+__pycache__/
+*.egg-info/
+.pytest_cache/
+/python/.venv/
+

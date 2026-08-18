@@ -1,0 +1,7 @@
+# Configuration for `oban start`. The dsn is read from OBAN_DSN so it can point
+# at the same database as the Elixir app, e.g.
+#
+#     postgresql://postgres:postgres@localhost/badge_forge_dev
+
+[queues]
+badges = 5

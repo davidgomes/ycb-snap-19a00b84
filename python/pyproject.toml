@@ -1,0 +1,19 @@
+[project]
+name = "badge-forge-workers"
+version = "0.1.0"
+description = "Python Oban workers for BadgeForge"
+requires-python = ">=3.12"
+dependencies = ["oban>=0.6,<0.7"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["badge_forge"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
