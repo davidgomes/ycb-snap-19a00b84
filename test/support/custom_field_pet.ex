@@ -9,7 +9,7 @@ defmodule MyApp.CustomFieldPet do
 
   @derive {
     Flop.Schema,
-    filterable: [],
+    filterable: [:age_score, :owner_age_score, :name_lower],
     sortable: [:age_score, :owner_age_score],
     adapter_opts: [
       custom_fields: [
@@ -23,6 +23,13 @@ defmodule MyApp.CustomFieldPet do
           field_dynamic: {__MODULE__, :owner_age_score_dynamic, []},
           bindings: [:owner],
           ecto_type: :integer
+        ],
+        name_lower: [
+          field_dynamic: {__MODULE__, :name_lower_dynamic, []},
+          ecto_type: :string
+        ],
+        plain: [
+          ecto_type: :string
         ]
       ]
     ]
@@ -30,6 +37,7 @@ defmodule MyApp.CustomFieldPet do
 
   schema "pets" do
     field :age, :integer
+    field :name, :string
     belongs_to :owner, Owner
   end
 
@@ -44,5 +52,9 @@ defmodule MyApp.CustomFieldPet do
 
   def owner_age_score_dynamic(_opts) do
     dynamic([owner: owner], owner.age)
+  end
+
+  def name_lower_dynamic(_opts) do
+    dynamic([pet], fragment("LOWER(?)", pet.name))
   end
 end
