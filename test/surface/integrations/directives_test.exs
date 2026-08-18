@@ -779,6 +779,31 @@ defmodule Surface.DirectivesTest do
              """
     end
 
+    test "scroll, DOM patching and lifecycle events" do
+      html =
+        render_surface do
+          ~F"""
+          <div
+            :on-viewport-top="prev_page"
+            :on-viewport-bottom="next_page"
+            :on-mounted="mounted"
+            :on-remove="remove"
+            :on-connected="connected"
+            :on-disconnected="disconnected"
+          />
+          """
+        end
+
+      doc = parse_document!(html)
+
+      assert attribute(doc, "phx-viewport-top") == ["prev_page"]
+      assert attribute(doc, "phx-viewport-bottom") == ["next_page"]
+      assert attribute(doc, "phx-mounted") == ["mounted"]
+      assert attribute(doc, "phx-remove") == ["remove"]
+      assert attribute(doc, "phx-connected") == ["connected"]
+      assert attribute(doc, "phx-disconnected") == ["disconnected"]
+    end
+
     test "as event name + target option" do
       html =
         render_surface do

@@ -14,7 +14,13 @@ defmodule Surface.Directive.Events do
     "window-focus",
     "window-blur",
     "window-keydown",
-    "window-keyup"
+    "window-keyup",
+    "viewport-top",
+    "viewport-bottom",
+    "mounted",
+    "remove",
+    "connected",
+    "disconnected"
   ]
 
   @phx_events Enum.map(@events, &"phx-#{&1}")
