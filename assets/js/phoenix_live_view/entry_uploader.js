@@ -17,9 +17,15 @@ export default class EntryUploader {
     if (this.errored) {
       return;
     }
-    this.uploadChannel.leave();
     this.errored = true;
     this.chunkTimer != null && clearTimeout(this.chunkTimer);
+    this.uploadChannel.leave();
+    // The server already recorded {:writer_failure, reason}. Applying the
+    // generic entry-error path would push a second client error and clear
+    // the input. Leave the entry pending until cancel removes it.
+    if (reason === "writer_error") {
+      return;
+    }
     this.entry.error(reason);
   }
 
