@@ -2504,6 +2504,32 @@
         "difficulty": 6
       },
       {
+        "slug": "prism",
+        "name": "Prism",
+        "uuid": "88be2f17-e845-49cc-8ec9-e62706bfafe6",
+        "practices": [
+          "erlang-libraries",
+          "floating-point-numbers"
+        ],
+        "prerequisites": [
+          "recursion",
+          "tail-call-recursion",
+          "maps",
+          "lists",
+          "tuples",
+          "enum",
+          "case",
+          "multiple-clause-functions",
+          "pattern-matching",
+          "nil",
+          "integers",
+          "floating-point-numbers",
+          "erlang-libraries",
+          "module-attributes-as-constants"
+        ],
+        "difficulty": 6
+      },
+      {
         "slug": "rail-fence-cipher",
         "name": "Rail Fence Cipher",
         "uuid": "3daeb229-0638-443f-9ae2-222ebb88c11a",
