@@ -23,6 +23,11 @@ defmodule GRPC.Client.Connection.Table do
     end
   end
 
+  def update_lb_state(ref, lb_state) do
+    :ets.update_element(@table, ref, {3, lb_state})
+    :ok
+  end
+
   def delete(ref) do
     :ets.delete(@table, ref)
     :ok
@@ -30,7 +35,15 @@ defmodule GRPC.Client.Connection.Table do
 
   @impl true
   def init(:ok) do
-    @table = :ets.new(@table, [:named_table, :set, :public, read_concurrency: true])
+    @table =
+      :ets.new(@table, [
+        :named_table,
+        :set,
+        :public,
+        read_concurrency: true,
+        write_concurrency: true
+      ])
+
     {:ok, nil}
   end
 end

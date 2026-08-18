@@ -238,7 +238,8 @@ defmodule GRPC.Client.Connection do
         pick_healthy_channel(real_channels)
 
       {:ok, lb_mod, lb_state, real_channels} ->
-        with {:ok, {host, port}, _lb_state} <- lb_mod.pick(lb_state),
+        with {:ok, {host, port}, new_lb_state} <- lb_mod.pick(lb_state),
+             :ok <- Table.update_lb_state(ref, new_lb_state),
              {:connected, %Channel{} = channel} <-
                Map.get(real_channels, build_address_key(host, port)) do
           {:ok, channel}
@@ -464,7 +465,11 @@ defmodule GRPC.Client.Connection do
          lb_state: lb_state,
          real_channels: real_channels
        }) do
-    Table.put(ref, lb_mod, lb_state, real_channels)
+    if Enum.any?(real_channels, fn {_key, value} -> match?({:connected, _}, value) end) do
+      Table.put(ref, lb_mod, lb_state, real_channels)
+    else
+      Table.delete(ref)
+    end
   end
 
   defp put_lb_state(_state), do: :ok
