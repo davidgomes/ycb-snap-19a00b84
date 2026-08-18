@@ -1,5 +1,9 @@
 ## Changelog
 
+#### V2.5.0
+- breaking: `QueryBuilder.create_schema_filter/3` is now `/4` with `query` first: `(adapter, query, filter_key, filter_value)`
+- breaking: `c:QueryBuilder.create_schema_filter/2` is now `/3`: `(query, filter_key, filter_value)` so filters can be piped
+
 #### V2.4.0
 - add recursive relational filtering
 - add `%{field: %{!=: [1, 2, 3]}}` to allow `NOT IN ANY` queries
