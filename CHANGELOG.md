@@ -3,6 +3,29 @@
 
 #### Fixed
 
+- **`dropdown` flips its menu above the trigger when the viewport leaves
+  no room below.** The panel was CSS-positioned under the trigger with
+  nothing measuring the space it landed in, so the two places a dropdown
+  most often lives - the row-actions menu in a table's last row, a user
+  menu in a bottom bar - opened their items off the bottom of the screen,
+  reachable only by scrolling a page that the open menu had no reason to
+  scroll. The new `PetalDropdown` hook measures on open and stamps
+  `data-pc-flip="top"`, which turns the panel over onto `bottom-full` and
+  moves the scale transition's origin with it so the menu still grows out
+  of its trigger. The decision is the one the combobox and the data
+  table's filter menus already make - flip only when the room below can't
+  hold the menu AND there is more of it above, so a trigger near the top
+  of a short viewport doesn't flip into a worse fit - and when neither
+  side fits, the roomier one caps the panel and the items scroll within
+  it. Measuring hangs off the panel's inline display rather than a click
+  handler, because that single write is what the trigger, click-away,
+  Escape and a consumer's own `JS.toggle` all drain through, and it runs
+  before the browser paints the shown panel, so nothing flashes downward
+  first. Everything built on `dropdown` inherits the fix:
+  `user_dropdown_menu`, `language_select`, `color_scheme_switch`'s
+  dropdown variant. The flip is the hook's, so it needs the
+  petal_components hooks registered; without them a dropdown behaves
+  exactly as it did before.
 - **`command_dialog` now locks background scroll while the palette is
   open.** A native modal `<dialog>` hands you the top layer, the focus
   trap and Escape, but it does not stop the page underneath from
