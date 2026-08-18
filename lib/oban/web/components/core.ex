@@ -203,6 +203,9 @@ defmodule Oban.Web.Components.Core do
     """
   end
 
+  defp badge_icon(%{name: "bolt_circle"} = assigns),
+    do: ~H[<Icons.icon name="icon-bolt-circle" class="h-4 w-4 shrink-0" />]
+
   defp badge_icon(%{name: "camera"} = assigns),
     do: ~H[<Icons.icon name="icon-camera" class="h-4 w-4 shrink-0" />]
 

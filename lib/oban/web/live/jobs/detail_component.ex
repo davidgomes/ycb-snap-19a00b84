@@ -63,6 +63,7 @@ defmodule Oban.Web.Jobs.DetailComponent do
           <Core.status_badge :if={@job.meta["workflow"]} icon="rectangle_group" label="Workflow" />
           <Core.status_badge :if={@job.meta["chunk"]} icon="user_group" label="Chunk" />
           <Core.status_badge :if={@job.meta["chain"]} icon="link" label="Chain" />
+          <Core.status_badge :if={@job.meta["signal"]} icon="bolt_circle" label="Signal" />
           <Core.status_badge :if={@job.meta["recorded"]} icon="camera" label="Recorded" />
           <Core.status_badge :if={@job.meta["encrypted"]} icon="lock_closed" label="Encrypted" />
           <Core.status_badge :if={@job.meta["structured"]} icon="table_cells" label="Structured" />
