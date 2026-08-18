@@ -36,6 +36,8 @@ defmodule PlugRailsCookieSessionStore.MessageVerifier do
   end
 
   defp hmac(digest, secret, data) do
+    :code.ensure_loaded(:crypto)
+
     if function_exported?(:crypto, :mac, 4) do
       :crypto.mac(:hmac, digest, secret, data)
     else
