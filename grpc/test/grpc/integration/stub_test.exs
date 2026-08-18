@@ -16,7 +16,7 @@ defmodule GRPC.Integration.StubTest do
 
     # Comfortably longer than the client deadline, so the client always gives up first.
     def say_hello(_req, _stream) do
-      Process.sleep(1_000)
+      Process.sleep(1000)
     end
   end
 

@@ -176,14 +176,14 @@ defmodule GRPC.Integration.ServerTest do
     end
   end
 
-  # Deadline used by the two tests below; the servers sleep either side of it.
+  # Client deadline for the timeout test below; TimeoutServer sleeps well past it.
   @deadline 100
 
   defmodule TimeoutServer do
     use GRPC.Server, service: Routeguide.RouteGuide.Service
 
     def list_features(_rectangle, _stream) do
-      Process.sleep(1_000)
+      Process.sleep(1000)
     end
   end
 
@@ -439,9 +439,7 @@ defmodule GRPC.Integration.ServerTest do
       low = %Routeguide.Point{latitude: 400_000_000, longitude: -750_000_000}
       high = %Routeguide.Point{latitude: 420_000_000, longitude: -730_000_000}
       rect = %Routeguide.Rectangle{lo: low, hi: high}
-
-      {:ok, stream} =
-        channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 5 * @deadline)
+      {:ok, stream} = channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 500)
 
       Enum.each(stream, fn {:ok, feature} ->
         assert feature

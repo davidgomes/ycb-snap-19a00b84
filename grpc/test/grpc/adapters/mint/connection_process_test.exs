@@ -621,7 +621,7 @@ defmodule GRPC.Client.Adapters.Mint.ConnectionProcessTest do
       assert [{:error, %Mint.HTTPError{reason: {:server_closed_request, :refused_stream}}}] =
                :queue.to_list(response_state.responses)
 
-      refute_receive {:elixir_grpc, :connection_down, _pid}
+      refute_received {:elixir_grpc, :connection_down, _pid}
     end
   end
 
