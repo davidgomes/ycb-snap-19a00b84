@@ -56,7 +56,7 @@ Open the generated migration and call the `up` and `down` functions on `ErrorTra
 defmodule MyApp.Repo.Migrations.AddErrorTracker do
   use Ecto.Migration
 
-  def up, do: ErrorTracker.Migration.up(version: 4)
+  def up, do: ErrorTracker.Migration.up(version: 5)
 
   # We specify `version: 1` in `down`, to ensure we remove all migrations.
   def down, do: ErrorTracker.Migration.down(version: 1)
@@ -158,3 +158,11 @@ ErrorTracker tracks every error by default. In certain cases some errors may be 
 ErrorTracker provides functionality that allows you to ignore errors based on their attributes and context.
 
 Take a look at the `ErrorTracker.Ignorer` behaviour for more information about how to implement your own ignorer.
+
+## Muting errors
+
+Sometimes an error is noisy but you still want to keep track of its occurrences. In those cases you can mute it from the dashboard (or using `ErrorTracker.mute/1`).
+
+Occurrences of muted errors are still stored, but no Telemetry events are emitted for them. As notifications and other integrations are built on top of those events, muted errors won't reach them.
+
+You can unmute an error at any time from the dashboard or using `ErrorTracker.unmute/1`.
