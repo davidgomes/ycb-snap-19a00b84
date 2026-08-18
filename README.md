@@ -140,6 +140,45 @@ cursor_before = metadata.before
 IO.puts "total count: #{metadata.total_count}"
 ```
 
+## Dynamic expressions
+
+You can paginate on computed SQL expressions by passing a 0-arity function
+in `:cursor_fields` that returns an `Ecto.Query.dynamic/2` expression. Use
+`select_merge` so the expression value is available on each returned row,
+and optionally provide `:fetch_cursor_value_fun` when the value is not a
+schema field.
+
+```elixir
+query =
+  from(
+    f in Post,
+    select_merge: %{
+      rank_value:
+        fragment("ts_rank(document, plainto_tsquery('simple', ?)) AS rank_value", ^q)
+    },
+    where: fragment("document @@ plainto_tsquery('simple', ?)", ^q),
+    order_by: [
+      desc: fragment("rank_value"),
+      desc: f.id
+    ]
+  )
+
+query
+|> Repo.paginate(
+  limit: 30,
+  cursor_fields: [
+    {:rank_value,
+     fn ->
+       dynamic(
+         [x],
+         fragment("ts_rank(document, plainto_tsquery('simple', ?))", ^q)
+       )
+     end},
+    :id
+  ]
+)
+```
+
 ## Security Considerations
 
 `Repo.paginate/4` will throw an `ArgumentError` should it detect an executable term in the cursor parameters passed to it (`before`, `after`).

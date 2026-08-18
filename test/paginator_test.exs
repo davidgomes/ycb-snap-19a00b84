@@ -827,6 +827,44 @@ defmodule PaginatorTest do
     end
   end
 
+  test "expression based field is passed to cursor_fields" do
+    base_customer_name = "Bob"
+
+    list = create_customers_with_similar_names(base_customer_name)
+
+    {:ok, customer_3} = Enum.fetch(list, 3)
+
+    %Page{entries: entries, metadata: metadata} =
+      base_customer_name
+      |> customers_with_tsvector_rank()
+      |> Repo.paginate(
+        after: encode_cursor(%{rank_value: customer_3.rank_value, id: customer_3.id}),
+        limit: 3,
+        cursor_fields: [
+          {:rank_value,
+           fn ->
+             dynamic(
+               [x],
+               fragment(
+                 "ts_rank(setweight(to_tsvector('simple', name), 'A'), plainto_tsquery('simple', ?))",
+                 ^base_customer_name
+               )
+             )
+           end},
+          :id
+        ]
+      )
+
+    last_entry = List.last(entries)
+    first_entry = List.first(entries)
+
+    assert metadata == %Metadata{
+             after: encode_cursor(%{rank_value: last_entry.rank_value, id: last_entry.id}),
+             before: encode_cursor(%{rank_value: first_entry.rank_value, id: first_entry.id}),
+             limit: 3
+           }
+  end
+
   test "when before parameter is erlang term, we do not execute the code", %{} do
     # before and after, are user inputs, we need to make sure that they are
     # handled safely.
@@ -1102,6 +1140,46 @@ defmodule PaginatorTest do
       order_by: [
         {^address_city_direction, a.city},
         {^payment_id_direction, p.id}
+      ]
+    )
+  end
+
+  defp create_customers_with_similar_names(base_customer_name) do
+    1..10
+    |> Enum.map(fn i ->
+      {:ok, %{rows: [[rank_value]]}} =
+        Repo.query(
+          "SELECT ts_rank(setweight(to_tsvector('simple', $1), 'A'), plainto_tsquery('simple', $2))",
+          [
+            "#{base_customer_name} #{i}",
+            base_customer_name
+          ]
+        )
+
+      insert(:customer, %{
+        name: "#{base_customer_name} #{i}",
+        rank_value: rank_value
+      })
+    end)
+  end
+
+  defp customers_with_tsvector_rank(q) do
+    from(f in Customer,
+      select_merge: %{
+        rank_value:
+          fragment(
+            "ts_rank(setweight(to_tsvector('simple', name), 'A'), plainto_tsquery('simple', ?)) AS rank_value",
+            ^q
+          )
+      },
+      where:
+        fragment(
+          "setweight(to_tsvector('simple', name), 'A') @@ plainto_tsquery('simple', ?)",
+          ^q
+        ),
+      order_by: [
+        asc: fragment("rank_value"),
+        asc: f.id
       ]
     )
   end
