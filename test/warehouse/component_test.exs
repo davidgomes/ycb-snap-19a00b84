@@ -3,7 +3,7 @@ defmodule Warehouse.ComponentTest do
 
   import Mox
 
-  alias Warehouse.{AdditiveMap, Component}
+  alias Warehouse.{AdditiveMap, Component, Sku}
 
   def demand_fixture(sku, kit_quantity, component_demand, parts_available) do
     component = insert(:component)
@@ -52,5 +52,38 @@ defmodule Warehouse.ComponentTest do
   test "update_component_demand/2 updates the component demand" do
     component = :component |> insert() |> supervise()
     assert :ok = Component.update_component_demand(component.id, 5)
+  end
+
+  test "update_component_availability/0 recalculates demand for non-pulled components" do
+    stub(Warehouse.MockEvents, :broadcast_component_quantities, fn _, _ -> :ok end)
+    stub(Warehouse.MockEvents, :broadcast_sku_quantities, fn _, _ -> :ok end)
+
+    sku = :sku |> insert() |> supervise()
+    component = insert(:component)
+    insert(:kit, component: component, sku: sku, quantity: 1)
+    supervise(component)
+
+    Component.update_component_demand(component.id, 5)
+    assert AdditiveMap.get(Component.get_sku_demands(), sku.id) == 5
+
+    insert_list(3, :part, sku: sku)
+    Sku.update_sku_availability(sku.id)
+
+    assert_eventually(fn ->
+      AdditiveMap.get(Component.get_sku_demands(), sku.id) == 2 and
+        Sku.get_sku_quantity(sku.id).demand == 2
+    end)
+  end
+
+  defp assert_eventually(assertion, attempts \\ 20)
+  defp assert_eventually(assertion, 0), do: assert(assertion.())
+
+  defp assert_eventually(assertion, attempts) do
+    if assertion.() do
+      assert true
+    else
+      Process.sleep(10)
+      assert_eventually(assertion, attempts - 1)
+    end
   end
 end
