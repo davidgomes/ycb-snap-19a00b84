@@ -245,55 +245,23 @@ Override global options for specific handlers using tuple syntax:
 }
 ```
 
-**Supported per-handler options:**
+**Per-handler options:**
 
-Oban job options (under `:oban` key):
+Any option supported by `Oban.Job.new/2` can be provided under the `:oban` key.
+Per-handler options are merged over the global options:
 - `queue` - Override queue (atom)
 - `max_attempts` - Override retry count (integer)
 - `priority` - Override priority (0-3, lower is higher)
 - `tags` - Override tags (list of strings)
-
-Conditional execution (`:if` key):
-- Function: `fn event -> boolean() end` - receives full Event struct
-- MFA tuple: `{Module, :function, [args]}` - event is appended as last argument
-
-### Conditional handlers
-
-Use the `:if` option to conditionally schedule handlers based on runtime conditions:
+- `schedule_in`, `unique`, `meta`, etc. - Any other supported Oban job option
 
 ```elixir
 @events %{
   user_created: [
-    # Feature flag check (recommended for @events - can be serialized)
-    {MyApp.NewEmailHandler, if: {FunWithFlags, :enabled?, [:new_email_template]}},
-
-    # Custom validation function
-    {MyApp.PremiumHandler, if: {MyApp.Features, :is_premium?, []}},
-
-    # Always scheduled (no :if)
-    MyApp.StandardHandler
+    {MyApp.EmailHandler, oban: [unique: [period: 60]]}
   ]
 }
-
-# Helper module example
-defmodule MyApp.Features do
-  def is_premium?(event) do
-    event.data["plan"] != "free"
-  end
-end
 ```
-
-**The `:if` condition:**
-- Receives the full `Event` struct (with `data`, `event_id`, `causation_id`, `correlation_id`)
-- `idempotency_key` is `nil` in the `:if` check (generated per-job after condition passes)
-- Runs synchronously during `emit/3`, before Oban jobs are created
-- If returns `false`, handler is skipped (no job created)
-- Keep checks fast - they block the emit caller
-
-**MFA vs Function:**
-- MFA tuples (`{Module, :function, []}`) can be used in `@events` module attributes
-- Anonymous functions work at runtime but cannot be stored in module attributes
-- For feature flags, use MFA tuples with libraries like `fun_with_flags`
 
 ## API
 
