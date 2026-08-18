@@ -271,7 +271,11 @@ defmodule Flop.Adapter.Ecto do
       } = field_info ->
         dynamic_opts = Keyword.merge(extra_opts, field_dynamic_opts)
         field_dynamic = apply(mod, fun, [dynamic_opts])
-        field_info = put_in(field_info.extra[:resolved_dynamic], field_dynamic)
+
+        field_info = %{
+          field_info
+          | extra: Map.put(field_info.extra, :resolved_dynamic, field_dynamic)
+        }
 
         Query.where(
           query,
