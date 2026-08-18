@@ -151,6 +151,15 @@ defmodule GRPC.Client.ReResolveTest do
     :sys.get_state(worker_pid)
   end
 
+  defp wait_for_channels(ref, count, attempts \\ 200) do
+    if map_size(get_state(ref).real_channels) == count or attempts == 0 do
+      :ok
+    else
+      Process.sleep(10)
+      wait_for_channels(ref, count, attempts - 1)
+    end
+  end
+
   describe "scale-up: new backends discovered" do
     test "adds channels for addresses that appear in DNS", ctx do
       {:ok, channel} =
@@ -487,7 +496,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: new_addrs, service_config: nil}}
       end)
 
-      Process.sleep(@wait)
+      wait_for_channels(ctx.ref, 3)
 
       hosts =
         for _ <- 1..6 do
@@ -518,7 +527,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: [%{address: "10.0.0.2", port: 50051}], service_config: nil}}
       end)
 
-      Process.sleep(@wait)
+      wait_for_channels(ctx.ref, 1)
 
       hosts =
         for _ <- 1..5 do
@@ -562,6 +571,8 @@ defmodule GRPC.Client.ReResolveTest do
       picks = pickers |> Task.await_many(10_000) |> List.flatten()
 
       assert Enum.all?(picks, &match?({:ok, %GRPC.Channel{}}, &1))
+
+      wait_for_channels(ctx.ref, 1)
 
       hosts =
         for _ <- 1..3 do
@@ -1153,14 +1164,14 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "refresh handler with failed channels" do
+  describe "failed channels" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.2"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
       Map.put(ctx, :failing_adapter, GRPC.Test.FailingClientAdapter)
     end
 
-    test "GenServer survives when :refresh picks a failed channel", ctx do
+    test "are never offered to the load balancer", ctx do
       # Connect with 2 backends — one healthy, one failing
       expect(ctx.resolver, :resolve, fn _target ->
         {:ok,
@@ -1199,20 +1210,15 @@ defmodule GRPC.Client.ReResolveTest do
       state = get_state(ctx.ref)
       assert match?({:failed, _}, Map.get(state.real_channels, "10.0.0.2:50051"))
 
-      # Wait for several :refresh cycles (15s default, but we'll trigger manually).
-      # Round-robin will eventually pick 10.0.0.2. Without the fix, this crashes.
-      pid = whereis_name(ctx.ref)
+      # Round robin would otherwise rotate onto the backend that never connected.
+      hosts =
+        for _ <- 1..5 do
+          {:ok, picked} = Connection.pick_channel(channel)
+          picked.host
+        end
 
-      for _ <- 1..5 do
-        send(pid, :refresh)
-      end
-
-      # Small sleep for messages to process
-      Process.sleep(50)
-
-      assert Process.alive?(pid)
-      assert {:ok, picked} = Connection.pick_channel(channel)
-      assert picked.host == "10.0.0.1"
+      assert Enum.uniq(hosts) == ["10.0.0.1"]
+      assert Process.alive?(whereis_name(ctx.ref))
 
       disconnect_and_wait(channel)
     end
