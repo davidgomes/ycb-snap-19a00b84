@@ -113,6 +113,21 @@ defmodule Surface.Components.LinkTest do
     assert html =~ ~s(phx-click="my_click")
   end
 
+  test "event with values" do
+    html =
+      render_surface do
+        ~F"""
+        <Link label="user" to="/users/1" click="my_click" values={hello: :world, one: 2} />
+        """
+      end
+
+    doc = parse_document!(html)
+
+    assert attribute(doc, "phx-click") == ["my_click"]
+    assert attribute(doc, "phx-value-hello") == ["world"]
+    assert attribute(doc, "phx-value-one") == ["2"]
+  end
+
   test "updates when opts change", %{conn: conn} do
     {:ok, view, html} = live_isolated(conn, ViewWithLink)
     refute html =~ ~s(disabled="disabled")

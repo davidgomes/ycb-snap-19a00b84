@@ -4,6 +4,11 @@
 
 This version moves all Form helpers to a [separate library](https://github.com/surface-ui/surface_form). Form Helpers are no longer used in new apps from Surface v0.12. Older applications who wish to maintain compatibility, add `{:surface_form, "~> 0.1.0"}` to your `mix.exs`.
 
+* Add support for the `viewport-top`, `viewport-bottom`, `mounted`, `remove`, `connected` and `disconnected`
+    events, e.g. `:on-viewport-top={...}`
+* The internal modules `Surface.Components.Events` and `Surface.Components.Utils`, only used by the form
+    helpers and other form-related components, have been moved to `surface_form`
+
 ## v0.11.5 (2024-09-04)
 
 * Support Liveview `~> 0.20.15` (#749)
