@@ -8,12 +8,28 @@ defmodule Warehouse.Clients.Assembly.Connection do
 
   require Logger
 
+  @reconnect_interval_ms :timer.seconds(5)
+
   def start_link(_) do
     GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
+  @doc """
+  Returns the channel used to talk to the assembly service, or an error when the
+  connection is not running at all.
+
+  ## Examples
+
+      iex> channel()
+      {:ok, %GRPC.Channel{}}
+
+  """
+  @spec channel() :: {:ok, GRPC.Channel.t()} | {:error, :not_started}
   def channel() do
-    GenServer.call(__MODULE__, :channel)
+    case GenServer.whereis(__MODULE__) do
+      nil -> {:error, :not_started}
+      pid -> GenServer.call(pid, :channel)
+    end
   end
 
   @impl true
@@ -21,38 +37,40 @@ defmodule Warehouse.Clients.Assembly.Connection do
     Logger.debug("Warehouse.Clients.Assembly.Connection connecting to gateway at #{config(:url)}")
 
     case GRPC.Stub.connect(config(:url), assembly_service_options()) do
-      {:error, error} ->
-        Logger.error("Warehouse.Clients.Assembly.Connection could not connect: #{error}")
-        Process.sleep(5000)
-        init(%{})
-
-      channel ->
+      {:ok, channel} ->
         Logger.debug("Warehouse.Clients.Assembly.Connection connected")
         {:ok, channel}
-    end
-  end
 
-  @impl true
-  def handle_info({:gun_down, _, _, _, _}, _state) do
-    Logger.debug("Warehouse.Clients.Assembly.Connection disconnected")
-
-    with {:ok, channel} <- init(%{}) do
-      {:noreply, channel}
-    end
-  end
-
-  @impl true
-  def handle_info({:gun_up, _, _, _, _}, _state) do
-    Logger.debug("Warehouse.Clients.Assembly.Connection connected")
-
-    with {:ok, channel} <- init(%{}) do
-      {:noreply, channel}
+      {:error, reason} ->
+        Logger.error("Warehouse.Clients.Assembly.Connection could not connect", resource: inspect(reason))
+        Process.sleep(@reconnect_interval_ms)
+        init(:ok)
     end
   end
 
   @impl true
   def handle_call(:channel, _from, channel) do
-    {:reply, channel, channel}
+    {:reply, {:ok, channel}, channel}
+  end
+
+  # `gun` reconnects on its own and keeps the same connection process, so the
+  # channel we already hold stays valid and we must not open a second one.
+  @impl true
+  def handle_info({:gun_up, _conn_pid, protocol}, channel) do
+    Logger.debug("Warehouse.Clients.Assembly.Connection connected over #{protocol}")
+    {:noreply, channel}
+  end
+
+  @impl true
+  def handle_info({:gun_down, _conn_pid, _protocol, reason, _killed_streams}, channel) do
+    Logger.debug("Warehouse.Clients.Assembly.Connection disconnected", resource: inspect(reason))
+    {:noreply, channel}
+  end
+
+  @impl true
+  def handle_info(message, channel) do
+    Logger.debug("Warehouse.Clients.Assembly.Connection ignoring message", resource: inspect(message))
+    {:noreply, channel}
   end
 
   defp assembly_service_options() do

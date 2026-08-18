@@ -17,13 +17,18 @@ defmodule Warehouse.Clients.Assembly.DefaultClient do
 
     with {:ok, channel} <- Connection.channel(),
          {:ok, stream} <- Stub.list_component_demands(channel, request) do
-      Stream.map(stream, &cast/1)
+      Stream.flat_map(stream, &cast/1)
     else
       {:error, reason} ->
         Logger.error("Unable to get component demand from assembly service", resource: inspect(reason))
-        Stream.cycle([])
+        []
     end
   end
 
-  defp cast({:ok, res}), do: res
+  defp cast({:ok, res}), do: [res]
+
+  defp cast(res) do
+    Logger.error("Unable to read component demand from assembly service", resource: inspect(res))
+    []
+  end
 end
