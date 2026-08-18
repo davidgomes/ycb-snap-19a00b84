@@ -1,0 +1,5 @@
+# The Python and Elixir Oban instances share this PostgreSQL database.
+dsn = "postgresql://postgres:postgres@localhost/badge_forge_dev"
+
+[queues]
+badges = 10
