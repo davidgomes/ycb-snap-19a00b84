@@ -65,19 +65,39 @@ defmodule Hexpm.Repository.Releases do
 
   def latest_version(repository, package, opts)
       when is_binary(repository) and is_binary(package) do
+    only_stable? = Keyword.fetch!(opts, :only_stable)
+    unstable_fallback? = Keyword.get(opts, :unstable_fallback, false)
+    with_docs? = Keyword.get(opts, :with_docs)
+
     from(r in Release,
       join: p in assoc(r, :package),
       join: repository in assoc(p, :repository),
       where: repository.name == ^repository and p.name == ^package,
-      select: struct(r, [:version, :has_docs])
+      select: r.version
     )
-    |> Repo.all()
-    |> Release.latest_version(opts)
+    |> maybe_filter_has_docs(with_docs?)
+    |> maybe_filter_stable(only_stable?)
+    |> order_by([r], desc: r.version)
+    |> limit(1)
+    |> Repo.one()
     |> case do
-      nil -> nil
-      release -> release.version
+      nil when only_stable? and unstable_fallback? ->
+        latest_version(
+          repository,
+          package,
+          Keyword.merge(opts, only_stable: false, unstable_fallback: false)
+        )
+
+      release ->
+        release
     end
   end
+
+  defp maybe_filter_has_docs(query, true), do: where(query, [r], r.has_docs)
+  defp maybe_filter_has_docs(query, _), do: query
+
+  defp maybe_filter_stable(query, true), do: where(query, [r], fragment("(?).prerelease = '{}'", r.version))
+  defp maybe_filter_stable(query, _), do: query
 
   def package_versions(packages) do
     Release.package_versions(packages)

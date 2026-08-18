@@ -102,24 +102,15 @@ defmodule Hexpm.Repository.Packages do
       from(
         r in Release,
         where: r.package_id in ^package_ids,
-        group_by: r.package_id,
-        select:
-          {r.package_id,
-           {fragment("array_agg(?)", r.version), fragment("array_agg(?)", r.inserted_at)}}
+        distinct: r.package_id,
+        order_by: [asc: r.package_id, desc: r.version],
+        select: {r.package_id, r}
       )
       |> Repo.all()
-      |> Map.new(fn {package_id, {versions, inserted_ats}} ->
-        {package_id,
-         Enum.zip_with(versions, inserted_ats, fn version, inserted_at ->
-           %Release{version: version, inserted_at: inserted_at}
-         end)}
-      end)
+      |> Map.new()
 
     Enum.map(packages, fn package ->
-      release =
-        Release.latest_version(releases[package.id], only_stable: true, unstable_fallback: true)
-
-      %{package | latest_release: release}
+      %{package | latest_release: releases[package.id]}
     end)
   end
 
