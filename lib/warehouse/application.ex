@@ -8,6 +8,9 @@ defmodule Warehouse.Application do
   require Logger
 
   def start(_type, _args) do
+    # Order matters here. The warmup needs the assembly connection to ask for
+    # component demand, and Broadway must not handle a message before every SKU
+    # and component process is running and holds its demand.
     children =
       [
         {SpandexDatadog.ApiServer, [http: HTTPoison, host: "127.0.0.1", batch_size: 20]},
@@ -30,8 +33,6 @@ defmodule Warehouse.Application do
     {:ok, _pid} = Supervisor.start_link(children, opts)
   end
 
-  # The warmup needs the assembly connection to ask for component demand, and
-  # `Warehouse.Broadway` must not handle messages before the warmup is done.
   defp assembly_connection_children() do
     if Application.get_env(:warehouse, Warehouse.Clients.Assembly.Connection)[:enabled?],
       do: [Warehouse.Clients.Assembly.Connection],

@@ -4,7 +4,6 @@ config :warehouse,
   env: Mix.env(),
   ecto_repos: [Warehouse.Repo],
   events: Warehouse.Events,
-  warmup?: true,
   exluded_picking_locations: [
     # shipping
     208,
@@ -23,7 +22,8 @@ config :warehouse,
     # sarah's desk
     401
   ],
-  producer: {BroadwayRabbitMQ.Producer, queue: "", connection: []}
+  producer: {BroadwayRabbitMQ.Producer, queue: "", connection: []},
+  warmup?: true
 
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",

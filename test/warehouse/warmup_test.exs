@@ -41,6 +41,6 @@ defmodule Warehouse.WarmupTest do
 
     assert :ok = Warmup.run()
 
-    assert Component.get_sku_demands() |> AdditiveMap.get(sku.id) == 20
+    assert AdditiveMap.get(Component.get_sku_demands(), sku.id) == 20
   end
 end
