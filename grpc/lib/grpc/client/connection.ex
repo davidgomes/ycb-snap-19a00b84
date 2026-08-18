@@ -261,7 +261,7 @@ defmodule GRPC.Client.Connection do
          {:ok, %Channel{} = channel} <- lb_mod.pick(lb_state) do
       {:ok, channel}
     else
-      _no_channel -> {:error, :no_connection}
+      _unavailable -> {:error, :no_connection}
     end
   end
 
@@ -354,8 +354,8 @@ defmodule GRPC.Client.Connection do
 
   @impl GenServer
   def terminate(_reason, %__MODULE__{virtual_channel: %Channel{ref: ref}} = state) do
-    # Both erases are idempotent, so this also covers crashes and supervisor stops
-    # that never went through disconnect/1.
+    # Idempotent, so this also covers crashes and supervisor stops that never went
+    # through disconnect/1.
     :persistent_term.erase({__MODULE__, ref})
     shutdown_lb(state)
     :ok
@@ -380,15 +380,17 @@ defmodule GRPC.Client.Connection do
     added = MapSet.difference(new_keys, old_keys)
     removed = MapSet.difference(old_keys, new_keys)
 
-    real_channels = disconnect_removed_channels(removed, adapter, state.real_channels)
-
-    real_channels =
-      connect_new_channels(new_addresses, added, adapter, opts, state, real_channels)
+    kept = Map.drop(state.real_channels, MapSet.to_list(removed))
+    real_channels = connect_new_channels(new_addresses, added, adapter, opts, state, kept)
 
     # The published lb_state is stable for the life of the connection, so handing the
     # new channels to the policy is enough — no :persistent_term write, and therefore
     # no global GC pass, when backends scale in or out.
     publish_channels(state, real_channels)
+
+    # Closed only once the policy has stopped handing them out, so concurrent picks
+    # don't land on a backend that is going away.
+    disconnect_channels(removed, adapter, state.real_channels)
 
     %{state | real_channels: real_channels}
   end
@@ -418,14 +420,12 @@ defmodule GRPC.Client.Connection do
 
   defp shutdown_lb(state), do: state
 
-  defp disconnect_removed_channels(removed, adapter, real_channels) do
-    Enum.reduce(MapSet.to_list(removed), real_channels, fn key, channels ->
-      case Map.get(channels, key) do
+  defp disconnect_channels(keys, adapter, real_channels) do
+    Enum.each(keys, fn key ->
+      case Map.get(real_channels, key) do
         {:connected, ch} -> do_disconnect(adapter, ch)
         _ -> :ok
       end
-
-      Map.delete(channels, key)
     end)
   end
 
