@@ -10,10 +10,22 @@ defmodule MixHelper do
   end
 
   def in_tmp(which, function) do
-    path = Path.join(tmp_path(), which)
+    path = Path.join(tmp_path(), to_string(which))
     File.rm_rf! path
     File.mkdir_p! path
     File.cd! path, function
+  end
+
+  def in_tmp_project(which, function) do
+    conf_before = Application.get_env(:phoenix, :generators) || []
+    path = Path.join(tmp_path(), to_string(which))
+    File.rm_rf! path
+    File.mkdir_p! path
+    File.cd! path, fn ->
+      File.touch!("mix.exs")
+      function.()
+    end
+    Application.put_env(:phoenix, :generators, conf_before)
   end
 
   def assert_file(file) do
