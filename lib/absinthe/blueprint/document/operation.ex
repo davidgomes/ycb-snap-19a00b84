@@ -13,6 +13,7 @@ defmodule Absinthe.Blueprint.Document.Operation do
     variable_definitions: [],
     variable_uses: [],
     fragment_uses: [],
+    description: nil,
     source_location: nil,
     # Populated by phases
     flags: %{},
@@ -31,6 +32,7 @@ defmodule Absinthe.Blueprint.Document.Operation do
           variable_definitions: [Blueprint.Document.VariableDefinition.t()],
           variable_uses: [Blueprint.Input.Variable.Use.t()],
           fragment_uses: [Blueprint.Document.Fragment.Named.Use.t()],
+          description: nil | String.t(),
           source_location: nil | Blueprint.SourceLocation.t(),
           schema_node: nil | Absinthe.Type.Object.t(),
           complexity: nil | non_neg_integer,

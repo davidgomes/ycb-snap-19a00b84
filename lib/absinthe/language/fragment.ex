@@ -7,6 +7,7 @@ defmodule Absinthe.Language.Fragment do
             type_condition: nil,
             directives: [],
             selection_set: nil,
+            description: nil,
             loc: %{line: nil}
 
   @type t :: %__MODULE__{
@@ -14,6 +15,7 @@ defmodule Absinthe.Language.Fragment do
           type_condition: nil | Language.NamedType.t(),
           directives: [Language.Directive.t()],
           selection_set: Language.SelectionSet.t(),
+          description: nil | String.t(),
           loc: Language.loc_t()
         }
 
@@ -24,6 +26,7 @@ defmodule Absinthe.Language.Fragment do
         type_condition: Blueprint.Draft.convert(node.type_condition, doc),
         selections: Blueprint.Draft.convert(node.selection_set.selections, doc),
         directives: Blueprint.Draft.convert(node.directives, doc),
+        description: node.description,
         source_location: source_location(node)
       }
     end

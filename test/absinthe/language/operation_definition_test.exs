@@ -55,6 +55,21 @@ defmodule Absinthe.Language.OperationDefinitionTest do
     end
   end
 
+  @query """
+  "A query with a description"
+  query Foo {
+    foo
+  }
+  """
+
+  test "builds a Operation.t with a description" do
+    assert %Blueprint.Document.Operation{
+             name: "Foo",
+             type: :query,
+             description: "A query with a description"
+           } = from_input(@query)
+  end
+
   defp from_input(text) do
     {:ok, %{input: doc}} = Absinthe.Phase.Parse.run(text)
 

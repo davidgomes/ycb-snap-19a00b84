@@ -9,6 +9,7 @@ defmodule Absinthe.Language.OperationDefinition do
             directives: [],
             selection_set: nil,
             shorthand: false,
+            description: nil,
             loc: %{line: nil}
 
   @type t :: %__MODULE__{
@@ -18,6 +19,7 @@ defmodule Absinthe.Language.OperationDefinition do
           directives: [Language.Directive.t()],
           selection_set: Language.SelectionSet.t(),
           shorthand: boolean(),
+          description: nil | String.t(),
           loc: Language.loc_t()
         }
 
@@ -29,6 +31,7 @@ defmodule Absinthe.Language.OperationDefinition do
         directives: Absinthe.Blueprint.Draft.convert(node.directives, doc),
         variable_definitions: Blueprint.Draft.convert(node.variable_definitions, doc),
         selections: Blueprint.Draft.convert(node.selection_set.selections, doc),
+        description: node.description,
         source_location: source_location(node)
       }
     end
