@@ -180,6 +180,19 @@ defmodule Phoenix.LiveView.Upload do
   @doc """
   Populates the errors for a given entry.
   """
+  def put_upload_error(
+        %Socket{} = socket,
+        conf_name,
+        entry_ref,
+        {:writer_failure, reason}
+      ) do
+    conf = Map.fetch!(socket.assigns.uploads, conf_name)
+
+    conf
+    |> UploadConfig.fail_entry(entry_ref, reason)
+    |> update_uploads(socket)
+  end
+
   def put_upload_error(%Socket{} = socket, conf_name, entry_ref, reason) do
     conf = Map.fetch!(socket.assigns.uploads, conf_name)
 

@@ -17,18 +17,31 @@ export default class EntryUploader {
     if (this.errored) {
       return;
     }
-    this.uploadChannel.leave();
     this.errored = true;
     this.chunkTimer != null && clearTimeout(this.chunkTimer);
+    this.uploadChannel.leave();
     this.entry.error(reason);
   }
 
+  channelError(reason) {
+    if (this.errored) {
+      return;
+    }
+    if (reason === "writer_error") {
+      this.errored = true;
+      this.chunkTimer != null && clearTimeout(this.chunkTimer);
+      this.uploadChannel.leave();
+    } else {
+      this.error(reason);
+    }
+  }
+
   upload() {
-    this.uploadChannel.onError((reason) => this.error(reason));
+    this.uploadChannel.onError((reason) => this.channelError(reason));
     this.uploadChannel
       .join()
       .receive("ok", (_data) => this.readNextChunk())
-      .receive("error", ({ reason }) => this.error(reason));
+      .receive("error", ({ reason }) => this.channelError(reason));
   }
 
   isDone() {
@@ -71,6 +84,6 @@ export default class EntryUploader {
           );
         }
       })
-      .receive("error", ({ reason }) => this.error(reason));
+      .receive("error", ({ reason }) => this.channelError(reason));
   }
 }

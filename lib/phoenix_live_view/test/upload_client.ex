@@ -134,20 +134,23 @@ defmodule Phoenix.LiveViewTest.UploadClient do
       "ref" => ref
     } = client_entry
 
-    {:ok, _resp, entry_socket} =
-      Phoenix.ChannelTest.subscribe_and_join(state.socket, "lvu:123", %{"token" => token})
+    case Phoenix.ChannelTest.subscribe_and_join(state.socket, "lvu:123", %{"token" => token}) do
+      {:ok, _resp, entry_socket} ->
+        %{
+          name: name,
+          content: content,
+          size: byte_size(content),
+          type: type,
+          socket: entry_socket,
+          ref: ref,
+          token: token,
+          chunk_percent: 0
+        }
+        |> with_chunk_boundaries()
 
-    %{
-      name: name,
-      content: content,
-      size: byte_size(content),
-      type: type,
-      socket: entry_socket,
-      ref: ref,
-      token: token,
-      chunk_percent: 0
-    }
-    |> with_chunk_boundaries()
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   def with_chunk_boundaries(entry) do
