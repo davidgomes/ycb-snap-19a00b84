@@ -33,6 +33,25 @@ defmodule Paginator.ConfigTest do
       assert config.cursor_fields == [id: :desc]
     end
 
+    test "applies column with nulls direction tuples" do
+      config =
+        Config.new(
+          cursor_fields: [
+            id: :asc_nulls_last,
+            name: :asc_nulls_first,
+            age: :desc_nulls_last,
+            score: :desc_nulls_first
+          ]
+        )
+
+      assert config.cursor_fields == [
+               id: :asc_nulls_last,
+               name: :asc_nulls_first,
+               age: :desc_nulls_last,
+               score: :desc_nulls_first
+             ]
+    end
+
     test "applies column with direction tuples mixed with column fields" do
       config = Config.new(cursor_fields: [{:id, :desc}, :name], sort_direction: :asc)
 
@@ -43,6 +62,21 @@ defmodule Paginator.ConfigTest do
       config = Config.new(cursor_fields: [{{:payments, :id}, :desc}], sort_direction: :asc)
 
       assert config.cursor_fields == [{{:payments, :id}, :desc}]
+    end
+
+    test "applies {binding, column} tuples with nulls direction" do
+      config =
+        Config.new(
+          cursor_fields: [
+            {{:payments, :id}, :desc_nulls_last},
+            {{:customers, :name}, :asc_nulls_first}
+          ]
+        )
+
+      assert config.cursor_fields == [
+               {{:payments, :id}, :desc_nulls_last},
+               {{:customers, :name}, :asc_nulls_first}
+             ]
     end
 
     test "applies {binding, column} tuples without direction" do
@@ -157,6 +191,25 @@ defmodule Paginator.ConfigTest do
             Cursor.encode(%{
               {:person, :first_name} => "Test 121",
               {:person, :last_name} => "Test"
+            })
+        )
+
+      Config.validate!(config)
+    end
+
+    test "ok when cursor matches cursor_fields with nulls order directions" do
+      config =
+        Config.new(
+          cursor_fields: [
+            {:person, :first_name},
+            {{:person, :last_name}, :asc_nulls_last},
+            age: :desc_nulls_first
+          ],
+          after:
+            Cursor.encode(%{
+              {:person, :first_name} => "Test 121",
+              {:person, :last_name} => "Test",
+              :age => 30
             })
         )
 

@@ -936,6 +936,27 @@ defmodule PaginatorTest do
            }
   end
 
+  test "sorts with nulls directions", %{
+    payments: {_p1, _p2, _p3, p4, p5, p6, p7, p8, _p9, _p10, _p11, _p12}
+  } do
+    %Page{entries: entries, metadata: metadata} =
+      payments_by_amount_and_charged_at(:desc_nulls_last, :asc_nulls_first)
+      |> Repo.paginate(
+        cursor_fields: [amount: :desc_nulls_last, charged_at: :asc_nulls_first, id: :asc],
+        after: encode_cursor(%{amount: p8.amount, charged_at: p8.charged_at, id: p8.id}),
+        before: encode_cursor(%{amount: p6.amount, charged_at: p6.charged_at, id: p6.id}),
+        limit: 8
+      )
+
+    assert to_ids(entries) == to_ids([p7, p5, p4])
+
+    assert metadata == %Metadata{
+             after: encode_cursor(%{amount: p4.amount, charged_at: p4.charged_at, id: p4.id}),
+             before: encode_cursor(%{amount: p7.amount, charged_at: p7.charged_at, id: p7.id}),
+             limit: 8
+           }
+  end
+
   defp to_ids(entries), do: Enum.map(entries, & &1.id)
 
   defp create_customers_and_payments(_context) do
