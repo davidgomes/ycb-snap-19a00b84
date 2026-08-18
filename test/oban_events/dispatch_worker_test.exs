@@ -4,9 +4,9 @@ defmodule ObanEvents.DispatchWorkerTest do
 
   import ExUnit.CaptureLog
 
-  alias ObanEvents.DispatchWorker
+  alias ObanEvents.{DispatchWorker, Event}
 
-  # Mock handler for testing
+  # Mock handler with handle_event/2 for testing
   defmodule TestHandler do
     @moduledoc false
     @behaviour ObanEvents.Handler
@@ -38,8 +38,22 @@ defmodule ObanEvents.DispatchWorkerTest do
     def handle_event(_event, _data), do: :ok
   end
 
+  # Mock handler with handle_event/3 (with Event struct)
+  defmodule TestHandlerWithMetadata do
+    @moduledoc false
+    use ObanEvents.Handler
+
+    @impl true
+    def handle_event(:test_event_with_meta, data, %Event{} = event) do
+      send(self(), {:handler_3_called, :test_event_with_meta, data, event})
+      :ok
+    end
+
+    def handle_event(_event, _data, _meta), do: :ok
+  end
+
   describe "perform/1" do
-    test "successfully processes event and calls handler" do
+    test "successfully processes event and calls handle_event/2" do
       job_args = %{
         "event" => "test_event",
         "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
@@ -49,6 +63,27 @@ defmodule ObanEvents.DispatchWorkerTest do
       assert :ok = perform_job(DispatchWorker, job_args)
 
       assert_received {:handler_called, :test_event, %{"action" => "success"}}
+    end
+
+    test "successfully processes event and calls handle_event/3 when exported" do
+      job_args = %{
+        "id" => "evt-123",
+        "event" => "test_event_with_meta",
+        "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandlerWithMetadata",
+        "data" => %{"foo" => "bar"},
+        "correlation_id" => "corr-456",
+        "causation_id" => "cause-789",
+        "metadata" => %{"actor" => "admin"}
+      }
+
+      assert :ok = perform_job(DispatchWorker, job_args)
+
+      assert_received {:handler_3_called, :test_event_with_meta, %{"foo" => "bar"}, event}
+      assert event.id == "evt-123"
+      assert event.name == :test_event_with_meta
+      assert event.correlation_id == "corr-456"
+      assert event.causation_id == "cause-789"
+      assert event.metadata == %{"actor" => "admin"}
     end
 
     test "returns error when handler returns error" do

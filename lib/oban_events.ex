@@ -14,6 +14,7 @@ defmodule ObanEvents do
   - **Transactional** - Works within database transactions for atomicity
   - **Observable** - Track event processing via Oban Web UI
   - **Type-safe** - Compile-time validation of events
+  - **Event Metadata** - Event ID, timestamp, correlation_id, causation_id, and custom metadata
 
   ## Usage
 
@@ -45,14 +46,26 @@ defmodule ObanEvents do
         end
       end)
 
+  Emit events with metadata:
+
+      MyApp.Events.emit(:user_created, %{user_id: user.id},
+        correlation_id: "req-123",
+        metadata: %{actor_id: current_user.id}
+      )
+
+  Emit an `ObanEvents.Event` struct directly:
+
+      event = ObanEvents.Event.new(:user_created, %{user_id: user.id}, metadata: %{ip: "127.0.0.1"})
+      MyApp.Events.emit(event)
+
   ## Event Flow
 
-  1. `emit/2` is called with an event name and data
+  1. `emit/2` or `emit/3` is called with an event or event name and data/options
   2. Registry looks up all handlers for that event
   3. Oban jobs are created (one per handler)
   4. Jobs are persisted to the database within the transaction
   5. `DispatchWorker` processes each job asynchronously
-  6. Each handler's `handle_event/2` callback is invoked
+  6. Each handler's `handle_event/3` or `handle_event/2` callback is invoked
 
   ## Configuration Options
 
@@ -64,7 +77,9 @@ defmodule ObanEvents do
   ## API
 
   Using this module provides:
+  - `emit/1` - Dispatch an `ObanEvents.Event` struct
   - `emit/2` - Dispatch events to handlers via Oban jobs
+  - `emit/3` - Dispatch events with additional metadata options
   - `get_handlers!/1` - Get handlers for an event
   - `all_events/0` - List all registered events
   - `registered?/1` - Check if an event exists
@@ -87,8 +102,20 @@ defmodule ObanEvents do
       end
   """
 
+  alias ObanEvents.Event
+
   @doc """
-  Emit an event.
+  Emit an `ObanEvents.Event` struct.
+
+  Creates Oban jobs for all registered handlers of the given event.
+  Should be called within a transaction to ensure atomicity.
+
+  Returns `{:ok, jobs}` on success. Raises `ArgumentError` if event is not registered.
+  """
+  @callback emit(Event.t()) :: {:ok, [Oban.Job.t()]}
+
+  @doc """
+  Emit an event with event name and data payload.
 
   Creates Oban jobs for all registered handlers of the given event.
   Should be called within a transaction to ensure atomicity.
@@ -96,6 +123,20 @@ defmodule ObanEvents do
   Returns `{:ok, jobs}` on success. Raises `ArgumentError` if event is not registered.
   """
   @callback emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+
+  @doc """
+  Emit an event with event name, data payload, and metadata options.
+
+  Options can include:
+  - `:id` - Custom event ID
+  - `:timestamp` - Custom `DateTime`
+  - `:correlation_id` - Correlation ID
+  - `:causation_id` - Causation ID
+  - `:metadata` - Additional metadata map
+
+  Returns `{:ok, jobs}` on success. Raises `ArgumentError` if event is not registered.
+  """
+  @callback emit(atom(), map(), keyword() | map()) :: {:ok, [Oban.Job.t()]}
 
   @doc """
   Get all handler modules registered for a given event.
@@ -132,10 +173,55 @@ defmodule ObanEvents do
 
   defmacro __before_compile__(_env) do
     quote do
-      alias ObanEvents.DispatchWorker
+      alias ObanEvents.{DispatchWorker, Event}
 
       @doc """
-      Emit an event.
+      Emit an `ObanEvents.Event` struct.
+
+      Creates Oban jobs for all registered handlers of the given event.
+      Should be called within a transaction to ensure atomicity.
+
+      ## Return Values
+
+      - `{:ok, jobs}` - Successfully created Oban jobs (list of `Oban.Job` structs)
+
+      ## Parameters
+
+      - `event`: An `ObanEvents.Event` struct
+
+      ## Examples
+
+          event = ObanEvents.Event.new(:user_created, %{id: user.id}, metadata: %{ip: "127.0.0.1"})
+          #{inspect(__MODULE__)}.emit(event)
+      """
+      @spec emit(Event.t()) :: {:ok, [Oban.Job.t()]}
+      def emit(%Event{name: event_name} = event) when is_atom(event_name) do
+        handlers = get_handlers!(event_name)
+        event_args = Event.to_map(event)
+
+        jobs =
+          Enum.map(handlers, fn handler_module ->
+            DispatchWorker.new(
+              Map.put(event_args, "handler", Atom.to_string(handler_module)),
+              queue: @oban_queue,
+              max_attempts: @oban_max_attempts,
+              priority: @oban_priority
+            )
+          end)
+
+        if jobs == [] do
+          # No handlers registered, nothing to do
+          {:ok, []}
+        else
+          # Insert all jobs in a single operation
+          # If called within a transaction, these inserts are part of it
+          # Oban.insert_all always returns a list of jobs
+          {:ok, @oban_instance.insert_all(jobs)}
+        end
+      end
+
+      @doc """
+      Emit an event with event name and data map.
 
       Creates Oban jobs for all registered handlers of the given event.
       Should be called within a transaction to ensure atomicity.
@@ -180,31 +266,31 @@ defmodule ObanEvents do
       """
       @spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
       def emit(event_name, data) when is_atom(event_name) and is_map(data) do
-        handlers = get_handlers!(event_name)
+        emit(event_name, data, [])
+      end
 
-        jobs =
-          Enum.map(handlers, fn handler_module ->
-            DispatchWorker.new(
-              %{
-                event: Atom.to_string(event_name),
-                handler: Atom.to_string(handler_module),
-                data: data
-              },
-              queue: @oban_queue,
-              max_attempts: @oban_max_attempts,
-              priority: @oban_priority
-            )
-          end)
+      @doc """
+      Emit an event with event name, data map, and additional metadata options.
 
-        if jobs == [] do
-          # No handlers registered, nothing to do
-          {:ok, []}
-        else
-          # Insert all jobs in a single operation
-          # If called within a transaction, these inserts are part of it
-          # Oban.insert_all always returns a list of jobs
-          {:ok, @oban_instance.insert_all(jobs)}
-        end
+      ## Parameters
+
+      - `event_name`: Atom representing the event (e.g., `:user_created`)
+      - `data`: Map of event-specific data
+      - `opts`: Keyword list or map containing metadata options (`:id`, `:timestamp`, `:correlation_id`, `:causation_id`, `:metadata`)
+
+      ## Examples
+
+          #{inspect(__MODULE__)}.emit(:user_created, %{user_id: 123},
+            correlation_id: "corr-123",
+            causation_id: "cause-456",
+            metadata: %{actor_id: 1, ip: "127.0.0.1"}
+          )
+      """
+      @spec emit(atom(), map(), keyword() | map()) :: {:ok, [Oban.Job.t()]}
+      def emit(event_name, data, opts)
+          when is_atom(event_name) and is_map(data) and (is_list(opts) or is_map(opts)) do
+        event = Event.new(event_name, data, opts)
+        emit(event)
       end
     end
   end

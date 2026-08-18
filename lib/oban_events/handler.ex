@@ -3,7 +3,7 @@ defmodule ObanEvents.Handler do
   Behaviour for event handlers.
 
   Event handlers process events asynchronously via Oban workers.
-  Each handler implements a single callback: `handle_event/2`.
+  Each handler implements `handle_event/2` and/or `handle_event/3`.
 
   See the [README](README.md) for architectural guidance and best practices.
 
@@ -12,10 +12,19 @@ defmodule ObanEvents.Handler do
       defmodule MyApp.UserHandler do
         use ObanEvents.Handler
 
+        # Using handle_event/2
         @impl true
         def handle_event(:user_created, data) do
           %{"user_id" => user_id} = data
           # Process the event
+          :ok
+        end
+
+        # Or using handle_event/3 to access metadata and the Event struct
+        @impl true
+        def handle_event(:user_created, data, %ObanEvents.Event{metadata: metadata}) do
+          %{"user_id" => user_id} = data
+          # Process event with metadata
           :ok
         end
 
@@ -45,7 +54,7 @@ defmodule ObanEvents.Handler do
   """
 
   @doc """
-  Handle an event.
+  Handle an event with event name and payload data.
 
   Receives the event name (atom) and event-specific data (map).
   Should process the event and return an ok/error tuple.
@@ -62,6 +71,28 @@ defmodule ObanEvents.Handler do
   """
   @callback handle_event(event_name :: atom(), data :: map()) ::
               :ok | {:ok, any()} | {:error, any()}
+
+  @doc """
+  Handle an event with event name, payload data, and the `ObanEvents.Event` struct.
+
+  Optional callback for handlers that require event metadata, ID, timestamp,
+  correlation ID, or causation ID.
+
+  ## Parameters
+
+  - `event_name`: Atom representing the event (e.g., `:user_created`)
+  - `data`: Map containing event-specific data
+  - `event`: `ObanEvents.Event` struct containing metadata and identifiers
+
+  ## Return Values
+
+  - `:ok` | `{:ok, any()}` - Success
+  - `{:error, any()}` - Failure (will trigger retry)
+  """
+  @callback handle_event(event_name :: atom(), data :: map(), event :: ObanEvents.Event.t()) ::
+              :ok | {:ok, any()} | {:error, any()}
+
+  @optional_callbacks [handle_event: 2, handle_event: 3]
 
   @doc false
   defmacro __using__(_opts) do
