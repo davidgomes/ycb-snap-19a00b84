@@ -3,6 +3,12 @@
 
 #### Fixed
 
+- **`data_table` menus stay in the page.** Filter editors and the
+  Columns dropdown no longer use `top_layer`, so they stop riding
+  `PetalPopover`'s fixed visual-viewport tracking. They are ordinary
+  in-page popovers: scroll the page and the menu goes with the
+  trigger. Event-mode Apply hides the panel with `JS.hide`; the hook
+  only mounts in event mode for selection.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to

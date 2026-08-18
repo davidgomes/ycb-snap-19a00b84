@@ -4768,14 +4768,14 @@ export const PetalDataTable = {
 
     // link mode has no events, so a filter editor's Apply becomes a
     // patch built from the form's inputs: replace this field's entry in
-    // the committed filter list (an empty editor removes it), close the
-    // popover, navigate
+    // the committed filter list (an empty editor removes it), hide the
+    // in-page popover, navigate
     this.onSubmit = (e) => {
       const form = e.target.closest(".pc-data-table__filter-form");
       if (!form) return;
 
-      // event mode: the form pushes its own phx-submit - only the
-      // popover close is ours
+      // event mode: the form pushes its own phx-submit. If this hook
+      // is also mounted (selection), hide the in-page panel here too.
       if (!form.hasAttribute("data-pc-dt-filter")) {
         this.closePopover(form);
         return;
@@ -4858,8 +4858,6 @@ export const PetalDataTable = {
       panel.hasAttribute("popover") &&
       typeof panel.hidePopover === "function"
     ) {
-      // top-layer panels close through the native API, which also
-      // restores focus and light-dismiss state
       panel.hidePopover();
       return;
     }

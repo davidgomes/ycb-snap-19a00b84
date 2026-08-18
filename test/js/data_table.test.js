@@ -221,7 +221,7 @@ describe("PetalDataTable", () => {
     expect(url).toContain("filters[0][field]=email");
   });
 
-  it("closes a top-layer panel through the native popover API", () => {
+  it("closes an in-page panel by hiding it, not via the native popover API", () => {
     const { el, patched, form } = mountWithFilter({
       navTemplate: "/orders?:filters",
       filters: [],
@@ -234,12 +234,18 @@ describe("PetalDataTable", () => {
     });
 
     const panel = el.querySelector(".pc-popover__panel");
-    panel.setAttribute("popover", "auto");
+    panel.id = "pop";
+    const trigger = document.createElement("button");
+    trigger.id = "pop-trigger";
+    trigger.setAttribute("aria-expanded", "true");
+    el.appendChild(trigger);
     const hidden = [];
     panel.hidePopover = () => hidden.push(true);
 
     submit(form);
-    expect(hidden).toEqual([true]);
+    expect(hidden).toEqual([]);
+    expect(panel.style.display).toBe("none");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(patched).toHaveLength(1);
   });
 

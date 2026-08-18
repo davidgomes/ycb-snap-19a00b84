@@ -226,12 +226,14 @@ defmodule PetalComponents.DataTable do
 
     link_mode? = is_nil(assigns.on_change)
 
-    # link mode: URL wiring. Either mode: filter popovers are native
-    # top-layer popovers the hook closes after an Apply, and selection's
-    # tri-state header checkbox needs its indeterminate property set.
+    # link mode: URL wiring for search / page-size / filters. Either
+    # mode: selection's tri-state header checkbox needs its
+    # indeterminate property set. Filter menus are in-page popovers -
+    # event mode closes them with JS.hide on submit, no hook required.
     hooked? =
-      (link_mode? and (assigns.searchable or assigns.page_size_options != [])) or
-        filter_cols != [] or assigns.selectable
+      (link_mode? and
+         (assigns.searchable or assigns.page_size_options != [] or filter_cols != [])) or
+        assigns.selectable
 
     assigns =
       assigns
@@ -331,7 +333,6 @@ defmodule PetalComponents.DataTable do
           <.popover
             :if={@column_toggle}
             id={"#{@id}-columns"}
-            top_layer
             placement="bottom-end"
             class="pc-data-table__columns"
             trigger_class="pc-button pc-button--sm pc-button--gray-outline"
@@ -733,7 +734,6 @@ defmodule PetalComponents.DataTable do
     <div class="pc-data-table__filter">
       <.popover
         id={@pop_id}
-        top_layer
         placement="bottom-start"
         class="pc-data-table__filter-popover"
         trigger_class={[
@@ -892,12 +892,16 @@ defmodule PetalComponents.DataTable do
     """
   end
 
-  # event mode pushes the form; the hook closes the native popover on
-  # submit (a top-layer panel needs hidePopover(), not a display toggle)
+  # event mode pushes the form and hides the in-page panel; link mode
+  # has no events, so Apply is the hook's job (patch + display:none)
   defp filter_submit_js(nil, _target, _pop_id), do: nil
 
-  defp filter_submit_js(event, target, _pop_id) do
-    if target, do: JS.push(event, target: target), else: JS.push(event)
+  defp filter_submit_js(event, target, pop_id) do
+    push = if target, do: JS.push(event, target: target), else: JS.push(event)
+
+    push
+    |> JS.hide(to: "##{pop_id}")
+    |> JS.set_attribute({"aria-expanded", "false"}, to: "##{pop_id}-trigger")
   end
 
   defp normalize_options(options) do
