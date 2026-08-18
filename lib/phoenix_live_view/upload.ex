@@ -74,13 +74,13 @@ defmodule Phoenix.LiveView.Upload do
 
     case UploadConfig.get_entry_by_ref(upload_config, entry_ref) do
       %UploadEntry{} = entry ->
-        new_config = UploadConfig.cancel_entry(upload_config, entry)
+        new_upload_config = UploadConfig.cancel_entry(upload_config, entry)
 
-        if new_config.entries == [] and new_config.cid != :unregistered do
-          Phoenix.LiveView.Channel.release_upload_name(new_config.ref)
+        if new_upload_config.entries == [] do
+          Phoenix.LiveView.Channel.drop_upload_name(new_upload_config)
         end
 
-        update_uploads(new_config, socket)
+        update_uploads(new_upload_config, socket)
 
       _ ->
         raise ArgumentError, "no entry in upload \"#{inspect(name)}\" with ref \"#{entry_ref}\""
@@ -166,6 +166,13 @@ defmodule Phoenix.LiveView.Upload do
     |> update_uploads(socket)
   end
 
+  @doc false
+  def fail_entry_upload(%Socket{} = socket, %UploadConfig{} = conf, entry_ref, reason) do
+    conf
+    |> UploadConfig.fail_entry(entry_ref, reason)
+    |> update_uploads(socket)
+  end
+
   @doc """
   Registers a new entry upload for a `Phoenix.LiveView.UploadChannel` process.
   """
@@ -184,19 +191,6 @@ defmodule Phoenix.LiveView.Upload do
   @doc """
   Populates the errors for a given entry.
   """
-  def put_upload_error(
-        %Socket{} = socket,
-        conf_name,
-        entry_ref,
-        {:writer_failure, reason}
-      ) do
-    conf = Map.fetch!(socket.assigns.uploads, conf_name)
-
-    conf
-    |> UploadConfig.fail_entry(entry_ref, reason)
-    |> update_uploads(socket)
-  end
-
   def put_upload_error(%Socket{} = socket, conf_name, entry_ref, reason) do
     conf = Map.fetch!(socket.assigns.uploads, conf_name)
 

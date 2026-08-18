@@ -85,7 +85,7 @@ defmodule Phoenix.LiveView.UploadChannel do
           {:error, %{reason: :writer_error}}
       end
     else
-      {:error, reason} when reason in [:expired, :invalid] ->
+      {:error, reason} when reason in [:expired, :invalid, :outdated] ->
         {:error, %{reason: :invalid_token}}
 
       {:error, reason} when reason in [:already_registered, :disallowed] ->
@@ -115,7 +115,7 @@ defmodule Phoenix.LiveView.UploadChannel do
               end
             end
 
-          Channel.report_writer_error(socket.assigns.live_view_pid, reason)
+          :ok = Channel.report_writer_error(socket.assigns.live_view_pid, reason)
 
           {:stop, {:shutdown, :closed}, {:error, %{reason: :writer_error}}, new_socket}
       end

@@ -1122,7 +1122,7 @@ defmodule Phoenix.LiveView.UploadChannelTest do
         Process.register(self(), :test_writer)
         avatar = file_input(lv, "form", :avatar, [%{name: "foo.jpeg", content: "error"}])
 
-        assert {:error, %{reason: :writer_error}} = render_upload(avatar, "foo.jpeg")
+        assert {:error, :writer_error} = render_upload(avatar, "foo.jpeg")
         assert_receive :init
         assert_receive {:progress, 0, [writer_failure: :init_failed]}
 
@@ -1142,29 +1142,41 @@ defmodule Phoenix.LiveView.UploadChannelTest do
       test "successful sibling can be consumed before failed entry is cancelled", %{lv: lv} do
         Process.register(self(), :test_writer)
 
-        avatar =
-          file_input(lv, "form", :avatar, [
-            %{name: "failed.jpeg", content: "error"},
-            %{name: "success.jpeg", content: "00000"}
-          ])
+        failed =
+          file_input(lv, "form", :avatar, [%{name: "failed.jpeg", content: "00000error"}])
 
-        render_upload(avatar, "failed.jpeg")
-        assert_receive {:progress, 0, [writer_failure: :custom_error]}
-        assert render_upload(avatar, "success.jpeg") =~ "success.jpeg:100%"
+        successful =
+          file_input(lv, "form", :avatar, [%{name: "success.jpeg", content: "00000"}])
 
-        assert {[%LiveView.UploadEntry{client_name: "success.jpeg"} = successful],
+        assert render_upload(failed, "failed.jpeg", 50) =~ "failed.jpeg:50%"
+        assert_receive {:progress, 50, []}
+        assert %{"failed.jpeg" => failed_pid} = UploadClient.channel_pids(failed)
+        unlink(failed_pid, lv, failed)
+        Process.monitor(failed_pid)
+
+        render_upload(failed, "failed.jpeg", 50)
+        assert_receive {:progress, 50, [writer_failure: :custom_error]}
+        assert_receive {:DOWN, _ref, :process, ^failed_pid, {:shutdown, :closed}}, 1000
+
+        assert render_upload(successful, "success.jpeg") =~ "success.jpeg:100%"
+        assert %{"success.jpeg" => successful_pid} = UploadClient.channel_pids(successful)
+        Process.monitor(successful_pid)
+
+        assert {[%LiveView.UploadEntry{client_name: "success.jpeg"} = successful_entry],
                 [%LiveView.UploadEntry{client_name: "failed.jpeg"}]} =
                  get_uploaded_entries(lv, :avatar)
 
         assert :consumed =
                  UploadLive.run(lv, fn socket ->
                    result =
-                     Phoenix.LiveView.consume_uploaded_entry(socket, successful, fn _ ->
+                     Phoenix.LiveView.consume_uploaded_entry(socket, successful_entry, fn _ ->
                        {:ok, :consumed}
                      end)
 
                    {:reply, result, socket}
                  end)
+
+        assert_receive {:DOWN, _ref, :process, ^successful_pid, {:shutdown, :closed}}, 1000
 
         assert {[], [%LiveView.UploadEntry{client_name: "failed.jpeg"} = failed]} =
                  get_uploaded_entries(lv, :avatar)

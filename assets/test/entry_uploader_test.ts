@@ -27,8 +27,9 @@ describe("EntryUploader", () => {
 
   test("does not apply the generic entry error for writer failures", () => {
     let errorCb;
+    let channelErrorCb;
     let fakeChannel = {
-      onError: jest.fn(),
+      onError: (cb) => (channelErrorCb = cb),
       leave: jest.fn(),
       join: () => ({
         receive(kind, cb) {
@@ -43,8 +44,9 @@ describe("EntryUploader", () => {
 
     new EntryUploader(entry, config, fakeLiveSocket).upload();
     errorCb({ reason: "writer_error" });
+    channelErrorCb("closed");
 
-    expect(fakeChannel.leave).toHaveBeenCalled();
+    expect(fakeChannel.leave).toHaveBeenCalledTimes(1);
     expect(entry.error).not.toHaveBeenCalled();
   });
 });

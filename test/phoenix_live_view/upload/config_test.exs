@@ -427,8 +427,8 @@ defmodule Phoenix.LiveView.UploadConfigTest do
 
     failed_conf =
       conf
-      |> UploadConfig.fail_entry(entry_ref, :storage_error)
-      |> UploadConfig.fail_entry(entry_ref, :storage_error)
+      |> UploadConfig.fail_entry(entry_ref, {:writer_failure, :storage_error})
+      |> UploadConfig.fail_entry(entry_ref, {:writer_failure, :storage_error})
 
     assert [%UploadEntry{ref: ^entry_ref} = entry] = failed_conf.entries
     assert UploadConfig.entry_pid(failed_conf, entry) == nil
@@ -438,6 +438,17 @@ defmodule Phoenix.LiveView.UploadConfigTest do
              UploadConfig.register_entry_upload(failed_conf, self(), entry_ref)
 
     assert UploadConfig.unregister_completed_entry(failed_conf, entry_ref) == failed_conf
+  end
+
+  test "fail_entry/3 ignores a failure for an entry that is already gone" do
+    socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any)
+    client_entry = build_client_entry(:avatar)
+    entry_ref = client_entry["ref"]
+
+    assert {:ok, conf} = UploadConfig.put_entries(socket.assigns.uploads.avatar, [client_entry])
+    conf = drop_entry(conf, entry_ref)
+
+    assert UploadConfig.fail_entry(conf, entry_ref, {:writer_failure, :storage_error}) == conf
   end
 
   test "supports binary upload name" do

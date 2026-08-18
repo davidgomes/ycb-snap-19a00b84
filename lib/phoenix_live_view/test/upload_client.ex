@@ -83,13 +83,7 @@ defmodule Phoenix.LiveViewTest.UploadClient do
   end
 
   def handle_call(:channel_pids, _from, state) do
-    pids =
-      Enum.flat_map(state.entries, fn
-        {name, %{socket: %{channel_pid: channel_pid}}} -> [{name, channel_pid}]
-        {_name, _entry} -> []
-      end)
-      |> Map.new()
-
+    pids = Enum.into(state.entries, %{}, fn {name, entry} -> {name, entry.socket.channel_pid} end)
     {:reply, pids, state}
   end
 
@@ -154,7 +148,7 @@ defmodule Phoenix.LiveViewTest.UploadClient do
         }
         |> with_chunk_boundaries()
 
-      {:error, reason} ->
+      {:error, %{reason: reason}} ->
         {:error, reason}
     end
   end
@@ -259,6 +253,9 @@ defmodule Phoenix.LiveViewTest.UploadClient do
             state.cid
           )
 
+        update_entry_percent(state, entry, stats.new_percent)
+
+      %Phoenix.Socket.Reply{ref: ^ref, status: :error, payload: %{reason: :writer_error}} ->
         update_entry_percent(state, entry, stats.new_percent)
 
       %Phoenix.Socket.Reply{ref: ^ref, status: :error} ->
