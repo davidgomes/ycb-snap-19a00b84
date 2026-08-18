@@ -15,7 +15,6 @@ defmodule TestCoherenceWeb.ViewHelpers do
   @recover_link_text "Forgot your password?"
   @unlock_link_text "Send an unlock email"
   @register_link_text "Need An Account?"
-  @invite_link_text "Invite Someone"
   @confirm_link_text "Resend confirmation email"
   @signin_link_text "Sign In"
   @signout_link_text "Sign Out"
