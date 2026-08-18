@@ -73,6 +73,10 @@ defmodule Phoenix.LiveView.Channel do
     send(self(), {@prefix, :drop_upload_entries, info})
   end
 
+  def release_upload_name(ref) do
+    send(self(), {@prefix, :release_upload_name, ref})
+  end
+
   def report_writer_error(pid, reason) do
     channel_pid = self()
     send(pid, {@prefix, :report_writer_error, channel_pid, reason})
@@ -293,6 +297,10 @@ defmodule Phoenix.LiveView.Channel do
       end)
 
     {:noreply, new_state}
+  end
+
+  def handle_info({@prefix, :release_upload_name, ref}, state) do
+    {:noreply, drop_upload_ref(state, ref)}
   end
 
   def handle_info({@prefix, :report_writer_error, channel_pid, reason}, state) do

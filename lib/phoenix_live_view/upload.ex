@@ -74,9 +74,13 @@ defmodule Phoenix.LiveView.Upload do
 
     case UploadConfig.get_entry_by_ref(upload_config, entry_ref) do
       %UploadEntry{} = entry ->
-        upload_config
-        |> UploadConfig.cancel_entry(entry)
-        |> update_uploads(socket)
+        new_config = UploadConfig.cancel_entry(upload_config, entry)
+
+        if new_config.entries == [] and new_config.cid != :unregistered do
+          Phoenix.LiveView.Channel.release_upload_name(new_config.ref)
+        end
+
+        update_uploads(new_config, socket)
 
       _ ->
         raise ArgumentError, "no entry in upload \"#{inspect(name)}\" with ref \"#{entry_ref}\""
