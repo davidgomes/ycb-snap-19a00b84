@@ -104,6 +104,10 @@ defmodule Absinthe.Phase.Document.Execution.Resolution do
     {%{result | values: values}, res}
   end
 
+  def walk_result(%{state: :suspended} = res, _bp_node, _schema_type, _res, _path) do
+    {res, res}
+  end
+
   def walk_result(%Absinthe.Resolution{} = old_res, _bp_node, _schema_type, res, _path) do
     res = update_persisted_fields(old_res, res)
     do_resolve_field(res, res.source, res.path)
