@@ -425,7 +425,7 @@ defmodule Flop.Adapter.Ecto.Operators do
   defmacro empty_dynamic(:array) do
     quote do
       is_nil(^var!(field_dynamic)) or
-        ^var!(field_dynamic) == type(^[], ^var!(ecto_type))
+        ^var!(field_dynamic) == ^[]
     end
   end
 
@@ -439,7 +439,7 @@ defmodule Flop.Adapter.Ecto.Operators do
   defmacro empty_dynamic(:map) do
     quote do
       is_nil(^var!(field_dynamic)) or
-        ^var!(field_dynamic) == type(^%{}, ^var!(ecto_type))
+        ^var!(field_dynamic) == ^%{}
     end
   end
 

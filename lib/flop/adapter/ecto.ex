@@ -805,38 +805,6 @@ defmodule Flop.Adapter.Ecto do
     match_empty(condition, op, value)
   end
 
-  defp build_op(
-         _schema_struct,
-         %FieldInfo{
-           ecto_type: ecto_type,
-           extra: %{type: :custom, field_dynamic: {mod, fun, dynamic_opts}}
-         },
-         %Filter{op: op, value: value},
-         dialect,
-         extra_opts
-       )
-       when op in [:empty, :not_empty] do
-    extra_opts = Keyword.merge(extra_opts, dynamic_opts)
-    field_dynamic = apply(mod, fun, [extra_opts])
-
-    condition =
-      case {array_or_map(ecto_type), dialect} do
-        {:array, %Dialect{arrays?: false}} ->
-          dynamic([], empty_dynamic(:json_array))
-
-        {:array, _} ->
-          dynamic([], empty_dynamic(:array))
-
-        {:map, _} ->
-          dynamic([], empty_dynamic(:map))
-
-        {:other, _} ->
-          dynamic([], empty_dynamic(:other))
-      end
-
-    match_empty(condition, op, value)
-  end
-
   # Ecto's MyXQL adapter cannot build array operations, so the array operators
   # are built with MySQL's JSON functions instead. See the Dialect module.
   defp build_op(
@@ -876,26 +844,9 @@ defmodule Flop.Adapter.Ecto do
     match_contains(dynamic([{^binding, r}], json_contains()), op)
   end
 
-  defp build_op(
-         _schema_struct,
-         %FieldInfo{
-           ecto_type: ecto_type,
-           extra: %{type: :custom, field_dynamic: {mod, fun, dynamic_opts}}
-         },
-         %Filter{op: op, value: value},
-         %Dialect{arrays?: false},
-         extra_opts
-       )
-       when op in [:contains, :not_contains] do
-    extra_opts = Keyword.merge(extra_opts, dynamic_opts)
-    field_dynamic = apply(mod, fun, [extra_opts])
-    ecto_type = Flop.Misc.expand_type(ecto_type)
-    match_contains(dynamic([], json_contains_dynamic()), op)
-  end
-
   # operators whose SQL does not depend on the adapter
   for op <- @operators, op not in [:empty, :not_empty | @ilike_operators] do
-    {fragment, fragment_dynamic, prelude, combinator} = op_config(op)
+    {fragment, _fragment_dynamic, prelude, combinator} = op_config(op)
 
     defp build_op(
            _schema_struct,
@@ -905,21 +856,6 @@ defmodule Flop.Adapter.Ecto do
          ) do
       unquote(prelude)
       build_dynamic(unquote(fragment), false, unquote(combinator))
-    end
-
-    defp build_op(
-           _schema_struct,
-           %FieldInfo{
-             extra: %{type: :custom, field_dynamic: {mod, fun, dynamic_opts}}
-           },
-           %Filter{op: unquote(op), value: value},
-           _dialect,
-           extra_opts
-         ) do
-      unquote(prelude)
-      extra_opts = Keyword.merge(extra_opts, dynamic_opts)
-      field_dynamic = apply(mod, fun, [extra_opts])
-      build_dynamic(unquote(fragment_dynamic), false, unquote(combinator))
     end
 
     defp build_op(
@@ -935,7 +871,7 @@ defmodule Flop.Adapter.Ecto do
 
   # operators whose SQL depends on whether the Ecto adapter supports ilike
   for op <- @ilike_operators, ilike? <- [true, false] do
-    {fragment, fragment_dynamic, prelude, combinator} = op_config(op, ilike?)
+    {fragment, _fragment_dynamic, prelude, combinator} = op_config(op, ilike?)
 
     defp build_op(
            _schema_struct,
@@ -946,6 +882,88 @@ defmodule Flop.Adapter.Ecto do
       unquote(prelude)
       build_dynamic(unquote(fragment), false, unquote(combinator))
     end
+
+    defp build_op(
+           _schema_struct,
+           %FieldInfo{extra: %{type: :join, binding: binding, field: field}},
+           %Filter{op: unquote(op), value: value},
+           %Dialect{ilike?: unquote(ilike?)}
+         ) do
+      unquote(prelude)
+      build_dynamic(unquote(fragment), true, unquote(combinator))
+    end
+  end
+
+  defp build_op(
+         _schema_struct,
+         %FieldInfo{
+           ecto_type: ecto_type,
+           extra: %{type: :custom, field_dynamic: {mod, fun, dynamic_opts}}
+         },
+         %Filter{op: op, value: value},
+         dialect,
+         extra_opts
+       )
+       when op in [:empty, :not_empty] do
+    extra_opts = Keyword.merge(extra_opts, dynamic_opts)
+    field_dynamic = apply(mod, fun, [extra_opts])
+
+    condition =
+      case {array_or_map(ecto_type), dialect} do
+        {:array, %Dialect{arrays?: false}} ->
+          dynamic([r], empty_dynamic(:json_array))
+
+        {:array, _} ->
+          dynamic([r], empty_dynamic(:array))
+
+        {:map, _} ->
+          dynamic([r], empty_dynamic(:map))
+
+        {:other, _} ->
+          dynamic([r], empty_dynamic(:other))
+      end
+
+    match_empty(condition, op, value)
+  end
+
+  defp build_op(
+         _schema_struct,
+         %FieldInfo{
+           ecto_type: ecto_type,
+           extra: %{type: :custom, field_dynamic: {mod, fun, dynamic_opts}}
+         },
+         %Filter{op: op, value: value},
+         %Dialect{arrays?: false},
+         extra_opts
+       )
+       when op in [:contains, :not_contains] do
+    extra_opts = Keyword.merge(extra_opts, dynamic_opts)
+    field_dynamic = apply(mod, fun, [extra_opts])
+    ecto_type = Flop.Misc.expand_type(ecto_type)
+    match_contains(dynamic([r], json_contains_dynamic()), op)
+  end
+
+  for op <- @operators, op not in [:empty, :not_empty | @ilike_operators] do
+    {_fragment, fragment_dynamic, prelude, combinator} = op_config(op)
+
+    defp build_op(
+           _schema_struct,
+           %FieldInfo{
+             extra: %{type: :custom, field_dynamic: {mod, fun, dynamic_opts}}
+           },
+           %Filter{op: unquote(op), value: value},
+           _dialect,
+           extra_opts
+         ) do
+      unquote(prelude)
+      extra_opts = Keyword.merge(extra_opts, dynamic_opts)
+      field_dynamic = apply(mod, fun, [extra_opts])
+      build_dynamic(unquote(fragment_dynamic), false, unquote(combinator))
+    end
+  end
+
+  for op <- @ilike_operators, ilike? <- [true, false] do
+    {_fragment, fragment_dynamic, prelude, combinator} = op_config(op, ilike?)
 
     defp build_op(
            _schema_struct,
@@ -960,16 +978,6 @@ defmodule Flop.Adapter.Ecto do
       extra_opts = Keyword.merge(extra_opts, dynamic_opts)
       field_dynamic = apply(mod, fun, [extra_opts])
       build_dynamic(unquote(fragment_dynamic), false, unquote(combinator))
-    end
-
-    defp build_op(
-           _schema_struct,
-           %FieldInfo{extra: %{type: :join, binding: binding, field: field}},
-           %Filter{op: unquote(op), value: value},
-           %Dialect{ilike?: unquote(ilike?)}
-         ) do
-      unquote(prelude)
-      build_dynamic(unquote(fragment), true, unquote(combinator))
     end
   end
 
