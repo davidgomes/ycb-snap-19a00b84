@@ -21,6 +21,7 @@ defmodule WebDev.Generator do
     Oban.Workers.DigestMailer,
     Oban.Workers.ExportGenerator,
     Oban.Workers.MailingListSyncer,
+    Oban.Workers.PaymentAuthorizer,
     Oban.Workers.PricingAnalyzer,
     Oban.Workers.PushNotifier,
     Oban.Workers.ReadabilityAnalyzer,
@@ -373,6 +374,36 @@ defmodule Oban.Workers.VideoProcessor do
 
   @impl Oban.Pro.Worker
   def process(%Job{args: %__MODULE__{}}), do: Generator.random_perform(1_000, 20_000)
+end
+
+defmodule Oban.Workers.PaymentAuthorizer do
+  @moduledoc false
+
+  use Oban.Pro.Worker, queue: :default, max_attempts: 10, tags: ["payments"]
+
+  alias Faker.{Internet, UUID}
+
+  def gen(opts \\ []) do
+    new(%{order_id: UUID.v4(), email: Internet.email()}, opts)
+  end
+
+  @impl Oban.Pro.Worker
+  def process(%Job{id: id, meta: meta}) do
+    unless Map.has_key?(meta, "wait_until"), do: schedule_callback(id)
+
+    case Oban.Pro.Worker.await_signal(wait_for: {30, :minutes}, wait_timeout: 15_000) do
+      {:ok, _payload} -> :ok
+      {:error, :timeout} -> {:cancel, "no gateway response"}
+    end
+  end
+
+  defp schedule_callback(job_id) do
+    Task.start(fn ->
+      Process.sleep(:timer.seconds(60))
+
+      Oban.Pro.Worker.signal(job_id, %{status: "approved", confirmed_at: DateTime.utc_now()})
+    end)
+  end
 end
 
 defmodule Oban.Workers.ArticleSummarizer do
