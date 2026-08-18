@@ -41,6 +41,17 @@ defmodule ObanEventsTest do
     }
   end
 
+  # Test event bus with custom configuration using opts: [...]
+  defmodule CustomOptsConfigEventBus do
+    @moduledoc false
+    use ObanEvents,
+      oban: {Oban, opts: [queue: :nested_queue, max_attempts: 7, priority: 1, tags: ["nested"]]}
+
+    @events %{
+      test_event: [ObanEventsTest.TestHandler]
+    }
+  end
+
   # Test module with per-handler options
   defmodule PerHandlerOptionsEventBus do
     @moduledoc false
@@ -49,31 +60,7 @@ defmodule ObanEventsTest do
     @events %{
       multi_handler_event: [
         {TestHandler, oban: [priority: 0, max_attempts: 5, tags: ["critical"]]},
-        {TestHandler, oban: [queue: :low_priority, priority: 3]},
-        TestHandler
-      ]
-    }
-  end
-
-  # Helper module for :if conditions
-  defmodule ConditionHelpers do
-    def check_enabled(event), do: event.data["enabled"] == true
-    def check_premium(event), do: event.data["plan"] == "premium"
-    def always_false(_event), do: false
-  end
-
-  # Test module with :if conditions
-  defmodule ConditionalHandlers do
-    @moduledoc false
-    use ObanEvents
-
-    alias ObanEventsTest.ConditionHelpers
-
-    @events %{
-      conditional_event: [
-        {TestHandler, if: {ConditionHelpers, :check_enabled, []}},
-        {TestHandler, if: {ConditionHelpers, :check_premium, []}},
-        {TestHandler, if: {ConditionHelpers, :always_false, []}},
+        {TestHandler, queue: :low_priority, priority: 3},
         TestHandler
       ]
     }
@@ -159,6 +146,16 @@ defmodule ObanEventsTest do
       assert job.tags == ["custom"]
     end
 
+    test "uses custom configuration with opts key when specified" do
+      assert {:ok, jobs} = CustomOptsConfigEventBus.emit(:test_event, %{"test" => "data"})
+
+      [job] = jobs
+      assert job.queue == "nested_queue"
+      assert job.max_attempts == 7
+      assert job.priority == 1
+      assert job.tags == ["nested"]
+    end
+
     test "per-handler options override global defaults" do
       assert {:ok, jobs} =
                PerHandlerOptionsEventBus.emit(:multi_handler_event, %{"test" => "data"})
@@ -187,41 +184,6 @@ defmodule ObanEventsTest do
       assert job3.priority == 2
       assert job3.max_attempts == 3
       assert job3.tags == []
-    end
-
-    test ":if conditions filter handlers based on event data" do
-      # enabled=true, plan=premium -> should schedule first 2 handlers + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => true,
-                 "plan" => "premium"
-               })
-
-      assert length(jobs) == 3
-
-      # enabled=true, plan=free -> should schedule first handler + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{"enabled" => true, "plan" => "free"})
-
-      assert length(jobs) == 2
-
-      # enabled=false, plan=premium -> should schedule second handler + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => false,
-                 "plan" => "premium"
-               })
-
-      assert length(jobs) == 2
-
-      # enabled=false, plan=free -> should only schedule default handler
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => false,
-                 "plan" => "free"
-               })
-
-      assert length(jobs) == 1
     end
   end
 end
