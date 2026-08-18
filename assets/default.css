@@ -2694,6 +2694,22 @@
   .pc-data-table__filter-clear-icon.pc-data-table__filter-clear-icon {
     @apply w-4! h-4!;
   }
+  .pc-data-table__toolbar--selection {
+    @apply rounded-md bg-primary-50 px-3 py-2 dark:bg-primary-500/10;
+  }
+  .pc-data-table__selection-count {
+    @apply text-sm font-medium text-primary-700 dark:text-primary-300;
+  }
+  .pc-data-table__clear-selection {
+    @apply text-sm font-medium text-primary-600 hover:underline dark:text-primary-400;
+  }
+  .pc-data-table__selection-actions {
+    @apply ml-auto flex items-center gap-2;
+  }
+  .pc-data-table__select-th,
+  .pc-data-table__select-td {
+    @apply w-px;
+  }
 
   /* Avatars - sizes */
 

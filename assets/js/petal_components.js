@@ -4659,6 +4659,11 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+    this.syncSelectAllIndeterminate();
+  },
+
+  updated() {
+    this.syncSelectAllIndeterminate();
   },
 
   destroyed() {
@@ -4666,6 +4671,16 @@ export const PetalDataTable = {
     this.el.removeEventListener("input", this.onInput);
     this.el.removeEventListener("change", this.onChange);
     this.el.removeEventListener("submit", this.onSubmit);
+  },
+
+  // the header checkbox's "mixed" (some but not all rows selected) look
+  // is a DOM property, not an HTML attribute - the server ships whether
+  // it applies via a data attribute and this syncs the property on
+  // mount and after every patch
+  syncSelectAllIndeterminate() {
+    const input = this.el.querySelector("[data-pc-dt-select-all]");
+    if (!input) return;
+    input.indeterminate = this.el.dataset.selectAllIndeterminate === "true";
   },
 
   committedFilters() {

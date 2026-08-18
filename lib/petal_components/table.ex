@@ -54,7 +54,7 @@ defmodule PetalComponents.Table do
     """
 
   slot :col do
-    attr :label, :string
+    attr :label, :any, doc: "usually a string, but any renderable term works (e.g. a checkbox)"
     attr :class, :any
     attr :row_class, :any
     attr :sortable, :boolean, doc: "render the header as a sort button"

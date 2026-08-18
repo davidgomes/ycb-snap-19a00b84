@@ -363,6 +363,99 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "pc-data-table__actions"
   end
 
+  test "selectable renders a checkbox per row and a tri-state header control" do
+    assigns = base(%{state: %State{total: 74}})
+
+    none_selected =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable row_id={& &1.name}>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert none_selected =~ ~s(data-pc-dt-select-all)
+    assert none_selected =~ ~s(aria-label="Select row")
+    refute none_selected =~ "checked"
+    refute none_selected =~ "selected"
+
+    some_selected =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        row_id={& &1.name}
+        selected={["Amy"]}
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert some_selected =~ "select_row"
+    assert some_selected =~ "1 selected"
+    assert some_selected =~ ~s(phx-value-op="clear_selection")
+    assert some_selected =~ ~s(data-select-all-indeterminate="true")
+
+    all_selected =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        row_id={& &1.name}
+        selected={["Amy", "Bea"]}
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert all_selected =~ "2 selected"
+    refute all_selected =~ ~s(data-select-all-indeterminate="true")
+  end
+
+  test "selectable with bulk_actions morphs the toolbar while rows are selected" do
+    assigns = base(%{state: %State{total: 74}})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        row_id={& &1.name}
+        selected={["Amy"]}
+        searchable
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:bulk_actions :let={ids}>
+          <button type="button">Delete {length(ids)}</button>
+        </:bulk_actions>
+      </.data_table>
+      """)
+
+    assert html =~ "Delete 1"
+    assert html =~ "pc-data-table__toolbar--selection"
+    refute html =~ "pc-data-table__search-input"
+  end
+
+  test "selectable without on_change raises" do
+    assigns = base(%{path: "/orders"})
+
+    assert_raise ArgumentError, ~r/selectable needs on_change/, fn ->
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} path={@path} selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+    end
+  end
+
   test "raises without either wiring mode" do
     assigns = base(%{path: nil})
 
