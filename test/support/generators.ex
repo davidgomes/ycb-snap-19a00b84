@@ -45,11 +45,11 @@ defmodule Flop.Generators do
     length_range = Keyword.fetch!(opts, :length)
 
     gen all length <- integer(length_range),
-            names <- uniq_list_of_strings(length),
+            names <- uniq_list_of_nullable_strings(length),
             family_names <- uniq_list_of_strings(length),
             given_names <- uniq_list_of_strings(length),
             owners <- uniq_list_of_owners(length),
-            ages <- uniq_list_of(integer(1..500), length: length),
+            ages <- uniq_list_of_nullable_integers(length),
             species <- uniq_list_of_strings(length) do
       [names, ages, species, family_names, given_names, owners]
       |> Enum.zip()
@@ -63,6 +63,28 @@ defmodule Flop.Generators do
           owner: owner
         }
       end)
+    end
+  end
+
+  def uniq_list_of_nullable_strings(len) do
+    gen all strings <- uniq_list_of_strings(len),
+            nil_index <- integer(0..(len - 1)) do
+      if len > 0 do
+        List.replace_at(strings, nil_index, nil)
+      else
+        strings
+      end
+    end
+  end
+
+  def uniq_list_of_nullable_integers(len) do
+    gen all integers <- uniq_list_of(integer(1..500), length: len),
+            nil_index <- integer(0..(len - 1)) do
+      if len > 0 do
+        List.replace_at(integers, nil_index, nil)
+      else
+        integers
+      end
     end
   end
 

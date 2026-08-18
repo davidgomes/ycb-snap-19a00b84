@@ -745,6 +745,13 @@ defmodule Flop.ValidationTest do
 
       assert {:ok, %Flop{decoded_cursor: %{age: 4}}} =
                validate(params, for: Pet)
+
+      # nil values are allowed (nullable order fields)
+      cursor = Cursor.encode(%{age: nil})
+      params = %{last: 2, before: cursor, order_by: [:age]}
+
+      assert {:ok, %Flop{decoded_cursor: %{age: nil}}} =
+               validate(params, for: Pet)
     end
 
     test "replaces before cursor with invalid value types with replace_invalid_params" do
