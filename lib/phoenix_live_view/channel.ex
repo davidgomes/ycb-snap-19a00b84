@@ -75,7 +75,7 @@ defmodule Phoenix.LiveView.Channel do
 
   def report_writer_error(pid, reason) do
     channel_pid = self()
-    send(pid, {@prefix, :report_writer_error, channel_pid, reason})
+    GenServer.call(pid, {@prefix, :report_writer_error, channel_pid, reason})
   end
 
   def release_upload_name(name) do
@@ -283,7 +283,7 @@ defmodule Phoenix.LiveView.Channel do
     {:noreply, drop_upload_name(state, name)}
   end
 
-  def handle_info({@prefix, :report_writer_error, channel_pid, reason}, state) do
+  def handle_call({@prefix, :report_writer_error, channel_pid, reason}, _from, state) do
     case state.upload_pids do
       %{^channel_pid => {ref, entry_ref, cid}} ->
         new_state =
@@ -303,10 +303,10 @@ defmodule Phoenix.LiveView.Channel do
             invoke_progress_callback(new_socket, upload_config, entry, state, nil)
           end)
 
-        {:noreply, new_state}
+        {:reply, :ok, new_state}
 
       _ ->
-        {:noreply, state}
+        {:reply, :ok, state}
     end
   end
 
