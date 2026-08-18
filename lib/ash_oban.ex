@@ -1225,6 +1225,49 @@ defmodule AshOban do
     end
   end
 
+  @doc """
+  Runs the given function, translating `AshOban.Errors.SnoozeJob` and
+  `AshOban.Errors.CancelJob` errors into the corresponding Oban results.
+
+  The error may be raised, returned in an `{:error, error}` tuple, or nested
+  inside of an Ash error class.
+  """
+  @spec job_control((-> result)) :: result | {:snooze, term()} | {:cancel, term()}
+        when result: term()
+  def job_control(fun) do
+    case fun.() do
+      {:error, error} = result ->
+        job_control_result(error) || result
+
+      result ->
+        result
+    end
+  rescue
+    error ->
+      case job_control_result(error) do
+        nil -> reraise error, __STACKTRACE__
+        result -> result
+      end
+  end
+
+  defp job_control_result(%AshOban.Errors.SnoozeJob{snooze_for: snooze_for}) do
+    {:snooze, snooze_for}
+  end
+
+  defp job_control_result(%AshOban.Errors.CancelJob{reason: reason}) do
+    {:cancel, reason}
+  end
+
+  defp job_control_result(%{errors: errors}) when is_list(errors) do
+    job_control_result(errors)
+  end
+
+  defp job_control_result(errors) when is_list(errors) do
+    Enum.find_value(errors, &job_control_result/1)
+  end
+
+  defp job_control_result(_), do: nil
+
   @doc false
   def debug(message, true) do
     Logger.debug(message)

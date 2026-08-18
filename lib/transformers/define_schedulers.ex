@@ -1044,7 +1044,11 @@ defmodule AshOban.Transformers.DefineSchedulers do
     else
       quote location: :keep, generated: true do
         @impl unquote(worker)
-        def unquote(function_name)(%Oban.Job{args: %{"primary_key" => primary_key} = args} = job) do
+        def unquote(function_name)(%Oban.Job{args: %{"primary_key" => _}} = job) do
+          AshOban.job_control(fn -> do_work(job) end)
+        end
+
+        defp do_work(%Oban.Job{args: %{"primary_key" => primary_key} = args} = job) do
           case AshOban.lookup_actor(args["actor"], unquote(trigger.actor_persister)) do
             {:ok, actor} ->
               authorize? = AshOban.authorize?()
@@ -1123,9 +1127,11 @@ defmodule AshOban.Transformers.DefineSchedulers do
       if atomic? do
         quote location: :keep, generated: true do
           @impl unquote(worker)
-          def unquote(function_name)(
-                %Oban.Job{args: %{"primary_key" => primary_key} = args} = job
-              ) do
+          def unquote(function_name)(%Oban.Job{args: %{"primary_key" => _}} = job) do
+            AshOban.job_control(fn -> do_work(job) end)
+          end
+
+          defp do_work(%Oban.Job{args: %{"primary_key" => primary_key} = args} = job) do
             AshOban.debug(
               "Trigger #{unquote(inspect(resource))}.#{unquote(trigger.name)} triggered for primary key #{inspect(primary_key)}",
               unquote(trigger.debug?)
@@ -1235,9 +1241,11 @@ defmodule AshOban.Transformers.DefineSchedulers do
       else
         quote location: :keep, generated: true do
           @impl unquote(worker)
-          def unquote(function_name)(
-                %Oban.Job{args: %{"primary_key" => primary_key} = args} = job
-              ) do
+          def unquote(function_name)(%Oban.Job{args: %{"primary_key" => _}} = job) do
+            AshOban.job_control(fn -> do_work(job) end)
+          end
+
+          defp do_work(%Oban.Job{args: %{"primary_key" => primary_key} = args} = job) do
             AshOban.debug(
               "Trigger #{unquote(inspect(resource))}.#{unquote(trigger.name)} triggered for primary key #{inspect(primary_key)}",
               unquote(trigger.debug?)

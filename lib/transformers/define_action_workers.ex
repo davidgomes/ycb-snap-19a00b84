@@ -74,6 +74,10 @@ defmodule AshOban.Transformers.DefineActionWorkers do
         require Logger
         @impl unquote(worker)
         def unquote(function_name)(%Oban.Job{args: args} = job) do
+          AshOban.job_control(fn -> run(args, job) end)
+        end
+
+        defp run(args, job) do
           scheduled_action =
             AshOban.Info.oban_scheduled_action(unquote(resource), unquote(scheduled_action.name))
 
