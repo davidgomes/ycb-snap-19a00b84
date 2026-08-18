@@ -99,6 +99,33 @@ defmodule PetalComponents.PopoverTest do
     refute html =~ "phx-click-away"
   end
 
+  test "hide_popover/2 hides the panel and resets the trigger's aria-expanded" do
+    assigns = %{close: hide_popover("pop-close")}
+
+    html =
+      rendered_to_string(~H"""
+      <form phx-submit={@close}></form>
+      """)
+
+    assert html =~ "&quot;hide&quot;"
+    assert html =~ "#pop-close&quot;"
+    assert html =~ "&quot;aria-expanded&quot;,&quot;false&quot;"
+    assert html =~ "#pop-close-trigger&quot;"
+  end
+
+  test "hide_popover/2 composes onto commands passed in" do
+    assigns = %{submit: Phoenix.LiveView.JS.push("save") |> hide_popover("pop-compose")}
+
+    html =
+      rendered_to_string(~H"""
+      <form phx-submit={@submit}></form>
+      """)
+
+    assert html =~ "&quot;push&quot;"
+    assert html =~ "&quot;save&quot;"
+    assert html =~ "&quot;hide&quot;"
+  end
+
   test "passes through custom classes" do
     assigns = %{}
 

@@ -86,20 +86,32 @@ defmodule PetalComponents.Popover do
     end
   end
 
+  @doc """
+  JS commands that close the popover with the given id - for an action
+  *inside* the panel that should dismiss it, like a form's submit button.
+
+      <form phx-submit={JS.push("save") |> Popover.hide_popover("settings")}>
+
+  It resets the trigger's `aria-expanded` alongside hiding the panel, so the
+  next click on the trigger opens rather than re-closing.
+
+  Default (in-page) mode only. Top-layer panels are the browser's to open and
+  close - `popovertarget` and light dismiss handle it - and a JS command that
+  only hid the panel would leave the browser thinking it was still open.
+  """
+  def hide_popover(js \\ %JS{}, id) when is_binary(id) do
+    js
+    |> JS.hide(
+      to: "##{id}",
+      transition: {@transition_out_base, @transition_out_start, @transition_out_end}
+    )
+    |> JS.set_attribute({"aria-expanded", "false"}, to: "##{id}-trigger")
+  end
+
   defp render_anchored(assigns) do
     trigger_id = "#{assigns.id}-trigger"
 
-    hide_panel =
-      JS.hide(
-        to: "##{assigns.id}",
-        transition: {@transition_out_base, @transition_out_start, @transition_out_end}
-      )
-
-    hide =
-      compose_js(
-        assigns.on_close,
-        JS.set_attribute(hide_panel, {"aria-expanded", "false"}, to: "##{trigger_id}")
-      )
+    hide = compose_js(assigns.on_close, hide_popover(assigns.id))
 
     # Escape closes AND returns focus to the trigger; scoped to the component
     # (not the window) so a stray Escape elsewhere never steals focus.
