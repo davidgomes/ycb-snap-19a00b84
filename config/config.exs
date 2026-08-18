@@ -11,6 +11,10 @@ config :free_oban_ui,
   ecto_repos: [FreeObanUi.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+config :free_oban_ui, Oban,
+  repo: FreeObanUi.Repo,
+  queues: [default: 10]
+
 # Configures the endpoint
 config :free_oban_ui, FreeObanUiWeb.Endpoint,
   url: [host: "localhost"],

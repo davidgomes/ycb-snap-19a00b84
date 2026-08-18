@@ -1,0 +1,87 @@
+<div class="space-y-8">
+  <div>
+    <h1 class="text-3xl font-bold tracking-tight text-zinc-900">Oban Jobs</h1>
+    <p class="mt-2 text-sm text-zinc-600">The 50 most recently inserted jobs.</p>
+  </div>
+
+  <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <%= for state <- @states do %>
+      <.link
+        href={~p"/?#{%{state: state, queue: @selected_queue}}"}
+        class={[
+          "rounded-lg border p-4 transition hover:border-zinc-400",
+          @selected_state == state && "border-zinc-900 bg-zinc-50",
+          @selected_state != state && "border-zinc-200"
+        ]}
+      >
+        <div class="text-xs font-medium uppercase tracking-wide text-zinc-500"><%= state %></div>
+        <div class="mt-1 text-2xl font-semibold text-zinc-900"><%= Map.get(@counts, state, 0) %></div>
+      </.link>
+    <% end %>
+  </div>
+
+  <form method="get" class="flex flex-wrap items-end gap-4 rounded-lg bg-zinc-50 p-4">
+    <div>
+      <label for="state" class="block text-sm font-medium text-zinc-700">State</label>
+      <select id="state" name="state" class="mt-1 rounded-md border-zinc-300 text-sm">
+        <option value="">All states</option>
+        <option :for={state <- @states} value={state} selected={state == @selected_state}>
+          <%= state %>
+        </option>
+      </select>
+    </div>
+    <div>
+      <label for="queue" class="block text-sm font-medium text-zinc-700">Queue</label>
+      <select id="queue" name="queue" class="mt-1 rounded-md border-zinc-300 text-sm">
+        <option value="">All queues</option>
+        <option :for={queue <- @queues} value={queue} selected={queue == @selected_queue}>
+          <%= queue %>
+        </option>
+      </select>
+    </div>
+    <button class="rounded-md bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-700">
+      Filter
+    </button>
+    <.link href={~p"/"} class="px-2 py-2 text-sm font-medium text-zinc-600 hover:text-zinc-900">
+      Clear
+    </.link>
+  </form>
+
+  <div class="overflow-hidden rounded-lg border border-zinc-200">
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-zinc-200 text-left text-sm">
+        <thead class="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
+          <tr>
+            <th class="px-4 py-3 font-medium">ID</th>
+            <th class="px-4 py-3 font-medium">Worker</th>
+            <th class="px-4 py-3 font-medium">Queue</th>
+            <th class="px-4 py-3 font-medium">State</th>
+            <th class="px-4 py-3 font-medium">Attempt</th>
+            <th class="px-4 py-3 font-medium">Inserted</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-zinc-100 bg-white">
+          <tr :for={job <- @jobs} class="hover:bg-zinc-50">
+            <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-500"><%= job.id %></td>
+            <td class="max-w-xs truncate px-4 py-3 font-medium text-zinc-900"><%= job.worker %></td>
+            <td class="whitespace-nowrap px-4 py-3 text-zinc-600"><%= job.queue %></td>
+            <td class="whitespace-nowrap px-4 py-3">
+              <span class={["rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset", state_class(job.state)]}>
+                <%= job.state %>
+              </span>
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-zinc-600">
+              <%= job.attempt %>/<%= job.max_attempts %>
+            </td>
+            <td class="whitespace-nowrap px-4 py-3 text-zinc-600"><%= format_time(job.inserted_at) %></td>
+          </tr>
+          <tr :if={@jobs == []}>
+            <td colspan="6" class="px-4 py-12 text-center text-zinc-500">
+              No jobs match these filters.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

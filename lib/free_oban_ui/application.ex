@@ -10,6 +10,7 @@ defmodule FreeObanUi.Application do
     children = [
       FreeObanUiWeb.Telemetry,
       FreeObanUi.Repo,
+      {Oban, Application.fetch_env!(:free_oban_ui, Oban)},
       {DNSCluster, query: Application.get_env(:free_oban_ui, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: FreeObanUi.PubSub},
       # Start the Finch HTTP client for sending emails
