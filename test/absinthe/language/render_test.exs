@@ -34,6 +34,22 @@ defmodule Absinthe.Language.RenderTest do
       """)
     end
 
+    test "for described operations and fragments" do
+      assert_rendered("""
+      "Fetches a user."
+      query GetUser {
+        user {
+          ...UserFields
+        }
+      }
+
+      "Fields shared by user queries."
+      fragment UserFields on User {
+        id
+      }
+      """)
+    end
+
     test "for inline fragment with type query" do
       assert_rendered("""
       query inlineFragmentTyping {

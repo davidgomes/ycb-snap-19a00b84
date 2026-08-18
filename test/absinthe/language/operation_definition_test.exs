@@ -25,6 +25,17 @@ defmodule Absinthe.Language.OperationDefinitionTest do
              } = from_input(@query)
     end
 
+    test "preserves the description" do
+      query = """
+      "Fetches foo."
+      query Foo {
+        foo
+      }
+      """
+
+      assert %Blueprint.Document.Operation{description: "Fetches foo."} = from_input(query)
+    end
+
     @query """
     query Foo($showFoo: Boolean = true) {
       foo @include(if: $showFoo)

@@ -21,6 +21,18 @@ defmodule Absinthe.Language.FragmentTest do
                ]
              } = from_input(@query)
     end
+
+    test "preserves the description" do
+      query = """
+      "Fields from Foo."
+      fragment FooFields on Foo {
+        foo
+      }
+      """
+
+      assert %Blueprint.Document.Fragment.Named{description: "Fields from Foo."} =
+               from_input(query)
+    end
   end
 
   defp from_input(text) do

@@ -81,6 +81,38 @@ defmodule Absinthe.Phase.Parse.DescriptionsTest do
             }} = run(@sdl)
   end
 
+  test "parses descriptions on operations and fragments" do
+    document = """
+    \"""
+    Fetches a user.
+    \"""
+    query GetUser {
+      user {
+        ...UserFields
+      }
+    }
+
+    "Fields shared by user queries."
+    fragment UserFields on User {
+      id
+    }
+    """
+
+    assert {:ok,
+            %{
+              definitions: [
+                %Absinthe.Language.OperationDefinition{
+                  name: "GetUser",
+                  description: "Fetches a user."
+                },
+                %Absinthe.Language.Fragment{
+                  name: "UserFields",
+                  description: "Fields shared by user queries."
+                }
+              ]
+            }} = run(document)
+  end
+
   def run(input) do
     with {:ok, %{input: input}} <- Absinthe.Phase.Parse.run(input) do
       {:ok, input}
