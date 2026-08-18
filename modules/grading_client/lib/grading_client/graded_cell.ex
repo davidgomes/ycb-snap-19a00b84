@@ -22,8 +22,6 @@ defmodule GradingClient.GradedCell do
 
   @impl true
   def to_source(attrs) do
-    modules = Map.new(GradingClient.Answers.get_modules(), &{inspect(&1), &1})
-
     source_ast =
       try do
         source_attr = attrs["source"]
@@ -39,14 +37,7 @@ defmodule GradingClient.GradedCell do
             |> String.trim_leading("#")
             |> String.split(":", parts: 2)
 
-          module_id =
-            case unquote(Macro.escape(modules))[String.trim(module_id)] do
-              nil ->
-                raise "invalid module id: #{module_id}"
-
-              module_id ->
-                module_id
-            end
+          module_id = String.to_atom(String.trim(module_id))
 
           question_id =
             case Integer.parse(String.trim(question_id)) do
