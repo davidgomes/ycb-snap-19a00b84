@@ -173,6 +173,29 @@ defmodule Sentry.Transport.RateLimiterTest do
       :ets.insert(table_name(), {"trace_metric", now + 60})
       assert RateLimiter.rate_limited_for_category?(:metric) == true
     end
+
+    test "a byte category parsed from the header gates its count category string" do
+      RateLimiter.update_rate_limits("60:log_byte:organization")
+
+      assert RateLimiter.rate_limited?("log_byte") == true
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+    end
+
+    test "gates log_item on the log_byte limit as a string category" do
+      now = System.system_time(:second)
+      :ets.insert(table_name(), {"log_byte", now + 60})
+
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited?("log_item") == false
+    end
+
+    test "gates trace_metric on the trace_metric_byte limit as a string category" do
+      now = System.system_time(:second)
+      :ets.insert(table_name(), {"trace_metric_byte", now + 60})
+
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == true
+      assert RateLimiter.rate_limited?("trace_metric") == false
+    end
   end
 
   defp table_name, do: Process.get(:rate_limiter_table_name)
