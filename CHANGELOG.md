@@ -16,6 +16,10 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 
 
+### Improvements:
+
+* add support for snoozing and cancelling Oban jobs from actions
+
 ### Features:
 
 * experiment with new chunk worker logic by Zach Daniel
