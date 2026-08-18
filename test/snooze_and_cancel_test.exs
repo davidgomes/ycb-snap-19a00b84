@@ -16,26 +16,20 @@ defmodule AshOban.SnoozeAndCancelTest do
     end
   end
 
-  defmodule ProcessAtomically do
+  defmodule SnoozeAtomically do
     @moduledoc false
-    use Ash.Resource.Change
+    use Ash.Resource.Validation
 
-    require Ash.Expr
-
-    def change(changeset, _opts, _context) do
-      if Process.get(:snooze_and_cancel_test) == :snooze do
-        Ash.Changeset.add_error(changeset, AshOban.snooze(60))
-      else
-        Ash.Changeset.change_attribute(changeset, :processed, true)
-      end
-    end
-
-    def atomic(_changeset, _opts, _context) do
+    def validate(_changeset, _opts, _context) do
       if Process.get(:snooze_and_cancel_test) == :snooze do
         {:error, AshOban.snooze(60)}
       else
-        {:atomic, %{processed: Ash.Expr.expr(true)}}
+        :ok
       end
+    end
+
+    def atomic(changeset, opts, context) do
+      validate(changeset, opts, context)
     end
   end
 
@@ -116,7 +110,8 @@ defmodule AshOban.SnoozeAndCancelTest do
       end
 
       update :process_atomically do
-        change AshOban.SnoozeAndCancelTest.ProcessAtomically
+        validate AshOban.SnoozeAndCancelTest.SnoozeAtomically
+        change set_attribute(:processed, true)
       end
 
       update :mark_errored do
