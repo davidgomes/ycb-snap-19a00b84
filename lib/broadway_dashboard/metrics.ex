@@ -28,9 +28,9 @@ defmodule BroadwayDashboard.Metrics do
   defp check_pipeline_running_at_node(pipeline, target_node) do
     result =
       if target_node == node() do
-        Process.whereis(pipeline)
+        GenServer.whereis(pipeline)
       else
-        :rpc.call(target_node, Process, :whereis, [pipeline])
+        :rpc.call(target_node, GenServer, :whereis, [pipeline])
       end
 
     case result do
