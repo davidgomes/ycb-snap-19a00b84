@@ -2,10 +2,10 @@ defmodule Warehouse.Schemas.Component do
   use Ecto.Schema
 
   @type t :: %__MODULE__{
-          removed: integer()
+          removed: boolean()
         }
 
   schema "components" do
-    field :removed, :integer
+    field :removed, :boolean
   end
 end
