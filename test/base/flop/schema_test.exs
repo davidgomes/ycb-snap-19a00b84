@@ -388,7 +388,7 @@ defmodule Flop.SchemaTest do
              )
   end
 
-  test "raises error if custom field is added to sortable list" do
+  test "raises error if sortable custom field has no sorter" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Parsley do
@@ -407,6 +407,64 @@ defmodule Flop.SchemaTest do
         end
       end
 
-    assert error.message =~ "cannot sort by custom field"
+    assert error.message =~ "missing :sorter option for custom field"
+  end
+
+  test "raises error if filterable custom field has no filter" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Sage do
+          @derive {
+            Flop.Schema,
+            filterable: [:inserted_at],
+            sortable: [],
+            custom_fields: [
+              inserted_at: [ecto_type: :utc_datetime]
+            ]
+          }
+          defstruct [:id, :inserted_at]
+        end
+      end
+
+    assert error.message =~ "missing :filter option for custom field"
+  end
+
+  test "raises error if filterable custom field has no ecto_type" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Thyme do
+          @derive {
+            Flop.Schema,
+            filterable: [:inserted_at],
+            sortable: [],
+            custom_fields: [
+              inserted_at: [filter: {__MODULE__, :some_function, []}]
+            ]
+          }
+          defstruct [:id, :inserted_at]
+        end
+      end
+
+    assert error.message =~ "missing :ecto_type option for custom field"
+  end
+
+  test "does not require a filter or an ecto_type for a sort-only custom field" do
+    defmodule Oregano do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [sorter: {__MODULE__, :some_function, []}]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    assert %Flop.FieldInfo{ecto_type: nil, extra: extra} =
+             Schema.field_info(struct(Oregano), :inserted_at)
+
+    assert extra.sorter == {Oregano, :some_function, []}
+    assert extra.filter == nil
   end
 end

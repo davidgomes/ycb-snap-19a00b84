@@ -170,6 +170,40 @@ defmodule Flop.Adapters.Ecto.FlopTest do
              ) == Enum.reverse(expected)
     end
 
+    test "orders by custom fields" do
+      pets = insert_list(20, :pet)
+
+      assert Flop.all(Pet, %Flop{order_by: [:dog_age, :id]}, for: Pet) ==
+               Enum.sort_by(pets, &{&1.age * 7, &1.id})
+
+      assert Flop.all(
+               Pet,
+               %Flop{
+                 order_by: [:dog_age, :id],
+                 order_directions: [:desc, :asc]
+               },
+               for: Pet
+             ) == Enum.sort_by(pets, &{-&1.age * 7, &1.id})
+    end
+
+    test "passes extra opts to the sorter function of a custom field" do
+      pets = insert_list(20, :pet)
+
+      assert Flop.all(Pet, %Flop{order_by: [:dog_age, :id]},
+               for: Pet,
+               extra_opts: [factor: -1]
+             ) == Enum.sort_by(pets, &{-&1.age, &1.id})
+    end
+
+    test "raises if custom order field has no sorter function" do
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.all(Pet, %Flop{order_by: [:reverse_name]}, for: Pet)
+        end
+
+      assert error.message =~ "no sorter function configured for custom field"
+    end
+
     test "warns if query passed to Flop already included ordering" do
       query = from p in Pet, order_by: :species
 

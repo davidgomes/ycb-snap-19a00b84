@@ -151,8 +151,16 @@ defmodule Flop.Generators do
   def cursor_fields(%{} = schema) do
     schema
     |> Flop.Schema.sortable()
+    |> Enum.reject(&unsupported_cursor_field?(schema, &1))
     |> Enum.shuffle()
     |> constant()
+  end
+
+  defp unsupported_cursor_field?(schema, field) do
+    %Flop.FieldInfo{extra: %{type: type}} =
+      Flop.Schema.field_info(schema, field)
+
+    type in [:alias, :compound, :custom]
   end
 
   def order_directions(%{} = schema) do
