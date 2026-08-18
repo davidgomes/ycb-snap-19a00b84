@@ -92,14 +92,24 @@ defmodule PetalComponents.Popover do
 
       <form phx-submit={JS.push("save") |> Popover.hide_popover("settings")}>
 
-  It resets the trigger's `aria-expanded` alongside hiding the panel, so the
-  next click on the trigger opens rather than re-closing.
+  Click-away only fires outside the panel, so nothing within it closes on its
+  own. Focus returns to the trigger, because the element that was focused is
+  the one being hidden - the same move Escape makes, and the one the browser
+  makes for a top-layer panel.
 
   Default (in-page) mode only. Top-layer panels are the browser's to open and
   close - `popovertarget` and light dismiss handle it - and a JS command that
   only hid the panel would leave the browser thinking it was still open.
   """
   def hide_popover(js \\ %JS{}, id) when is_binary(id) do
+    js
+    |> hide_panel(id)
+    |> JS.focus(to: "##{id}-trigger")
+  end
+
+  # closing without touching focus: what click-away wants, since focus
+  # belongs to whatever was just clicked
+  defp hide_panel(js \\ %JS{}, id) do
     js
     |> JS.hide(
       to: "##{id}",
@@ -111,11 +121,11 @@ defmodule PetalComponents.Popover do
   defp render_anchored(assigns) do
     trigger_id = "#{assigns.id}-trigger"
 
-    hide = compose_js(assigns.on_close, hide_popover(assigns.id))
+    hide = compose_js(assigns.on_close, hide_panel(assigns.id))
 
     # Escape closes AND returns focus to the trigger; scoped to the component
     # (not the window) so a stray Escape elsewhere never steals focus.
-    hide_and_refocus = JS.focus(hide, to: "##{trigger_id}")
+    hide_and_refocus = compose_js(assigns.on_close, hide_popover(assigns.id))
 
     toggle =
       JS.toggle_attribute(

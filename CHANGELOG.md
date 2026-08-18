@@ -7,8 +7,9 @@
   popover, for an action *inside* the panel that should dismiss it:
   `phx-submit={JS.push("save") |> hide_popover("settings")}`. Click-away
   fires only outside the panel, so a submit button inside it had nothing
-  to close with. It hides the panel and resets the trigger's
-  `aria-expanded` together, exactly as click-away and Escape do.
+  to close with. It hides the panel, resets the trigger's `aria-expanded`
+  and returns focus to the trigger, since the element that was focused is
+  the one being hidden - the same close Escape performs.
 
 #### Fixed
 

@@ -99,7 +99,7 @@ defmodule PetalComponents.PopoverTest do
     refute html =~ "phx-click-away"
   end
 
-  test "hide_popover/2 hides the panel and resets the trigger's aria-expanded" do
+  test "hide_popover/2 hides the panel, resets aria-expanded and refocuses the trigger" do
     assigns = %{close: hide_popover("pop-close")}
 
     html =
@@ -111,6 +111,9 @@ defmodule PetalComponents.PopoverTest do
     assert html =~ "#pop-close&quot;"
     assert html =~ "&quot;aria-expanded&quot;,&quot;false&quot;"
     assert html =~ "#pop-close-trigger&quot;"
+    # the action that closed the panel was inside it, so focus has nowhere
+    # to land - send it back to the trigger, as Escape does
+    assert html =~ "&quot;focus&quot;"
   end
 
   test "hide_popover/2 composes onto commands passed in" do
