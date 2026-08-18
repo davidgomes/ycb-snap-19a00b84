@@ -26,6 +26,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on array fields, with `JSON_CONTAINS` and `JSON_LENGTH` on MySQL, instead of
   raising.
 - Remove the `:=~` operator from the operators allowed for boolean fields.
+- Build null-aware predicates for cursor pagination, so that ordering by a
+  nullable column no longer loses the rows where it is `NULL`. Cursor
+  pagination with the plain `:asc` or `:desc` directions now requires the repo
+  to be configured, since Flop needs it to know where the database sorts
+  `NULL` values. Use the `:asc_nulls_first`, `:asc_nulls_last`,
+  `:desc_nulls_first` or `:desc_nulls_last` directions to avoid that
+  requirement.
 
 ## [0.27.2] - 2026-08-12
 

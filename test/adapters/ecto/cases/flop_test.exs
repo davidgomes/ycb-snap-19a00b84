@@ -2255,6 +2255,140 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                  for: MyApp.WalkingDistances
                )
     end
+
+    test "does not skip or repeat rows when the order field is nullable" do
+      ages = [3, nil, 7, 1, nil, 5]
+      names = ~w(Ann Bo Cy Dee Eve Fay)
+      order_by = [:age, :name]
+
+      for {name, age} <- Enum.zip(names, ages) do
+        Repo.insert!(%Pet{name: name, age: age})
+      end
+
+      for age_direction <- [
+            :asc,
+            :asc_nulls_first,
+            :asc_nulls_last,
+            :desc,
+            :desc_nulls_first,
+            :desc_nulls_last
+          ] do
+        directions = [age_direction, :asc]
+
+        expected =
+          Flop.all(
+            Pet,
+            %Flop{order_by: order_by, order_directions: directions},
+            for: Pet
+          )
+
+        assert length(expected) == length(names)
+
+        {forward, last_cursor} =
+          Enum.reduce(expected, {[], nil}, fn _pet, {acc, cursor} ->
+            {:ok, {[pet], meta}} =
+              Flop.validate_and_run(
+                Pet,
+                %Flop{
+                  first: 1,
+                  after: cursor,
+                  order_by: order_by,
+                  order_directions: directions
+                },
+                for: Pet
+              )
+
+            {acc ++ [pet], meta.end_cursor}
+          end)
+
+        assert forward == expected
+
+        assert {:ok, {[], %Meta{end_cursor: nil}}} =
+                 Flop.validate_and_run(
+                   Pet,
+                   %Flop{
+                     first: 1,
+                     after: last_cursor,
+                     order_by: order_by,
+                     order_directions: directions
+                   },
+                   for: Pet
+                 )
+
+        {backward, first_cursor} =
+          Enum.reduce(expected, {[], nil}, fn _pet, {acc, cursor} ->
+            {:ok, {[pet], meta}} =
+              Flop.validate_and_run(
+                Pet,
+                %Flop{
+                  last: 1,
+                  before: cursor,
+                  order_by: order_by,
+                  order_directions: directions
+                },
+                for: Pet
+              )
+
+            {[pet | acc], meta.start_cursor}
+          end)
+
+        assert backward == expected
+
+        assert {:ok, {[], %Meta{start_cursor: nil}}} =
+                 Flop.validate_and_run(
+                   Pet,
+                   %Flop{
+                     last: 1,
+                     before: first_cursor,
+                     order_by: order_by,
+                     order_directions: directions
+                   },
+                   for: Pet
+                 )
+      end
+    end
+
+    test "does not skip or repeat rows when a nullable join field is used" do
+      owner = insert(:owner, age: 10)
+      order_by = [:owner_age, :name]
+      directions = [:asc_nulls_last, :asc]
+
+      for name <- ~w(Ann Bo) do
+        Repo.insert!(%Pet{name: name, owner_id: owner.id})
+      end
+
+      for name <- ~w(Cy Dee) do
+        Repo.insert!(%Pet{name: name})
+      end
+
+      expected =
+        Flop.all(
+          pets_with_owners_query(),
+          %Flop{order_by: order_by, order_directions: directions},
+          for: Pet
+        )
+
+      assert length(expected) == 4
+
+      {forward, _last_cursor} =
+        Enum.reduce(expected, {[], nil}, fn _pet, {acc, cursor} ->
+          {:ok, {[pet], meta}} =
+            Flop.validate_and_run(
+              pets_with_owners_query(),
+              %Flop{
+                first: 1,
+                after: cursor,
+                order_by: order_by,
+                order_directions: directions
+              },
+              for: Pet
+            )
+
+          {acc ++ [pet], meta.end_cursor}
+        end)
+
+      assert forward == expected
+    end
   end
 
   describe "__using__/1" do
