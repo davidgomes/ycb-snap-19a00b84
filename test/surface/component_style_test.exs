@@ -469,10 +469,10 @@ defmodule Surface.ComponentStyleTest do
 
     attr = scope_attr(ViewWithLiveComponentWithUpdate, :render)
 
-    # We need to use `attr="attr"` instead of just `attr` here because it seems live_isolated/2
+    # We need to use `attr=""` instead of just `attr` here because it seems live_isolated/2
     # renders attributes differently. Maybe because it relies on `<.dynamic_tag/>`?
     assert html =~ """
-           <a data-phx-component=\"1\" #{attr}="#{attr}" href="#" class="a">link</a>\
+           <a data-phx-component=\"1\" #{attr}="" href="#" class="a">link</a>\
            """
   end
 
