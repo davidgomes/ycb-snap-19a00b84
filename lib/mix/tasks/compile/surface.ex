@@ -150,7 +150,9 @@ defmodule Mix.Tasks.Compile.Surface do
 
   @switches [
     return_errors: :boolean,
-    warnings_as_errors: :boolean
+    warnings_as_errors: :boolean,
+    force: :boolean,
+    all_warnings: :boolean
   ]
 
   @assets_opts [
