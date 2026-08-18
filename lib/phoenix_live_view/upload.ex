@@ -74,9 +74,12 @@ defmodule Phoenix.LiveView.Upload do
 
     case UploadConfig.get_entry_by_ref(upload_config, entry_ref) do
       %UploadEntry{} = entry ->
-        upload_config
-        |> UploadConfig.cancel_entry(entry)
-        |> update_uploads(socket)
+        socket =
+          upload_config
+          |> UploadConfig.cancel_entry(entry)
+          |> update_uploads(socket)
+
+        maybe_release_upload_name(socket, name)
 
       _ ->
         raise ArgumentError, "no entry in upload \"#{inspect(name)}\" with ref \"#{entry_ref}\""
@@ -189,6 +192,17 @@ defmodule Phoenix.LiveView.Upload do
   end
 
   @doc """
+  Marks an entry as failed, records the error, and detaches its upload channel.
+  """
+  def fail_entry(%Socket{} = socket, conf_name, entry_ref, reason) do
+    conf = Map.fetch!(socket.assigns.uploads, conf_name)
+
+    conf
+    |> UploadConfig.fail_entry(entry_ref, reason)
+    |> update_uploads(socket)
+  end
+
+  @doc """
   Retrieves the `%UploadConfig{}` from the socket for the provided ref.
 
   Returns `:error` when the socket has no upload allowed for the ref.
@@ -292,6 +306,17 @@ defmodule Phoenix.LiveView.Upload do
     |> Enum.filter(fn entry -> entry.ref in entry_refs end)
     |> Enum.reduce(conf, fn entry, acc -> UploadConfig.drop_entry(acc, entry) end)
     |> update_uploads(socket)
+  end
+
+  defp maybe_release_upload_name(%Socket{} = socket, name) do
+    case socket.assigns[:uploads] do
+      %{^name => %UploadConfig{entries: []}} ->
+        Phoenix.LiveView.Channel.release_upload_name(name)
+        socket
+
+      _ ->
+        socket
+    end
   end
 
   defp update_uploads(%UploadConfig{} = new_conf, %Socket{} = socket) do
