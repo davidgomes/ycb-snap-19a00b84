@@ -3,6 +3,20 @@
 
 #### Fixed
 
+- **`data_table` menus live in the page again.** The filter editors and
+  the Columns dropdown rode the popover's top-layer mode, so a fixed
+  panel had to be re-anchored on every scroll, resize and visual
+  viewport change - and every miss in that chase was visible: a flash
+  at the corner, a snap back to it on the patches Columns makes with
+  each toggle, an editor adrift above a mobile keyboard. They are plain
+  CSS-anchored panels again: they move with the page for free, and a
+  patch cannot strip a position they don't have. Closing after an Apply
+  is now a LiveView.JS command the component renders in both wiring
+  modes - so event mode needs no JS again, and the `PetalDataTable`
+  hook is back to link mode's URL wiring plus the selection checkbox.
+  Below `sm` the panels hang off the toolbar instead of their button,
+  which is what keeps an edge button's editor on screen without
+  measuring anything.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to

@@ -2605,7 +2605,24 @@
     @apply min-w-0 max-w-full;
   }
   .pc-data-table__toolbar {
-    @apply mb-3 flex flex-wrap items-center gap-2;
+    @apply relative mb-3 flex flex-wrap items-center gap-2;
+  }
+  /* The filter editors and the Columns menu are ordinary in-page panels:
+     they scroll with the page instead of being re-anchored to it. That
+     leaves one thing CSS must answer - a button near the right edge
+     would open its panel off the page. Narrow screens hang the panels
+     off the toolbar (its width is the table's, so they always fit); from
+     sm up there is room to hang them off the button itself. */
+  .pc-data-table__filter-popover,
+  .pc-data-table__columns {
+    @apply static sm:relative;
+  }
+  .pc-data-table__filter-popover > .pc-popover__panel,
+  .pc-data-table__columns > .pc-popover__panel {
+    @apply left-0 right-auto w-full sm:w-max;
+  }
+  .pc-data-table__columns > .pc-popover__panel {
+    @apply sm:left-auto sm:right-0;
   }
   .pc-data-table__scroll {
     @apply overflow-x-auto;
@@ -2672,11 +2689,13 @@
   .pc-data-table__filter-icon.pc-data-table__filter-icon {
     @apply w-3.5! h-3.5! mr-1.5;
   }
+  /* below sm the panel is as wide as the toolbar, so the editor fills it
+     rather than leaving its Apply button stranded mid-panel */
   .pc-data-table__filter-form {
-    @apply flex w-56 flex-col gap-2;
+    @apply flex w-full flex-col gap-2 sm:w-56;
   }
   .pc-data-table__filter-form--select {
-    @apply w-48;
+    @apply sm:w-48;
   }
   /* py-0: these carry an explicit height, so the base py-2 would push a
      16px line box (coarse pointers) past the content box and sit the

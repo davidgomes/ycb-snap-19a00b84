@@ -108,13 +108,18 @@ defmodule PetalComponents.DataTableTest do
     # active trigger reads the predicate; its clear button posts removal
     assert html =~ "Status is any of Pending, Paid"
     assert html =~ ~s(aria-label="Clear Status filter")
-    # event mode carries the op grammar in hidden inputs; the hook mounts
-    # only to close top-layer popovers - no URL wiring
+    # event mode carries the op grammar in hidden inputs and closes the
+    # editor from phx-submit - no hook, no URL wiring
     assert html =~ ~s(name="op" value="filter")
-    assert html =~ ~s(phx-hook="PetalDataTable")
-    assert html =~ ~s(popover="auto")
+    assert html =~ ~s(pc-popover__panel--bottom-start)
+    refute html =~ ~s(popover=)
+    refute html =~ "PetalDataTable"
     refute html =~ "data-nav-template"
     refute html =~ "data-filters="
+    # Apply pushes, then closes the editor - a display toggle, no hook
+    [_, submit_js] = Regex.run(~r/phx-submit="([^"]*)"/, html)
+    assert submit_js =~ "&quot;push&quot;"
+    assert submit_js =~ "&quot;hide&quot;"
   end
 
   test "filterable link mode: hook + :filters placeholder + JSON stamp + clear URL" do
@@ -136,6 +141,11 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ ~s(data-nav-template="/orders?:filters")
     assert html =~ ~s(data-filters=)
     assert html =~ "contains"
+    # Apply closes the editor with no event behind it - the hook turns
+    # that same submit into the patch
+    [_, submit_js] = Regex.run(~r/phx-submit="([^"]*)"/, html)
+    assert submit_js =~ "&quot;hide&quot;"
+    refute submit_js =~ "&quot;push&quot;"
     # the clear affordance patches to a filterless URL
     assert html =~ ~s(aria-label="Clear Email filter")
     refute html =~ ~s(href="/orders?filters)
@@ -336,6 +346,10 @@ defmodule PetalComponents.DataTableTest do
     refute html =~ "amy@x.com"
     assert html =~ ~s(phx-value-op="toggle_column")
     assert html =~ ~s(phx-value-field="email")
+    # an in-page panel: every toggle patches, and a CSS-anchored panel
+    # has no position for that patch to strip
+    assert html =~ ~s(pc-popover__panel--bottom-end)
+    refute html =~ ~s(popover=)
     # the last visible column's checkbox is disabled - a table needs one
     assert Regex.match?(~r/<input[^>]*checked[^>]*disabled[^>]*phx-value-field="name"/, html) or
              Regex.match?(~r/<input[^>]*disabled[^>]*phx-value-field="name"/, html)

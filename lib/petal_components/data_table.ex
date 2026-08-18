@@ -26,9 +26,10 @@ defmodule PetalComponents.DataTable do
       clears as `%{"op" => "clear_filters"}`. `State.handle_op/3`
       speaks the whole grammar, so the handler is a one-liner.
 
-  In link mode the quick-search input and rows-per-page select are wired
-  by the `PetalDataTable` hook (patch URLs built from templates the
-  component renders); event mode needs no JS.
+  In link mode the quick-search input, the rows-per-page select and the
+  filter editors' Apply are wired by the `PetalDataTable` hook (patch
+  URLs built from templates the component renders); event mode needs no
+  JS.
 
   Selection (`selectable`) is UI state, not query state - it rides an
   event in BOTH wiring modes (`on_ui`, defaulting to `on_change`) and
@@ -226,12 +227,14 @@ defmodule PetalComponents.DataTable do
 
     link_mode? = is_nil(assigns.on_change)
 
-    # link mode: URL wiring. Either mode: filter popovers are native
-    # top-layer popovers the hook closes after an Apply, and selection's
-    # tri-state header checkbox needs its indeterminate property set.
-    hooked? =
-      (link_mode? and (assigns.searchable or assigns.page_size_options != [])) or
-        filter_cols != [] or assigns.selectable
+    # link mode has no events by design, so search, page size and filter
+    # Applies must become patch URLs instead; either mode needs the hook
+    # for selection's tri-state header checkbox.
+    url_wiring? =
+      link_mode? and
+        (assigns.searchable or assigns.page_size_options != [] or filter_cols != [])
+
+    hooked? = url_wiring? or assigns.selectable
 
     assigns =
       assigns
@@ -331,7 +334,6 @@ defmodule PetalComponents.DataTable do
           <.popover
             :if={@column_toggle}
             id={"#{@id}-columns"}
-            top_layer
             placement="bottom-end"
             class="pc-data-table__columns"
             trigger_class="pc-button pc-button--sm pc-button--gray-outline"
@@ -733,7 +735,6 @@ defmodule PetalComponents.DataTable do
     <div class="pc-data-table__filter">
       <.popover
         id={@pop_id}
-        top_layer
         placement="bottom-start"
         class="pc-data-table__filter-popover"
         trigger_class={[
@@ -892,12 +893,23 @@ defmodule PetalComponents.DataTable do
     """
   end
 
-  # event mode pushes the form; the hook closes the native popover on
-  # submit (a top-layer panel needs hidePopover(), not a display toggle)
-  defp filter_submit_js(nil, _target, _pop_id), do: nil
+  # An Apply closes the editor, and an in-page panel closes by display -
+  # something LiveView.JS can say in both modes, so event mode pushes
+  # then closes and link mode only closes (the hook turns that same
+  # submit into a patch). It belongs here rather than in the hook: a
+  # JS command is remembered across the patch that follows, a raw style
+  # write is not.
+  defp filter_submit_js(nil, _target, pop_id), do: close_editor_js(%JS{}, pop_id)
 
-  defp filter_submit_js(event, target, _pop_id) do
-    if target, do: JS.push(event, target: target), else: JS.push(event)
+  defp filter_submit_js(event, target, pop_id) do
+    push = if target, do: JS.push(%JS{}, event, target: target), else: JS.push(%JS{}, event)
+    close_editor_js(push, pop_id)
+  end
+
+  defp close_editor_js(js, pop_id) do
+    js
+    |> JS.hide(to: "##{pop_id}")
+    |> JS.set_attribute({"aria-expanded", "false"}, to: "##{pop_id}-trigger")
   end
 
   defp normalize_options(options) do

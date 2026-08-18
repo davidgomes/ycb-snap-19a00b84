@@ -4768,18 +4768,14 @@ export const PetalDataTable = {
 
     // link mode has no events, so a filter editor's Apply becomes a
     // patch built from the form's inputs: replace this field's entry in
-    // the committed filter list (an empty editor removes it), close the
-    // popover, navigate
+    // the committed filter list (an empty editor removes it), navigate.
+    // Closing the editor is the component's own phx-submit in either
+    // mode - a LiveView.JS hide, which the patch that follows remembers
+    // and a raw style write would not. Only link-mode forms carry the
+    // marker attribute.
     this.onSubmit = (e) => {
-      const form = e.target.closest(".pc-data-table__filter-form");
+      const form = e.target.closest("[data-pc-dt-filter]");
       if (!form) return;
-
-      // event mode: the form pushes its own phx-submit - only the
-      // popover close is ours
-      if (!form.hasAttribute("data-pc-dt-filter")) {
-        this.closePopover(form);
-        return;
-      }
 
       e.preventDefault();
       clearTimeout(this.searchTimer);
@@ -4789,7 +4785,6 @@ export const PetalDataTable = {
       const next = this.readFilter(form, field);
       if (next) filters.push(next);
 
-      this.closePopover(form);
       this.patchTo(this.navUrl(filters));
     };
 
@@ -4849,23 +4844,6 @@ export const PetalDataTable = {
     }
 
     return value === "" ? null : { field, op, value };
-  },
-
-  closePopover(form) {
-    const panel = form.closest(".pc-popover__panel");
-    if (!panel) return;
-    if (
-      panel.hasAttribute("popover") &&
-      typeof panel.hidePopover === "function"
-    ) {
-      // top-layer panels close through the native API, which also
-      // restores focus and light-dismiss state
-      panel.hidePopover();
-      return;
-    }
-    panel.style.display = "none";
-    const trigger = document.getElementById(`${panel.id}-trigger`);
-    if (trigger) trigger.setAttribute("aria-expanded", "false");
   },
 
   // Both placeholders resolve from the live DOM in one pass, so
