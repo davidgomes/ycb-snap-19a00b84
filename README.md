@@ -50,7 +50,7 @@ end
 
 ### 2. Create Event Handlers
 
-Implement the `ObanEvents.Handler` behaviour:
+Implement the `ObanEvents.Handler` behaviour (`handle_event/2` or optional `handle_event/3` for metadata):
 
 ```elixir
 defmodule MyApp.EmailHandler do
@@ -68,6 +68,11 @@ defmodule MyApp.EmailHandler do
     :ok
   end
 
+  # Or handle with metadata
+  # def handle_event(:user_created, data, metadata) do
+  #   ...
+  # end
+
   @impl true
   def handle_event(_event, _data), do: :ok
 end
@@ -75,7 +80,7 @@ end
 
 ### 3. Emit Events
 
-Emit events from your application code, preferably within transactions:
+Emit events from your application code, preferably within transactions. You can emit with data, with data and metadata, or using an `ObanEvents.Event` struct:
 
 ```elixir
 defmodule MyApp.Accounts do
@@ -87,12 +92,19 @@ defmodule MyApp.Accounts do
            {:ok, _jobs} <- Events.emit(:user_created, %{
              user_id: user.id,
              email: user.email
-           }) do
+           }, %{trace_id: "abc-123"}) do
         {:ok, user}
       end
     end)
   end
 end
+```
+
+Or using `ObanEvents.Event`:
+
+```elixir
+event = ObanEvents.Event.new(:user_created, %{user_id: user.id}, %{trace_id: "abc-123"})
+{:ok, jobs} = Events.emit(event)
 ```
 
 ## How It Works
@@ -359,32 +371,34 @@ After all old jobs have processed (check Oban Web UI), you can safely remove the
 
 ## Testing
 
+ObanEvents provides testing helpers via `ObanEvents.Testing` (`use ObanEvents.Testing` or `import ObanEvents.Testing`).
+
 ### Testing Event Emission
 
 ```elixir
 use Oban.Testing, repo: MyApp.Repo
+use ObanEvents.Testing
 
 test "emits user_created event" do
   {:ok, user} = Accounts.create_user(%{email: "test@example.com"})
 
-  assert_enqueued(
-    worker: ObanEvents.DispatchWorker,
-    args: %{
-      "event" => "user_created",
-      "handler" => "Elixir.MyApp.EmailHandler",
-      "data" => %{"user_id" => user.id}
-    }
-  )
+  assert_event_enqueued(:user_created, handler: MyApp.EmailHandler)
+  assert_event_enqueued(:user_created, data: %{"user_id" => user.id})
+  refute_event_enqueued(:user_deleted)
 end
 ```
 
 ### Testing Handlers
 
+You can unit test handlers directly with `perform_handler/3` or `perform_handler/4`:
+
 ```elixir
+use ObanEvents.Testing
+
 test "EmailHandler sends welcome email" do
   data = %{"user_id" => 123, "email" => "test@example.com"}
 
-  assert :ok = MyApp.EmailHandler.handle_event(:user_created, data)
+  assert :ok = perform_handler(MyApp.EmailHandler, :user_created, data)
   assert_email_sent(to: "test@example.com", subject: "Welcome!")
 end
 ```

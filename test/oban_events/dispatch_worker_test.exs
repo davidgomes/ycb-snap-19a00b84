@@ -38,12 +38,51 @@ defmodule ObanEvents.DispatchWorkerTest do
     def handle_event(_event, _data), do: :ok
   end
 
+  defmodule TestHandlerWithMetadata do
+    @moduledoc false
+    use ObanEvents.Handler
+
+    def handle_event(:test_event_with_metadata, data, metadata) do
+      send(self(), {:handler_called_with_metadata, :test_event_with_metadata, data, metadata})
+      :ok
+    end
+
+    def handle_event(_event, _data), do: :ok
+  end
+
   describe "perform/1" do
     test "successfully processes event and calls handler" do
       job_args = %{
         "event" => "test_event",
         "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
         "data" => %{"action" => "success"}
+      }
+
+      assert :ok = perform_job(DispatchWorker, job_args)
+
+      assert_received {:handler_called, :test_event, %{"action" => "success"}}
+    end
+
+    test "successfully processes event and calls handler with metadata when arity 3 is implemented" do
+      job_args = %{
+        "event" => "test_event_with_metadata",
+        "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandlerWithMetadata",
+        "data" => %{"action" => "success"},
+        "metadata" => %{"trace_id" => "123"}
+      }
+
+      assert :ok = perform_job(DispatchWorker, job_args)
+
+      assert_received {:handler_called_with_metadata, :test_event_with_metadata,
+                       %{"action" => "success"}, %{"trace_id" => "123"}}
+    end
+
+    test "successfully processes event and calls handler with arity 2 when metadata is present in job args" do
+      job_args = %{
+        "event" => "test_event",
+        "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
+        "data" => %{"action" => "success"},
+        "metadata" => %{"trace_id" => "123"}
       }
 
       assert :ok = perform_job(DispatchWorker, job_args)

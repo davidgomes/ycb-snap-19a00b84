@@ -63,10 +63,25 @@ defmodule ObanEvents.Handler do
   @callback handle_event(event_name :: atom(), data :: map()) ::
               :ok | {:ok, any()} | {:error, any()}
 
+  @doc """
+  Optional callback to handle an event with additional metadata.
+  If not defined, handlers default to invoking `handle_event/2`.
+  """
+  @callback handle_event(event_name :: atom(), data :: map(), metadata :: map()) ::
+              :ok | {:ok, any()} | {:error, any()}
+
+  @optional_callbacks [handle_event: 3]
+
   @doc false
   defmacro __using__(_opts) do
     quote do
       @behaviour ObanEvents.Handler
+
+      def handle_event(event, data, _metadata) do
+        handle_event(event, data)
+      end
+
+      defoverridable handle_event: 3
     end
   end
 end

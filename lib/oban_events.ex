@@ -93,9 +93,16 @@ defmodule ObanEvents do
   Creates Oban jobs for all registered handlers of the given event.
   Should be called within a transaction to ensure atomicity.
 
+  Accepts either:
+  - `(event_name, data)`
+  - `(event_name, data, metadata)`
+  - `(%ObanEvents.Event{})`
+
   Returns `{:ok, jobs}` on success. Raises `ArgumentError` if event is not registered.
   """
-  @callback emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+  @callback emit(atom() | ObanEvents.Event.t(), map(), map()) :: {:ok, [Oban.Job.t()]}
+  @callback emit(atom() | ObanEvents.Event.t(), map()) :: {:ok, [Oban.Job.t()]}
+  @callback emit(atom() | ObanEvents.Event.t()) :: {:ok, [Oban.Job.t()]}
 
   @doc """
   Get all handler modules registered for a given event.
@@ -146,8 +153,9 @@ defmodule ObanEvents do
 
       ## Parameters
 
-      - `event_name`: Atom representing the event (e.g., `:user_created`)
+      - `event_or_struct`: Atom representing the event (e.g., `:user_created`) or an `%ObanEvents.Event{}` struct
       - `data`: Map of event-specific data (atom or string keys both work, must be JSON-serializable)
+      - `metadata`: Optional map of additional metadata (e.g., trace context, correlation id, actor, etc.)
 
       ## Examples
 
@@ -159,18 +167,12 @@ defmodule ObanEvents do
             end
           end)
 
-          # With atom keys (recommended for readability)
-          #{inspect(__MODULE__)}.emit(:user_updated, %{
-            user_id: user.id,
-            old_email: "old@example.com",
-            new_email: "new@example.com"
-          })
+          # With additional metadata
+          #{inspect(__MODULE__)}.emit(:user_created, %{id: user.id}, %{trace_id: "xyz-123"})
 
-          # With string keys (also valid)
-          #{inspect(__MODULE__)}.emit(:user_updated, %{
-            "user_id" => user.id,
-            "new_email" => "new@example.com"
-          })
+          # With an Event struct
+          event = ObanEvents.Event.new(:user_created, %{id: user.id}, %{trace_id: "xyz-123"})
+          #{inspect(__MODULE__)}.emit(event)
 
       Note: Handlers always receive data with string keys, regardless of how you emit.
 
@@ -178,18 +180,36 @@ defmodule ObanEvents do
 
       Raises `ArgumentError` if the event is not registered.
       """
-      @spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
-      def emit(event_name, data) when is_atom(event_name) and is_map(data) do
+      @spec emit(atom() | ObanEvents.Event.t(), map(), map()) :: {:ok, [Oban.Job.t()]}
+      def emit(event_or_struct, data \\ %{}, metadata \\ %{})
+
+      def emit(%ObanEvents.Event{name: event_name, data: data, metadata: metadata}, _data, _metadata)
+          when is_atom(event_name) and is_map(data) and is_map(metadata) do
+        emit(event_name, data, metadata)
+      end
+
+      def emit(event_name, data, metadata)
+          when is_atom(event_name) and is_map(data) and is_map(metadata) do
         handlers = get_handlers!(event_name)
 
         jobs =
           Enum.map(handlers, fn handler_module ->
-            DispatchWorker.new(
+            job_args =
               %{
                 event: Atom.to_string(event_name),
                 handler: Atom.to_string(handler_module),
                 data: data
-              },
+              }
+
+            job_args =
+              if map_size(metadata) > 0 do
+                Map.put(job_args, :metadata, metadata)
+              else
+                job_args
+              end
+
+            DispatchWorker.new(
+              job_args,
               queue: @oban_queue,
               max_attempts: @oban_max_attempts,
               priority: @oban_priority

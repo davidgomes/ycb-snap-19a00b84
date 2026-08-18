@@ -88,10 +88,32 @@ defmodule ObanEventsTest do
     # transaction if one exists, but we don't test that here since this library
     # doesn't provide its own Repo.
 
-    test "requires event_name to be an atom" do
+    test "requires event_name to be an atom or Event struct" do
       assert_raise FunctionClauseError, fn ->
         TestEventBus.emit("string_event", %{})
       end
+    end
+
+    test "supports emitting with metadata map" do
+      event_data = %{"investment_id" => "123"}
+      metadata = %{"trace_id" => "abc-123", "user_id" => "usr_1"}
+
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, event_data, metadata)
+      assert job.args["event"] == "investment_created"
+      assert job.args["data"] == event_data
+      assert job.args["metadata"] == metadata
+    end
+
+    test "supports emitting with ObanEvents.Event struct" do
+      event =
+        ObanEvents.Event.new(:investment_created, %{"investment_id" => "123"}, %{
+          "trace_id" => "abc-123"
+        })
+
+      assert {:ok, [job]} = TestEventBus.emit(event)
+      assert job.args["event"] == "investment_created"
+      assert job.args["data"] == %{"investment_id" => "123"}
+      assert job.args["metadata"] == %{"trace_id" => "abc-123"}
     end
 
     test "requires data to be a map" do
