@@ -106,6 +106,11 @@ defmodule BroadwayDashboardTest do
               {:live_redirect, %{to: "/dashboard/broadway_auto_discovery?nav=" <> ^nav_name}}} =
                live(build_conn(), "/dashboard/broadway_auto_discovery")
 
+      {:ok, live, _} =
+        live(build_conn(), "/dashboard/broadway_auto_discovery?nav=#{nav_name}")
+
+      assert render(live) =~ "Throughput"
+
       Process.exit(registry, :normal)
     end
 
