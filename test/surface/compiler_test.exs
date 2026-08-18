@@ -740,7 +740,7 @@ defmodule Surface.CompilerTest do
       </div>
       """
 
-      assert_raise(SyntaxError, ~r/nofile:3:/, fn ->
+      assert_raise(SyntaxError, ~r/nofile:3(:|$)/, fn ->
         Surface.Compiler.compile(code, 1, __ENV__)
       end)
     end
@@ -757,7 +757,7 @@ defmodule Surface.CompilerTest do
       </Grid>
       """
 
-      assert_raise(SyntaxError, ~r/nofile:6:/, fn ->
+      assert_raise(SyntaxError, ~r/nofile:6(:|$)/, fn ->
         Surface.Compiler.compile(code, 1, __ENV__)
       end)
     end
@@ -773,7 +773,7 @@ defmodule Surface.CompilerTest do
       </div>
       """
 
-      assert_raise(SyntaxError, ~r/nofile:6:/, fn ->
+      assert_raise(SyntaxError, ~r/nofile:6(:|$)/, fn ->
         Surface.Compiler.compile(code, 1, __ENV__)
       end)
     end
@@ -787,7 +787,7 @@ defmodule Surface.CompilerTest do
       </Grid>
       """
 
-      assert_raise(SyntaxError, ~r/nofile:1:/, fn ->
+      assert_raise(SyntaxError, ~r/nofile:1(:|$)/, fn ->
         Surface.Compiler.compile(code, 1, __ENV__)
       end)
     end
@@ -804,7 +804,7 @@ defmodule Surface.CompilerTest do
       </Grid>
       """
 
-      assert_raise(SyntaxError, ~r/nofile:5/, fn ->
+      assert_raise(SyntaxError, ~r/nofile:5(:|$)/, fn ->
         Surface.Compiler.compile(code, 1, __ENV__)
       end)
     end
@@ -818,7 +818,7 @@ defmodule Surface.CompilerTest do
       </GridLive>
       """
 
-      assert_raise(SyntaxError, ~r/nofile:1:/, fn ->
+      assert_raise(SyntaxError, ~r/nofile:1(:|$)/, fn ->
         Surface.Compiler.compile(code, 1, __ENV__)
       end)
     end

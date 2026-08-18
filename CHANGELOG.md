@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.12.2-dev
+
+* Fix compile/tests issues with Elixir 1.19 and LiveView 1.1 (#772)
+
 ## v0.12.1 (2025-02-14)
 
 * Support Liveview `1.0` (#760)
