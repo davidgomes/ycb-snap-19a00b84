@@ -300,7 +300,6 @@ defmodule GRPC.Client.Connection do
 
   def handle_info({:resolver_update, result}, state) do
     state = handle_resolve_result(result, state)
-    put_lb_state(state)
     {:noreply, state}
   end
 
@@ -367,23 +366,25 @@ defmodule GRPC.Client.Connection do
 
     added = MapSet.difference(new_keys, old_keys)
     removed = MapSet.difference(old_keys, new_keys)
+    removed_channels = connected_channels(removed, state.real_channels)
 
-    real_channels = disconnect_removed_channels(removed, adapter, state.real_channels)
+    real_channels = Map.drop(state.real_channels, MapSet.to_list(removed))
 
     real_channels =
       connect_new_channels(new_addresses, added, adapter, opts, state, real_channels)
 
-    rebalance_after_reconcile(new_addresses, real_channels, state)
+    state = rebalance_after_reconcile(new_addresses, real_channels, state)
+    put_lb_state(state)
+    Enum.each(removed_channels, &do_disconnect(adapter, &1))
+    state
   end
 
-  defp disconnect_removed_channels(removed, adapter, real_channels) do
-    Enum.reduce(MapSet.to_list(removed), real_channels, fn key, channels ->
-      case Map.get(channels, key) do
-        {:connected, ch} -> do_disconnect(adapter, ch)
-        _ -> :ok
+  defp connected_channels(keys, real_channels) do
+    Enum.flat_map(keys, fn key ->
+      case Map.get(real_channels, key) do
+        {:connected, channel} -> [channel]
+        _ -> []
       end
-
-      Map.delete(channels, key)
     end)
   end
 
