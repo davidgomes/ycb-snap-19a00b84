@@ -10,6 +10,7 @@
   * Virtual channels can now be explicitly named, allowing clearer identification and management of channels.
   * Support was added for grpc-web trailers encoded in the message body, improving compatibility with grpc-web clients.
   * Periodic DNS re-resolution is now supported for client-side service discovery, enabling automatic detection of new backends and removal of stale ones. New connect options: `resolve_interval`, `max_resolve_interval`, `min_resolve_interval`. Public API: `GRPC.Client.Connection.resolve_now/1`.
+  * ETS-backed load balancers with per-request pick rotation and lock-free concurrency. Storing LB state in ETS eliminates `persistent_term` writes during reconciliation while preserving sub-microsecond pick times.
   * `:gun` and `:mint` are now optional dependencies, allowing users to include only the HTTP client adapter they need.
   * Elixir 1.20 is now supported with updated dependency constraints.
 
