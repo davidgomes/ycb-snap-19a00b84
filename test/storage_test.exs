@@ -13,7 +13,7 @@ defmodule Oban.Console.StorageTest do
     end
 
     test "returns last options saved" do
-      opts = [states: ["scheduled"], limit: 50]
+      opts = [limit: 50, states: ["scheduled"]]
 
       Storage.set_last_jobs_opts(opts)
 
@@ -27,7 +27,7 @@ defmodule Oban.Console.StorageTest do
     end
 
     test "saves options" do
-      opts = [states: ["scheduled"], limit: 50]
+      opts = [limit: 50, states: ["scheduled"]]
 
       Storage.set_last_jobs_opts(opts)
 
@@ -35,8 +35,8 @@ defmodule Oban.Console.StorageTest do
     end
 
     test "updates options" do
-      opts = [states: ["scheduled"], limit: 50]
-      new_opts = [states: ["scheduled", "completed"], limit: 100]
+      opts = [limit: 50, states: ["scheduled"]]
+      new_opts = [limit: 100, states: ["scheduled", "completed"]]
 
       Storage.set_last_jobs_opts(opts)
       Storage.set_last_jobs_opts(new_opts)

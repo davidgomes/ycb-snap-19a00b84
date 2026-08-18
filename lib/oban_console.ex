@@ -3,15 +3,11 @@ defmodule Oban.Console do
   Documentation for `ObanConsole`.
   """
 
-  @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> ObanConsole.hello()
-      :world
-
-  """
   def list_queues() do
+    Oban.Console.Queues.list()
+  end
+
+  def list_jobs(opts \\ []) do
+    Oban.Console.Jobs.list(opts)
   end
 end
