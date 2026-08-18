@@ -212,7 +212,10 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
   end
 
   defp docker_instructions(image, env) do
-    envs = Enum.map_join(env, "\n", fn {key, value} -> ~s/  -e #{key}="#{value}" \\/ end)
+    envs =
+      Enum.map_join(env, "\n", fn {key, value} ->
+        ~s/  -e #{key}="#{escape_double_quotes(value)}" \\/
+      end)
 
     """
     docker run -p 8080:8080 -p 8081:8081 --pull always \\
@@ -222,7 +225,10 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
   end
 
   defp fly_instructions(image, env, hub_name, deployment_group_name) do
-    envs = Enum.map_join(env, " \\\n", fn {key, value} -> ~s/  #{key}="#{value}"/ end)
+    envs =
+      Enum.map_join(env, " \\\n", fn {key, value} ->
+        ~s/  #{key}="#{escape_double_quotes(value)}"/
+      end)
 
     example_dir =
       "lb-server-#{hub_name}-#{deployment_group_name}"
@@ -371,5 +377,9 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
     else
       sanitized
     end
+  end
+
+  defp escape_double_quotes(value) do
+    String.replace(value, ~S["], ~S[\"])
   end
 end
