@@ -1,2 +1,0 @@
-defmodule Ocelot do
-end
