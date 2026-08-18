@@ -161,6 +161,23 @@ defmodule ErrorTrackerTest do
     end
   end
 
+  describe inspect(&ErrorTracker.mute/1) do
+    test "marks the error as muted" do
+      %Occurrence{error: error} = report_error(fn -> raise "This is a test" end)
+
+      assert {:ok, %Error{muted: true}} = ErrorTracker.mute(error)
+    end
+  end
+
+  describe inspect(&ErrorTracker.unmute/1) do
+    test "marks the error as unmuted" do
+      %Occurrence{error: error} = report_error(fn -> raise "This is a test" end)
+      {:ok, muted} = ErrorTracker.mute(error)
+
+      assert {:ok, %Error{muted: false}} = ErrorTracker.unmute(muted)
+    end
+  end
+
   describe inspect(&ErrorTracker.add_breadcrumb/1) do
     test "adds an entry to the breadcrumbs list" do
       ErrorTracker.add_breadcrumb("breadcrumb 1")
