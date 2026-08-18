@@ -12,6 +12,7 @@
 
 ### Bug Fixes
 
+  * Fixed named Gun channels being terminated when the original caller process exits by moving connection ownership into adapter-owned processes.
   * Fixed an issue in stream map_error where send_response handling could behave incorrectly.
   * Resolved a persistent_term memory leak in GRPC.Client.Connection that occurred when a connection was disconnected.
   * Corrected the cacertfile option name.
