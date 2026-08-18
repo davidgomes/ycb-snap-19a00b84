@@ -65,6 +65,7 @@ defmodule ObanEvents do
 
   Using this module provides:
   - `emit/2` - Dispatch events to handlers via Oban jobs
+  - `emit/3` - Dispatch events with metadata
   - `get_handlers!/1` - Get handlers for an event
   - `all_events/0` - List all registered events
   - `registered?/1` - Check if an event exists
@@ -85,6 +86,28 @@ defmodule ObanEvents do
 
         def handle_event(_event, _data), do: :ok
       end
+
+  ## Event Metadata
+
+  Events carry metadata beyond their payload: a unique event id, the emit time
+  and any metadata passed to `emit/3`. Handlers that implement `handle_event/3`
+  receive it as an `ObanEvents.Event` struct:
+
+      MyApp.Events.emit(:user_created, %{user_id: user.id}, meta: %{actor_id: actor.id})
+
+      defmodule MyApp.AuditHandler do
+        use ObanEvents.Handler
+
+        @impl true
+        def handle_event(name, data, %ObanEvents.Event{} = event) do
+          MyApp.Audit.record(name, data, event_id: event.id, actor_id: event.meta["actor_id"])
+        end
+      end
+
+  ## Testing
+
+  `ObanEvents.Testing` provides helpers to assert on emitted events and to run
+  handlers without going through the database.
   """
 
   @doc """
@@ -96,6 +119,14 @@ defmodule ObanEvents do
   Returns `{:ok, jobs}` on success. Raises `ArgumentError` if event is not registered.
   """
   @callback emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+
+  @doc """
+  Emit an event with metadata.
+
+  Accepts the metadata options of `ObanEvents.Event.new/3`: `:meta`, `:id` and
+  `:emitted_at`.
+  """
+  @callback emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
 
   @doc """
   Get all handler modules registered for a given event.
@@ -180,16 +211,49 @@ defmodule ObanEvents do
       """
       @spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
       def emit(event_name, data) when is_atom(event_name) and is_map(data) do
+        emit(event_name, data, [])
+      end
+
+      @doc """
+      Emit an event with metadata.
+
+      Same as `emit/2`, with metadata attached to the event. All handler jobs
+      created by a single call share the same event id, which makes it possible
+      to trace one emit across its handlers.
+
+      ## Options
+
+      - `:meta` - metadata map carried alongside the payload, e.g. the actor or
+        request that caused the event (must be JSON-serializable)
+      - `:id` - unique event id (default: a generated UUID)
+      - `:emitted_at` - `DateTime` the event was emitted (default: `DateTime.utc_now/0`)
+
+      Metadata is available to handlers that implement `handle_event/3` via the
+      `ObanEvents.Event` struct.
+
+      ## Examples
+
+          #{inspect(__MODULE__)}.emit(:user_created, %{user_id: user.id},
+            meta: %{actor_id: actor.id, request_id: Logger.metadata()[:request_id]}
+          )
+
+      ## Errors
+
+      Raises `ArgumentError` if the event is not registered or if the metadata
+      options are invalid.
+      """
+      @spec emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
+      def emit(event_name, data, opts)
+          when is_atom(event_name) and is_map(data) and is_list(opts) do
         handlers = get_handlers!(event_name)
+        event = ObanEvents.Event.new(event_name, data, opts)
 
         jobs =
           Enum.map(handlers, fn handler_module ->
-            DispatchWorker.new(
-              %{
-                event: Atom.to_string(event_name),
-                handler: Atom.to_string(handler_module),
-                data: data
-              },
+            event
+            |> ObanEvents.Event.for_handler(handler_module)
+            |> ObanEvents.Event.to_args()
+            |> DispatchWorker.new(
               queue: @oban_queue,
               max_attempts: @oban_max_attempts,
               priority: @oban_priority

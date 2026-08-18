@@ -38,6 +38,17 @@ defmodule ObanEvents.DispatchWorkerTest do
     def handle_event(_event, _data), do: :ok
   end
 
+  # Mock handler that also receives the event metadata
+  defmodule MetadataHandler do
+    @moduledoc false
+    @behaviour ObanEvents.Handler
+
+    def handle_event(event, data, %ObanEvents.Event{} = event_struct) do
+      send(self(), {:handler_called, event, data, event_struct})
+      :ok
+    end
+  end
+
   describe "perform/1" do
     test "successfully processes event and calls handler" do
       job_args = %{
@@ -131,6 +142,56 @@ defmodule ObanEvents.DispatchWorkerTest do
 
       assert log =~ "Event handler returned unexpected value"
       assert_received {:handler_called, :test_event, %{"action" => "unexpected"}}
+    end
+
+    test "passes the event struct to handlers that implement handle_event/3" do
+      job_args = %{
+        "event" => "test_event",
+        "handler" => "Elixir.ObanEvents.DispatchWorkerTest.MetadataHandler",
+        "data" => %{"action" => "success"},
+        "meta" => %{"actor_id" => 7},
+        "event_id" => "event-1",
+        "emitted_at" => "2026-01-01T00:00:00Z"
+      }
+
+      assert :ok = perform_job(DispatchWorker, job_args, attempt: 2)
+
+      assert_received {:handler_called, :test_event, %{"action" => "success"}, event}
+
+      assert event.id == "event-1"
+      assert event.name == :test_event
+      assert event.handler == MetadataHandler
+      assert event.meta == %{"actor_id" => 7}
+      assert event.emitted_at == ~U[2026-01-01 00:00:00Z]
+      assert event.attempt == 2
+    end
+
+    test "dispatches jobs enqueued without metadata" do
+      job_args = %{
+        "event" => "test_event",
+        "handler" => "Elixir.ObanEvents.DispatchWorkerTest.MetadataHandler",
+        "data" => %{"action" => "success"}
+      }
+
+      assert :ok = perform_job(DispatchWorker, job_args)
+
+      assert_received {:handler_called, :test_event, %{"action" => "success"}, event}
+
+      assert event.id == nil
+      assert event.meta == %{}
+    end
+
+    test "logs the event id for traceability" do
+      job_args = %{
+        "event" => "test_event",
+        "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
+        "data" => %{"action" => "success"},
+        "event_id" => "event-1"
+      }
+
+      log = capture_log(fn -> assert :ok = perform_job(DispatchWorker, job_args) end)
+
+      assert log =~ "event_id=event-1"
     end
   end
 

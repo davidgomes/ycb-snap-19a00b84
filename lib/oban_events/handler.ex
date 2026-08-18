@@ -3,7 +3,7 @@ defmodule ObanEvents.Handler do
   Behaviour for event handlers.
 
   Event handlers process events asynchronously via Oban workers.
-  Each handler implements a single callback: `handle_event/2`.
+  Each handler implements `handle_event/2` or `handle_event/3`.
 
   See the [README](README.md) for architectural guidance and best practices.
 
@@ -21,6 +21,26 @@ defmodule ObanEvents.Handler do
 
         # Ignore other events
         def handle_event(_event, _data), do: :ok
+      end
+
+  ## Accessing Event Metadata
+
+  Handlers that need the event metadata implement `handle_event/3` instead,
+  which receives the `ObanEvents.Event` struct as the third argument. A handler
+  implements either callback, `handle_event/3` takes precedence when both exist.
+
+      defmodule MyApp.AuditHandler do
+        use ObanEvents.Handler
+
+        @impl true
+        def handle_event(name, data, %ObanEvents.Event{} = event) do
+          MyApp.Audit.record(name, data,
+            event_id: event.id,
+            actor_id: event.meta["actor_id"],
+            emitted_at: event.emitted_at,
+            attempt: event.attempt
+          )
+        end
       end
 
   ## Return Values
@@ -63,10 +83,54 @@ defmodule ObanEvents.Handler do
   @callback handle_event(event_name :: atom(), data :: map()) ::
               :ok | {:ok, any()} | {:error, any()}
 
+  @doc """
+  Handle an event with access to its metadata.
+
+  Same as `c:handle_event/2`, but also receives the `ObanEvents.Event` struct
+  describing the event: its id, metadata, emit time and current Oban attempt.
+
+  When a handler exports this callback it is used instead of `c:handle_event/2`.
+
+  ## Parameters
+
+  - `event_name`: Atom representing the event (e.g., `:user_created`)
+  - `data`: Map containing event-specific data
+  - `event`: `ObanEvents.Event` struct with the event metadata
+
+  ## Return Values
+
+  - `:ok` | `{:ok, any()}` - Success
+  - `{:error, any()}` - Failure (will trigger retry)
+  """
+  @callback handle_event(event_name :: atom(), data :: map(), event :: ObanEvents.Event.t()) ::
+              :ok | {:ok, any()} | {:error, any()}
+
+  @optional_callbacks handle_event: 2, handle_event: 3
+
   @doc false
   defmacro __using__(_opts) do
     quote do
       @behaviour ObanEvents.Handler
+
+      @before_compile ObanEvents.Handler
     end
+  end
+
+  @doc false
+  defmacro __before_compile__(env) do
+    defines_event_callback? =
+      Module.defines?(env.module, {:handle_event, 2}) or
+        Module.defines?(env.module, {:handle_event, 3})
+
+    unless defines_event_callback? do
+      raise CompileError,
+        file: env.file,
+        line: env.line,
+        description:
+          "Missing handle_event callback in #{inspect(env.module)}. " <>
+            "Handlers must define handle_event/2, or handle_event/3 to also receive the ObanEvents.Event struct."
+    end
+
+    quote(do: nil)
   end
 end

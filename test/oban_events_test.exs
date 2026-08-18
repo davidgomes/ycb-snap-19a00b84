@@ -3,8 +3,16 @@ defmodule ObanEventsTest do
 
   alias ObanEvents.DispatchWorker
 
-  # Test handler module
+  # Test handler modules
   defmodule TestHandler do
+    @moduledoc false
+    use ObanEvents.Handler
+
+    @impl true
+    def handle_event(_event, _data), do: :ok
+  end
+
+  defmodule OtherTestHandler do
     @moduledoc false
     use ObanEvents.Handler
 
@@ -17,11 +25,13 @@ defmodule ObanEventsTest do
     @moduledoc false
     use ObanEvents
 
+    alias ObanEventsTest.OtherTestHandler
     alias ObanEventsTest.TestHandler
 
     @event_handlers %{
       investment_status_changed: [TestHandler],
       investment_created: [TestHandler],
+      investment_archived: [TestHandler, OtherTestHandler],
       investment_cancelled: [],
       portfolio_company_added: [],
       portfolio_company_removed: [],
@@ -97,6 +107,65 @@ defmodule ObanEventsTest do
     test "requires data to be a map" do
       assert_raise FunctionClauseError, fn ->
         TestEventBus.emit(:event_name, "not a map")
+      end
+    end
+
+    test "converts atom keys in the payload to strings" do
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{investment_id: 1})
+
+      assert job.args["data"] == %{"investment_id" => 1}
+    end
+
+    test "attaches generated metadata to the job args" do
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{"test" => "data"})
+
+      assert {:ok, _uuid} = Ecto.UUID.cast(job.args["event_id"])
+      assert {:ok, _datetime, _offset} = DateTime.from_iso8601(job.args["emitted_at"])
+      assert job.args["meta"] == %{}
+    end
+  end
+
+  describe "emit/3" do
+    test "attaches metadata to the job args" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{"investment_id" => 1},
+                 meta: %{actor_id: 7, request_id: "req-1"}
+               )
+
+      assert job.args["meta"] == %{"actor_id" => 7, "request_id" => "req-1"}
+    end
+
+    test "accepts an explicit event id and emit time" do
+      emitted_at = ~U[2026-01-01 00:00:00Z]
+
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{}, id: "event-1", emitted_at: emitted_at)
+
+      assert job.args["event_id"] == "event-1"
+      assert job.args["emitted_at"] == "2026-01-01T00:00:00Z"
+    end
+
+    test "shares one event id across all handler jobs" do
+      assert {:ok, jobs} = TestEventBus.emit(:investment_archived, %{"investment_id" => 1})
+
+      assert [event_id] = jobs |> Enum.map(& &1.args["event_id"]) |> Enum.uniq()
+      assert {:ok, _uuid} = Ecto.UUID.cast(event_id)
+
+      assert Enum.map(jobs, & &1.args["handler"]) == [
+               "Elixir.ObanEventsTest.TestHandler",
+               "Elixir.ObanEventsTest.OtherTestHandler"
+             ]
+    end
+
+    test "raises when the metadata is invalid" do
+      assert_raise ArgumentError, ~r/:meta must be a map/, fn ->
+        TestEventBus.emit(:investment_created, %{}, meta: "nope")
+      end
+    end
+
+    test "raises ArgumentError for unregistered events" do
+      assert_raise ArgumentError, ~r/Unknown event: :unknown_event/, fn ->
+        TestEventBus.emit(:unknown_event, %{}, meta: %{})
       end
     end
   end
