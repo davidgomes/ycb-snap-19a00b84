@@ -45,9 +45,7 @@ defmodule ElixirLS.LanguageServer.Providers.FoldingRange do
 
   alias __MODULE__
 
-  @type input :: %{
-          lines: [FoldingRange.Line.t()]
-        }
+  @type input :: %{lines: [FoldingRange.Line.t()]}
 
   @type t :: GenLSP.Structures.FoldingRange.t()
 
@@ -103,9 +101,7 @@ defmodule ElixirLS.LanguageServer.Providers.FoldingRange do
   end
 
   def convert_text_to_input(text) do
-    %{
-      lines: FoldingRange.Line.format_string(text)
-    }
+    %{lines: FoldingRange.Line.format_string(text)}
   end
 
   defp indentation_ranges(lines) do
