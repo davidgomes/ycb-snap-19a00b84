@@ -55,6 +55,11 @@ defmodule PetalComponents.Table do
 
   slot :col do
     attr :label, :string
+
+    attr :header, :any,
+      doc:
+        "header cell content when a word won't do (markup, e.g. the data table's select-all checkbox); wins over label"
+
     attr :class, :any
     attr :row_class, :any
     attr :sortable, :boolean, doc: "render the header as a sort button"
@@ -109,7 +114,7 @@ defmodule PetalComponents.Table do
                   <.sort_icon state={sort_state(col, @sort_by, @sort_dir)} />
                 </button>
               <% else %>
-                {col[:label]}
+                {col[:header] || col[:label]}
               <% end %>
             </.th>
           </.tr>

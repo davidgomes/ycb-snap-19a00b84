@@ -8,7 +8,7 @@ import hooks from "../../assets/js/petal_components.js";
 
 const mounted = [];
 
-function mountBase({ navTemplate, debounce } = {}) {
+function mountBase({ navTemplate, debounce, selectAll } = {}) {
   const el = document.createElement("div");
   el.id = "dt";
   el.className = "pc-data-table";
@@ -21,6 +21,7 @@ function mountBase({ navTemplate, debounce } = {}) {
       <option value="10" selected>10</option>
       <option value="20">20</option>
     </select>
+    ${selectAll ? `<input type="checkbox" data-pc-dt-select-all data-indeterminate="${selectAll}" />` : ""}
   `;
   document.body.appendChild(el);
 
@@ -262,6 +263,19 @@ describe("PetalDataTable", () => {
     expect(e.defaultPrevented).toBe(false);
     expect(patched).toEqual([]);
     expect(wrap.style.display).toBe("none");
+  });
+
+  it("mirrors the select-all checkbox's indeterminate property on mount and update", () => {
+    const { hook, el } = mountBase({ selectAll: "true" });
+    const box = el.querySelector("[data-pc-dt-select-all]");
+
+    expect(box.indeterminate).toBe(true);
+
+    // all rows picked: the server drops the data attribute, so the
+    // property has to follow or the box keeps its dash over the tick
+    delete box.dataset.indeterminate;
+    hook.updated();
+    expect(box.indeterminate).toBe(false);
   });
 
   it("destroyed cancels a pending search patch", () => {

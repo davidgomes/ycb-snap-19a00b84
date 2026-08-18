@@ -1722,6 +1722,18 @@
       url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23fff' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e")
     );
   }
+
+  /* The third state ("some of these rows"): `indeterminate` is a DOM
+     property with no HTML attribute, so the data attribute carries it
+     server-rendered and paints the dash with JS off too. Same token
+     story as the tick, one glyph along. */
+  .pc-checkbox[data-indeterminate="true"] {
+    @apply bg-primary-600 border-primary-600;
+    background-image: var(
+      --pc-checkbox-dash,
+      url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23fff' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M3.5 7a1 1 0 000 2h9a1 1 0 000-2h-9z'/%3e%3c/svg%3e")
+    );
+  }
   .pc-checkbox-group {
     @apply pt-2;
   }
@@ -2693,6 +2705,41 @@
   /* Doubled selector + !important: icon sizing contract (see pagination chevrons). */
   .pc-data-table__filter-clear-icon.pc-data-table__filter-clear-icon {
     @apply w-4! h-4!;
+  }
+
+  /* Row selection: the checkbox column hugs its control, and the toolbar
+     morphs into the selection bar while anything is picked. */
+  .pc-data-table__select-th,
+  .pc-data-table__select-td {
+    @apply w-px whitespace-nowrap pr-3;
+  }
+  /* the checkbox cell takes the table's first-column slot, but the
+     emphasis belongs to the first column of DATA - hand it over */
+  .pc-data-table__select-td + .pc-table__td {
+    @apply font-semibold;
+  }
+  .pc-data-table__selection {
+    @apply flex min-h-9 w-full flex-wrap items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1 text-sm dark:border-primary-400/20 dark:bg-primary-400/10;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pc-data-table__selection {
+      animation: pc-data-table-selection-in 0.15s ease-out;
+    }
+  }
+  @keyframes pc-data-table-selection-in {
+    from {
+      opacity: 0;
+      transform: translateY(-0.25rem);
+    }
+  }
+  .pc-data-table__selection-count {
+    @apply font-medium text-gray-900 dark:text-gray-100;
+  }
+  .pc-data-table__bulk-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pc-data-table__selection-clear {
+    @apply ml-auto;
   }
 
   /* Avatars - sizes */

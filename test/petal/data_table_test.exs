@@ -363,6 +363,170 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "pc-data-table__actions"
   end
 
+  test "selectable renders the checkbox column with a tri-state header" do
+    rows = [%{id: 1, name: "Amy"}, %{id: 2, name: "Bea"}]
+    assigns = base(%{rows: rows, state: %State{total: 2, selected: ["1"]}})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    # one row of two picked: the header is mixed, and the hook mounts to
+    # mirror that into the indeterminate DOM property
+    assert html =~ "data-pc-dt-select-all"
+    assert html =~ ~s(data-indeterminate="true")
+    assert html =~ ~s(aria-label="Select all rows")
+    assert html =~ ~s(phx-hook="PetalDataTable")
+    # the header's click is a JS.push: only it can carry the page's ids
+    assert html =~ "select_all"
+    # per-row boxes push the toggle op with the row id, the picked one checked
+    assert html =~ ~s(phx-value-op="select")
+    assert html =~ ~s(phx-value-id="1")
+    assert html =~ ~s(phx-value-id="2")
+    assert html =~ ~s(aria-label="Select row")
+    assert length(String.split(html, ~s(checked))) - 1 == 1
+  end
+
+  test "a fully selected page checks the header and its click deselects the page" do
+    rows = [%{id: 1, name: "Amy"}, %{id: 2, name: "Bea"}]
+    assigns = base(%{rows: rows, state: %State{total: 2, selected: ["1", "2"]}})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    refute html =~ "data-indeterminate"
+    assert html =~ "deselect_all"
+    assert length(String.split(html, ~s(checked))) - 1 == 3
+  end
+
+  test "an empty selection leaves the header off and its click selects the page" do
+    rows = [%{id: 1, name: "Amy"}]
+    assigns = base(%{rows: rows, state: %State{total: 1}})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    refute html =~ "data-indeterminate"
+    refute html =~ "checked"
+    assert html =~ "select_all"
+    refute html =~ "deselect_all"
+  end
+
+  test "the toolbar morphs into the selection bar while rows are picked" do
+    rows = [%{id: 1, name: "Amy"}, %{id: 2, name: "Bea"}]
+    picked = %State{total: 2, selected: ["1", "2"]}
+    assigns = base(%{rows: rows, picked: picked, state: %State{total: 2}})
+
+    selecting =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@picked} on_change="table" selectable searchable>
+        <:col :let={row} field={:name} filterable="text">{row.name}</:col>
+        <:bulk_action :let={ids}>
+          <button type="button">Archive {length(ids)}</button>
+        </:bulk_action>
+      </.data_table>
+      """)
+
+    assert selecting =~ "2 selected"
+    assert selecting =~ "Archive 2"
+    assert selecting =~ ~s(phx-value-op="clear_selection")
+    assert selecting =~ "Clear selection"
+    # the search input and filter button give up the row while it morphs
+    refute selecting =~ "pc-data-table__search-input"
+    refute selecting =~ "pc-data-table__filter-popover"
+
+    idle =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable searchable>
+        <:col :let={row} field={:name} filterable="text">{row.name}</:col>
+        <:bulk_action :let={ids}>
+          <button type="button">Archive {length(ids)}</button>
+        </:bulk_action>
+      </.data_table>
+      """)
+
+    assert idle =~ "pc-data-table__search-input"
+    refute idle =~ "pc-data-table__selection"
+    refute idle =~ "Archive"
+  end
+
+  test "link mode selection rides on_select, since selection is never a URL" do
+    rows = [%{id: 1, name: "Amy"}]
+    assigns = base(%{rows: rows, state: %State{total: 1, selected: ["1"]}})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} path={@path} selectable on_select="pick">
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert html =~ ~s(phx-click="pick")
+    assert html =~ "1 selected"
+
+    assert_raise ArgumentError, ~r/on_select/, fn ->
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} path={@path} selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+    end
+  end
+
+  test "row_id names the id when it isn't :id; without one, ids are required" do
+    rows = [%{uuid: "abc", name: "Amy"}]
+    assigns = base(%{rows: rows, state: %State{total: 1}})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        row_id={& &1.uuid}
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert html =~ ~s(phx-value-id="abc")
+
+    assert_raise ArgumentError, ~r/row_id/, fn ->
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+    end
+  end
+
+  test "a loading selectable table keeps the column but asks for no ids" do
+    assigns = base(%{rows: [], state: %State{total: 74, page_size: 3}})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable loading>
+        <:col :let={row} field={:name}>{row}</:col>
+      </.data_table>
+      """)
+
+    assert html =~ ~s(data-pc-dt-select-all disabled)
+    refute html =~ ~s(phx-value-op="select")
+  end
+
   test "raises without either wiring mode" do
     assigns = base(%{path: nil})
 
