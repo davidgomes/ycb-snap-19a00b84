@@ -11,6 +11,17 @@ defmodule Hammer.ETSTest do
   end
 
   describe "hit through actual RateLimit implementation" do
+    test "supports non-string keys (e.g. tuples, atoms, numbers)" do
+      scale = :timer.minutes(10)
+      limit = 10
+
+      assert {:allow, 1} = RateLimit.hit(:my_atom_key, scale, limit)
+      assert {:allow, 2} = RateLimit.hit(:my_atom_key, scale, limit)
+      assert {:allow, 1} = RateLimit.hit({:user, 123}, scale, limit)
+      assert {:allow, 2} = RateLimit.hit({:user, 123}, scale, limit)
+      assert {:allow, 1} = RateLimit.hit(42, scale, limit)
+    end
+
     test "returns {:allow, 4} tuple on in-limit checks" do
       key = "key"
       scale = :timer.minutes(10)

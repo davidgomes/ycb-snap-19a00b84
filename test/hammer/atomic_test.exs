@@ -11,6 +11,17 @@ defmodule Hammer.AtomicTest do
   end
 
   describe "hit through actual RateAtomicLimit implementation" do
+    test "supports non-string keys (e.g. tuples, atoms, numbers)" do
+      scale = :timer.minutes(10)
+      limit = 10
+
+      assert {:allow, 1} = RateAtomicLimit.hit(:my_atom_key, scale, limit)
+      assert {:allow, 2} = RateAtomicLimit.hit(:my_atom_key, scale, limit)
+      assert {:allow, 1} = RateAtomicLimit.hit({:user, 123}, scale, limit)
+      assert {:allow, 2} = RateAtomicLimit.hit({:user, 123}, scale, limit)
+      assert {:allow, 1} = RateAtomicLimit.hit(42, scale, limit)
+    end
+
     test "returns {:allow, 4} tuple on in-limit checks" do
       key = "key"
       scale = :timer.minutes(10)
