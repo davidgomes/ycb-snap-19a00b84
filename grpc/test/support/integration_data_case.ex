@@ -67,7 +67,12 @@ defmodule GRPC.Integration.TestCase do
     end
   end
 
-  def reconnect_server(server, port, retry \\ 3) do
+  # The listening socket is released asynchronously, so poll frequently instead
+  # of sleeping for a fixed (and much longer) grace period.
+  @reconnect_backoff 20
+  @reconnect_retries 75
+
+  def reconnect_server(server, port, retry \\ @reconnect_retries) do
     result = GRPC.Server.start(server, port)
 
     case result do
@@ -75,10 +80,10 @@ defmodule GRPC.Integration.TestCase do
         result
 
       {:error, :eaddrinuse} ->
-        Logger.warning("Got eaddrinuse when reconnecting to #{server}:#{port}. retry: #{retry}")
+        Logger.debug("Got eaddrinuse when reconnecting to #{server}:#{port}. retry: #{retry}")
 
         if retry >= 1 do
-          Process.sleep(500)
+          Process.sleep(@reconnect_backoff)
           reconnect_server(server, port, retry - 1)
         else
           result
