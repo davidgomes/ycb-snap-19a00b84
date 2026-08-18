@@ -2,6 +2,7 @@ defmodule ObanChoreWeb.DashboardLiveTest do
   use ExUnit.Case, async: false
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
+  import Ecto.Query
 
   @endpoint ObanChore.TestEndpoint
 
@@ -105,6 +106,39 @@ defmodule ObanChoreWeb.DashboardLiveTest do
 
     # Assert job details
     assert has_element?(element(view, ~s(div[data-role="job-details"][data-job-id="#{job.id}"])))
+  end
+
+  test "displays completed past jobs in the dashboard tabs" do
+    chore_module = to_string(DashboardTestChore)
+
+    # Insert a completed job and an executing job directly into the database
+    changeset1 = DashboardTestChore.new(%{username: "past_user", admin: false})
+    {:ok, past_job} = Oban.insert(changeset1)
+    ObanChore.TestRepo.update_all(where(Oban.Job, [j], j.id == ^past_job.id), set: [state: "completed"])
+
+    changeset2 = DashboardTestChore.new(%{username: "active_user", admin: true})
+    {:ok, active_job} = Oban.insert(changeset2)
+    ObanChore.TestRepo.update_all(where(Oban.Job, [j], j.id == ^active_job.id), set: [state: "executing"])
+
+    conn = build_conn()
+    {:ok, view, _html} = live(conn, "/ops/chores")
+
+    # Select the chore
+    view
+    |> element("button[data-role=chore-select][data-chore-module=\"#{chore_module}\"]")
+    |> render_click()
+
+    # Assert both past and active job tabs are present
+    assert has_element?(element(view, ~s(button[data-role="job-tab"][data-job-id="#{past_job.id}"])))
+    assert has_element?(element(view, ~s(button[data-role="job-tab"][data-job-id="#{active_job.id}"])))
+
+    # Assert clicking the past job tab shows its details
+    view
+    |> element("button[data-role=\"job-tab\"][data-job-id=\"#{past_job.id}\"]")
+    |> render_click()
+
+    assert has_element?(element(view, ~s(div[data-role="job-details"][data-job-id="#{past_job.id}"])))
+    assert render(view) =~ "past_user"
   end
 
   test "enforces and toggles job uniqueness" do

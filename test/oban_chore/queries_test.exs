@@ -75,7 +75,7 @@ defmodule ObanChore.QueriesTest do
     assert query.from.source == {"oban_jobs", Oban.Job}
 
     query_str = inspect(query)
-    assert query_str =~ "j0.state in [\"available\", \"scheduled\", \"executing\"]"
     assert query_str =~ "j0.worker == ^\"SomeWorker\""
+    assert query_str =~ "order_by: [desc: j0.id]"
   end
 end

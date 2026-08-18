@@ -112,7 +112,7 @@ defmodule ObanChore do
   end
 
   @doc """
-  Lists the active (available, scheduled, executing) jobs for a given worker module.
+  Lists the jobs (including past and active) for a given worker module.
 
   Returns a list of `%Oban.Job{}` structs with the state converted to an atom.
   """
@@ -121,8 +121,8 @@ defmodule ObanChore do
     repo = config.repo
 
     Oban.Job
-    |> where([j], j.state in ~w(available scheduled executing))
     |> where([j], j.worker == ^normalize_worker(worker_module))
+    |> order_by([j], desc: j.id)
     |> repo.all()
     |> Enum.map(fn job -> %{job | state: String.to_existing_atom(job.state)} end)
   end

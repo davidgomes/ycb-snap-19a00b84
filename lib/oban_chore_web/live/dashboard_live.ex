@@ -96,6 +96,8 @@ defmodule ObanChoreWeb.DashboardLive do
                       :executing -> "background-color: var(--oc-blue-500);"
                       :available -> "background-color: var(--oc-gray-400);"
                       :scheduled -> "background-color: var(--oc-amber-400);"
+                      :completed -> "background-color: var(--oc-emerald-500);"
+                      :discarded -> "background-color: var(--oc-rose-500);"
                       _ -> "background-color: var(--oc-gray-400);"
                     end
                   }></span>
