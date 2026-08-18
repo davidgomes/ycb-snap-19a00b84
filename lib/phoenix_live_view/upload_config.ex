@@ -705,7 +705,7 @@ defmodule Phoenix.LiveView.UploadConfig do
     %{
       conf
       | entry_refs_to_pids: Map.put(conf.entry_refs_to_pids, entry_ref, @failed),
-        errors: List.delete(conf.errors, error) ++ [error]
+        errors: Enum.reject(conf.errors, &(&1 == error)) ++ [error]
     }
   end
 
