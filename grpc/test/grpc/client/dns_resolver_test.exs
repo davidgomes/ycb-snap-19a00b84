@@ -1042,14 +1042,14 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "refresh handler with failed channels" do
+  describe "picking with failed channels" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.2"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
       Map.put(ctx, :failing_adapter, GRPC.Test.FailingClientAdapter)
     end
 
-    test "GenServer survives when :refresh picks a failed channel", ctx do
+    test "round robin never hands out a backend that failed to connect", ctx do
       # Connect with 2 backends — one healthy, one failing
       expect(ctx.resolver, :resolve, fn _target ->
         {:ok,
@@ -1088,20 +1088,15 @@ defmodule GRPC.Client.ReResolveTest do
       state = get_state(ctx.ref)
       assert match?({:failed, _}, Map.get(state.real_channels, "10.0.0.2:50051"))
 
-      # Wait for several :refresh cycles (15s default, but we'll trigger manually).
-      # Round-robin will eventually pick 10.0.0.2. Without the fix, this crashes.
-      pid = whereis_name(ctx.ref)
+      # The rotation only covers ready channels, so it never lands on 10.0.0.2
+      hosts =
+        Enum.map(1..5, fn _ ->
+          {:ok, picked} = Connection.pick_channel(channel)
+          picked.host
+        end)
 
-      for _ <- 1..5 do
-        send(pid, :refresh)
-      end
-
-      # Small sleep for messages to process
-      Process.sleep(50)
-
-      assert Process.alive?(pid)
-      assert {:ok, picked} = Connection.pick_channel(channel)
-      assert picked.host == "10.0.0.1"
+      assert Enum.uniq(hosts) == ["10.0.0.1"]
+      assert Process.alive?(whereis_name(ctx.ref))
 
       disconnect_and_wait(channel)
     end
