@@ -201,7 +201,7 @@ defmodule PetalComponents.DataTable do
 
     link_mode? = is_nil(assigns.on_change)
 
-    select_event = assigns.selectable && (assigns.on_select || assigns.on_change)
+    select_event = if assigns.selectable, do: assigns.on_select || assigns.on_change
 
     if assigns.selectable and is_nil(select_event) do
       raise ArgumentError,
