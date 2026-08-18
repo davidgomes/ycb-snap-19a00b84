@@ -1975,8 +1975,8 @@
   }
   /* Flipped: no room below the trigger and more room above - the
      PetalDropdown hook measures on open and stamps the attribute, the same
-     vocabulary the data table's panels use. The scale-in origin moves to
-     the trigger's edge with it, or the menu grows away from its button. */
+     vocabulary the data table's panels use. The scale-in origin follows the
+     panel, or a flipped menu would grow away from the button it belongs to. */
   .pc-dropdown__menu-items-wrapper[data-pc-flip="top"] {
     @apply top-auto bottom-full mt-0 mb-2;
   }
