@@ -131,6 +131,65 @@ defmodule ObanChoreWeb.CoreComponents do
   end
 
   @doc """
+  Renders a badge with the state of a job.
+  """
+  attr(:state, :atom, required: true)
+
+  def job_state_badge(assigns) do
+    ~H"""
+    <span class="oc-badge" style={state_style(@state)}>
+      <%= String.capitalize(to_string(@state)) %>
+    </span>
+    """
+  end
+
+  @doc """
+  Renders the past executions of a chore.
+
+  Each row pushes `on_select` with the job id so the parent can open the job details.
+  """
+  attr(:jobs, :list, required: true)
+  attr(:now, :any, default: nil)
+  attr(:on_select, :string, required: true)
+
+  def history_table(assigns) do
+    ~H"""
+    <div class="oc-card" data-role="history">
+      <%= if @jobs == [] do %>
+        <p class="oc-history-empty">No past executions found for this chore.</p>
+      <% else %>
+        <table class="oc-history-table">
+          <thead>
+            <tr>
+              <th>Job</th>
+              <th>State</th>
+              <th>Arguments</th>
+              <th>Attempt</th>
+              <th>Finished</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              :for={job <- @jobs}
+              phx-click={@on_select}
+              phx-value-id={job.id}
+              data-role="history-row"
+              data-job-id={job.id}
+            >
+              <td class="oc-font-mono">#<%= job.id %></td>
+              <td><.job_state_badge state={job.state} /></td>
+              <td class="oc-history-args" title={format_args(job.args)}><%= format_args(job.args) %></td>
+              <td><%= job.attempt %>/<%= job.max_attempts %></td>
+              <td><%= format_elapsed_time(finished_at(job), @now) %></td>
+            </tr>
+          </tbody>
+        </table>
+      <% end %>
+    </div>
+    """
+  end
+
+  @doc """
   Renders a warning banner for duplicate chore execution.
   """
   attr(:on_dismiss, :string, required: true)
@@ -417,7 +476,58 @@ defmodule ObanChoreWeb.CoreComponents do
     end
   end
 
+  @doc """
+  Formats how long ago `timestamp` happened relative to `now`.
+  """
+  def format_elapsed_time(nil, _now), do: "-"
+
+  def format_elapsed_time(timestamp, now) do
+    diff = DateTime.diff(to_datetime(now || DateTime.utc_now()), to_datetime(timestamp))
+
+    cond do
+      diff < 60 -> "just now"
+      diff < 3600 -> "#{div(diff, 60)}m ago"
+      diff < 86_400 -> "#{div(diff, 3600)}h ago"
+      true -> "#{div(diff, 86_400)}d ago"
+    end
+  end
+
   defp to_datetime(%DateTime{} = dt), do: dt
   defp to_datetime(%NaiveDateTime{} = ndt), do: DateTime.from_naive!(ndt, "Etc/UTC")
   defp to_datetime(nil), do: DateTime.utc_now()
+
+  defp finished_at(job) do
+    job.completed_at || job.cancelled_at || job.discarded_at || job.attempted_at
+  end
+
+  defp format_args(args) when map_size(args) == 0, do: "No arguments"
+
+  defp format_args(args) do
+    Enum.map_join(args, ", ", fn {key, value} -> "#{key}: #{inspect(value)}" end)
+  end
+
+  defp state_style(state) do
+    case state do
+      :executing ->
+        "background-color: var(--oc-blue-50); color: var(--oc-blue-700); box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.1);"
+
+      :available ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+
+      :scheduled ->
+        "background-color: var(--oc-amber-50); color: var(--oc-amber-800); box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.2);"
+
+      :retryable ->
+        "background-color: var(--oc-amber-50); color: var(--oc-amber-800); box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.2);"
+
+      :completed ->
+        "background-color: var(--oc-emerald-50); color: var(--oc-emerald-800); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.2);"
+
+      :discarded ->
+        "background-color: var(--oc-rose-50); color: var(--oc-rose-900); box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.1);"
+
+      _ ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+    end
+  end
 end

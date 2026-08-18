@@ -71,6 +71,17 @@ defmodule ObanChoreWeb.DashboardLive do
               >
                 New Execution
               </button>
+              <button
+                phx-click="select_tab"
+                phx-value-tab="history"
+                data-role="history-tab"
+                class={[
+                  "oc-tab-item",
+                  if(@selected_tab == :history, do: "oc-tab-item--active", else: "")
+                ]}
+              >
+                History
+              </button>
               <%= for job_id <- Map.get(@chore_jobs, @selected_chore_module, []), job = @jobs[job_id] do %>
                 <button
                   phx-click="select_tab"
@@ -96,6 +107,9 @@ defmodule ObanChoreWeb.DashboardLive do
                       :executing -> "background-color: var(--oc-blue-500);"
                       :available -> "background-color: var(--oc-gray-400);"
                       :scheduled -> "background-color: var(--oc-amber-400);"
+                      :retryable -> "background-color: var(--oc-amber-400);"
+                      :completed -> "background-color: var(--oc-emerald-500);"
+                      :discarded -> "background-color: var(--oc-rose-500);"
                       _ -> "background-color: var(--oc-gray-400);"
                     end
                   }></span>
@@ -124,6 +138,10 @@ defmodule ObanChoreWeb.DashboardLive do
                       now={@now}
                     />
                   <% end %>
+              <% end %>
+
+              <%= if @selected_tab == :history do %>
+                <.history_table jobs={@history} now={@now} on_select="select_history_job" />
               <% end %>
             </div>
           </div>
@@ -156,6 +174,7 @@ defmodule ObanChoreWeb.DashboardLive do
        selected_chore_module: nil,
        jobs: %{},
        chore_jobs: %{},
+       history: [],
        selected_tab: :new,
        now: DateTime.utc_now()
      )}
@@ -215,7 +234,7 @@ defmodule ObanChoreWeb.DashboardLive do
     allowed_modules = Enum.map(socket.assigns.chores, & &1.module)
 
     if module in allowed_modules do
-      {:noreply, assign(socket, selected_chore_module: module, selected_tab: :new)}
+      {:noreply, assign(socket, selected_chore_module: module, selected_tab: :new, history: [])}
     else
       {:noreply, socket}
     end
@@ -227,9 +246,36 @@ defmodule ObanChoreWeb.DashboardLive do
   end
 
   @impl true
+  def handle_event("select_tab", %{"tab" => "history"}, socket) do
+    history =
+      case socket.assigns.selected_chore_module do
+        nil -> []
+        module -> ObanChore.list_history(module)
+      end
+
+    {:noreply, assign(socket, selected_tab: :history, history: history)}
+  end
+
+  @impl true
   def handle_event("select_tab", %{"tab" => "job_" <> id_str}, socket) do
     id = String.to_integer(id_str)
     {:noreply, assign(socket, selected_tab: {:job, id})}
+  end
+
+  @impl true
+  def handle_event("select_history_job", %{"id" => id_str}, socket) do
+    id = String.to_integer(id_str)
+
+    case Enum.find(socket.assigns.history, &(&1.id == id)) do
+      nil ->
+        {:noreply, socket}
+
+      job ->
+        {:noreply,
+         socket
+         |> track_job(job, socket.assigns.selected_chore_module)
+         |> assign(selected_tab: {:job, job.id})}
+    end
   end
 
   @impl true
@@ -261,16 +307,10 @@ defmodule ObanChoreWeb.DashboardLive do
         | state: if(is_binary(job.state), do: String.to_existing_atom(job.state), else: job.state)
       }
 
-      new_jobs = Map.put(socket.assigns.jobs, job.id, job)
-
-      new_chore_jobs =
-        Map.update(socket.assigns.chore_jobs, worker_module, [job.id], fn job_ids ->
-          if job.id in job_ids, do: job_ids, else: [job.id | job_ids]
-        end)
-
       {:noreply,
        socket
-       |> assign(jobs: new_jobs, chore_jobs: new_chore_jobs, selected_tab: {:job, job.id})}
+       |> track_job(job, worker_module)
+       |> assign(selected_tab: {:job, job.id})}
     else
       {:noreply, socket}
     end
@@ -300,6 +340,17 @@ defmodule ObanChoreWeb.DashboardLive do
   @impl true
   def handle_info(:tick, socket) do
     {:noreply, assign(socket, now: DateTime.utc_now())}
+  end
+
+  defp track_job(socket, job, worker_module) do
+    new_jobs = Map.put(socket.assigns.jobs, job.id, job)
+
+    new_chore_jobs =
+      Map.update(socket.assigns.chore_jobs, worker_module, [job.id], fn job_ids ->
+        if job.id in job_ids, do: job_ids, else: [job.id | job_ids]
+      end)
+
+    assign(socket, jobs: new_jobs, chore_jobs: new_chore_jobs)
   end
 
   defp fetch_counts(chores) do

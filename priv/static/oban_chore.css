@@ -507,6 +507,57 @@ textarea.oc-input {
   white-space: nowrap;
 }
 
+/* History */
+.oc-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.oc-history-table th {
+  text-align: left;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--oc-gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--oc-gray-200);
+}
+
+.oc-history-table td {
+  padding: 0.75rem 1.5rem;
+  color: var(--oc-gray-700);
+  border-bottom: 1px solid var(--oc-gray-100);
+  white-space: nowrap;
+}
+
+.oc-history-table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.oc-history-table tbody tr:hover {
+  background-color: var(--oc-gray-50);
+}
+
+.oc-history-args {
+  max-width: 20rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: var(--oc-gray-600);
+}
+
+.oc-history-empty {
+  margin: 0;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-style: italic;
+  color: var(--oc-gray-500);
+}
+
 /* Logs */
 .oc-log-container {
   background-color: var(--oc-gray-900);

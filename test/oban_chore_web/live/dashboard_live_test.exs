@@ -278,6 +278,52 @@ defmodule ObanChoreWeb.DashboardLiveTest do
     end
   end
 
+  describe "history" do
+    test "lists past executions and opens their details" do
+      job = insert_finished_job(%{"username" => "past_user", "admin" => false})
+
+      conn = build_conn()
+      {:ok, view, _html} = live(conn, "/ops/chores")
+
+      view
+      |> element(
+        "button[data-role=chore-select][data-chore-module=\"#{to_string(DashboardTestChore)}\"]"
+      )
+      |> render_click()
+
+      # Finished jobs don't take up a tab until they are opened from the history
+      refute has_element?(view, ~s(button[data-role="job-tab"][data-job-id="#{job.id}"]))
+
+      html = view |> element("button[data-role=history-tab]") |> render_click()
+
+      assert html =~ "past_user"
+      assert html =~ "Completed"
+      assert has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{job.id}"]))
+
+      view
+      |> element(~s(tr[data-role="history-row"][data-job-id="#{job.id}"]))
+      |> render_click()
+
+      assert has_element?(view, ~s(button[data-role="job-tab"][data-job-id="#{job.id}"]))
+      assert has_element?(view, ~s(div[data-role="job-details"][data-job-id="#{job.id}"]))
+    end
+
+    test "renders an empty state when the chore was never executed" do
+      conn = build_conn()
+      {:ok, view, _html} = live(conn, "/ops/chores")
+
+      view
+      |> element(
+        "button[data-role=chore-select][data-chore-module=\"#{to_string(DashboardTestChore)}\"]"
+      )
+      |> render_click()
+
+      html = view |> element("button[data-role=history-tab]") |> render_click()
+
+      assert html =~ "No past executions found for this chore."
+    end
+  end
+
   describe "auth" do
     test "filters chores by module whitelist" do
       conn = build_conn()
@@ -310,5 +356,13 @@ defmodule ObanChoreWeb.DashboardLiveTest do
       assert render_click(view, "select_chore", %{"module" => to_string(DashboardUniqueChore)}) =~
                "No chore selected"
     end
+  end
+
+  defp insert_finished_job(args) do
+    {:ok, job} = Oban.insert(DashboardTestChore.new(args))
+
+    job
+    |> Ecto.Changeset.change(state: "completed", completed_at: DateTime.utc_now())
+    |> ObanChore.TestRepo.update!()
   end
 end
