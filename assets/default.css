@@ -2694,6 +2694,32 @@
   .pc-data-table__filter-clear-icon.pc-data-table__filter-clear-icon {
     @apply w-4! h-4!;
   }
+  /* the toolbar morphs while rows are selected: same strip, selection content */
+  .pc-data-table__selection-count {
+    @apply text-sm font-medium text-gray-700 dark:text-gray-200;
+  }
+  .pc-data-table__selection-clear {
+    @apply ml-auto;
+  }
+  /* the selection column is chrome, not data - it takes the checkbox and nothing more */
+  .pc-data-table__select-th,
+  .pc-data-table__select-td {
+    @apply w-px;
+  }
+  .pc-data-table__select-all,
+  .pc-data-table__select-row {
+    @apply block;
+  }
+  /* the header's mixed state: indeterminate is a property no attribute can
+     set, so the hook applies it and this rule is the only thing that draws
+     it - the dash gets the tick's token treatment */
+  .pc-data-table__select-all:indeterminate {
+    @apply bg-primary-600 border-primary-600;
+    background-image: var(
+      --pc-checkbox-dash,
+      url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23fff' xmlns='http://www.w3.org/2000/svg'%3e%3crect x='3.5' y='7' width='9' height='2' rx='1'/%3e%3c/svg%3e")
+    );
+  }
 
   /* Avatars - sizes */
 

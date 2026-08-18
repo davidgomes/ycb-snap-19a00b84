@@ -4659,6 +4659,20 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+    this.syncSelectAll();
+  },
+
+  updated() {
+    this.syncSelectAll();
+  },
+
+  // the select-all header's third state is a property, not an attribute,
+  // so the server stamps it as data-indeterminate and the hook mirrors it
+  // onto the checkbox after every patch
+  syncSelectAll() {
+    this.el.querySelectorAll("[data-pc-dt-select-all]").forEach((box) => {
+      box.indeterminate = box.dataset.indeterminate === "true";
+    });
   },
 
   destroyed() {

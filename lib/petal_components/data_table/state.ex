@@ -19,6 +19,20 @@ defmodule PetalComponents.DataTable.State do
   params, so URL-as-state (shareable sorts/filters, working back button)
   is a one-liner in `handle_params` rather than a hand-rolled encoding.
 
+  ## Selection
+
+  `selected` holds the checked row ids as strings (ids arrive from the
+  client, so they are never converted to anything else). It is the one
+  field that does NOT round-trip through params: a selection is
+  ephemeral socket state, not a shareable request. Link-mode tables
+  rebuild their state from params on every patch, so carry the
+  selection over explicitly:
+
+      state =
+        params
+        |> State.from_params(fields: [:name, :email])
+        |> State.put_selection(socket.assigns.table.selected)
+
   ## Filter operators
 
   Text: `:contains`, `:eq`, `:starts_with` - number: `:eq`, `:neq`,
@@ -35,7 +49,13 @@ defmodule PetalComponents.DataTable.State do
   """
 
   @enforce_keys []
-  defstruct order_by: [], filters: [], search: nil, page: 1, page_size: 10, total: nil
+  defstruct order_by: [],
+            filters: [],
+            search: nil,
+            selected: [],
+            page: 1,
+            page_size: 10,
+            total: nil
 
   @type order :: {atom(), :asc | :desc}
   @type filter :: %{field: atom(), op: atom(), value: term()}
@@ -43,6 +63,7 @@ defmodule PetalComponents.DataTable.State do
           order_by: [order()],
           filters: [filter()],
           search: String.t() | nil,
+          selected: [String.t()],
           page: pos_integer(),
           page_size: pos_integer(),
           total: non_neg_integer() | nil
@@ -91,7 +112,8 @@ defmodule PetalComponents.DataTable.State do
   Encodes the state as a flat params map suitable for `push_patch`
   query strings. Defaults (page 1, empty sorts/filters, the default
   page size) are omitted so URLs stay clean; `total` never round-trips -
-  it is a result, not a request.
+  it is a result, not a request - and neither does `selected`, which is
+  a selection, not a query.
 
   Pass the same `:page_size` default given to `from_params/2` so the
   two stay symmetric (an omitted size decodes back to that default).
@@ -146,6 +168,63 @@ defmodule PetalComponents.DataTable.State do
     %{state | page_size: parse_pos_int(size, state.page_size), page: 1}
   end
 
+  @doc "Whether `id` (stringified) is currently selected."
+  def selected?(%__MODULE__{selected: selected}, id), do: to_string(id) in selected
+
+  @doc """
+  Toggles one row's selection. Paging and sorting leave the selection
+  alone, so a pick made on page 1 survives a trip to page 7.
+  """
+  def toggle_selection(%__MODULE__{} = state, id) do
+    id = to_string(id)
+
+    if id in state.selected do
+      %{state | selected: List.delete(state.selected, id)}
+    else
+      %{state | selected: state.selected ++ [id]}
+    end
+  end
+
+  @doc """
+  Toggles a whole page of ids as one unit - the tri-state header's
+  grammar: a fully selected page deselects, a partly (or un-) selected
+  one selects the rest, which is what the mixed state promises. `ids`
+  may be a list or the comma-joined string the header checkbox posts.
+  """
+  def toggle_page(%__MODULE__{} = state, ids) do
+    ids = normalize_ids(ids)
+
+    cond do
+      ids == [] -> state
+      Enum.all?(ids, &(&1 in state.selected)) -> deselect_ids(state, ids)
+      true -> %{state | selected: state.selected ++ Enum.reject(ids, &(&1 in state.selected))}
+    end
+  end
+
+  @doc "Replaces the selection wholesale (ids are stringified) - how link mode carries it across patches."
+  def put_selection(%__MODULE__{} = state, ids), do: %{state | selected: normalize_ids(ids)}
+
+  @doc "Drops `ids` from the selection, e.g. after a bulk action consumed them."
+  def deselect_ids(%__MODULE__{} = state, ids) do
+    ids = normalize_ids(ids)
+    %{state | selected: Enum.reject(state.selected, &(&1 in ids))}
+  end
+
+  @doc "Empties the selection."
+  def clear_selection(%__MODULE__{} = state), do: %{state | selected: []}
+
+  defp normalize_ids(ids) when is_binary(ids),
+    do: ids |> String.split(",", trim: true) |> Enum.uniq()
+
+  defp normalize_ids(ids) when is_list(ids) do
+    ids
+    |> Enum.map(&to_string/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq()
+  end
+
+  defp normalize_ids(_other), do: []
+
   @doc """
   Applies one event-mode op payload - the entire `data_table` event
   grammar in one call, so an event-mode handler is a one-liner:
@@ -157,10 +236,11 @@ defmodule PetalComponents.DataTable.State do
       end
 
   Ops: `sort` (field), `page` (page), `search` (term), `page_size`
-  (page_size), `filter` (field, filter_op, value/value2/values), and
-  `clear_filters`. Unknown ops and non-whitelisted fields leave the
-  state unchanged; like `from_params/2`, no atoms are ever created
-  from input.
+  (page_size), `filter` (field, filter_op, value/value2/values),
+  `clear_filters`, plus the selection ops `select` (id),
+  `select_page` (ids) and `clear_selection`. Unknown ops and
+  non-whitelisted fields leave the state unchanged; like
+  `from_params/2`, no atoms are ever created from input.
 
   A `filter` op's value normalizes by editor shape: a `values` list
   posts as-is (the select editor's `:in`), `between` pairs
@@ -195,6 +275,17 @@ defmodule PetalComponents.DataTable.State do
 
       %{"op" => "clear_filters"} ->
         clear_filters(state)
+
+      # a crafted payload can carry any shape here; only the two an id
+      # can honestly be are stringified, the rest fall through unchanged
+      %{"op" => "select", "id" => id} when is_binary(id) or is_integer(id) ->
+        toggle_selection(state, id)
+
+      %{"op" => "select_page", "ids" => ids} ->
+        toggle_page(state, ids)
+
+      %{"op" => "clear_selection"} ->
+        clear_selection(state)
 
       _other ->
         state
