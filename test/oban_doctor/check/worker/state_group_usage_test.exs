@@ -66,6 +66,22 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsageTest do
       assert length(issues) == 1
     end
 
+    test "returns no issues for Oban's safe named state groups" do
+      workers =
+        Enum.map([:incomplete, :scheduled, :successful], fn group ->
+          %{
+            module: MyApp.Workers.NamedStateGroupWorker,
+            file: "lib/my_app/workers/named_state_group_worker.ex",
+            line: 1,
+            queue: :default,
+            unique: [fields: [:args], states: group],
+            max_attempts: nil
+          }
+        end)
+
+      assert StateGroupUsage.run(%{workers: workers}) == []
+    end
+
     test "returns no issues when worker uses explicit states" do
       workers = [
         %{

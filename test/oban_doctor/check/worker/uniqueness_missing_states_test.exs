@@ -109,6 +109,38 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       assert issues == []
     end
 
+    test "does not flag workers using Oban's other named state groups" do
+      for group <- [:incomplete, :scheduled, :successful] do
+        worker = %{
+          module: MyApp.Workers.NamedStateGroupWorker,
+          file: "lib/my_app/workers/named_state_group_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: group],
+          max_attempts: nil
+        }
+
+        assert UniquenessMissingStates.run(%{workers: [worker]}) == []
+      end
+    end
+
+    test "still checks single-state lists" do
+      workers = [
+        %{
+          module: MyApp.Workers.ScheduledOnlyWorker,
+          file: "lib/my_app/workers/scheduled_only_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: [:scheduled]],
+          max_attempts: nil
+        }
+      ]
+
+      [issue] = UniquenessMissingStates.run(%{workers: workers})
+
+      assert issue.meta.missing_states == [:available, :executing, :retryable]
+    end
+
     test "detects workers missing only some states" do
       workers = [
         %{

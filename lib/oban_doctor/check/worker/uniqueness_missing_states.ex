@@ -1,12 +1,17 @@
 defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   @moduledoc """
-  Checks for workers with unique configuration that don't include all recommended states.
+  Checks explicit unique state lists for missing recommended states.
 
-  When using unique constraints, you should typically include all non-final states:
-  `:available`, `:scheduled`, `:executing`, and `:retryable`.
+  When using an explicit state list, you should typically include all non-final
+  states: `:available`, `:scheduled`, `:executing`, and `:retryable`.
 
   Missing states means duplicate jobs could be enqueued when existing jobs are
   in the missing state.
+
+  Oban's named state groups (`:all`, `:incomplete`, `:scheduled`, and
+  `:successful`) are intentional alternatives to explicit lists and aren't
+  reported by this check. The `:all` group is handled by
+  `ObanDoctor.Check.Worker.StateGroupUsage`.
 
   ## Examples
 
@@ -15,18 +20,28 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
 
   Good - includes all non-final states:
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  Good - uses Oban's named group for unfinished jobs:
+      unique: [fields: [:args], states: :incomplete]
+
+  ## References
+
+    * [Unique Jobs](https://hexdocs.pm/oban/unique_jobs.html)
+    * [`Oban.Job.unique_states/1`](https://hexdocs.pm/oban/Oban.Job.html#unique_states/1)
+    * [Upgrading to Oban v2.20](https://hexdocs.pm/oban/v2-20.html)
   """
 
   use ObanDoctor.Check, category: :worker
 
   @recommended_states [:available, :scheduled, :executing, :retryable]
+  @named_state_groups [:all, :incomplete, :scheduled, :successful]
 
   @impl true
   def id, do: :uniqueness_missing_states
 
   @impl true
   def description do
-    "Detects workers with unique config missing recommended states"
+    "Detects workers with explicit unique states missing recommended states"
   end
 
   @impl true
@@ -51,8 +66,7 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   defp missing_recommended_states?(%{unique: unique}) do
     states = Keyword.get(unique, :states, [])
 
-    # Don't flag if they're using :all group (that's caught by another check)
-    if uses_all_group?(states) do
+    if uses_named_state_group?(states) do
       false
     else
       state_list = normalize_states(states)
@@ -61,10 +75,12 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
     end
   end
 
-  defp uses_all_group?(:all), do: true
-  defp uses_all_group?([:all]), do: true
-  defp uses_all_group?(states) when is_list(states), do: :all in states
-  defp uses_all_group?(_), do: false
+  defp uses_named_state_group?(states) when states in @named_state_groups, do: true
+
+  # Preserve support for the :all list form, which StateGroupUsage reports.
+  defp uses_named_state_group?(states) when is_list(states), do: :all in states
+
+  defp uses_named_state_group?(_), do: false
 
   defp normalize_states(states) when is_list(states), do: states
   defp normalize_states(_), do: []
