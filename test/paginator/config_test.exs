@@ -167,6 +167,18 @@ defmodule Paginator.ConfigTest do
       Config.validate!(config)
     end
 
+    test "ok when after cursor matches expression cursor_fields" do
+      fun = fn -> nil end
+
+      config =
+        Config.new(
+          cursor_fields: [{:rank_value, fun}, :id],
+          after: Cursor.encode(%{rank_value: 0.1, id: 1})
+        )
+
+      Config.validate!(config)
+    end
+
     test "raises ArgumentError when before cursor does not match the cursor_fields" do
       config = Config.new(cursor_fields: [:id], before: complex_before())
 
