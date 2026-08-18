@@ -18,6 +18,8 @@ defmodule FreeObanUiWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+
+    live "/oban", ObanJobsLive
   end
 
   # Other scopes may use custom stacks.
