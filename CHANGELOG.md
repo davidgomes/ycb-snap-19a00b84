@@ -57,6 +57,16 @@
 - **`pagination` event mode grows up**: `event` accepts a custom event
   name (string) and `event_values` adds phx-value-* pairs - page
   clicks can speak any consumer's event grammar.
+- **`<.data_table>` row selection (4.12 data table, milestone 3).**
+  `selectable` (+ `row_id`, `selected`) adds a leading checkbox column
+  via `table`'s new `selectable`/`selected`/`on_select`/`on_select_all`
+  attrs; the header checkbox is tri-state (checked/empty/indeterminate
+  across the current page) - native `<input>` has no indeterminate
+  attribute, so the `PetalDataTable` hook (now mounted in both wiring
+  modes whenever selectable) sets the DOM property on mount and every
+  update. Once `selected` is non-empty the toolbar morphs into a count +
+  clear button + new `:bulk_actions` slot in place of search/filters,
+  rather than stacking a second bar.
 
 ### 4.12.0 - 2026-08-08
 
