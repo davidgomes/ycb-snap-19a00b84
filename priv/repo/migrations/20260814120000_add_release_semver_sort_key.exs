@@ -86,12 +86,12 @@ defmodule Hexpm.Repo.Migrations.AddReleaseSemverSortKey do
 
     execute("""
     ALTER TABLE public.releases
-      ADD COLUMN semver_sort_key bytea
-        GENERATED ALWAYS AS (public.hexpm_semver_sort_key(version)) STORED NOT NULL,
-      ADD COLUMN semver_stable boolean
-        GENERATED ALWAYS AS (
-          pg_catalog.strpos(pg_catalog.split_part(version, '+', 1), '-') = 0
-        ) STORED NOT NULL
+    ADD COLUMN semver_sort_key bytea
+      GENERATED ALWAYS AS (public.hexpm_semver_sort_key(version)) STORED NOT NULL,
+    ADD COLUMN semver_stable boolean
+      GENERATED ALWAYS AS (
+        pg_catalog.strpos(pg_catalog.split_part(version, '+', 1), '-') = 0
+      ) STORED NOT NULL
     """)
   end
 
@@ -100,8 +100,8 @@ defmodule Hexpm.Repo.Migrations.AddReleaseSemverSortKey do
 
     execute("""
     ALTER TABLE public.releases
-      DROP COLUMN semver_sort_key,
-      DROP COLUMN semver_stable
+    DROP COLUMN semver_sort_key,
+    DROP COLUMN semver_stable
     """)
 
     execute("DROP FUNCTION public.hexpm_semver_sort_key(text)")
