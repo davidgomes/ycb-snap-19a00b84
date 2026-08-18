@@ -58,6 +58,12 @@ defmodule MyApp.Pet do
         reverse_name: [
           filter: {__MODULE__, :reverse_name_filter, []},
           ecto_type: :string
+        ],
+        # intentionally not added to `filterable`, since it has neither a
+        # `filter` nor a `field_dynamic` function configured; only used to
+        # exercise the runtime guard against unvalidated Flop structs
+        unconfigured_custom: [
+          ecto_type: :string
         ]
       ]
     ]

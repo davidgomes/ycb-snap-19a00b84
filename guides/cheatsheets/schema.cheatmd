@@ -460,6 +460,23 @@ custom_fields: [
 
 `Flop.with_named_bindings/4` adds these bindings when the field is used.
 
+### Filtering with only `field_dynamic`
+
+```elixir
+custom_fields: [
+  human_age: [
+    field_dynamic: {CustomFields, :human_age, []},
+    ecto_type: :integer
+  ]
+]
+```
+
+If a custom field configures `field_dynamic` but no `filter`, Flop builds the
+filter query itself by applying the requested operator to the dynamic
+expression, just like it does for a regular field. This means a single
+`field_dynamic` function is enough to make a custom field both sortable and
+filterable, as long as no special filter logic is needed.
+
 ## Ecto types
 {: .col-2}
 

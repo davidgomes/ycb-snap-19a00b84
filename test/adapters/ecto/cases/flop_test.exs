@@ -1046,6 +1046,151 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       end
     end
 
+    test "filters by a custom field via field_dynamic" do
+      insert_custom_field_pets([30, 10, 40, 20])
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{filters: [%Filter{field: :age_score, op: :>=, value: 40}]},
+          for: CustomFieldPet
+        )
+
+      assert Enum.map(result, & &1.age) |> Enum.sort() == [20, 30, 40]
+    end
+
+    test "merges runtime and compile-time options when filtering by field_dynamic" do
+      insert_custom_field_pets([30, 10, 20])
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{filters: [%Filter{field: :age_score, op: :>=, value: -15}]},
+          for: CustomFieldPet,
+          extra_opts: [factor: -1, runtime_only: :available, test_pid: self()]
+        )
+
+      assert Enum.map(result, & &1.age) |> Enum.sort() == [10, 20, 30]
+
+      assert_receive {:age_score_dynamic_opts, opts}
+      assert opts[:factor] == 2
+      assert opts[:compile_only] == :available
+      assert opts[:runtime_only] == :available
+    end
+
+    test "applies empty and not_empty filter to an array field via field_dynamic" do
+      with_tags = insert(:owner, tags: ["catdog"])
+      without_tags = insert(:owner, tags: [])
+
+      pet_with_tags =
+        Repo.insert!(%CustomFieldPet{age: 1, owner_id: with_tags.id})
+
+      pet_without_tags =
+        Repo.insert!(%CustomFieldPet{age: 2, owner_id: without_tags.id})
+
+      query =
+        CustomFieldPet
+        |> join(:inner, [pet], owner in assoc(pet, :owner), as: :owner)
+
+      assert query
+             |> Flop.all(
+               %Flop{
+                 filters: [
+                   %Filter{field: :owner_tags_dynamic, op: :empty, value: true}
+                 ]
+               },
+               for: CustomFieldPet
+             ) == [pet_without_tags]
+
+      assert query
+             |> Flop.all(
+               %Flop{
+                 filters: [
+                   %Filter{
+                     field: :owner_tags_dynamic,
+                     op: :not_empty,
+                     value: true
+                   }
+                 ]
+               },
+               for: CustomFieldPet
+             ) == [pet_with_tags]
+    end
+
+    test "applies contains and in filters to a field via field_dynamic" do
+      tagged = insert(:owner, tags: ["catdog"])
+      untagged = insert(:owner, tags: [])
+
+      tagged_pet =
+        Repo.insert!(%CustomFieldPet{age: 1, owner_id: tagged.id})
+
+      Repo.insert!(%CustomFieldPet{age: 2, owner_id: untagged.id})
+
+      query =
+        CustomFieldPet
+        |> join(:inner, [pet], owner in assoc(pet, :owner), as: :owner)
+
+      assert query
+             |> Flop.all(
+               %Flop{
+                 filters: [
+                   %Filter{
+                     field: :owner_tags_dynamic,
+                     op: :contains,
+                     value: "catdog"
+                   }
+                 ]
+               },
+               for: CustomFieldPet
+             ) == [tagged_pet]
+
+      assert Flop.all(
+               CustomFieldPet,
+               %Flop{
+                 filters: [%Filter{field: :age_score, op: :in, value: [2, 60]}]
+               },
+               for: CustomFieldPet
+             )
+             |> Enum.map(& &1.age) == [1]
+    end
+
+    test "filters by a custom field on a named binding via field_dynamic" do
+      older = insert(:owner, age: 60)
+      younger = insert(:owner, age: 20)
+
+      Repo.insert!(%CustomFieldPet{age: 1, owner_id: older.id})
+      Repo.insert!(%CustomFieldPet{age: 2, owner_id: younger.id})
+
+      flop = %Flop{
+        filters: [%Filter{field: :owner_age_score, op: :>=, value: 30}]
+      }
+
+      assert Flop.named_bindings(flop, CustomFieldPet) == [:owner]
+
+      query =
+        CustomFieldPet
+        |> join(:inner, [pet], owner in assoc(pet, :owner), as: :owner)
+        |> select([pet, owner: owner], owner.age)
+
+      assert Flop.all(query, flop, for: CustomFieldPet) == [60]
+    end
+
+    test "raises when filtering by a custom field without filter or field_dynamic" do
+      assert_raise ArgumentError,
+                   ~r/filtering by a custom field requires a filter or field_dynamic/,
+                   fn ->
+                     Flop.all(
+                       Pet,
+                       %Flop{
+                         filters: [
+                           %Filter{field: :unconfigured_custom, value: "x"}
+                         ]
+                       },
+                       for: Pet
+                     )
+                   end
+    end
+
     test "silently ignores nil values for field and value" do
       flop = %Flop{filters: [%Filter{op: :>=, value: 4}]}
       assert Flop.query(Pet, flop) == Pet
