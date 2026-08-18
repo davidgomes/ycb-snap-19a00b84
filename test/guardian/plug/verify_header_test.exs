@@ -217,6 +217,150 @@ defmodule Guardian.Plug.VerifyHeaderTest do
     refute conn.halted
   end
 
+  describe "with a secret from the connection" do
+    defmodule SecretImpl do
+      @moduledoc false
+
+      use Guardian,
+        otp_app: :guardian,
+        token_module: Guardian.Token.Jwt,
+        issuer: "MyApp",
+        secret_key: "app-wide-secret",
+        allowed_algos: ["HS512"]
+
+      def subject_for_token(%{id: id}, _claims), do: {:ok, "User:#{id}"}
+      def resource_from_claims(%{"sub" => "User:" <> sub}), do: {:ok, %{id: sub}}
+
+      def the_secret(val), do: val
+    end
+
+    @tenant_secret "tenant-secret"
+
+    setup do
+      impl = __MODULE__.SecretImpl
+      {:ok, token, claims} = impl.encode_and_sign(@resource, %{}, secret: @tenant_secret)
+
+      {:ok, %{impl: impl, handler: __MODULE__.Handler, token: token, claims: claims}}
+    end
+
+    defp tenant_secret(conn) do
+      case Plug.Conn.get_req_header(conn, "x-tenant-id") do
+        ["tenant-1"] -> @tenant_secret
+        _ -> nil
+      end
+    end
+
+    test "verifies with the secret returned for the connection", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_header("authorization", "Bearer #{ctx.token}")
+        |> put_req_header("x-tenant-id", "tenant-1")
+        |> VerifyHeader.call(
+          Keyword.merge(VerifyHeader.init([]),
+            module: ctx.impl,
+            error_handler: ctx.handler,
+            secret: &tenant_secret/1
+          )
+        )
+
+      refute conn.status == 401
+      assert Guardian.Plug.current_token(conn) == ctx.token
+      assert Guardian.Plug.current_claims(conn) == ctx.claims
+    end
+
+    test "the function is called with the connection", ctx do
+      test_pid = self()
+
+      :get
+      |> conn("/")
+      |> put_req_header("authorization", "Bearer #{ctx.token}")
+      |> put_req_header("x-tenant-id", "tenant-1")
+      |> VerifyHeader.call(
+        Keyword.merge(VerifyHeader.init([]),
+          module: ctx.impl,
+          error_handler: ctx.handler,
+          secret: fn conn ->
+            send(test_pid, {:secret_called, conn.request_path})
+            @tenant_secret
+          end
+        )
+      )
+
+      assert_received {:secret_called, "/"}
+    end
+
+    test "a failed lookup rejects the token instead of using the configured secret", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_header("authorization", "Bearer #{ctx.token}")
+        |> VerifyHeader.call(
+          Keyword.merge(VerifyHeader.init([]),
+            module: ctx.impl,
+            error_handler: ctx.handler,
+            secret: &tenant_secret/1
+          )
+        )
+
+      assert conn.status == 401
+      assert conn.resp_body == inspect({:invalid_token, :secret_not_found})
+      refute Guardian.Plug.current_token(conn)
+    end
+
+    test "a token signed with the application secret is rejected for a tenant", ctx do
+      {:ok, app_token, _claims} = ctx.impl.encode_and_sign(@resource)
+
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_header("authorization", "Bearer #{app_token}")
+        |> put_req_header("x-tenant-id", "tenant-1")
+        |> VerifyHeader.call(
+          Keyword.merge(VerifyHeader.init([]),
+            module: ctx.impl,
+            error_handler: ctx.handler,
+            secret: &tenant_secret/1
+          )
+        )
+
+      assert conn.status == 401
+      assert conn.resp_body == inspect({:invalid_token, :invalid_token})
+    end
+
+    test "a function of the wrong arity raises rather than being ignored", ctx do
+      assert_raise ArgumentError, ~r/must be a function of arity 1/, fn ->
+        :get
+        |> conn("/")
+        |> put_req_header("authorization", "Bearer #{ctx.token}")
+        |> VerifyHeader.call(
+          Keyword.merge(VerifyHeader.init([]),
+            module: ctx.impl,
+            error_handler: ctx.handler,
+            secret: fn -> @tenant_secret end
+          )
+        )
+      end
+    end
+
+    test "an {m, f, a} secret keeps its meaning", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_header("authorization", "Bearer #{ctx.token}")
+        |> VerifyHeader.call(
+          Keyword.merge(VerifyHeader.init([]),
+            module: ctx.impl,
+            error_handler: ctx.handler,
+            secret: {ctx.impl, :the_secret, [@tenant_secret]}
+          )
+        )
+
+      refute conn.status == 401
+      assert Guardian.Plug.current_token(conn) == ctx.token
+    end
+  end
+
   describe "with refresh_from_cookie option" do
     defmodule ImplJwt do
       @moduledoc false

@@ -715,6 +715,46 @@ defmodule Guardian.PlugTest do
     end
   end
 
+  describe "maybe_resolve_secret" do
+    test "calls a function of arity one with the connection" do
+      conn = :get |> conn("/") |> put_req_header("x-tenant-id", "tenant-1")
+
+      opts = Guardian.Plug.maybe_resolve_secret(conn, secret: fn conn -> hd(get_req_header(conn, "x-tenant-id")) end)
+
+      assert Keyword.fetch(opts, :secret) == {:ok, "tenant-1"}
+    end
+
+    test "keeps a nil result so it can fail closed downstream" do
+      conn = conn(:get, "/")
+
+      opts = Guardian.Plug.maybe_resolve_secret(conn, secret: fn _conn -> nil end)
+
+      assert Keyword.fetch(opts, :secret) == {:ok, nil}
+    end
+
+    test "leaves other values untouched" do
+      conn = conn(:get, "/")
+      secret = {Guardian.PlugTest.Impl, :config, [:secret_key]}
+
+      assert Guardian.Plug.maybe_resolve_secret(conn, secret: secret) == [secret: secret]
+      assert Guardian.Plug.maybe_resolve_secret(conn, secret: "a secret") == [secret: "a secret"]
+    end
+
+    test "leaves an absent option absent" do
+      conn = conn(:get, "/")
+
+      assert Guardian.Plug.maybe_resolve_secret(conn, key: :default) == [key: :default]
+    end
+
+    test "raises on a function of the wrong arity" do
+      conn = conn(:get, "/")
+
+      assert_raise ArgumentError, ~r/must be a function of arity 1/, fn ->
+        Guardian.Plug.maybe_resolve_secret(conn, secret: fn -> "a secret" end)
+      end
+    end
+  end
+
   describe "#keys" do
     alias Guardian.Plug.Keys
 

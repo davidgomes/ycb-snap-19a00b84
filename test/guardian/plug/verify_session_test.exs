@@ -198,6 +198,63 @@ defmodule Guardian.Plug.VerifySessionTest do
     assert Guardian.Plug.current_claims(conn, key: :admin) == claims
   end
 
+  describe "with a secret from the connection" do
+    defmodule SecretImpl do
+      @moduledoc false
+
+      use Guardian,
+        otp_app: :guardian,
+        token_module: Guardian.Token.Jwt,
+        issuer: "MyApp",
+        secret_key: "app-wide-secret",
+        allowed_algos: ["HS512"]
+
+      def subject_for_token(%{id: id}, _claims), do: {:ok, "User:#{id}"}
+      def resource_from_claims(%{"sub" => "User:" <> sub}), do: {:ok, %{id: sub}}
+    end
+
+    @tenant_secret "tenant-secret"
+
+    setup do
+      impl = __MODULE__.SecretImpl
+      {:ok, token, claims} = impl.encode_and_sign(@resource, %{}, secret: @tenant_secret)
+
+      {:ok, %{impl: impl, handler: __MODULE__.Handler, token: token, claims: claims}}
+    end
+
+    defp tenant_secret(conn) do
+      case Plug.Conn.get_req_header(conn, "x-tenant-id") do
+        ["tenant-1"] -> @tenant_secret
+        _ -> nil
+      end
+    end
+
+    test "verifies with the secret returned for the connection", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> Plug.Conn.put_req_header("x-tenant-id", "tenant-1")
+        |> init_test_session(%{guardian_default_token: ctx.token})
+        |> VerifySession.call(module: ctx.impl, error_handler: ctx.handler, secret: &tenant_secret/1)
+
+      refute conn.status == 401
+      assert Guardian.Plug.current_token(conn) == ctx.token
+      assert Guardian.Plug.current_claims(conn) == ctx.claims
+    end
+
+    test "a failed lookup rejects the token instead of using the configured secret", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> init_test_session(%{guardian_default_token: ctx.token})
+        |> VerifySession.call(module: ctx.impl, error_handler: ctx.handler, secret: &tenant_secret/1)
+
+      assert conn.status == 401
+      assert conn.resp_body == inspect({:invalid_token, :secret_not_found})
+      refute Guardian.Plug.current_token(conn)
+    end
+  end
+
   describe "with refresh_from_cookie option" do
     defmodule ImplJwt do
       @moduledoc false
