@@ -65,6 +65,23 @@ defmodule Oban.Web.Jobs.DetailComponentTest do
     assert html =~ "ARGS REDACTED"
   end
 
+  test "rendering status badges for metadata features" do
+    job = %Oban.Job{
+      id: 1,
+      worker: "MyApp.Worker",
+      args: %{},
+      state: "available",
+      meta: %{"signal" => true, "batch" => "123"}
+    }
+
+    html = render_component(Component, assigns(job), router: Router)
+
+    assert html =~ "Signal"
+    assert html =~ "icon-bolt-circle"
+    assert html =~ "Batch"
+    assert html =~ "icon-square-2x2"
+  end
+
   defp assigns(job, opts \\ []) do
     os_time = System.system_time(:second)
 

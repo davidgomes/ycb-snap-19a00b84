@@ -68,6 +68,7 @@ defmodule Oban.Web.Jobs.DetailComponent do
           <Core.status_badge :if={@job.meta["structured"]} icon="table_cells" label="Structured" />
           <Core.status_badge :if={@job.meta["decorated"]} icon="sparkles" label="Decorated" />
           <Core.status_badge :if={@job.meta["rescued"]} icon="life_buoy" label="Rescued" />
+          <Core.status_badge :if={@job.meta["signal"]} icon="bolt_circle" label="Signal" />
 
           <Core.icon_button
             id="detail-cancel"

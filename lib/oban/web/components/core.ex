@@ -239,6 +239,9 @@ defmodule Oban.Web.Components.Core do
   defp badge_icon(%{name: "play_pause_circle"} = assigns),
     do: ~H[<Icons.icon name="icon-play-pause-circle" class="h-4 w-4 shrink-0" />]
 
+  defp badge_icon(%{name: "bolt_circle"} = assigns),
+    do: ~H[<Icons.icon name="icon-bolt-circle" class="h-4 w-4 shrink-0" />]
+
   @doc """
   An icon-only button that expands to show label on hover. Supports disabled state.
   """
