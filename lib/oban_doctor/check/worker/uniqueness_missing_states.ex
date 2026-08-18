@@ -15,11 +15,20 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
 
   Good - includes all non-final states:
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  Also good - use one of Oban's named state groups (`:all`, `:incomplete`,
+  `:scheduled`, `:successful`), which already cover the recommended states:
+      unique: [fields: [:args], states: :incomplete]
+
+  See the [Oban unique jobs guide](https://hexdocs.pm/oban/unique_jobs.html) and
+  `Oban.Job.unique_states/1` for details on the available named groups.
   """
 
   use ObanDoctor.Check, category: :worker
 
   @recommended_states [:available, :scheduled, :executing, :retryable]
+
+  @named_state_groups [:all, :incomplete, :scheduled, :successful]
 
   @impl true
   def id, do: :uniqueness_missing_states
@@ -51,8 +60,9 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   defp missing_recommended_states?(%{unique: unique}) do
     states = Keyword.get(unique, :states, [])
 
-    # Don't flag if they're using :all group (that's caught by another check)
-    if uses_all_group?(states) do
+    # Don't flag named state groups: :all is caught by another check, and
+    # :incomplete/:scheduled/:successful already satisfy the recommendation.
+    if uses_named_group?(states) do
       false
     else
       state_list = normalize_states(states)
@@ -61,10 +71,13 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
     end
   end
 
-  defp uses_all_group?(:all), do: true
-  defp uses_all_group?([:all]), do: true
-  defp uses_all_group?(states) when is_list(states), do: :all in states
-  defp uses_all_group?(_), do: false
+  defp uses_named_group?(group) when group in @named_state_groups, do: true
+  defp uses_named_group?([group]) when group in @named_state_groups, do: true
+  defp uses_named_group?(states) when is_list(states) do
+    Enum.any?(@named_state_groups, &(&1 in states))
+  end
+
+  defp uses_named_group?(_), do: false
 
   defp normalize_states(states) when is_list(states), do: states
   defp normalize_states(_), do: []
