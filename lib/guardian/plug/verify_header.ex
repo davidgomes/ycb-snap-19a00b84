@@ -36,7 +36,14 @@ if Code.ensure_loaded?(Plug) do
       `:none` will not use a prefix.
     * `key` - The location to store the information in the connection. Defaults to: `default`
     * `halt` - Whether to halt the connection in case of error. Defaults to `true`.
+    * `secret` - The secret used to verify the token. Any value resolvable by
+      `Guardian.Config` is valid. A function of arity one is called with the
+      connection so that the secret can be selected per request. See
+      `Guardian.Plug.maybe_resolve_secret/2`.
     * `:refresh_from_cookie` - Looks for and validates a token found in the request cookies. (default `false`)
+
+    A connection aware `secret` is not inherited by `:refresh_from_cookie`,
+    which exchanges the cookie token through its own options.
 
     Refresh from cookie option
 
@@ -89,7 +96,8 @@ if Code.ensure_loaded?(Plug) do
            module <- Pipeline.fetch_module!(conn, opts),
            claims_to_check <- Keyword.get(opts, :claims, %{}),
            key <- storage_key(conn, opts),
-           {:ok, claims} <- Guardian.decode_and_verify(module, token, claims_to_check, opts) do
+           verify_opts <- Guardian.Plug.maybe_resolve_secret(conn, opts),
+           {:ok, claims} <- Guardian.decode_and_verify(module, token, claims_to_check, verify_opts) do
         conn
         |> Guardian.Plug.put_current_token(token, key: key)
         |> Guardian.Plug.put_current_claims(claims, key: key)

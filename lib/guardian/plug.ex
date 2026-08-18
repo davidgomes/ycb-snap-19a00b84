@@ -308,6 +308,42 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
+    @doc """
+    Resolves a connection aware `:secret` option.
+
+    When the `:secret` option is a function of arity one it is called with the
+    connection and the result replaces the option, so a verifying secret can be
+    selected per request:
+
+    ```elixir
+    plug Guardian.Plug.VerifyHeader, secret: &MyApp.Tokens.secret_for/1
+    ```
+
+    Every other value, including the `{module, function, args}` form understood
+    by `Guardian.Config.resolve_value/1`, is left untouched. An option that is
+    not set is left unset so the implementation module's `:secret_key`
+    configuration keeps applying.
+
+    Note that the function is called once per plug that reads the option. A
+    pipeline with more than one verify plug resolves the secret more than once
+    per request, so lookups that hit a database or a JWKS endpoint should be
+    cached by the caller.
+    """
+    @spec maybe_resolve_secret(Plug.Conn.t(), Guardian.options()) :: Guardian.options()
+    def maybe_resolve_secret(conn, opts) do
+      case Keyword.fetch(opts, :secret) do
+        {:ok, fun} when is_function(fun, 1) ->
+          Keyword.put(opts, :secret, fun.(conn))
+
+        {:ok, fun} when is_function(fun) ->
+          raise ArgumentError,
+                "the :secret option must be a function of arity 1 when given a function, got: #{inspect(fun)}"
+
+        _ ->
+          opts
+      end
+    end
+
     @spec find_token_from_cookies(conn :: Plug.Conn.t(), Keyword.t()) :: {:ok, String.t()} | :no_token_found
     def find_token_from_cookies(conn, opts \\ []) do
       key =

@@ -210,22 +210,26 @@ defmodule Guardian.Token.Jwt do
     use Guardian.Token.Jwt.SecretFetcher
 
     def fetch_signing_secret(mod, opts) do
-      secret = Keyword.get(opts, :secret)
-      secret = Config.resolve_value(secret) || apply(mod, :config, [:secret_key])
-
-      case secret do
+      case fetch_secret(mod, opts) do
         nil -> {:error, :secret_not_found}
         val -> {:ok, val}
       end
     end
 
     def fetch_verifying_secret(mod, _token_headers, opts) do
-      secret = Keyword.get(opts, :secret)
-      secret = Config.resolve_value(secret) || mod.config(:secret_key)
-
-      case secret do
+      case fetch_secret(mod, opts) do
         nil -> {:error, :secret_not_found}
         val -> {:ok, val}
+      end
+    end
+
+    # An explicit `:secret` never falls back to the implementation module's
+    # `:secret_key`. A per request lookup that fails must reject the token
+    # rather than verify it against the application wide secret.
+    defp fetch_secret(mod, opts) do
+      case Keyword.fetch(opts, :secret) do
+        {:ok, secret} -> Config.resolve_value(secret)
+        :error -> apply(mod, :config, [:secret_key])
       end
     end
   end
@@ -318,6 +322,10 @@ defmodule Guardian.Token.Jwt do
 
   * `secret` - Override the configured secret. `Guardian.Config.config_value` is valid
   * `allowed_algos` - A list of allowable algos
+
+  A `secret` that is given but resolves to `nil` fails with
+  `{:error, :secret_not_found}`. It does not fall back to the configured
+  `secret_key`.
   """
   def decode_token(mod, token, options \\ []) do
     with {:ok, secret_fetcher} <- fetch_secret_fetcher(mod),
@@ -332,6 +340,7 @@ defmodule Guardian.Token.Jwt do
         {false, _, _} -> {:error, :invalid_token}
       end
     else
+      {:error, _} = err -> err
       _ -> {:error, :invalid_token}
     end
   end

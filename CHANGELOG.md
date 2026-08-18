@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Added
+
+* The `:secret` option of `Guardian.Plug.VerifyHeader`,
+  `Guardian.Plug.VerifySession` and `Guardian.Plug.VerifyCookie` accepts a
+  function of arity one, called with the connection, so the verifying secret can
+  be selected per request without wrapping the plug. A `{module, function, args}`
+  tuple keeps its existing meaning of `apply(module, function, args)`. See the
+  "Runtime Verifying Secrets" guide.
+
+### Changed
+
+* **Breaking**: a `:secret` option that is present but resolves to `nil` no
+  longer falls back to the implementation module's `:secret_key`. It now fails
+  with `{:error, :secret_not_found}`. Previously a per request secret lookup that
+  quietly returned `nil` verified (or signed) with the application wide secret
+  instead of rejecting the token, which is a tenant isolation failure for
+  implementation modules that handle both third party and self issued tokens.
+  Omitting `:secret` still falls back to `:secret_key` as before.
+* **Breaking**: `Guardian.Token.Jwt.decode_token/3` no longer collapses every
+  non-signature failure into `:invalid_token`. Errors from the secret fetcher,
+  such as `:secret_not_found`, now reach error handlers as
+  `{:invalid_token, :secret_not_found}` where they previously appeared as
+  `{:invalid_token, :invalid_token}`.
+
 ## v2.4.1
 
 ### Security
