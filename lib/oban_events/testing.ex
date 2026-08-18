@@ -183,8 +183,9 @@ defmodule ObanEvents.Testing do
   @doc """
   Return all emitted events as `ObanEvents.Event` structs.
 
-  Options are passed to `Oban.Testing.all_enqueued/1`, e.g. `queue: :events`.
-  Jobs that don't describe an event are skipped.
+  Options are passed to `Oban.Testing.all_enqueued/1`, e.g. `queue: :events`,
+  and the events follow its ordering. Jobs that don't describe an event are
+  skipped.
 
   ## Examples
 

@@ -9,8 +9,10 @@ A lightweight, persistent event bus for Elixir applications built on top of [Oba
 - ⚡ **Async** - Non-blocking execution of handlers
 - 🔗 **Transactional** - Works within database transactions for atomicity
 - 📊 **Observable** - Track event processing via Oban Web UI
+- 🏷️ **Traceable** - Every event carries an id, an emit time and custom metadata
 - ✅ **Type-safe** - Compile-time validation of events
 - 🎯 **Decoupled** - Event emitters don't know about handlers
+- 🧪 **Testable** - Assertion and handler helpers in `ObanEvents.Testing`
 
 ## Installation
 
@@ -144,6 +146,22 @@ Emit an event to all registered handlers.
 MyApp.Events.emit(:user_created, %{user_id: 123, email: "user@example.com"})
 ```
 
+### `emit/3`
+
+Emit an event with metadata attached.
+
+```elixir
+@spec emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
+
+MyApp.Events.emit(:user_created, %{user_id: 123}, meta: %{actor_id: 7})
+```
+
+Options:
+
+- `:meta` - metadata map carried alongside the payload (default: `%{}`)
+- `:id` - unique event id (default: a generated UUID)
+- `:emitted_at` - `DateTime` the event was emitted (default: `DateTime.utc_now/0`)
+
 ### `get_handlers!/1`
 
 Get all handlers registered for an event.
@@ -177,9 +195,58 @@ MyApp.Events.registered?(:user_created)
 # => true
 ```
 
+## Event Metadata
+
+Beyond its payload, every event carries metadata: a unique id shared by all of
+its handler jobs, the time it was emitted, and anything passed as `:meta`.
+
+```elixir
+MyApp.Events.emit(:user_created, %{user_id: user.id},
+  meta: %{actor_id: actor.id, request_id: request_id}
+)
+```
+
+Handlers that need the metadata implement `handle_event/3`, which receives an
+`ObanEvents.Event` struct as the third argument:
+
+```elixir
+defmodule MyApp.AuditHandler do
+  use ObanEvents.Handler
+
+  @impl true
+  def handle_event(name, data, %ObanEvents.Event{} = event) do
+    MyApp.Audit.record(name, data,
+      event_id: event.id,
+      actor_id: event.meta["actor_id"],
+      emitted_at: event.emitted_at
+    )
+  end
+end
+```
+
+The struct carries:
+
+- `:id` - unique event id, shared by every handler job of the same emit
+- `:name` - event name
+- `:data` - payload, with string keys
+- `:meta` - metadata passed to `emit/3`, with string keys
+- `:handler` - handler module the event is being dispatched to
+- `:emitted_at` - `DateTime` the event was emitted, not when it is processed
+- `:job_id`, `:attempt`, `:max_attempts` - Oban job details of the current run
+
+Notes:
+
+- A handler implements either `handle_event/2` or `handle_event/3`. When both
+  are defined, `handle_event/3` is used.
+- Metadata is stored in the job args, so it must be JSON-serializable and stays
+  small. Use it for tracing (actor, request id, correlation id), not for payload.
+- Jobs that were enqueued before metadata existed still run. Their event `id` is
+  `nil`, `meta` is empty and `emitted_at` falls back to the job's insert time.
+
 ## Handler Implementation
 
-Handlers must implement the `handle_event/2` callback:
+Handlers must implement the `handle_event/2` callback, or `handle_event/3` to
+also receive the [event metadata](#event-metadata):
 
 ```elixir
 defmodule MyApp.AnalyticsHandler do
@@ -359,33 +426,87 @@ After all old jobs have processed (check Oban Web UI), you can safely remove the
 
 ## Testing
 
-### Testing Event Emission
+`ObanEvents.Testing` provides helpers for both sides of the bus. Add them to
+your test case with the same options you would pass to `Oban.Testing`:
 
 ```elixir
-use Oban.Testing, repo: MyApp.Repo
+defmodule MyApp.AccountsTest do
+  use ExUnit.Case, async: true
+  use ObanEvents.Testing, repo: MyApp.Repo
+end
+```
 
+This also does `use Oban.Testing`, so `assert_enqueued/1`, `all_enqueued/1` and
+`perform_job/3` stay available for anything the event helpers don't cover.
+
+### Testing Event Emission
+
+`assert_event_emitted/2` and `refute_event_emitted/2` match on the fields you
+pass, and ignore the rest:
+
+```elixir
 test "emits user_created event" do
   {:ok, user} = Accounts.create_user(%{email: "test@example.com"})
 
-  assert_enqueued(
-    worker: ObanEvents.DispatchWorker,
-    args: %{
-      "event" => "user_created",
-      "handler" => "Elixir.MyApp.EmailHandler",
-      "data" => %{"user_id" => user.id}
-    }
+  assert_event_emitted(:user_created)
+
+  assert_event_emitted(:user_created,
+    handler: MyApp.EmailHandler,
+    data: %{user_id: user.id},
+    meta: %{actor_id: 7}
   )
+
+  refute_event_emitted(:user_deleted)
+end
+```
+
+Use `emitted_events/1` to assert on generated metadata, such as the id shared by
+all handler jobs of one emit:
+
+```elixir
+test "emits one event for both handlers" do
+  {:ok, _user} = Accounts.create_user(%{email: "test@example.com"})
+
+  assert [event_one, event_two] = emitted_events()
+
+  assert event_one.name == :user_created
+  assert event_one.id == event_two.id
 end
 ```
 
 ### Testing Handlers
 
+`perform_event/4` runs a handler through `ObanEvents.DispatchWorker`, the same
+way Oban does in production, including the metadata it receives:
+
 ```elixir
 test "EmailHandler sends welcome email" do
   data = %{"user_id" => 123, "email" => "test@example.com"}
 
-  assert :ok = MyApp.EmailHandler.handle_event(:user_created, data)
+  assert :ok = perform_event(MyApp.EmailHandler, :user_created, data)
   assert_email_sent(to: "test@example.com", subject: "Welcome!")
+end
+
+test "AuditHandler records the actor" do
+  assert :ok =
+           perform_event(MyApp.AuditHandler, :user_created, %{user_id: 123},
+             meta: %{actor_id: 7},
+             attempt: 2
+           )
+end
+```
+
+For handlers called directly, `build_event/3` builds the `ObanEvents.Event`
+struct that `handle_event/3` expects:
+
+```elixir
+test "AuditHandler records the event id" do
+  event = build_event(:user_created, %{user_id: 123}, meta: %{actor_id: 7})
+
+  assert :ok = MyApp.AuditHandler.handle_event(event.name, event.data, event)
+
+  assert [audit] = MyApp.Audit.all()
+  assert audit.event_id == event.id
 end
 ```
 
@@ -429,12 +550,13 @@ end
 
 ### Logging
 
-ObanEvents logs all event processing:
+ObanEvents logs all event processing. Log lines carry the event id and the Oban
+job id, so a single emit can be traced across its handlers:
 
 ```
-[info] Processing event: user_created with handler: MyApp.EmailHandler
-[info] Event processed successfully: user_created by MyApp.EmailHandler
-[error] Event handler failed: user_created by MyApp.EmailHandler, error: :network_timeout
+[info] Processing event: user_created with handler: MyApp.EmailHandler (event_id=fdc1..., job_id=42, attempt=1)
+[info] Event processed successfully: user_created by MyApp.EmailHandler (event_id=fdc1..., job_id=42, attempt=1)
+[error] Event handler failed: user_created by MyApp.EmailHandler, error: :network_timeout (event_id=fdc1..., job_id=43, attempt=1)
 ```
 
 ## Troubleshooting
@@ -459,6 +581,13 @@ SELECT * FROM oban_jobs
 WHERE queue = 'events'
 ORDER BY inserted_at DESC
 LIMIT 10;
+```
+
+**Find every handler job of a single event:**
+
+```sql
+SELECT args->>'handler', state, errors FROM oban_jobs
+WHERE args->>'event_id' = 'fdc1c0ba-8e2d-4b2c-9a02-2b0b3a2f4c1e';
 ```
 
 ### Events Not Emitted
@@ -504,6 +633,7 @@ iex> Oban.retry_job(job)
 
 See the [test suite](test/) for complete examples of:
 - Event emission
+- Event metadata
 - Handler implementation
 - Transaction behavior
 - Testing patterns
