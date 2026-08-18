@@ -370,7 +370,6 @@ defmodule Pet do
     adapter_opts: [
       custom_fields: [
         human_age: [
-          filter: {CustomFields, :human_age_filter, []},
           field_dynamic: {CustomFields, :human_age, []},
           ecto_type: :integer
         ]
@@ -391,30 +390,9 @@ end
 defmodule CustomFields do
   import Ecto.Query
 
-  # for ordering
+  # used for both ordering and filtering
   def human_age(_opts) do
     dynamic([p], fragment("? * 7", p.age))
-  end
-
-  # for filtering
-  def human_age_filter(q, %Flop.Filter{value: value, op: op}, _) do
-    case Ecto.Type.cast(:integer, value) do
-      {:ok, human_years} ->
-        value_in_dog_years = round(human_years / 7)
-
-        case op do
-          :== -> where(q, [p], p.age == ^value_in_dog_years)
-          :!= -> where(q, [p], p.age != ^value_in_dog_years)
-          :> -> where(q, [p], p.age > ^value_in_dog_years)
-          :< -> where(q, [p], p.age < ^value_in_dog_years)
-          :>= -> where(q, [p], p.age >= ^value_in_dog_years)
-          :<= -> where(q, [p], p.age <= ^value_in_dog_years)
-        end
-
-      :error ->
-        # cannot cast filter value, ignore
-        q
-    end
   end
 end
 ```

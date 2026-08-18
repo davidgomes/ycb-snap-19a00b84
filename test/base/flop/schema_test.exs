@@ -413,7 +413,7 @@ defmodule Flop.SchemaTest do
     assert error.message =~ ":inserted_at"
   end
 
-  test "raises error if a filterable custom field has no filter" do
+  test "raises error if a filterable custom field has neither filter nor field_dynamic" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Sage do
@@ -423,7 +423,6 @@ defmodule Flop.SchemaTest do
             sortable: [],
             custom_fields: [
               inserted_at: [
-                field_dynamic: {__MODULE__, :some_function, []},
                 ecto_type: :utc_datetime
               ]
             ]
@@ -433,7 +432,7 @@ defmodule Flop.SchemaTest do
       end
 
     assert error.message =~
-             "custom field without filter function marked as filterable"
+             "custom field without filter or field_dynamic function marked as filterable"
 
     assert error.message =~ ":inserted_at"
   end
@@ -442,7 +441,7 @@ defmodule Flop.SchemaTest do
     defmodule Thyme do
       @derive {
         Flop.Schema,
-        filterable: [:filtered],
+        filterable: [:filtered, :sorted],
         sortable: [:sorted],
         custom_fields: [
           filtered: [
