@@ -141,10 +141,13 @@ defmodule Mix.Tasks.Compile.Surface do
 
   """
 
-  use Mix.Task
+  use Mix.Task.Compiler
   @recursive true
 
   alias Mix.Task.Compiler.Diagnostic
+
+  @manifest "compile.surface"
+  @manifest_vsn 1
 
   @switches [
     return_errors: :boolean,
@@ -161,6 +164,7 @@ defmodule Mix.Tasks.Compile.Surface do
   ]
 
   @doc false
+  @impl true
   def run(args) do
     # Do nothing if it's a dependency. We only have to run it once for the main project
     if "--from-mix-deps-compile" in args do
@@ -168,17 +172,97 @@ defmodule Mix.Tasks.Compile.Surface do
     else
       {compile_opts, _argv, _err} = OptionParser.parse(args, switches: @switches)
       opts = Application.get_env(:surface, :compiler, [])
-      asset_opts = Keyword.take(opts, @assets_opts)
-      asset_components = Surface.components()
-      project_components = Surface.components(only_current_project: true)
 
-      [
-        Mix.Tasks.Compile.Surface.ValidateComponents.validate(project_components),
-        Mix.Tasks.Compile.Surface.AssetGenerator.run(asset_components, asset_opts)
-      ]
-      |> List.flatten()
-      |> handle_diagnostics(compile_opts)
+      diagnostics =
+        case read_manifest(opts, "--force" in args) do
+          {:ok, diagnostics} ->
+            diagnostics
+
+          :stale ->
+            diagnostics = compile(opts)
+            write_manifest(opts, diagnostics)
+            diagnostics
+        end
+
+      handle_diagnostics(diagnostics, compile_opts)
     end
+  end
+
+  @impl true
+  def manifests, do: [manifest()]
+
+  @impl true
+  def diagnostics do
+    case read_manifest(Application.get_env(:surface, :compiler, []), false) do
+      {:ok, diagnostics} -> diagnostics
+      :stale -> []
+    end
+  end
+
+  @impl true
+  def clean do
+    File.rm(manifest())
+    :ok
+  end
+
+  defp compile(opts) do
+    asset_opts = Keyword.take(opts, @assets_opts)
+    asset_components = Surface.components()
+    project_components = Surface.components(only_current_project: true)
+
+    [
+      Mix.Tasks.Compile.Surface.ValidateComponents.validate(project_components),
+      Mix.Tasks.Compile.Surface.AssetGenerator.run(asset_components, asset_opts)
+    ]
+    |> List.flatten()
+  end
+
+  defp manifest do
+    Path.join(Mix.Project.manifest_path(), @manifest)
+  end
+
+  defp read_manifest(_opts, true = _force?) do
+    :stale
+  end
+
+  defp read_manifest(opts, _force?) do
+    manifest = manifest()
+
+    with false <- stale?(manifest),
+         {:ok, binary} <- File.read(manifest),
+         {@manifest_vsn, ^opts, diagnostics} <- safe_binary_to_term(binary) do
+      {:ok, diagnostics}
+    else
+      _ -> :stale
+    end
+  end
+
+  defp write_manifest(opts, diagnostics) do
+    manifest = manifest()
+    manifest |> Path.dirname() |> File.mkdir_p!()
+    File.write!(manifest, :erlang.term_to_binary({@manifest_vsn, opts, diagnostics}))
+  end
+
+  # The compiler only depends on modules already compiled by the Elixir compiler, so there's
+  # nothing to do as long as neither those modules nor the project's config have changed.
+  defp stale?(manifest) do
+    manifest_mtime = Mix.Utils.last_modified(manifest)
+
+    manifest_mtime == 0 or Mix.Project.config_mtime() > manifest_mtime or
+      Enum.any?(elixir_manifests(), &(Mix.Utils.last_modified(&1) > manifest_mtime))
+  end
+
+  # The manifests of every app in the build path, i.e. the project itself plus its deps
+  defp elixir_manifests do
+    Mix.Project.build_path()
+    |> Path.join("lib/*/.mix/compile.elixir")
+    |> Path.wildcard(match_dot: true)
+  end
+
+  defp safe_binary_to_term(binary) do
+    :erlang.binary_to_term(binary)
+  rescue
+    ArgumentError -> nil
   end
 
   @doc false

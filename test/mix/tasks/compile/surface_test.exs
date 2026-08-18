@@ -15,13 +15,17 @@ defmodule Mix.Tasks.Compile.SurfaceTest do
   @css_rel_output_file "tmp/_components.css"
   @css_output_file Path.join(File.cwd!(), @css_rel_output_file)
 
+  @manifest Path.join(Mix.Project.manifest_path(), "compile.surface")
+
+  @compiler_conf [
+    hooks_output_dir: @hooks_rel_output_dir,
+    css_output_file: @css_rel_output_file
+  ]
+
   setup_all do
     conf_before = Application.get_env(:surface, :compiler, [])
 
-    Application.put_env(:surface, :compiler,
-      hooks_output_dir: @hooks_rel_output_dir,
-      css_output_file: @css_rel_output_file
-    )
+    Application.put_env(:surface, :compiler, @compiler_conf)
 
     on_exit(fn ->
       Application.put_env(:surface, :compiler, conf_before)
@@ -39,9 +43,12 @@ defmodule Mix.Tasks.Compile.SurfaceTest do
       File.rm_rf!(@css_output_file)
     end
 
+    File.rm(@manifest)
+
     on_exit(fn ->
       File.rm_rf!(@hooks_output_dir)
       File.rm_rf!(@css_output_file)
+      File.rm(@manifest)
     end)
 
     :ok
@@ -63,6 +70,34 @@ defmodule Mix.Tasks.Compile.SurfaceTest do
 
            export default {}
            """
+  end
+
+  test "don't generate assets again if nothing has changed since the last run" do
+    run(["--return-errors"])
+    assert File.exists?(@hooks_index_file)
+
+    File.rm_rf!(@hooks_output_dir)
+    run(["--return-errors"])
+    refute File.exists?(@hooks_index_file)
+  end
+
+  test "generate assets again if the compiler options have changed" do
+    run(["--return-errors"])
+    File.rm_rf!(@hooks_output_dir)
+
+    Application.put_env(:surface, :compiler, [{:enable_variants, false} | @compiler_conf])
+    on_exit(fn -> Application.put_env(:surface, :compiler, @compiler_conf) end)
+
+    run(["--return-errors"])
+    assert File.exists?(@hooks_index_file)
+  end
+
+  test "generate assets again when running with `--force`" do
+    run(["--return-errors"])
+    File.rm_rf!(@hooks_output_dir)
+
+    run(["--force", "--return-errors"])
+    assert File.exists?(@hooks_index_file)
   end
 
   test "prints and returns `{:ok, diagnostics}` on warning without `return_errors` and `warnings_as_errors`" do
