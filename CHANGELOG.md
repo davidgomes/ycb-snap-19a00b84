@@ -3,6 +3,13 @@
 
 #### Fixed
 
+- **`data_table`'s column-visibility and filter menus stay in the page
+  instead of chasing the viewport.** They used the popover's
+  `top_layer` mode, which repositions on every scroll/resize via
+  JavaScript - unnecessary for menus that already have room to render
+  inline, and a source of jitter. They now use the default anchored,
+  CSS-positioned popover mode.
+
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to

@@ -331,7 +331,6 @@ defmodule PetalComponents.DataTable do
           <.popover
             :if={@column_toggle}
             id={"#{@id}-columns"}
-            top_layer
             placement="bottom-end"
             class="pc-data-table__columns"
             trigger_class="pc-button pc-button--sm pc-button--gray-outline"
@@ -733,7 +732,6 @@ defmodule PetalComponents.DataTable do
     <div class="pc-data-table__filter">
       <.popover
         id={@pop_id}
-        top_layer
         placement="bottom-start"
         class="pc-data-table__filter-popover"
         trigger_class={[
