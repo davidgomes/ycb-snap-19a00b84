@@ -81,4 +81,34 @@ defmodule ObanChore.IntegrationTest do
     assert active_job.id == job.id
     assert active_job.state == :scheduled
   end
+
+  test "list_history/3 returns finished jobs newest first", %{oban_name: oban_name} do
+    {:ok, active} = Oban.insert(oban_name, IntegrationTestChore.new(%{user_id: 1}))
+    {:ok, completed} = Oban.insert(oban_name, IntegrationTestChore.new(%{user_id: 2}))
+    {:ok, discarded} = Oban.insert(oban_name, IntegrationTestChore.new(%{user_id: 3}))
+
+    transition!(completed, state: "completed", completed_at: DateTime.utc_now())
+    transition!(discarded, state: "discarded", discarded_at: DateTime.utc_now())
+
+    history = ObanChore.list_history(IntegrationTestChore, oban_name)
+
+    assert Enum.map(history, & &1.id) == [discarded.id, completed.id]
+    assert Enum.map(history, & &1.state) == [:discarded, :completed]
+    refute active.id in Enum.map(history, & &1.id)
+  end
+
+  test "list_history/3 caps the amount of returned jobs", %{oban_name: oban_name} do
+    for user_id <- 1..3 do
+      {:ok, job} = Oban.insert(oban_name, IntegrationTestChore.new(%{user_id: user_id}))
+      transition!(job, state: "completed", completed_at: DateTime.utc_now())
+    end
+
+    assert length(ObanChore.list_history(IntegrationTestChore, oban_name, 2)) == 2
+  end
+
+  defp transition!(job, changes) do
+    job
+    |> Ecto.Changeset.change(changes)
+    |> TestRepo.update!()
+  end
 end

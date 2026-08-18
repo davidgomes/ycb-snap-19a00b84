@@ -78,4 +78,20 @@ defmodule ObanChore.QueriesTest do
     assert query_str =~ "j0.state in [\"available\", \"scheduled\", \"executing\"]"
     assert query_str =~ "j0.worker == ^\"SomeWorker\""
   end
+
+  test "list_history/3 generates the correct Ecto query", %{oban_name: oban_name} do
+    ObanChore.list_history(SomeWorker, oban_name, 5)
+
+    assert_receive {:repo_all, query}
+    assert query.from.source == {"oban_jobs", Oban.Job}
+
+    query_str = inspect(query)
+
+    assert query_str =~
+             "j0.state in [\"completed\", \"discarded\", \"cancelled\", \"retryable\"]"
+
+    assert query_str =~ "j0.worker == ^\"SomeWorker\""
+    assert query_str =~ "order_by: [desc: j0.id]"
+    assert query_str =~ "limit: ^5"
+  end
 end
