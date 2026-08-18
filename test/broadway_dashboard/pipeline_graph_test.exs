@@ -102,18 +102,20 @@ defmodule BroadwayDashboard.PipelineGraphTest do
                ]
              ] = PipelineGraph.build_layers(topology_workload)
 
-      assert prod_id == :"#{broadway}.Broadway.Producer_0"
+      broadway_str = inspect(broadway)
 
-      assert proc_0 == :"#{broadway}.Broadway.Processor_default_0"
-      assert proc_1 == :"#{broadway}.Broadway.Processor_default_1"
-      assert proc_2 == :"#{broadway}.Broadway.Processor_default_2"
+      assert prod_id == "#{broadway_str}.Broadway.Producer_0"
 
-      assert default_batcher == :"#{broadway}.Broadway.Batcher_default"
+      assert proc_0 == "#{broadway_str}.Broadway.Processor_default_0"
+      assert proc_1 == "#{broadway_str}.Broadway.Processor_default_1"
+      assert proc_2 == "#{broadway_str}.Broadway.Processor_default_2"
 
-      assert batch_proc_0 == :"#{broadway}.Broadway.BatchProcessor_default_0"
-      assert batch_proc_1 == :"#{broadway}.Broadway.BatchProcessor_default_1"
+      assert default_batcher == "#{broadway_str}.Broadway.Batcher_default"
 
-      assert batch_proc_s3 == :"#{broadway}.Broadway.BatchProcessor_s3_0"
+      assert batch_proc_0 == "#{broadway_str}.Broadway.BatchProcessor_default_0"
+      assert batch_proc_1 == "#{broadway_str}.Broadway.BatchProcessor_default_1"
+
+      assert batch_proc_s3 == "#{broadway_str}.Broadway.BatchProcessor_s3_0"
     end
   end
 end
