@@ -53,7 +53,6 @@ defmodule PlugRailsCookieSessionStore.MessageEncryptor do
   end
 
   defp encrypt(message, cipher, secret, iv) do
-    :code.ensure_loaded(:crypto)
     secret = trim_secret(secret)
     if function_exported?(:crypto, :crypto_one_time, 5) do
       :crypto.crypto_one_time(cipher(cipher), secret, iv, message, true)
@@ -63,7 +62,6 @@ defmodule PlugRailsCookieSessionStore.MessageEncryptor do
   end
 
   defp decrypt(encrypted, cipher, secret, iv) do
-    :code.ensure_loaded(:crypto)
     secret = trim_secret(secret)
     if function_exported?(:crypto, :crypto_one_time, 5) do
       :crypto.crypto_one_time(cipher(cipher), secret, iv, encrypted, false)
