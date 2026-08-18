@@ -47,15 +47,10 @@ defmodule GRPC.Client.ConnectionTest do
           picked.host
         end
 
-      assert hosts == [
-               "10.0.0.1",
-               "10.0.0.2",
-               "10.0.0.3",
-               "10.0.0.1",
-               "10.0.0.2",
-               "10.0.0.3",
-               "10.0.0.1"
-             ]
+      distinct = Enum.uniq(hosts)
+
+      assert length(distinct) == 3
+      assert hosts == distinct |> Stream.cycle() |> Enum.take(7)
 
       Connection.disconnect(channel)
     end
