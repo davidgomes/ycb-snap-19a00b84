@@ -76,7 +76,8 @@ A list of file path patterns to exclude from analysis. Any file whose path conta
     # Config checks
     insert_trigger_enabled: [enabled: true],
     missing_pruner: [enabled: true],
-    no_reindexer: [enabled: true, severity: :info]
+    no_reindexer: [enabled: true, severity: :info],
+    smart_engine_not_configured: [enabled: true]
   ],
 
   excluded_workers: [
@@ -108,6 +109,7 @@ A list of file path patterns to exclude from analysis. Any file whose path conta
 | `insert_trigger_enabled` | `:warning` | Oban instances without `insert_trigger: false` |
 | `missing_pruner` | `:warning` | Oban instances without a pruner plugin |
 | `no_reindexer` | `:warning` | Oban instances without the Reindexer plugin |
+| `smart_engine_not_configured` | `:info` | Oban Pro instances not using Smart Engine |
 
 ## Severity Levels
 
