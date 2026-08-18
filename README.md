@@ -7,6 +7,21 @@ To start your Phoenix server:
 
 Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
 
+## Python Oban worker
+
+Badge generation jobs are enqueued from Elixir and processed by a Python
+worker that shares the same `oban_jobs` table via
+[Oban for Python](https://pypi.org/project/oban/).
+
+From IEx:
+
+    iex> BadgeForge.enqueue_batch(100)
+
+Then run the Python worker from `python/`:
+
+    uv sync
+    uv run oban start --config oban.toml
+
 Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
 
 ## Learn more
