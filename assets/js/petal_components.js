@@ -1774,8 +1774,10 @@ export const PetalDropdown = {
     if (!height || (!t.top && !t.bottom)) return; // jsdom / unrendered
 
     const vp = this.viewport();
-    // the panel's own margin off the trigger (mt-2, mb-2 flipped)
+    // the panel's own margin off the trigger (mt-2, mb-2 flipped), and the
+    // breathing room a capped panel keeps at the edge of the screen
     const gap = 8;
+    const pad = 8;
     const below = vp.top + vp.height - t.bottom - gap;
     const above = t.top - vp.top - gap;
     const flip = height > below && above > below;
@@ -1784,9 +1786,10 @@ export const PetalDropdown = {
 
     const room = flip ? above : below;
     if (height > room) {
-      // no floor: in a viewport too cramped for even one item, a sliver
-      // of scrollable menu still beats items rendered off-screen
-      this.el.style.maxHeight = `${Math.max(Math.round(room), 0)}px`;
+      // The pad comes off a menu that is already scrolling, never off one
+      // that fits - a floor over the actual room would push items back out
+      // of the viewport, which is the thing this cap exists to prevent.
+      this.el.style.maxHeight = `${Math.max(Math.round(room - pad), 0)}px`;
       this.el.style.overflowY = "auto";
     }
   },

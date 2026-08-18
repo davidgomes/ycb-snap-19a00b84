@@ -148,8 +148,8 @@ describe("PetalDropdown", () => {
     await show(d.el);
 
     expect(flipped(d.el)).toBe(false);
-    // 300 - 100 - 8 of room, so the menu scrolls within it
-    expect(d.el.style.maxHeight).toBe("192px");
+    // 192px of room below, less the 8px it keeps off the viewport edge
+    expect(d.el.style.maxHeight).toBe("184px");
     expect(d.el.style.overflowY).toBe("auto");
   });
 
@@ -161,7 +161,7 @@ describe("PetalDropdown", () => {
     await show(d.el);
 
     expect(flipped(d.el)).toBe(true);
-    expect(d.el.style.maxHeight).toBe("192px");
+    expect(d.el.style.maxHeight).toBe("184px");
     expect(d.el.style.overflowY).toBe("auto");
   });
 
