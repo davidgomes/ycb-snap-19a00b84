@@ -20,6 +20,7 @@ defmodule Mix.Tasks.ObanDoctor.CheckConfig do
     * **InsertTriggerEnabled** - Detects instances without insert_trigger disabled
     * **MissingPruner** - Detects instances without a pruner plugin
     * **NoReindexer** - Detects instances without the Reindexer plugin
+    * **SmartEngineNotConfigured** - Detects when Oban Pro is installed but SmartEngine is not configured
 
   ## Configuration
 
@@ -35,12 +36,14 @@ defmodule Mix.Tasks.ObanDoctor.CheckConfig do
   alias ObanDoctor.Check.Config.InsertTriggerEnabled
   alias ObanDoctor.Check.Config.MissingPruner
   alias ObanDoctor.Check.Config.NoReindexer
+  alias ObanDoctor.Check.Config.SmartEngineNotConfigured
   alias ObanDoctor.CLI.Output
 
   @config_checks [
     InsertTriggerEnabled,
     MissingPruner,
-    NoReindexer
+    NoReindexer,
+    SmartEngineNotConfigured
   ]
 
   @impl Mix.Task
