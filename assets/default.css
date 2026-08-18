@@ -1973,6 +1973,20 @@
   .pc-dropdown__menu-items-wrapper-placement--right {
     @apply left-0 origin-top-left;
   }
+  /* Flipped above the trigger: the PetalDropdown hook stamps this when the
+     viewport leaves no room below (and more above), then clears it on
+     close. The scale transition has to grow from the edge nearest the
+     trigger, so the origin turns over with the panel. Attribute + class
+     outranks the placement rules whatever their source order. */
+  .pc-dropdown__menu-items-wrapper[data-pc-flip="top"] {
+    @apply top-auto bottom-full mt-0 mb-2;
+  }
+  .pc-dropdown__menu-items-wrapper-placement--left[data-pc-flip="top"] {
+    @apply origin-bottom-right;
+  }
+  .pc-dropdown__menu-items-wrapper-placement--right[data-pc-flip="top"] {
+    @apply origin-bottom-left;
+  }
   /* The one trigger chevron for the dropdown family - user menu,
      language select and friends share this so the colour can't drift. */
   /* THE decorative-chevron rule for the dropdown family (dropdown,

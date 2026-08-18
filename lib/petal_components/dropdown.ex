@@ -49,6 +49,13 @@ defmodule PetalComponents.Dropdown do
       <.dropdown_menu_item link_type="live_patch" to="/" label="Live Patch item" />
       <.dropdown_menu_item link_type="live_redirect" to="/" label="Live Redirect item" />
     </.dropdown>
+
+  The menu drops below the trigger, and flips above it when the viewport
+  leaves no room below - the row-actions menu in a table's last row, a user
+  menu in a bottom bar. When neither side fits the whole menu, the roomier
+  one caps it and the items scroll. That measurement belongs to the
+  `PetalDropdown` hook, so it needs the petal_components hooks registered;
+  without them the menu still opens, always downward.
   """
   def dropdown(assigns) do
     assigns =
@@ -70,6 +77,7 @@ defmodule PetalComponents.Dropdown do
           ]}
           {js_attributes("button", @options_container_id)}
           aria-haspopup="true"
+          data-pc-dropdown-trigger
         >
           <span class="sr-only">Open options</span>
 
@@ -96,6 +104,7 @@ defmodule PetalComponents.Dropdown do
         ]}
         role="menu"
         id={@options_container_id}
+        phx-hook="PetalDropdown"
         aria-orientation="vertical"
         aria-labelledby="options-menu"
       >

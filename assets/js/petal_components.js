@@ -1662,6 +1662,136 @@ export const PetalPopover = {
   },
 };
 
+// Keeps a dropdown menu inside the viewport: flips it above its trigger
+// when there is no room below, and caps it to the room it has when
+// neither side fits. The panel is page-anchored by CSS (absolute under
+// the trigger), so this only ever stamps the flip and the cap - never
+// coordinates.
+//
+// Open/close is LiveView.JS's, which writes the panel's inline display,
+// so the flip hangs off a style observer rather than a click handler:
+// the trigger, click-away, Escape and a consumer's own JS.toggle all
+// drain through that one write. The observer runs as a microtask, before
+// the browser paints the shown panel, so nothing flashes downward first.
+export const PetalDropdown = {
+  mounted() {
+    this.open = false;
+    this.frame = null;
+
+    // Scroll fires far faster than the screen refreshes and each pass
+    // reads layout, so coalesce a burst into one measurement per frame.
+    this.reposition = () => {
+      if (this.frame) return;
+      this.frame = requestAnimationFrame(() => {
+        this.frame = null;
+        this.position();
+      });
+    };
+
+    this.observer = new MutationObserver(() => this.sync());
+    this.observer.observe(this.el, { attributeFilter: ["style"] });
+    this.sync();
+  },
+
+  // A patch re-renders the panel with the server's `display: none`, which
+  // closes it - pick that up rather than holding a stale open state (and
+  // with it listeners on a hidden panel).
+  updated() {
+    this.sync();
+  },
+
+  destroyed() {
+    if (this.frame) cancelAnimationFrame(this.frame);
+    this.observer.disconnect();
+    this.listen("removeEventListener");
+  },
+
+  // Only state CHANGES do work here: position() writes styles of its own,
+  // which re-enters this callback, and re-measuring on that would spin.
+  sync() {
+    const open = this.el.style.display !== "none";
+    if (open === this.open) return;
+    this.open = open;
+
+    if (open) {
+      this.listen("addEventListener");
+      this.position();
+    } else {
+      this.listen("removeEventListener");
+      this.reset();
+    }
+  },
+
+  listen(method) {
+    // capture: a dropdown inside a scrollable panel moves with that
+    // element's scroll, which does not bubble
+    window[method]("scroll", this.reposition, true);
+    window[method]("resize", this.reposition);
+    if (window.visualViewport) {
+      window.visualViewport[method]("resize", this.reposition);
+      window.visualViewport[method]("scroll", this.reposition);
+    }
+  },
+
+  // The trigger is the dropdown's own button, not a nested menu item's:
+  // it precedes the panel in the wrapper, so the first match wins even
+  // when this menu holds another dropdown.
+  trigger() {
+    return this.el.parentElement?.querySelector("[data-pc-dropdown-trigger]");
+  },
+
+  reset() {
+    this.el.removeAttribute("data-pc-flip");
+    this.el.style.maxHeight = "";
+    this.el.style.overflowY = "";
+  },
+
+  // The visible box in client coordinates: the shrunken region when a
+  // mobile keyboard or pinch-zoom owns part of the screen, else the
+  // window.
+  viewport() {
+    const vv = window.visualViewport;
+
+    return vv
+      ? { top: vv.offsetTop, height: vv.height }
+      : { top: 0, height: window.innerHeight };
+  },
+
+  // Measured with the flip and the cap cleared, so the panel's natural
+  // height decides - a capped panel always "fits" and would never flip
+  // back down once it had flipped up.
+  position() {
+    if (!this.open) return;
+    const trigger = this.trigger();
+    if (!trigger) return;
+
+    this.reset();
+
+    const t = trigger.getBoundingClientRect();
+    // offsetHeight, not the rect: the open transition scales the panel to
+    // 95%, and a scaled rect would under-measure the room it needs
+    const height = this.el.offsetHeight;
+    if (!height || (!t.top && !t.bottom)) return; // jsdom / unrendered
+
+    const vp = this.viewport();
+    // the panel's own margin off the trigger (mt-2, mb-2 flipped)
+    const gap = 8;
+    const below = vp.top + vp.height - t.bottom - gap;
+    const above = t.top - vp.top - gap;
+    const flip = height > below && above > below;
+
+    if (flip) this.el.setAttribute("data-pc-flip", "top");
+
+    const room = flip ? above : below;
+    if (height > room) {
+      // no floor: in a viewport too cramped for even one item, a sliver
+      // of scrollable menu still beats items rendered off-screen
+      this.el.style.maxHeight = `${Math.max(Math.round(room), 0)}px`;
+      this.el.style.overflowY = "auto";
+    }
+  },
+};
+
 // Command palette: client-side filtering + WAI-ARIA combobox keyboard model.
 // Items are hidden, never reordered - the server owns DOM order, so the
 // palette stays safe under LiveView patches. Scoring: value prefix beats
@@ -5467,6 +5597,7 @@ export default {
   PetalTypingEffect,
   PetalInputOTP,
   PetalPopover,
+  PetalDropdown,
   PetalCommand,
   PetalCommandTrigger,
   PetalAurora,

@@ -87,6 +87,20 @@ defmodule PetalComponents.DropdownTest do
       refute html =~ "x-show"
       assert_attribute(html, "phx-click")
     end
+
+    test "wires the menu and its trigger up for the viewport flip", %{assigns: assigns} do
+      html =
+        rendered_to_string(~H"""
+        <.dropdown label="Dropdown">
+          <.dropdown_menu_item label="Option" />
+        </.dropdown>
+        """)
+
+      # the hook measures the room under the trigger and flips the menu up
+      # when there is none - it finds the trigger by the data attribute
+      assert_attribute(html, "phx-hook", "PetalDropdown")
+      assert_attribute(html, "data-pc-dropdown-trigger")
+    end
   end
 
   describe "dropdown/1 - placement options" do
