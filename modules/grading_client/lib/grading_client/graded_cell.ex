@@ -29,13 +29,16 @@ defmodule GradingClient.GradedCell do
         source_attr = attrs["source"]
         source = Code.string_to_quoted!(source_attr)
 
+        header =
+          source_attr
+          |> String.split("\n", parts: 2)
+          |> hd()
+
         quote do
           result = unquote(source)
 
           [module_id, question_id] =
-            unquote(source_attr)
-            |> String.split("\n", parts: 2)
-            |> hd()
+            unquote(header)
             |> String.trim_leading("#")
             |> String.split(":", parts: 2)
 
