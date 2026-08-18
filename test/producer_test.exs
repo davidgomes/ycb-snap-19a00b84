@@ -241,6 +241,44 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
+  test "start all child process returned by config" do
+    {:ok, message_server} = MessageServer.start_link()
+
+    parent_pid = self()
+
+    child_specs = [
+      Supervisor.child_spec(
+        {Task, fn -> send(parent_pid, :child_started_1) end},
+        id: :child_started_1
+      ),
+      Supervisor.child_spec(
+        {Task, fn -> send(parent_pid, :child_started_2) end},
+        id: :child_started_2
+      )
+    ]
+
+    {:ok, pid} = start_broadway(message_server, shared_client: true, child_specs: child_specs)
+
+    assert_receive :child_started_1
+    assert_receive :child_started_2
+
+    stop_broadway(pid)
+  end
+
+  test "should not disconnect client if shared_client true" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, shared_client: false)
+    stop_broadway(pid)
+
+    assert_receive :disconnected
+
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, shared_client: true)
+    stop_broadway(pid)
+
+    refute_receive :disconnected
+  end
+
   test "single producer receiving messages from multiple topic/partitions" do
     {:ok, message_server} = MessageServer.start_link()
     {:ok, pid} = start_broadway(message_server)
