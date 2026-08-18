@@ -4602,16 +4602,20 @@ export const PetalComboBox = {
 };
 
 // Link-mode wiring for the data table's quick search and rows-per-page
-// select. Event mode posts through plain phx-change forms and never
-// mounts this hook; link mode has no events by design (handle_params is
-// the whole backend), so state changes must become patch URLs. The
-// component renders URL templates (:term / :page_size placeholders,
-// assembled around the already-encoded rest of the query) and a hidden
-// data-phx-link anchor; the hook fills a template in and clicks the
-// anchor so navigation stays LiveView's own.
+// select, plus DOM-only bits neither wiring mode can express in markup.
+// Event mode posts through plain phx-change forms and never mounts this
+// hook for search/paging; link mode has no events by design
+// (handle_params is the whole backend), so state changes must become
+// patch URLs. The component renders URL templates (:term / :page_size
+// placeholders, assembled around the already-encoded rest of the query)
+// and a hidden data-phx-link anchor; the hook fills a template in and
+// clicks the anchor so navigation stays LiveView's own. Row selection
+// mounts the hook in both modes, since the header checkbox's
+// indeterminate state is a DOM property no markup can set.
 export const PetalDataTable = {
   mounted() {
     this.searchTimer = null;
+    this.syncSelectAll();
 
     this.onInput = (e) => {
       if (!e.target.closest("[data-pc-dt-search]")) return;
@@ -4661,11 +4665,23 @@ export const PetalDataTable = {
     this.el.addEventListener("submit", this.onSubmit);
   },
 
+  // every LiveView patch re-renders the checkbox from scratch, and
+  // `indeterminate` is a DOM property with no HTML attribute - so it has
+  // to be re-applied after every update, not just at mount
+  updated() {
+    this.syncSelectAll();
+  },
+
   destroyed() {
     clearTimeout(this.searchTimer);
     this.el.removeEventListener("input", this.onInput);
     this.el.removeEventListener("change", this.onChange);
     this.el.removeEventListener("submit", this.onSubmit);
+  },
+
+  syncSelectAll() {
+    const box = this.el.querySelector("[data-pc-dt-select-all]");
+    if (box) box.indeterminate = box.dataset.indeterminate === "true";
   },
 
   committedFilters() {
