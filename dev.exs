@@ -1466,7 +1466,10 @@ defmodule Dev.PlaygroundLive do
   # actually delete out of it
   def handle_event("pg_select_delete", _params, socket) do
     {state, _rows} = socket.assigns.dt
-    all = Enum.reject(socket.assigns.dt_all, &(&1.id in socket.assigns.dt_selected))
+    selected = socket.assigns.dt_selected
+    all = Enum.reject(socket.assigns.dt_all, &(&1.id in selected))
+    # a shorter list can leave the current page past the end
+    state = %{state | page: 1}
 
     {:noreply,
      socket
