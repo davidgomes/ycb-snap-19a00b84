@@ -374,4 +374,96 @@ defmodule PetalComponents.DataTableTest do
       """)
     end
   end
+
+  test "row selection renders checkboxes, tri-state header, and morphing toolbar" do
+    assigns =
+      base(%{
+        rows: [
+          %{id: "1", name: "Amy"},
+          %{id: "2", name: "Bea"},
+          %{id: "3", name: "Dan"}
+        ],
+        selected: ["1"]
+      })
+
+    # partial selection (indeterminate)
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        path={@path}
+        selectable
+        selected={@selected}
+        on_select="select_row"
+      >
+        <:toolbar>
+          <button type="button">Custom Action</button>
+        </:toolbar>
+        <:selected_actions :let={selected}>
+          <button type="button">Delete ({length(selected)})</button>
+        </:selected_actions>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert html =~ "data-pc-dt-select-all"
+    assert html =~ ~s(data-indeterminate="true")
+    assert html =~ "data-pc-dt-select-row"
+    assert html =~ "1 selected"
+    assert html =~ "Delete (1)"
+    refute html =~ "Custom Action"
+
+    # all selected
+    assigns_all = Map.put(assigns, :selected, ["1", "2", "3"])
+
+    html_all =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        path={@path}
+        selectable
+        selected={@selected}
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """, assigns_all)
+
+    assert html_all =~ "data-pc-dt-select-all"
+    assert html_all =~ ~s(data-indeterminate="false")
+    assert html_all =~ ~s(checked)
+    assert html_all =~ "3 selected"
+
+    # none selected - toolbar renders normal content
+    assigns_none = Map.put(assigns, :selected, [])
+
+    html_none =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        path={@path}
+        selectable
+        selected={@selected}
+      >
+        <:toolbar>
+          <button type="button">Custom Action</button>
+        </:toolbar>
+        <:selected_actions :let={selected}>
+          <button type="button">Delete ({length(selected)})</button>
+        </:selected_actions>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """, assigns_none)
+
+    assert html_none =~ "data-pc-dt-select-all"
+    assert html_none =~ ~s(data-indeterminate="false")
+    assert html_none =~ "Custom Action"
+    refute html_none =~ "Delete"
+    refute html_none =~ "selected"
+  end
 end

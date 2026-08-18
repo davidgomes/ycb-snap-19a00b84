@@ -4613,6 +4613,8 @@ export const PetalDataTable = {
   mounted() {
     this.searchTimer = null;
 
+    this.syncIndeterminate();
+
     this.onInput = (e) => {
       if (!e.target.closest("[data-pc-dt-search]")) return;
       clearTimeout(this.searchTimer);
@@ -4621,6 +4623,14 @@ export const PetalDataTable = {
     };
 
     this.onChange = (e) => {
+      if (e.target.closest("[data-pc-dt-select-all]")) {
+        const checked = e.target.checked;
+        const rowCheckboxes = this.el.querySelectorAll("[data-pc-dt-select-row]");
+        rowCheckboxes.forEach((cb) => {
+          cb.checked = checked;
+        });
+      }
+
       if (!e.target.closest("[data-pc-dt-page-size]")) return;
       // the nav URL reads the live search input too, so the pending
       // debounced patch is redundant - and letting it fire later would
@@ -4659,6 +4669,16 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+  },
+
+  updated() {
+    this.syncIndeterminate();
+  },
+
+  syncIndeterminate() {
+    const selectAll = this.el.querySelector("[data-pc-dt-select-all]");
+    if (!selectAll) return;
+    selectAll.indeterminate = selectAll.dataset.indeterminate === "true";
   },
 
   destroyed() {

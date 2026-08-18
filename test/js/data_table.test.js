@@ -264,6 +264,55 @@ describe("PetalDataTable", () => {
     expect(wrap.style.display).toBe("none");
   });
 
+  it("syncs indeterminate state on header checkbox", () => {
+    const el = document.createElement("div");
+    el.id = "dt";
+    el.className = "pc-data-table";
+    el.innerHTML = `
+      <input type="checkbox" data-pc-dt-select-all data-indeterminate="true" />
+      <input type="checkbox" data-pc-dt-select-row value="1" checked />
+      <input type="checkbox" data-pc-dt-select-row value="2" />
+    `;
+    document.body.appendChild(el);
+
+    const hook = Object.create(hooks.PetalDataTable);
+    hook.el = el;
+    hook.mounted();
+    mounted.push(hook);
+
+    const selectAll = el.querySelector("[data-pc-dt-select-all]");
+    expect(selectAll.indeterminate).toBe(true);
+
+    selectAll.dataset.indeterminate = "false";
+    hook.updated();
+    expect(selectAll.indeterminate).toBe(false);
+  });
+
+  it("toggles all row checkboxes when select-all is clicked", () => {
+    const el = document.createElement("div");
+    el.id = "dt";
+    el.className = "pc-data-table";
+    el.innerHTML = `
+      <input type="checkbox" data-pc-dt-select-all />
+      <input type="checkbox" data-pc-dt-select-row value="1" />
+      <input type="checkbox" data-pc-dt-select-row value="2" />
+    `;
+    document.body.appendChild(el);
+
+    const hook = Object.create(hooks.PetalDataTable);
+    hook.el = el;
+    hook.mounted();
+    mounted.push(hook);
+
+    const selectAll = el.querySelector("[data-pc-dt-select-all]");
+    selectAll.checked = true;
+    selectAll.dispatchEvent(new Event("change", { bubbles: true }));
+
+    const rowCheckboxes = el.querySelectorAll("[data-pc-dt-select-row]");
+    expect(rowCheckboxes[0].checked).toBe(true);
+    expect(rowCheckboxes[1].checked).toBe(true);
+  });
+
   it("destroyed cancels a pending search patch", () => {
     const { hook, el, patched } = mount({
       navTemplate: "/orders?search=:term",

@@ -54,7 +54,7 @@ defmodule PetalComponents.Table do
     """
 
   slot :col do
-    attr :label, :string
+    attr :label, :any
     attr :class, :any
     attr :row_class, :any
     attr :sortable, :boolean, doc: "render the header as a sort button"
@@ -109,7 +109,14 @@ defmodule PetalComponents.Table do
                   <.sort_icon state={sort_state(col, @sort_by, @sort_dir)} />
                 </button>
               <% else %>
-                {col[:label]}
+                <%= cond do %>
+                  <% is_binary(col[:label]) -> %>
+                    {col[:label]}
+                  <% is_nil(col[:label]) -> %>
+                    <%= nil %>
+                  <% true -> %>
+                    {render_slot(col[:label])}
+                <% end %>
               <% end %>
             </.th>
           </.tr>

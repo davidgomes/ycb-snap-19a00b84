@@ -106,6 +106,26 @@ defmodule PetalComponents.DataTable do
     default: %{},
     doc: "overrides for the operator display names, e.g. %{contains: \"enthält\"}"
 
+  attr :selectable, :boolean,
+    default: false,
+    doc: "enable row selection with leading checkboxes and a tri-state header checkbox"
+
+  attr :selected, :list,
+    default: [],
+    doc: "list of currently selected row identifiers"
+
+  attr :row_id, :any,
+    default: nil,
+    doc: "function or key to extract unique identifier from each row (defaults to :id)"
+
+  attr :on_select, :any,
+    default: nil,
+    doc: "event or JS command fired when selection changes"
+
+  attr :selection_label, :string,
+    default: "selected",
+    doc: "label displayed after selected count in morphing toolbar, localizable"
+
   attr :class, :any, default: nil
 
   slot :col, required: true do
@@ -126,6 +146,7 @@ defmodule PetalComponents.DataTable do
 
   slot :action, doc: "trailing actions column, `:let` receives the row"
   slot :toolbar, doc: "custom toolbar content rendered above the table"
+  slot :selected_actions, doc: "actions rendered in the morphing toolbar when rows are selected, `:let` receives the selected list"
   slot :empty, doc: "custom empty state; a filters-aware default renders otherwise"
 
   def data_table(assigns) do
@@ -145,11 +166,51 @@ defmodule PetalComponents.DataTable do
 
     link_mode? = is_nil(assigns.on_change)
 
+    # Selection calculations
+    selectable? = assigns.selectable
+    selected_list = (assigns.selected || []) |> Enum.map(&to_string/1)
+    selected_count = length(selected_list)
+    has_selection? = selectable? and selected_count > 0
+
+    row_id_fn =
+      case assigns.row_id do
+        nil ->
+          fn row ->
+            to_string(Map.get(row, :id, Map.get(row, "id", "")))
+          end
+
+        fun when is_function(fun, 1) ->
+          fn row -> to_string(fun.(row)) end
+
+        key when is_atom(key) or is_binary(key) ->
+          fn row -> to_string(Map.get(row, key, "")) end
+      end
+
+    visible_row_ids =
+      if selectable? and not assigns.loading do
+        Enum.map(assigns.rows, row_id_fn)
+      else
+        []
+      end
+
+    visible_count = length(visible_row_ids)
+
+    selected_visible_count =
+      if visible_count > 0 do
+        Enum.count(visible_row_ids, fn id -> id in selected_list end)
+      else
+        0
+      end
+
+    all_selected? = visible_count > 0 and selected_visible_count == visible_count
+    indeterminate? = selected_visible_count > 0 and selected_visible_count < visible_count
+
     # link mode: URL wiring. Either mode: filter popovers are native
-    # top-layer popovers the hook closes after an Apply.
+    # top-layer popovers the hook closes after an Apply. Selection hook syncs indeterminate state.
     hooked? =
       (link_mode? and (assigns.searchable or assigns.page_size_options != [])) or
-        filter_cols != []
+        filter_cols != [] or
+        selectable?
 
     assigns =
       assigns
@@ -160,6 +221,13 @@ defmodule PetalComponents.DataTable do
       |> assign(:filter_cols, filter_cols)
       |> assign(:op_labels, Map.merge(default_op_labels(), assigns.filter_op_labels))
       |> assign(:hooked?, hooked?)
+      |> assign(:selectable?, selectable?)
+      |> assign(:selected_list, selected_list)
+      |> assign(:selected_count, selected_count)
+      |> assign(:has_selection?, has_selection?)
+      |> assign(:row_id_fn, row_id_fn)
+      |> assign(:all_selected?, all_selected?)
+      |> assign(:indeterminate?, indeterminate?)
       |> assign(
         :nav_template,
         link_mode? && hooked? && nav_template(assigns.path, assigns.state, assigns, filter_cols)
@@ -180,72 +248,81 @@ defmodule PetalComponents.DataTable do
     >
       <a :if={@hooked?} data-pc-dt-nav data-phx-link="patch" data-phx-link-state="push" hidden></a>
       <div
-        :if={@toolbar != [] or @searchable or @filter_cols != [] or @state.filters != []}
+        :if={@has_selection? or @toolbar != [] or @searchable or @filter_cols != [] or @state.filters != []}
         class="pc-data-table__toolbar"
       >
-        <div :if={@searchable} class="pc-data-table__search">
-          <.icon name="hero-magnifying-glass" class="pc-data-table__search-icon" />
-          <%= if @on_change do %>
-            <form phx-change={@on_change} phx-submit={@on_change} phx-target={@target}>
-              <input type="hidden" name="op" value="search" />
+        <%= if @has_selection? do %>
+          <div class="pc-data-table__selection-count">
+            {@selected_count} {@selection_label}
+          </div>
+          <div :if={@selected_actions != []} class="pc-data-table__selection-actions">
+            {render_slot(@selected_actions, @selected_list)}
+          </div>
+        <% else %>
+          <div :if={@searchable} class="pc-data-table__search">
+            <.icon name="hero-magnifying-glass" class="pc-data-table__search-icon" />
+            <%= if @on_change do %>
+              <form phx-change={@on_change} phx-submit={@on_change} phx-target={@target}>
+                <input type="hidden" name="op" value="search" />
+                <input
+                  type="text"
+                  name="term"
+                  value={@state.search}
+                  placeholder={@search_placeholder}
+                  phx-debounce={@search_debounce}
+                  autocomplete="off"
+                  class="pc-text-input pc-data-table__search-input"
+                />
+              </form>
+            <% else %>
               <input
                 type="text"
-                name="term"
                 value={@state.search}
                 placeholder={@search_placeholder}
-                phx-debounce={@search_debounce}
                 autocomplete="off"
+                data-pc-dt-search
                 class="pc-text-input pc-data-table__search-input"
               />
-            </form>
-          <% else %>
-            <input
-              type="text"
-              value={@state.search}
-              placeholder={@search_placeholder}
-              autocomplete="off"
-              data-pc-dt-search
-              class="pc-text-input pc-data-table__search-input"
-            />
+            <% end %>
+          </div>
+          <.filter_button
+            :for={col <- @filter_cols}
+            col={col}
+            table_id={@id}
+            state={@state}
+            path={@path}
+            on_change={@on_change}
+            target={@target}
+            op_labels={@op_labels}
+            apply_label={@apply_label}
+          />
+          {render_slot(@toolbar)}
+          <%= if @state.filters != [] do %>
+            <.button
+              :if={@on_change}
+              type="button"
+              size="sm"
+              variant="ghost"
+              color="gray"
+              class="pc-data-table__reset"
+              phx-click={@on_change}
+              phx-target={@target}
+              phx-value-op="clear_filters"
+            >
+              {@reset_filters_label}
+            </.button>
+            <.button
+              :if={@path}
+              link_type="live_patch"
+              to={url_for(@path, State.clear_filters(@state))}
+              size="sm"
+              variant="ghost"
+              color="gray"
+              class="pc-data-table__reset"
+            >
+              {@reset_filters_label}
+            </.button>
           <% end %>
-        </div>
-        <.filter_button
-          :for={col <- @filter_cols}
-          col={col}
-          table_id={@id}
-          state={@state}
-          path={@path}
-          on_change={@on_change}
-          target={@target}
-          op_labels={@op_labels}
-          apply_label={@apply_label}
-        />
-        {render_slot(@toolbar)}
-        <%= if @state.filters != [] do %>
-          <.button
-            :if={@on_change}
-            type="button"
-            size="sm"
-            variant="ghost"
-            color="gray"
-            class="pc-data-table__reset"
-            phx-click={@on_change}
-            phx-target={@target}
-            phx-value-op="clear_filters"
-          >
-            {@reset_filters_label}
-          </.button>
-          <.button
-            :if={@path}
-            link_type="live_patch"
-            to={url_for(@path, State.clear_filters(@state))}
-            size="sm"
-            variant="ghost"
-            color="gray"
-            class="pc-data-table__reset"
-          >
-            {@reset_filters_label}
-          </.button>
         <% end %>
       </div>
 
@@ -261,6 +338,20 @@ defmodule PetalComponents.DataTable do
           sort_dir={@sort_dir}
           on_sort={@on_sort}
         >
+          <:col :let={row} :if={@selectable?} label={header_checkbox(assigns)} class="pc-data-table__select-all-th" row_class="pc-data-table__select-cell">
+            <input
+              :if={!@loading}
+              type="checkbox"
+              class="pc-checkbox"
+              value={@row_id_fn.(row)}
+              checked={@row_id_fn.(row) in @selected_list}
+              data-pc-dt-select-row
+              phx-click={@on_select}
+              phx-target={@target}
+              phx-value-id={@row_id_fn.(row)}
+              aria-label={"Select row #{@row_id_fn.(row)}"}
+            />
+          </:col>
           <:col
             :let={row}
             :for={col <- @col}
@@ -745,6 +836,23 @@ defmodule PetalComponents.DataTable do
   defp align_class("right"), do: "pc-data-table__cell--right"
   defp align_class("center"), do: "pc-data-table__cell--center"
   defp align_class(_), do: nil
+
+  defp header_checkbox(assigns) do
+    ~H"""
+    <input
+      :if={!@loading}
+      type="checkbox"
+      class="pc-checkbox"
+      checked={@all_selected?}
+      data-pc-dt-select-all
+      data-indeterminate={if @indeterminate?, do: "true", else: "false"}
+      phx-click={@on_select}
+      phx-target={@target}
+      phx-value-id="all"
+      aria-label="Select all rows"
+    />
+    """
+  end
 
   defp humanize(field) do
     field |> to_string() |> String.replace("_", " ") |> String.capitalize()
