@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.12.0](https://github.com/absinthe-graphql/absinthe/compare/v1.11.0...v1.12.0) (Pending)
+
+### Features
+
+- Significantly Improved performance when using suspended fields (Dataloader,
+  Batching)
+- Significantly Improved memory usage when returnign lists of scalars
+
+
 ## [1.11.0](https://github.com/absinthe-graphql/absinthe/compare/v1.10.0...v1.11.0) (2026-06-04)
 
 
