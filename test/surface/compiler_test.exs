@@ -899,7 +899,7 @@ defmodule Surface.CompilerTest do
              """
     end
 
-    test "show debug info for module components with a colocated sface file and point to line 3" do
+    test "show debug info for module components with a colocated sface file and point to line 1" do
       alias Surface.CompilerTest.DebugAnnotations
 
       html =
@@ -914,8 +914,8 @@ defmodule Surface.CompilerTest do
 
       assert html == """
              <div>
-               <!-- <Surface.CompilerTest.DebugAnnotations.render> test/support/debug_annotations.sface:3 () -->render<!-- </Surface.CompilerTest.DebugAnnotations.render> -->
-               <!-- <Surface.CompilerTest.DebugAnnotations.render> test/support/debug_annotations.sface:3 () -->render<!-- </Surface.CompilerTest.DebugAnnotations.render> -->
+               <!-- <Surface.CompilerTest.DebugAnnotations.render> test/support/debug_annotations.sface:1 () -->render<!-- </Surface.CompilerTest.DebugAnnotations.render> -->
+               <!-- <Surface.CompilerTest.DebugAnnotations.render> test/support/debug_annotations.sface:1 () -->render<!-- </Surface.CompilerTest.DebugAnnotations.render> -->
              </div>
              """
     end
