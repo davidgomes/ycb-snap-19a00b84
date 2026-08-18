@@ -537,7 +537,7 @@ defmodule Surface.Compiler.Tokenizer do
   end
 
   defp handle_attr_name(<<c::utf8, _rest::binary>>, _column, []) when c in @name_stop_chars do
-    {:error, "expected attribute name, got: `#{<<c>>}`"}
+    {:error, "expected attribute name, got: `#{<<c::utf8>>}`"}
   end
 
   defp handle_attr_name(<<c::utf8, _rest::binary>> = text, column, buffer) when c in @name_stop_chars do
