@@ -369,7 +369,10 @@ defmodule Phoenix.LiveView.UploadConfig do
   def unregister_completed_entry(%UploadConfig{} = conf, entry_ref) do
     %UploadEntry{} = entry = get_entry_by_ref(conf, entry_ref)
 
-    drop_entry(conf, entry)
+    case Map.fetch!(conf.entry_refs_to_pids, entry_ref) do
+      @invalid -> conf
+      _ -> drop_entry(conf, entry)
+    end
   end
 
   @doc false
@@ -690,6 +693,17 @@ defmodule Phoenix.LiveView.UploadConfig do
 
   def put_error(%UploadConfig{} = conf, entry_ref, reason) do
     %{conf | errors: conf.errors ++ [{entry_ref, reason}]}
+  end
+
+  @doc false
+  def fail_entry(%UploadConfig{} = conf, entry_ref, reason) do
+    pair = {entry_ref, reason}
+
+    %{
+      conf
+      | entry_refs_to_pids: Map.put(conf.entry_refs_to_pids, entry_ref, @invalid),
+        errors: List.delete(conf.errors, pair) ++ [pair]
+    }
   end
 
   @doc false

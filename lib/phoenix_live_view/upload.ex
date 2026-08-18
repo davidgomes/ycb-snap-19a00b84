@@ -188,6 +188,15 @@ defmodule Phoenix.LiveView.Upload do
     |> update_uploads(socket)
   end
 
+  @doc false
+  def fail_upload_entry(%Socket{} = socket, conf_name, entry_ref, reason) do
+    conf = Map.fetch!(socket.assigns.uploads, conf_name)
+
+    conf
+    |> UploadConfig.fail_entry(entry_ref, reason)
+    |> update_uploads(socket)
+  end
+
   @doc """
   Retrieves the `%UploadConfig{}` from the socket for the provided ref.
 

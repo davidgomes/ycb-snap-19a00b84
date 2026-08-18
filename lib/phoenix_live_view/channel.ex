@@ -305,14 +305,40 @@ defmodule Phoenix.LiveView.Channel do
             upload_config = Upload.get_upload_by_ref!(socket, ref)
 
             new_socket =
-              Upload.put_upload_error(
+              Upload.fail_upload_entry(
                 socket,
                 upload_config.name,
                 entry_ref,
                 {:writer_failure, reason}
               )
 
-            {new_socket, {:ok, nil, state}}
+            upload_config = Upload.get_upload_by_ref!(new_socket, ref)
+            entry = UploadConfig.get_entry_by_ref(upload_config, entry_ref)
+
+            new_socket =
+              if event = upload_config.progress_event do
+                case event.(upload_config.name, entry, new_socket) do
+                  {:noreply, %Socket{} = new_socket} ->
+                    if new_socket.redirected do
+                      flash = Utils.changed_flash(new_socket)
+                      send(new_socket.root_pid, {@prefix, :redirect, new_socket.redirected, flash})
+                      %{new_socket | redirected: nil}
+                    else
+                      new_socket
+                    end
+
+                  other ->
+                    raise ArgumentError, """
+                    expected #{inspect(upload_config.name)} upload progress #{inspect(event)} to return {:noreply, Socket.t()} got:
+
+                        #{inspect(other)}
+                    """
+                end
+              else
+                new_socket
+              end
+
+            {new_socket, {:ok, nil, drop_upload_pid(state, channel_pid)}}
           end)
 
         {:noreply, new_state}
@@ -742,8 +768,9 @@ defmodule Phoenix.LiveView.Channel do
       conf = Upload.get_upload_by_ref!(socket, ref)
 
       new_state =
-        case conf.entries do
-          [_] -> drop_upload_name(state, conf.name)
+        case {conf.entries, UploadConfig.entry_pid(conf, UploadConfig.get_entry_by_ref(conf, entry_ref))} do
+          {[_], nil} -> state
+          {[_], _} -> drop_upload_name(state, conf.name)
           _ -> state
         end
 

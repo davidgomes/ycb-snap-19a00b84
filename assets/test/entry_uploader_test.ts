@@ -24,4 +24,27 @@ describe("EntryUploader", () => {
 
     expect(entry.error).toHaveBeenCalledWith("join crashed");
   });
+
+  test("does not apply the generic entry error for a server writer error", () => {
+    let errorCb;
+    let fakeChannel = {
+      onError: jest.fn(),
+      leave: jest.fn(),
+      join: () => ({
+        receive(kind, cb) {
+          if (kind === "error") errorCb = cb;
+          return this;
+        },
+      }),
+    };
+    let fakeLiveSocket = { channel: () => fakeChannel };
+    let entry = { ref: "0", metadata: () => ({}), error: jest.fn() };
+    let config = { chunk_size: 1024, chunk_timeout: 5000 };
+
+    new EntryUploader(entry, config, fakeLiveSocket).upload();
+    errorCb({ reason: "writer_error" });
+
+    expect(entry.error).not.toHaveBeenCalled();
+    expect(fakeChannel.leave).toHaveBeenCalled();
+  });
 });
