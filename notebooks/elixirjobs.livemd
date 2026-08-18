@@ -41,6 +41,7 @@ requester_options = [
 
 settings = [
   log2file: false,
+  print_stats: false,
   downloader_options: [requester: {SpiderMan.Requester.Finch, requester_options}],
   spider_options: [pipelines: []],
   item_processor_options: [
@@ -143,5 +144,9 @@ callbacks = [init: init, handle_response: handle_response]
 run ther spider
 
 ```elixir
+# print_stats is off so the terminal redraw does not clutter Livebook.
+# While a spider is running, inspect throughput with:
+#   SpiderMan.throughput(spider)
+#   SpiderMan.stats(spider)[:throughputs]
 SpiderMan.run_until_zero(spider, settings, 5_000)
 ```

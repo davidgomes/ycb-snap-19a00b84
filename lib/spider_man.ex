@@ -142,17 +142,22 @@ defmodule SpiderMan do
           downloader_tid: ets_stats,
           failed_tid: ets_stats,
           spider_tid: ets_stats,
-          item_processor_tid: ets_stats
+          item_processor_tid: ets_stats,
+          throughputs: [component_throughput_info :: map]
         ]
   def stats(spider) do
     components =
       :persistent_term.get(spider)
       |> Enum.sort()
-      |> Enum.map(fn {key, tid} ->
-        {key,
-         tid
-         |> :ets.info()
-         |> Keyword.take([:size, :memory])}
+      |> Enum.map(fn
+        {:stats_tid, tid} ->
+          {:throughputs, throughput(tid)}
+
+        {key, tid} ->
+          {key,
+           tid
+           |> :ets.info()
+           |> Keyword.take([:size, :memory])}
       end)
 
     [{:status, Engine.status(spider)} | components]
@@ -262,5 +267,38 @@ defmodule SpiderMan do
     end)
   catch
     _, _ -> :ok
+  end
+
+  @doc "fetch components' throughput for a spider (useful in Livebook)"
+  @spec throughput(spider) :: [component_throughput_info :: map]
+  def throughput(spider) when is_atom(spider) do
+    :persistent_term.get(spider)
+    |> Map.get(:stats_tid)
+    |> throughput()
+  end
+
+  def throughput(stats_tid) when is_reference(stats_tid) do
+    stats_tid
+    |> :ets.tab2list()
+    |> Enum.sort()
+    |> Enum.map(fn {component, total, success, fail, duration} ->
+      tps =
+        case System.convert_time_unit(duration, :native, :millisecond) do
+          0 ->
+            0
+
+          ms ->
+            Float.floor(success / (ms / 1000), 2)
+        end
+
+      %{
+        component: component,
+        total: total,
+        success: success,
+        fail: fail,
+        tps: tps,
+        duration: duration
+      }
+    end)
   end
 end
