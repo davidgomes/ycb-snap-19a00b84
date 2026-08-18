@@ -12,6 +12,17 @@
 
 #### Fixed
 
+- **The `data_table`'s filter editors and Columns menu live in the page
+  again.** They were top-layer panels, which buys nothing in a toolbar
+  that clips nothing and costs a hook that has to chase the viewport -
+  repositioning on every scroll, resize and mobile keyboard, re-anchoring
+  after every patch, hiding itself when its trigger scrolls away. They
+  are plain anchored popovers now: CSS puts them under their trigger, the
+  page scrolls them, no JS runs. Apply closes the editor with a JS
+  command rather than a style write, so the patch it triggers can't
+  reopen it, and event mode needs no JS for filters at all - the
+  `PetalDataTable` hook now mounts only for link mode's URL wiring and
+  selection's tri-state checkbox.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to

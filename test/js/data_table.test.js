@@ -135,7 +135,7 @@ describe("PetalDataTable", () => {
     expect(patched).toEqual(["/orders?search=amy&page_size=20"]);
   });
 
-  it("filter apply replaces this field's committed entry and closes the popover", () => {
+  it("filter apply replaces this field's committed entry in the patch URL", () => {
     const { el, patched, form } = mountWithFilter({
       navTemplate: "/orders?:filters",
       filters: [
@@ -161,7 +161,10 @@ describe("PetalDataTable", () => {
     expect(url).toContain("filters[1][field]=email");
     expect(url).toContain("filters[1][op]=starts_with");
     expect(url).toContain("filters[1][value]=amy");
-    expect(el.querySelector(".pc-popover__panel").style.display).toBe("none");
+    // the menu is an in-page panel the component closes with a JS command
+    // on the form - the hook must not touch it (a style write here would be
+    // undone by the patch it just triggered)
+    expect(el.querySelector(".pc-popover__panel").style.display).toBe("");
   });
 
   it("a select editor posts checked values as :in; none checked removes the filter", () => {
@@ -221,29 +224,7 @@ describe("PetalDataTable", () => {
     expect(url).toContain("filters[0][field]=email");
   });
 
-  it("closes a top-layer panel through the native popover API", () => {
-    const { el, patched, form } = mountWithFilter({
-      navTemplate: "/orders?:filters",
-      filters: [],
-      formHtml: `
-        <form class="pc-data-table__filter-form" data-pc-dt-filter data-field="email">
-          <select name="filter_op"><option value="contains" selected>contains</option></select>
-          <input name="value" value="x" />
-        </form>
-      `,
-    });
-
-    const panel = el.querySelector(".pc-popover__panel");
-    panel.setAttribute("popover", "auto");
-    const hidden = [];
-    panel.hidePopover = () => hidden.push(true);
-
-    submit(form);
-    expect(hidden).toEqual([true]);
-    expect(patched).toHaveLength(1);
-  });
-
-  it("event mode: submit only closes the popover - no interception, no navigation", () => {
+  it("event mode: submit passes straight through - no interception, no navigation", () => {
     const { el, patched } = mountBase({});
     delete el.dataset.navTemplate;
     const wrap = document.createElement("div");
@@ -261,7 +242,8 @@ describe("PetalDataTable", () => {
 
     expect(e.defaultPrevented).toBe(false);
     expect(patched).toEqual([]);
-    expect(wrap.style.display).toBe("none");
+    // the form's own phx-submit carries both the push and the close
+    expect(wrap.style.display).toBe("");
   });
 
   it("mirrors the indeterminate stamp onto the DOM property on mount and update", () => {

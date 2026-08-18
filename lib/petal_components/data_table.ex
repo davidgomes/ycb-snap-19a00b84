@@ -26,9 +26,9 @@ defmodule PetalComponents.DataTable do
       clears as `%{"op" => "clear_filters"}`. `State.handle_op/3`
       speaks the whole grammar, so the handler is a one-liner.
 
-  In link mode the quick-search input and rows-per-page select are wired
-  by the `PetalDataTable` hook (patch URLs built from templates the
-  component renders); event mode needs no JS.
+  In link mode the quick-search input, rows-per-page select and filter
+  editors are wired by the `PetalDataTable` hook (patch URLs built from
+  templates the component renders); event mode needs no JS.
 
   Selection (`selectable`) is UI state, not query state - it rides an
   event in BOTH wiring modes (`on_ui`, defaulting to `on_change`) and
@@ -226,12 +226,13 @@ defmodule PetalComponents.DataTable do
 
     link_mode? = is_nil(assigns.on_change)
 
-    # link mode: URL wiring. Either mode: filter popovers are native
-    # top-layer popovers the hook closes after an Apply, and selection's
+    # link mode: URL wiring, filter applies included (they patch, and link
+    # mode has no events to build the URL from). Either mode: selection's
     # tri-state header checkbox needs its indeterminate property set.
     hooked? =
-      (link_mode? and (assigns.searchable or assigns.page_size_options != [])) or
-        filter_cols != [] or assigns.selectable
+      (link_mode? and
+         (assigns.searchable or assigns.page_size_options != [] or filter_cols != [])) or
+        assigns.selectable
 
     assigns =
       assigns
@@ -331,7 +332,6 @@ defmodule PetalComponents.DataTable do
           <.popover
             :if={@column_toggle}
             id={"#{@id}-columns"}
-            top_layer
             placement="bottom-end"
             class="pc-data-table__columns"
             trigger_class="pc-button pc-button--sm pc-button--gray-outline"
@@ -733,7 +733,6 @@ defmodule PetalComponents.DataTable do
     <div class="pc-data-table__filter">
       <.popover
         id={@pop_id}
-        top_layer
         placement="bottom-start"
         class="pc-data-table__filter-popover"
         trigger_class={[
@@ -892,12 +891,16 @@ defmodule PetalComponents.DataTable do
     """
   end
 
-  # event mode pushes the form; the hook closes the native popover on
-  # submit (a top-layer panel needs hidePopover(), not a display toggle)
-  defp filter_submit_js(nil, _target, _pop_id), do: nil
+  # Apply closes the editor in both modes; event mode pushes the form
+  # first (link mode's patch is the hook's, built from these same inputs).
+  # The close must be a JS command, not a style write: LiveView re-applies
+  # the last command a patch touches, so a panel hidden by hand would pop
+  # back open the moment the filtered rows arrived.
+  defp filter_submit_js(nil, _target, pop_id), do: hide_popover(pop_id)
 
-  defp filter_submit_js(event, target, _pop_id) do
-    if target, do: JS.push(event, target: target), else: JS.push(event)
+  defp filter_submit_js(event, target, pop_id) do
+    push = if target, do: JS.push(event, target: target), else: JS.push(event)
+    hide_popover(push, pop_id)
   end
 
   defp normalize_options(options) do
