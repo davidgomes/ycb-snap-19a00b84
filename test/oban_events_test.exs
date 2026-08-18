@@ -9,7 +9,15 @@ defmodule ObanEventsTest do
     use ObanEvents.Handler
 
     @impl true
-    def handle_event(_event, _data), do: :ok
+    def handle_event(_event, %Event{}), do: :ok
+  end
+
+  defmodule SecondHandler do
+    @moduledoc false
+    use ObanEvents.Handler
+
+    @impl true
+    def handle_event(_event, %Event{}), do: :ok
   end
 
   # Test event bus with handlers registered (uses defaults)
@@ -17,11 +25,12 @@ defmodule ObanEventsTest do
     @moduledoc false
     use ObanEvents
 
-    alias ObanEventsTest.TestHandler
+    alias ObanEventsTest.{SecondHandler, TestHandler}
 
     @event_handlers %{
       investment_status_changed: [TestHandler],
       investment_created: [TestHandler],
+      dual_handler_event: [TestHandler, SecondHandler],
       investment_cancelled: [],
       portfolio_company_added: [],
       portfolio_company_removed: [],
@@ -98,6 +107,50 @@ defmodule ObanEventsTest do
       assert_raise FunctionClauseError, fn ->
         TestEventBus.emit(:event_name, "not a map")
       end
+    end
+  end
+
+  describe "emit/3 metadata" do
+    test "stamps jobs with a shared event_id and unique idempotency_key" do
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{"test" => "data"})
+
+      assert is_binary(job.args["event_id"])
+      assert is_binary(job.args["idempotency_key"])
+      assert job.args["event_id"] != job.args["idempotency_key"]
+      assert is_nil(job.args["causation_id"])
+      assert is_nil(job.args["correlation_id"])
+    end
+
+    test "passes causation_id and correlation_id through to job args" do
+      causation_id = "parent-event-id"
+      correlation_id = "business-op-id"
+
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{"test" => "data"},
+                 causation_id: causation_id,
+                 correlation_id: correlation_id
+               )
+
+      assert job.args["causation_id"] == causation_id
+      assert job.args["correlation_id"] == correlation_id
+    end
+
+    test "generates a new event_id for each emit" do
+      assert {:ok, [first]} = TestEventBus.emit(:investment_created, %{"n" => 1})
+      assert {:ok, [second]} = TestEventBus.emit(:investment_created, %{"n" => 2})
+
+      assert first.args["event_id"] != second.args["event_id"]
+    end
+
+    test "shares event_id across handlers and unique idempotency keys per job" do
+      assert {:ok, jobs} = TestEventBus.emit(:dual_handler_event, %{"n" => 1})
+      assert length(jobs) == 2
+
+      [first_id, second_id] = Enum.map(jobs, & &1.args["event_id"])
+      [first_key, second_key] = Enum.map(jobs, & &1.args["idempotency_key"])
+
+      assert first_id == second_id
+      assert first_key != second_key
     end
   end
 
