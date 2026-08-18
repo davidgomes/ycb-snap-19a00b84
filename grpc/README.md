@@ -155,6 +155,25 @@ iex> {:ok, channel} = GRPC.Stub.connect("unix:/tmp/my.sock")
 >__NOTE__: When using `DNS` or `xDS` targets, the connection layer periodically refreshes endpoints.
 ---
 
+## Load Balancing
+
+When a target resolves to several backends, the client holds one connection per backend and
+chooses one on every request, according to the configured policy:
+
+```elixir
+iex> {:ok, channel} =
+...>   GRPC.Stub.connect("dns://orders.prod.svc.cluster.local:50051",
+...>     lb_policy: :round_robin
+...>   )
+```
+
+`:pick_first` (the default) and `:round_robin` are supported, and a `loadBalancingConfig`
+entry in the resolved `ServiceConfig` takes precedence over `:lb_policy`. Picking runs in the
+calling process, so it costs a lock-free table read rather than a round-trip to the connection
+process. See the [load balancing guide](guides/advanced/load_balancing.md) for details.
+
+---
+
 ## Compression and Metadata
 
 You can specify message compression and attach default headers to all requests.

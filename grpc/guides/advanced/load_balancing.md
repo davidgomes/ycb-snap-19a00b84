@@ -41,3 +41,38 @@ iex> {:ok, channel} = GRPC.Stub.connect("unix:/tmp/my.sock")
 >__Note__: When using `DNS` target, the connection layer periodically refreshes endpoints.
 
 ---
+
+## Policies
+
+When a target resolves to more than one address, the client connects to every backend and picks
+one of those connections per request. The policy is chosen from the resolved `ServiceConfig`
+(`loadBalancingConfig`) when present, otherwise from the `:lb_policy` connect option:
+
+```elixir
+iex> {:ok, channel} = GRPC.Stub.connect("dns://orders.prod:50051", lb_policy: :round_robin)
+```
+
+| Policy          | Module                                    | Behaviour                                  |
+|:----------------|:------------------------------------------|:-------------------------------------------|
+| `:pick_first`   | `GRPC.Client.LoadBalancing.PickFirst`     | Always the first healthy backend (default) |
+| `:round_robin`  | `GRPC.Client.LoadBalancing.RoundRobin`    | Rotates over the healthy backends          |
+
+Only backends that are currently connected are offered to the policy. Re-resolution reconciles
+the connections and hands the new set to the policy, so backends scaling in or out are picked up
+without reconnecting the rest.
+
+## Writing a policy
+
+A policy implements `GRPC.Client.LoadBalancing`:
+
+  * `init/1` receives `channels: [GRPC.Channel.t()]` and returns the state to publish.
+    It runs in the connection process, so a table created here lives as long as the connection.
+  * `pick/1` returns `{:ok, channel}` or `{:error, reason}`. It runs in the calling process on
+    every RPC, so it must only read shared state — ETS and `:atomics` are a good fit, a
+    `GenServer` call is not.
+  * `update/2` receives the connected channels after re-resolution and mutates the state
+    published by `init/1` in place. The published state must stay valid, since callers may
+    already be holding it.
+  * `shutdown/1` frees whatever `init/1` allocated.
+
+---
