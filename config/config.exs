@@ -7,9 +7,11 @@ config :gen_queue_oban, GenQueueOban.Test.Repo,
   password: System.get_env("POSTGRES_PASSWORD") || "postgres",
   hostname: System.get_env("POSTGRES_HOST") || "localhost",
   database: "gen_queue_oban_test",
-  pool_size: 10
+  pool_size: 10,
+  log: false
 
 config :gen_queue_oban, GenQueueOban.Test.Enqueuer,
   adapter: GenQueue.Adapters.Oban,
   repo: GenQueueOban.Test.Repo,
-  queues: false
+  queues: false,
+  verbose: false

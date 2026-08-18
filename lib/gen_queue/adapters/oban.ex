@@ -86,9 +86,8 @@ defmodule GenQueue.Adapters.Oban do
   """
   @spec handle_job(GenQueue.t(), GenQueue.Job.t()) :: {:ok, GenQueue.Job.t()} | {:error, any}
   def handle_job(_gen_queue, %GenQueue.Job{} = job) do
-    case Oban.insert(build_changeset(job)) do
-      {:ok, %Oban.Job{}} -> {:ok, job}
-      {:error, error} -> {:error, error}
+    with {:ok, %Oban.Job{}} <- Oban.insert(build_changeset(job)) do
+      {:ok, job}
     end
   end
 
@@ -101,7 +100,8 @@ defmodule GenQueue.Adapters.Oban do
   defp build_args(%GenQueue.Job{args: [args]}) when is_map(args), do: args
 
   defp build_args(%GenQueue.Job{args: args}) do
-    raise ArgumentError, "Oban jobs must be enqueued with a single map of args - got: #{inspect(args)}"
+    raise ArgumentError,
+          "Oban jobs must be enqueued with a single map of args - got: #{inspect(args)}"
   end
 
   defp build_opts(%GenQueue.Job{} = job) do
