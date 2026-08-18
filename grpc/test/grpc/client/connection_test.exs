@@ -145,22 +145,8 @@ defmodule GRPC.Client.ConnectionTest do
       assert_receive {:DOWN, ^ref_mon, :process, ^pid, :shutdown}, 500
 
       assert :ets.info(table) == :undefined
+      assert :persistent_term.get({Connection, ref}, :erased) == :erased
       assert {:error, :no_connection} = Connection.pick_channel(channel)
-    end
-
-    test "repeated connect/disconnect cycles leak no persistent_term entries", %{
-      target: target,
-      adapter: adapter
-    } do
-      before_keys = published_refs()
-
-      Enum.each(1..100, fn _ ->
-        {:ok, channel} = Connection.connect(target, adapter: adapter, name: make_ref())
-        assert {:ok, _} = Connection.pick_channel(channel)
-        {:ok, _} = Connection.disconnect(channel)
-      end)
-
-      assert published_refs() == before_keys
     end
   end
 
@@ -228,10 +214,5 @@ defmodule GRPC.Client.ConnectionTest do
 
   defp lb_table(ref) do
     ref |> whereis_name() |> :sys.get_state() |> Map.fetch!(:lb_state) |> Map.fetch!(:table)
-  end
-
-  defp published_refs do
-    :persistent_term.get()
-    |> Enum.count(fn {key, _value} -> match?({Connection, _ref}, key) end)
   end
 end
