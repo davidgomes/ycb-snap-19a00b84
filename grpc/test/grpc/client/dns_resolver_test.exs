@@ -151,6 +151,32 @@ defmodule GRPC.Client.ReResolveTest do
     :sys.get_state(worker_pid)
   end
 
+  describe "per-request load balancing" do
+    test "round-robin picks a backend for every request", ctx do
+      {:ok, channel} =
+        connect_with_resolver(
+          ctx.ref,
+          ctx.resolver,
+          ctx.adapter,
+          [
+            %{address: "10.0.0.1", port: 50051},
+            %{address: "10.0.0.2", port: 50051}
+          ],
+          lb_policy: :round_robin
+        )
+
+      picked_hosts =
+        for _ <- 1..4 do
+          assert {:ok, picked} = Connection.pick_channel(channel)
+          picked.host
+        end
+
+      assert Enum.uniq(picked_hosts) == ["10.0.0.2", "10.0.0.1"]
+
+      disconnect_and_wait(channel)
+    end
+  end
+
   describe "scale-up: new backends discovered" do
     test "adds channels for addresses that appear in DNS", ctx do
       {:ok, channel} =
@@ -846,7 +872,7 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "stale persistent_term prevention" do
+  describe "stale load-balancer state prevention" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.99"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
@@ -1042,14 +1068,14 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "refresh handler with failed channels" do
+  describe "per-request picking with failed channels" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.2"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
       Map.put(ctx, :failing_adapter, GRPC.Test.FailingClientAdapter)
     end
 
-    test "GenServer survives when :refresh picks a failed channel", ctx do
+    test "falls back to a healthy channel when round-robin picks a failed channel", ctx do
       # Connect with 2 backends — one healthy, one failing
       expect(ctx.resolver, :resolve, fn _target ->
         {:ok,
@@ -1088,20 +1114,14 @@ defmodule GRPC.Client.ReResolveTest do
       state = get_state(ctx.ref)
       assert match?({:failed, _}, Map.get(state.real_channels, "10.0.0.2:50051"))
 
-      # Wait for several :refresh cycles (15s default, but we'll trigger manually).
-      # Round-robin will eventually pick 10.0.0.2. Without the fix, this crashes.
       pid = whereis_name(ctx.ref)
 
       for _ <- 1..5 do
-        send(pid, :refresh)
+        assert {:ok, picked} = Connection.pick_channel(channel)
+        assert picked.host == "10.0.0.1"
       end
 
-      # Small sleep for messages to process
-      Process.sleep(50)
-
       assert Process.alive?(pid)
-      assert {:ok, picked} = Connection.pick_channel(channel)
-      assert picked.host == "10.0.0.1"
 
       disconnect_and_wait(channel)
     end

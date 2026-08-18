@@ -8,15 +8,17 @@ defmodule GRPC.Client.LoadBalancing.RoundRobin do
     if addresses == [] do
       {:error, :no_addresses}
     else
-      {:ok, %{addresses: addresses, index: 0, n: length(addresses)}}
+      index = :atomics.new(1, signed: false)
+      :atomics.put(index, 1, 0)
+      {:ok, %{addresses: addresses, index: index, n: length(addresses)}}
     end
   end
 
   @impl true
-  def pick(%{addresses: addresses, index: idx, n: n} = state) do
+  def pick(%{addresses: addresses, index: index, n: n} = state) do
+    idx = rem(:atomics.add_get(index, 1, 1) - 1, n)
     %{address: host, port: port} = Enum.fetch!(addresses, idx)
 
-    new_state = %{state | index: rem(idx + 1, n)}
-    {:ok, {host, port}, new_state}
+    {:ok, {host, port}, state}
   end
 end
