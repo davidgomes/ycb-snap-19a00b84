@@ -379,11 +379,12 @@ defprotocol Flop.Schema do
 
   - `filter` is called to filter by the field. It receives the Ecto query, the
     Flop filter and an options keyword list, and returns the updated query. A
-    custom field needs it to be filterable.
-  - `field_dynamic` is called to order by the field. It receives an options
-    keyword list and returns an `Ecto.Query.dynamic_expr`, which Flop applies
-    the order direction to. It receives neither the query nor the direction. A
-    custom field needs it to be sortable.
+    custom field needs it to be filterable, unless `field_dynamic` is set.
+  - `field_dynamic` is called to get the field expression for ordering and,
+    unless a `filter` function is defined, filtering. It receives an options
+    keyword list and returns an `Ecto.Query.dynamic_expr`. It receives neither
+    the query nor the filter operator/value. A custom field needs it to be
+    sortable, or filterable without a separate `filter` function.
 
   If runtime options are necessary (like the timezone of the request or the user
   ID of the current user), use the `extra_opts` option when calling Flop
