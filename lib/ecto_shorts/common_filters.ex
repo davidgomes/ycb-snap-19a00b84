@@ -66,6 +66,8 @@ defmodule EctoShorts.CommonFilters do
 
   @common_filters QueryBuilder.Common.filters()
 
+  @behaviour QueryBuilder
+
   @doc """
   Converts filter params into a query
   """
@@ -98,7 +100,7 @@ defmodule EctoShorts.CommonFilters do
   end
 
   @doc """
-  Implementation for `c:EctoShorts.QueryBuilder.create_schema_filter/2`.
+  Implementation for `c:EctoShorts.QueryBuilder.create_schema_filter/3`.
 
   ### Examples
 
@@ -110,12 +112,13 @@ defmodule EctoShorts.CommonFilters do
     filter_key :: filter_key(),
     filter_value :: filter_value()
   ) :: query()
-  def create_schema_filter(query, filter, value) when filter in @common_filters do
-    QueryBuilder.create_schema_filter(QueryBuilder.Common, {filter, value}, query)
+  @impl QueryBuilder
+  def create_schema_filter(query, filter_key, filter_value) when filter_key in @common_filters do
+    QueryBuilder.create_schema_filter(QueryBuilder.Common, query, filter_key, filter_value)
   end
 
-  def create_schema_filter(query, filter, value) do
-    QueryBuilder.create_schema_filter(QueryBuilder.Schema, {filter, value}, query)
+  def create_schema_filter(query, filter_key, filter_value) do
+    QueryBuilder.create_schema_filter(QueryBuilder.Schema, query, filter_key, filter_value)
   end
 
   defp ensure_last_is_final_filter(params) do

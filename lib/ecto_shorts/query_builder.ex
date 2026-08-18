@@ -1,20 +1,41 @@
 defmodule EctoShorts.QueryBuilder do
-  @moduledoc "Behaviour for query building from filter tuples"
+  @moduledoc """
+  Specifies the query builder API required from adapters.
+  """
+  @moduledoc since: "2.5.0"
 
-  @type filter_tuple :: {filter_type :: atom, value :: any}
-  @type accumulator_query :: Ecto.Query.t
+  @type adapter :: module()
+  @type filter_key :: atom()
+  @type filter_value :: any()
+  @type query :: Ecto.Query.t()
 
-  @doc "Adds to accumulator query with filter_type and value"
-  @callback create_schema_filter(filter_tuple, accumulator_query) :: Ecto.Query.t
+  @doc """
+  Adds an expression to a query for the given filter key and value.
 
-  @spec create_schema_filter(module, filter_tuple, accumulator_query) :: Ecto.Query.t
-  def create_schema_filter(builder, filter_tuple, query) do
-    builder.create_schema_filter(filter_tuple, query)
+  The query-first argument order allows adapter calls to be chained:
+
+      iex> EctoShorts.Support.Schemas.Post
+      ...> |> EctoShorts.QueryBuilder.Schema.create_schema_filter(:id, 1)
+      ...> |> EctoShorts.QueryBuilder.Common.create_schema_filter(:first, 10)
+      #Ecto.Query<from p0 in EctoShorts.Support.Schemas.Post, where: p0.id == ^1, limit: ^10>
+  """
+  @callback create_schema_filter(query(), filter_key(), filter_value()) :: query()
+
+  @doc """
+  Invokes `c:create_schema_filter/3` on the given adapter.
+
+  ### Examples
+
+      iex> EctoShorts.QueryBuilder.create_schema_filter(
+      ...>   EctoShorts.QueryBuilder.Common,
+      ...>   EctoShorts.Support.Schemas.Comment,
+      ...>   :first,
+      ...>   1_000
+      ...> )
+      #Ecto.Query<from c0 in EctoShorts.Support.Schemas.Comment, limit: ^1000>
+  """
+  @spec create_schema_filter(adapter(), query(), filter_key(), filter_value()) :: query()
+  def create_schema_filter(adapter, query, filter_key, filter_value) do
+    adapter.create_schema_filter(query, filter_key, filter_value)
   end
-
-  @spec query_schema(Ecto.Queryable.t) :: Ecto.Queryable.t()
-  @doc "Pulls the schema from a query"
-  def query_schema(%{from: %{source: {_, schema}}}), do: query_schema(schema)
-  def query_schema(%{from: %{query: %{from: {_, schema}}}}), do: schema
-  def query_schema(query), do: query
 end
