@@ -22,7 +22,7 @@ defmodule BroadwayDashboard.Metrics do
   end
 
   def server_name(pipeline) do
-    :"BroadwayDashboard.Metrics.#{pipeline}"
+    :"BroadwayDashboard.Metrics.#{inspect(pipeline)}"
   end
 
   defp check_pipeline_running_at_node(pipeline, target_node) do
