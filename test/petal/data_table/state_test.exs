@@ -240,6 +240,63 @@ defmodule PetalComponents.DataTable.StateTest do
 
       assert bogus == text
     end
+
+    test "speaks the selection ops, page-scoped where the header is" do
+      state = %State{selected: ["1"]}
+
+      assert State.handle_op(state, %{"op" => "select", "id" => "2"}, @opts).selected ==
+               ["1", "2"]
+
+      assert State.handle_op(state, %{"op" => "select", "id" => "1"}, @opts).selected == []
+
+      assert State.handle_op(state, %{"op" => "select_all", "ids" => ["2", "3"]}, @opts).selected ==
+               ["1", "2", "3"]
+
+      # deselecting the visible page keeps picks made elsewhere
+      wide = %State{selected: ["1", "2", "9"]}
+
+      assert State.handle_op(wide, %{"op" => "deselect_all", "ids" => ["1", "2"]}, @opts).selected ==
+               ["9"]
+
+      assert State.handle_op(wide, %{"op" => "clear_selection"}, @opts).selected == []
+
+      # a malformed ids payload is left alone, like any unknown op
+      assert State.handle_op(state, %{"op" => "select_all", "ids" => "1"}, @opts) == state
+    end
+  end
+
+  describe "selection" do
+    test "ids compare and store as strings, so 1 and \"1\" are one row" do
+      state = State.toggle_selected(%State{}, 1)
+      assert state.selected == ["1"]
+      assert State.selected?(state, "1")
+      assert State.selected?(state, 1)
+      assert State.toggle_selected(state, "1").selected == []
+      refute State.selected?(%State{}, 1)
+    end
+
+    test "select_ids/2 adds without duplicating, deselect_ids/2 removes only those" do
+      state = State.select_ids(%State{selected: ["1"]}, [1, "2", "2"])
+      assert state.selected == ["1", "2"]
+
+      assert State.deselect_ids(state, ["2", "7"]).selected == ["1"]
+      assert State.clear_selection(state).selected == []
+    end
+
+    test "selection is UI state: it never round-trips through params" do
+      state = %State{selected: ["1", "2"], search: "amy"}
+      assert State.to_params(state) == %{"search" => "amy"}
+      assert State.from_params(%{"selected" => ["1"]}, fields: @fields).selected == []
+    end
+
+    test "selection survives the query ops that would strand it" do
+      state = %State{selected: ["1"], page: 3}
+
+      assert State.put_search(state, "amy").selected == ["1"]
+      assert State.put_filter(state, :name, :contains, "a").selected == ["1"]
+      assert State.toggle_sort(state, :name).selected == ["1"]
+      assert State.clear_filters(state).selected == ["1"]
+    end
   end
 
   describe "toggle_sort/2" do

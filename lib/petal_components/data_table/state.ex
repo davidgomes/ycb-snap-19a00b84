@@ -26,6 +26,18 @@ defmodule PetalComponents.DataTable.State do
   `:after`. Engines may support a subset; unknown ops are an engine
   concern, not a state concern.
 
+  ## Selection
+
+  `selected` holds the checked rows' ids as strings - what the DOM and
+  the wire carry, so an integer id and its `"1"` can never disagree.
+  Like `total` it never round-trips through params: a shared URL should
+  not resurrect someone else's checkboxes. Selection survives paging,
+  searching and filtering (bulk-acting on rows you picked before
+  narrowing is the point); `clear_selection/1` when it shouldn't.
+
+  The ids arrive from the client, so treat them as user input: a bulk
+  action must authorize them exactly like an id in a URL.
+
   ## Security
 
   `from_params/2` never creates atoms from user input: `:fields` is a
@@ -35,7 +47,13 @@ defmodule PetalComponents.DataTable.State do
   """
 
   @enforce_keys []
-  defstruct order_by: [], filters: [], search: nil, page: 1, page_size: 10, total: nil
+  defstruct order_by: [],
+            filters: [],
+            search: nil,
+            page: 1,
+            page_size: 10,
+            total: nil,
+            selected: []
 
   @type order :: {atom(), :asc | :desc}
   @type filter :: %{field: atom(), op: atom(), value: term()}
@@ -45,7 +63,8 @@ defmodule PetalComponents.DataTable.State do
           search: String.t() | nil,
           page: pos_integer(),
           page_size: pos_integer(),
-          total: non_neg_integer() | nil
+          total: non_neg_integer() | nil,
+          selected: [String.t()]
         }
 
   @ops ~w(contains eq starts_with neq gt lt between in before on after)a
@@ -90,8 +109,8 @@ defmodule PetalComponents.DataTable.State do
   @doc """
   Encodes the state as a flat params map suitable for `push_patch`
   query strings. Defaults (page 1, empty sorts/filters, the default
-  page size) are omitted so URLs stay clean; `total` never round-trips -
-  it is a result, not a request.
+  page size) are omitted so URLs stay clean; `total` and `selected`
+  never round-trip - one is a result, the other is UI state.
 
   Pass the same `:page_size` default given to `from_params/2` so the
   two stay symmetric (an omitted size decodes back to that default).
@@ -146,6 +165,36 @@ defmodule PetalComponents.DataTable.State do
     %{state | page_size: parse_pos_int(size, state.page_size), page: 1}
   end
 
+  @doc "Adds or removes one row id in the selection (the row checkbox's grammar)."
+  def toggle_selected(%__MODULE__{} = state, id) do
+    id = to_string(id)
+
+    if id in state.selected,
+      do: %{state | selected: List.delete(state.selected, id)},
+      else: %{state | selected: state.selected ++ [id]}
+  end
+
+  @doc """
+  Adds `ids` to the selection, keeping the existing picks - the header
+  checkbox is page-scoped, so selections made on other pages survive.
+  """
+  def select_ids(%__MODULE__{} = state, ids) do
+    ids = ids |> List.wrap() |> Enum.map(&to_string/1) |> Enum.uniq()
+    %{state | selected: state.selected ++ Enum.reject(ids, &(&1 in state.selected))}
+  end
+
+  @doc "Removes `ids` from the selection, keeping any pick outside them."
+  def deselect_ids(%__MODULE__{} = state, ids) do
+    ids = ids |> List.wrap() |> MapSet.new(&to_string/1)
+    %{state | selected: Enum.reject(state.selected, &MapSet.member?(ids, &1))}
+  end
+
+  @doc "Empties the selection."
+  def clear_selection(%__MODULE__{} = state), do: %{state | selected: []}
+
+  @doc "Whether `id` is currently selected (ids compare as strings)."
+  def selected?(%__MODULE__{} = state, id), do: to_string(id) in state.selected
+
   @doc """
   Applies one event-mode op payload - the entire `data_table` event
   grammar in one call, so an event-mode handler is a one-liner:
@@ -157,10 +206,11 @@ defmodule PetalComponents.DataTable.State do
       end
 
   Ops: `sort` (field), `page` (page), `search` (term), `page_size`
-  (page_size), `filter` (field, filter_op, value/value2/values), and
-  `clear_filters`. Unknown ops and non-whitelisted fields leave the
-  state unchanged; like `from_params/2`, no atoms are ever created
-  from input.
+  (page_size), `filter` (field, filter_op, value/value2/values),
+  `clear_filters`, plus the selection ops - `select` (id), `select_all`
+  and `deselect_all` (ids, the visible page's), `clear_selection`.
+  Unknown ops and non-whitelisted fields leave the state unchanged;
+  like `from_params/2`, no atoms are ever created from input.
 
   A `filter` op's value normalizes by editor shape: a `values` list
   posts as-is (the select editor's `:in`), `between` pairs
@@ -195,6 +245,18 @@ defmodule PetalComponents.DataTable.State do
 
       %{"op" => "clear_filters"} ->
         clear_filters(state)
+
+      %{"op" => "select", "id" => id} ->
+        toggle_selected(state, id)
+
+      %{"op" => "select_all", "ids" => ids} when is_list(ids) ->
+        select_ids(state, ids)
+
+      %{"op" => "deselect_all", "ids" => ids} when is_list(ids) ->
+        deselect_ids(state, ids)
+
+      %{"op" => "clear_selection"} ->
+        clear_selection(state)
 
       _other ->
         state
