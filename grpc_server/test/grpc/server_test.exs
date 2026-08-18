@@ -1,5 +1,5 @@
 defmodule GRPC.ServerTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   defmodule Greeter.Service do
     use GRPC.Service, name: "hello"

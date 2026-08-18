@@ -30,7 +30,7 @@ defmodule GRPC.Client.ReResolveTest do
   alias GRPC.Channel
   alias GRPC.Client.Connection
 
-  @resolve_interval 50
+  @resolve_interval 30
   @wait @resolve_interval + 30
   @wait_after_backoff @resolve_interval * 2 + 50
 
@@ -166,6 +166,19 @@ defmodule GRPC.Client.ReResolveTest do
   defp get_state(ref) do
     pid = whereis_name(ref)
     :sys.get_state(pid)
+  end
+
+  # Polls `fun` until it returns a truthy value instead of sleeping for a fixed
+  # amount of time, so the test only waits as long as the condition needs.
+  defp wait_until(fun, retries \\ 200) do
+    case fun.() do
+      falsy when falsy in [nil, false] and retries > 0 ->
+        Process.sleep(5)
+        wait_until(fun, retries - 1)
+
+      value ->
+        value
+    end
   end
 
   defp get_resolver_state(ref) do
@@ -1324,7 +1337,10 @@ defmodule GRPC.Client.ReResolveTest do
       assert Process.alive?(original_pid)
 
       Process.exit(original_pid, :kill)
-      Process.sleep(100)
+
+      wait_until(fn ->
+        match?(%{worker_pid: pid} when pid != original_pid, get_state(ctx.ref).resolver_state)
+      end)
 
       conn_pid = whereis_name(ctx.ref)
       assert Process.alive?(conn_pid)

@@ -15,7 +15,7 @@ defmodule GRPC.Integration.ServerTest do
     def route_chat(_ex_stream, stream) do
       GRPC.Server.send_headers(stream, %{})
       Process.exit(self(), :shutdown)
-      Process.sleep(500)
+      Process.sleep(:infinity)
     end
   end
 
@@ -180,7 +180,7 @@ defmodule GRPC.Integration.ServerTest do
     use GRPC.Server, service: Routeguide.RouteGuide.Service
 
     def list_features(_rectangle, _stream) do
-      Process.sleep(600)
+      Process.sleep(:infinity)
     end
   end
 
@@ -188,7 +188,7 @@ defmodule GRPC.Integration.ServerTest do
     use GRPC.Server, service: Routeguide.RouteGuide.Service
 
     def list_features(rectangle, materializer) do
-      Process.sleep(400)
+      Process.sleep(50)
       server_stream = Stream.each([rectangle.lo, rectangle.hi], fn point -> point end)
 
       server_stream
@@ -244,9 +244,8 @@ defmodule GRPC.Integration.ServerTest do
 
         {:ok, conn_pid} = :gun.open(~c"localhost", port)
         stream_ref = :gun.get(conn_pid, "/status")
-        Process.sleep(100)
 
-        assert_received {:gun_response, ^conn_pid, ^stream_ref, :nofin, 200, _headers}
+        assert_receive {:gun_response, ^conn_pid, ^stream_ref, :nofin, 200, _headers}
       end,
       0,
       adapter_opts: [status_handler: status_handler]
@@ -423,7 +422,7 @@ defmodule GRPC.Integration.ServerTest do
           error = %GRPC.RPCError{message: "Deadline expired", status: 4}
 
           assert {:error, ^error} =
-                   channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 500)
+                   channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 100)
         end)
       end)
 

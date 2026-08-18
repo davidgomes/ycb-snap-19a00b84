@@ -1,5 +1,5 @@
 defmodule GRPC.ChannelTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias GRPC.Test.ClientAdapter
   alias GRPC.Channel
 

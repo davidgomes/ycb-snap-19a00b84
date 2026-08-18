@@ -13,7 +13,7 @@ defmodule GRPC.Integration.StubTest do
     use GRPC.Server, service: Helloworld.Greeter.Service
 
     def say_hello(_req, _stream) do
-      Process.sleep(1000)
+      Process.sleep(:infinity)
     end
   end
 
@@ -30,6 +30,19 @@ defmodule GRPC.Integration.StubTest do
     end)
   end
 
+  # Polls `fun` until it returns a non-nil value instead of sleeping for a fixed
+  # amount of time, so the test only waits as long as the connection needs.
+  defp wait_until(fun, retries \\ 200) do
+    case fun.() do
+      nil when retries > 0 ->
+        Process.sleep(5)
+        wait_until(fun, retries - 1)
+
+      value ->
+        value
+    end
+  end
+
   defp whereis_name(ref) do
     case Registry.lookup(GRPC.Client.Registry, {GRPC.Client.Connection, ref}) do
       [{pid, _value}] -> pid
@@ -40,12 +53,11 @@ defmodule GRPC.Integration.StubTest do
   test "you can disconnect stubs" do
     run_server(HelloServer, fn port ->
       {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
-      Process.sleep(100)
 
       %{adapter_payload: %{conn_pid: connection_process_pid}} = channel
-      %{gun_pid: gun_pid} = :sys.get_state(connection_process_pid)
+      gun_pid = wait_until(fn -> :sys.get_state(connection_process_pid).gun_pid end)
 
-      gun_port = port_for(gun_pid)
+      gun_port = wait_until(fn -> port_for(gun_pid) end)
       # Using :erlang.monitor to be compatible with <= 1.5
       ref = :erlang.monitor(:port, gun_port)
 
@@ -147,7 +159,7 @@ defmodule GRPC.Integration.StubTest do
               %GRPC.RPCError{
                 message: "Deadline expired",
                 status: GRPC.Status.deadline_exceeded()
-              }} == channel |> Helloworld.Greeter.Stub.say_hello(req, timeout: 500)
+              }} == channel |> Helloworld.Greeter.Stub.say_hello(req, timeout: 100)
     end)
   end
 end
