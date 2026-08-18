@@ -35,6 +35,16 @@ defmodule CoherenceTestWeb.ViewHelpers do
 
   @helpers Module.concat(Application.get_env(:coherence, :web_module), Router.Helpers)
 
+  test "link texts are resolved at runtime" do
+    assert ViewHelpers.recover_link_text() == @recover_link
+    assert ViewHelpers.unlock_link_text() == @unlock_link
+    assert ViewHelpers.register_link_text() == @register_link
+    assert ViewHelpers.invite_link_text() == "Invite Someone"
+    assert ViewHelpers.confirm_link_text() == @confirmation_link
+    assert ViewHelpers.signin_link_text() == @signin_link
+    assert ViewHelpers.signout_link_text() == @signout_link
+  end
+
   test "coherence_path", %{conn: conn} do
     assert ViewHelpers.coherence_path(@helpers, :unlock_path, conn, :new) == "/unlocks/new"
 

@@ -12,13 +12,21 @@ defmodule TestCoherenceWeb.ViewHelpers do
   @seperator {:safe, "&nbsp; | &nbsp;"}
   @helpers Module.concat(Application.get_env(:coherence, :web_module), Router.Helpers)
 
-  @recover_link Messages.backend().forgot_your_password()
-  @unlock_link Messages.backend().send_an_unlock_email()
-  @register_link Messages.backend().need_an_account()
-  @invite_link Messages.backend().invite_someone()
-  @confirm_link Messages.backend().resend_confirmation_email()
-  @signin_link Messages.backend().sign_in()
-  @signout_link Messages.backend().sign_out()
+  @recover_link_text "Forgot your password?"
+  @unlock_link_text "Send an unlock email"
+  @register_link_text "Need An Account?"
+  @invite_link_text "Invite Someone"
+  @confirm_link_text "Resend confirmation email"
+  @signin_link_text "Sign In"
+  @signout_link_text "Sign Out"
+
+  def recover_link_text(), do: Messages.backend().forgot_your_password()
+  def unlock_link_text(), do: Messages.backend().send_an_unlock_email()
+  def register_link_text(), do: Messages.backend().need_an_account()
+  def invite_link_text(), do: Messages.backend().invite_someone()
+  def confirm_link_text(), do: Messages.backend().resend_confirmation_email()
+  def signin_link_text(), do: Messages.backend().sign_in()
+  def signout_link_text(), do: Messages.backend().sign_out()
 
   @doc """
   Create coherence template links.
@@ -37,18 +45,18 @@ defmodule TestCoherenceWeb.ViewHelpers do
 
   ### :new_session Options
 
-  * :recover - customize the recover link (#{@recover_link})
-  * :unlock - customize the unlock link (#{@unlock_link})
-  * :register - customize the register link (#{@register_link})
-  * :confirm - customize the confirm link (#{@confirm_link})
+  * :recover - customize the recover link (#{@recover_link_text})
+  * :unlock - customize the unlock link (#{@unlock_link_text})
+  * :register - customize the register link (#{@register_link_text})
+  * :confirm - customize the confirm link (#{@confirm_link_text})
 
   ### :layout Options
 
   * :list_tag - customize the list tag (:li)
   * :signout_class - customize the class on the signout link ("navbar-form")
-  * :signin - customize the signin link text (#{@signin_link})
-  * :signout - customize the signout link text (#{@signout_link})
-  * :register - customize the register link text (#{@register_link})
+  * :signin - customize the signin link text (#{@signin_link_text})
+  * :signout - customize the signout link text (#{@signout_link_text})
+  * :register - customize the register link text (#{@register_link_text})
 
   ### Disable links
 
@@ -60,26 +68,26 @@ defmodule TestCoherenceWeb.ViewHelpers do
   ## Examples
 
       coherence_links(conn, :new_session)
-      Generates: #{@recover_link}  #{@unlock_link} #{@register_link} #{@confirm_link}
+      Generates: #{@recover_link_text}  #{@unlock_link_text} #{@register_link_text} #{@confirm_link_text}
 
       coherence_links(conn, :new_session, recover: "Password reset", register: false
-      Generates: Password reset  #{@unlock_link}
+      Generates: Password reset  #{@unlock_link_text}
 
       coherence_links(conn, :layout)             # when logged in
-      Generates: User's Name  #{@signout_link}
+      Generates: User's Name  #{@signout_link_text}
 
       coherence_links(conn, :layout)             # when not logged in
-      Generates: #{@register_link}  #{@signin_link}
+      Generates: #{@register_link_text}  #{@signin_link_text}
 
   """
   @spec coherence_links(conn, atom, Keyword.t()) :: tuple
   def coherence_links(conn, which, opts \\ [])
 
   def coherence_links(conn, :new_session, opts) do
-    recover_link = Keyword.get(opts, :recover, @recover_link)
-    unlock_link = Keyword.get(opts, :unlock, @unlock_link)
-    register_link = Keyword.get(opts, :register, @register_link)
-    confirm_link = Keyword.get(opts, :confirm, @confirm_link)
+    recover_link = Keyword.get(opts, :recover, recover_link_text())
+    unlock_link = Keyword.get(opts, :unlock, unlock_link_text())
+    register_link = Keyword.get(opts, :register, register_link_text())
+    confirm_link = Keyword.get(opts, :confirm, confirm_link_text())
 
     user_schema = Coherence.Config.user_schema()
 
@@ -96,9 +104,9 @@ defmodule TestCoherenceWeb.ViewHelpers do
   def coherence_links(conn, :layout, opts) do
     list_tag = Keyword.get(opts, :list_tag, :li)
     signout_class = Keyword.get(opts, :signout_class, "navbar-form")
-    signin = Keyword.get(opts, :signin, @signin_link)
-    signout = Keyword.get(opts, :signout, @signout_link)
-    register = Keyword.get(opts, :register, @register_link)
+    signin = Keyword.get(opts, :signin, signin_link_text())
+    signout = Keyword.get(opts, :signout, signout_link_text())
+    register = Keyword.get(opts, :register, register_link_text())
 
     if Coherence.logged_in?(conn) do
       current_user = Coherence.current_user(conn)
@@ -152,7 +160,7 @@ defmodule TestCoherenceWeb.ViewHelpers do
   end
 
   @spec recover_link(conn, String.t()) :: tuple
-  def recover_link(conn, text \\ @recover_link),
+  def recover_link(conn, text \\ recover_link_text()),
     do: link(text, to: coherence_path(@helpers, :password_path, conn, :new))
 
   @spec register_link(conn, module, false | String.t()) :: [any] | []
@@ -163,7 +171,7 @@ defmodule TestCoherenceWeb.ViewHelpers do
   end
 
   @spec register_link(conn, String.t()) :: tuple
-  def register_link(conn, text \\ @register_link),
+  def register_link(conn, text \\ register_link_text()),
     do: link(text, to: coherence_path(@helpers, :registration_path, conn, :new))
 
   @spec unlock_link(conn, module, false | String.t()) :: [any] | []
@@ -174,16 +182,16 @@ defmodule TestCoherenceWeb.ViewHelpers do
   end
 
   @spec unlock_link(conn, String.t()) :: tuple
-  def unlock_link(conn, text \\ @unlock_link),
+  def unlock_link(conn, text \\ unlock_link_text()),
     do: link(text, to: coherence_path(@helpers, :unlock_path, conn, :new))
 
   @spec invitation_link(conn, String.t()) :: tuple
-  def invitation_link(conn, text \\ @invite_link) do
+  def invitation_link(conn, text \\ invite_link_text()) do
     link(text, to: coherence_path(@helpers, :invitation_path, conn, :new))
   end
 
   @spec signout_link(conn, String.t(), String.t()) :: tuple
-  def signout_link(conn, text \\ @signout_link, signout_class \\ "") do
+  def signout_link(conn, text \\ signout_link_text(), signout_class \\ "") do
     link(
       text,
       to: coherence_path(@helpers, :session_path, conn, :delete),
@@ -200,7 +208,7 @@ defmodule TestCoherenceWeb.ViewHelpers do
   end
 
   @spec confirmation_link(conn, String.t()) :: tuple
-  def confirmation_link(conn, text \\ @confirm_link) do
+  def confirmation_link(conn, text \\ confirm_link_text()) do
     link(text, to: coherence_path(@helpers, :confirmation_path, conn, :new))
   end
 
