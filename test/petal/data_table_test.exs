@@ -336,6 +336,7 @@ defmodule PetalComponents.DataTableTest do
 
     # the hidden column leaves the table but stays listed in the dropdown
     refute html =~ "amy@x.com"
+    refute html =~ ~s(popover="auto")
     assert html =~ ~s(phx-value-op="toggle_column")
     assert html =~ ~s(phx-value-field="email")
     # the last visible column's checkbox is disabled - a table needs one
