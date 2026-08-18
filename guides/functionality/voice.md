@@ -186,14 +186,14 @@ Note that the third element in the event is of type
 
 ## DAVE
 
-[Discord Audio & Video End-to-End Encryption (DAVE) Protocol](https://daveprotocol.com/) 
+[Discord Audio & Video End-to-End Encryption (DAVE) Protocol](https://daveprotocol.com/)
 is required for all voice sessions at present.
-Nostrum uses the [`:dave` package](https://hex.pm/packages/dave), 
+Nostrum uses the [`:dave` package](https://hex.pm/packages/dave),
 which is backed by Rust NIF bindings to [`davey`](https://github.com/Snazzah/davey).
 `RustlerPrecompiled` will fetch the required binaries for your OS at compile time so you
 don't need a Rust toolchain to run Nostrum.
 
-If you have an exceptionally uncommon OS or you prefer to build from source with your installed Rust toolchain, 
+If you have an exceptionally uncommon OS or you prefer to build from source with your installed Rust toolchain,
 you can add `Rustler` to your project dependencies and set `FORCE_DAVE_BUILD=true` when compiling.
 
 ```elixir
