@@ -55,9 +55,18 @@ defmodule PetalComponents.Dropdown do
       assigns
       |> assign_new(:options_container_id, fn -> "dropdown_#{Ecto.UUID.generate()}" end)
 
+    # the placement hook lives on the container, and a hook needs a stable id -
+    # a caller-supplied one still wins
+    assigns =
+      assigns
+      |> assign(:container_id, assigns.rest[:id] || "#{assigns.options_container_id}_container")
+      |> assign(:rest, Map.drop(assigns.rest, [:id]))
+
     ~H"""
     <div
       {@rest}
+      id={@container_id}
+      phx-hook="PetalDropdown"
       {js_attributes("container", @options_container_id, @on_close)}
       class={[@class, "pc-dropdown"]}
     >

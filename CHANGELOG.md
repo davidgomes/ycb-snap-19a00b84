@@ -3,6 +3,20 @@
 
 #### Fixed
 
+- **`dropdown` flips its panel above the trigger when the viewport
+  leaves no room below.** A dropdown near the bottom of the page opened
+  downward regardless, so its items rendered off-screen and the page
+  could not be scrolled to them. The new `PetalDropdown` hook measures
+  the trigger against the viewport whenever the panel is shown and marks
+  the panel `data-flip` when it does not fit below and has more room
+  above; the CSS then anchors it to the trigger's top edge (transform
+  origin follows, so the open transition still grows out of the
+  trigger). LiveView.JS owns the show/hide, so the hook watches the
+  panel's inline `display` rather than the click, which keeps every open
+  path covered, and it re-measures on scroll and resize while open so
+  the panel settles back down as soon as room returns. Register the
+  hook the same way as the rest: `hooks: { ...PetalComponents }`.
+
 - **`command_dialog` now locks background scroll while the palette is
   open.** A native modal `<dialog>` hands you the top layer, the focus
   trap and Escape, but it does not stop the page underneath from

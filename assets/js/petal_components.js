@@ -3710,6 +3710,79 @@ function sameValueMultiset(a, b) {
   return true;
 }
 
+// Dropdown panel placement. The panel opens downward by default and flips
+// above the trigger when the viewport leaves no room below AND more room
+// above (the bottom-of-page dropdown that used to open off-screen).
+// LiveView.JS owns show/hide here, so an observer on the panel's inline
+// display is what tells the hook an open happened; while open, scroll and
+// resize re-measure so the panel settles back down as soon as room returns.
+export const PetalDropdown = {
+  mounted() {
+    this.panel = this.el.querySelector(".pc-dropdown__menu-items-wrapper");
+    this.trigger = this.el.querySelector("button");
+    if (!this.panel) return;
+
+    this.listening = false;
+    this.onReposition = () => this.position();
+    this.observer = new MutationObserver(() => this.sync());
+    this.observer.observe(this.panel, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+    this.sync();
+  },
+
+  destroyed() {
+    if (this.observer) this.observer.disconnect();
+    this.unlisten();
+  },
+
+  isOpen() {
+    return !!this.panel && this.panel.style.display !== "none";
+  },
+
+  sync() {
+    if (this.isOpen()) {
+      this.listen();
+      this.position();
+    } else {
+      this.unlisten();
+      this.panel.removeAttribute("data-flip");
+    }
+  },
+
+  listen() {
+    if (this.listening) return;
+    this.listening = true;
+    window.addEventListener("scroll", this.onReposition, true);
+    window.addEventListener("resize", this.onReposition);
+  },
+
+  unlisten() {
+    if (!this.listening) return;
+    this.listening = false;
+    window.removeEventListener("scroll", this.onReposition, true);
+    window.removeEventListener("resize", this.onReposition);
+  },
+
+  // Measured with the flip cleared so the panel's natural placement height
+  // decides, never the flipped one.
+  position() {
+    if (!this.isOpen()) return;
+    this.panel.removeAttribute("data-flip");
+    const anchor = this.trigger || this.el;
+    const rect = anchor.getBoundingClientRect();
+    const panelH = this.panel.offsetHeight;
+    if (!panelH || (!rect.top && !rect.bottom)) return; // jsdom / unrendered
+    const gap = 8;
+    const below = window.innerHeight - rect.bottom - gap;
+    const above = rect.top - gap;
+    if (panelH > below && above > below) {
+      this.panel.setAttribute("data-flip", "");
+    }
+  },
+};
+
 // Slot content the panel must let the pointer focus - everything else in
 // there is chrome whose press has to keep focus in the search input.
 // [tabindex] covers hand-rolled widgets; the option rows have none.
@@ -5473,5 +5546,6 @@ export default {
   PetalNavMenu,
   PetalCommandDialog,
   PetalComboBox,
+  PetalDropdown,
   PetalDataTable,
 };
