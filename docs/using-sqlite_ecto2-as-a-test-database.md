@@ -85,7 +85,7 @@ And change the `deps/0` function to set different dependencies depending on envi
   defp deps do
     [{:sqlite_ecto2, "~> 2.0.0-dev.8", only: :test},
      {:postgrex, ">= 0.0.0", only: :prod},
-     {:ecto, "~> 2.1.0"}]
+     {:ecto, "~> 2.1 or ~> 2.2"}]
   end
 ```
 
