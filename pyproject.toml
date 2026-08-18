@@ -1,0 +1,13 @@
+[project]
+name = "badge_forge"
+version = "0.1.0"
+description = "BadgeForge Python Oban worker for PDF badge generation"
+requires-python = ">=3.10"
+dependencies = [
+    "oban>=0.6.5",
+    "weasyprint>=60.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

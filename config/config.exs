@@ -10,7 +10,7 @@ import Config
 config :badge_forge, Oban,
   engine: Oban.Engines.Basic,
   notifier: Oban.Notifiers.Postgres,
-  queues: [default: 10],
+  queues: [default: 10, printing: 10],
   repo: BadgeForge.Repo
 
 config :badge_forge,
