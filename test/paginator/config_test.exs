@@ -33,6 +33,26 @@ defmodule Paginator.ConfigTest do
       assert config.cursor_fields == [id: :desc]
     end
 
+    test "applies column with nulls_first / nulls_last direction tuples" do
+      config =
+        Config.new(
+          cursor_fields: [
+            id: :desc_nulls_first,
+            name: :asc_nulls_last,
+            created_at: :asc_nulls_first,
+            updated_at: :desc_nulls_last
+          ],
+          sort_direction: :asc
+        )
+
+      assert config.cursor_fields == [
+               id: :desc_nulls_first,
+               name: :asc_nulls_last,
+               created_at: :asc_nulls_first,
+               updated_at: :desc_nulls_last
+             ]
+    end
+
     test "applies column with direction tuples mixed with column fields" do
       config = Config.new(cursor_fields: [{:id, :desc}, :name], sort_direction: :asc)
 
@@ -157,6 +177,27 @@ defmodule Paginator.ConfigTest do
             Cursor.encode(%{
               {:person, :first_name} => "Test 121",
               {:person, :last_name} => "Test"
+            })
+        )
+
+      Config.validate!(config)
+    end
+
+    test "ok when cursor matches cursor_fields with asc_nulls_first, asc_nulls_last, desc_nulls_first, desc_nulls_last" do
+      config =
+        Config.new(
+          cursor_fields: [
+            id: :asc_nulls_first,
+            name: :desc_nulls_last,
+            {{:person, :age}, :desc_nulls_first},
+            {{:person, :birth_date}, :asc_nulls_last}
+          ],
+          after:
+            Cursor.encode(%{
+              :id => 1,
+              :name => "Alice",
+              {:person, :age} => 30,
+              {:person, :birth_date} => "1990-10-10"
             })
         )
 
