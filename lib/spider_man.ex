@@ -135,6 +135,16 @@ defmodule SpiderMan do
     end
   end
 
+  @typedoc "throughput info of a component, see `throughput/1`"
+  @type component_throughput_info :: %{
+          component: component,
+          total: non_neg_integer,
+          success: non_neg_integer,
+          fail: non_neg_integer,
+          tps: number,
+          duration: non_neg_integer
+        }
+
   @doc "fetch spider's statistics"
   @spec stats(spider) :: [
           status: status,
@@ -142,17 +152,16 @@ defmodule SpiderMan do
           downloader_tid: ets_stats,
           failed_tid: ets_stats,
           spider_tid: ets_stats,
-          item_processor_tid: ets_stats
+          item_processor_tid: ets_stats,
+          throughputs: [component_throughput_info]
         ]
   def stats(spider) do
     components =
       :persistent_term.get(spider)
       |> Enum.sort()
-      |> Enum.map(fn {key, tid} ->
-        {key,
-         tid
-         |> :ets.info()
-         |> Keyword.take([:size, :memory])}
+      |> Enum.map(fn
+        {:stats_tid, tid} -> {:throughputs, throughput(tid)}
+        {key, tid} -> {key, tid |> :ets.info() |> Keyword.take([:size, :memory])}
       end)
 
     [{:status, Engine.status(spider)} | components]
@@ -168,11 +177,56 @@ defmodule SpiderMan do
         ]
   def ets_stats(spider) do
     :persistent_term.get(spider)
+    |> Enum.reject(&match?({:stats_tid, _}, &1))
     |> Enum.map(fn {key, tid} ->
       {key,
        tid
        |> :ets.info()
        |> Keyword.take([:size, :memory])}
+    end)
+  end
+
+  @doc """
+  fetch spider's throughput info, easy to show throughput infos on livebook
+
+  ## Example
+
+      iex> SpiderMan.throughput(spider)
+      [
+        %{component: :downloader, total: 100, success: 98, fail: 2, tps: 12.5, duration: 7840000000},
+        %{component: :item_processor, total: 98, success: 98, fail: 0, tps: 12.25, duration: 8000000000},
+        %{component: :spider, total: 98, success: 98, fail: 0, tps: 12.3, duration: 7970000000}
+      ]
+
+  It's also possible to render it directly with `Kino.DataTable` in livebook:
+
+      SpiderMan.throughput(spider) |> Kino.DataTable.new()
+
+  """
+  @spec throughput(spider) :: [component_throughput_info]
+  def throughput(spider) when is_atom(spider) do
+    :persistent_term.get(spider) |> Map.fetch!(:stats_tid) |> throughput()
+  end
+
+  def throughput(stats_tid) when is_reference(stats_tid) do
+    stats_tid
+    |> :ets.tab2list()
+    |> Enum.sort()
+    |> Enum.map(fn {component, total, success, fail, duration} ->
+      tps =
+        case System.convert_time_unit(duration, :native, :millisecond) do
+          0 -> 0
+          ms -> Float.floor(success / (ms / 1000), 2)
+        end
+
+      %{
+        component: component,
+        total: total,
+        success: success,
+        fail: fail,
+        tps: tps,
+        duration: duration
+      }
     end)
   end
 

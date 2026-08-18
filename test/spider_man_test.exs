@@ -51,8 +51,23 @@ defmodule SpiderMan.SpiderManTest do
              downloader_tid: [memory: _, size: 0],
              failed_tid: [memory: _, size: 0],
              item_processor_tid: [memory: _, size: 0],
-             spider_tid: [memory: _, size: 0]
+             spider_tid: [memory: _, size: 0],
+             throughputs: throughputs
            ] = SpiderMan.stats(spider)
+
+    assert [
+             %{component: :downloader, total: 0, success: 0, fail: 0, tps: 0, duration: 0},
+             %{component: :item_processor, total: 0, success: 0, fail: 0, tps: 0, duration: 0},
+             %{component: :spider, total: 0, success: 0, fail: 0, tps: 0, duration: 0}
+           ] = throughputs
+  end
+
+  test "throughput", %{spider: spider} do
+    assert [
+             %{component: :downloader, total: 0, success: 0, fail: 0, tps: 0, duration: 0},
+             %{component: :item_processor, total: 0, success: 0, fail: 0, tps: 0, duration: 0},
+             %{component: :spider, total: 0, success: 0, fail: 0, tps: 0, duration: 0}
+           ] = SpiderMan.throughput(spider)
   end
 
   test "list_spiders", %{spider: spider} do

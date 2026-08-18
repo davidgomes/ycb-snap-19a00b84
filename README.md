@@ -19,6 +19,14 @@ This example show how to crawly data from
 
 Import notebook from URL: [`elixirjobs.livemd`](./notebooks/elixirjobs.livemd)
 
+While the spider is running, you can easily inspect its throughput with
+`SpiderMan.throughput/1`, which pairs nicely with `Kino.DataTable` to render
+a live table in Livebook:
+
+```elixir
+SpiderMan.throughput(spider) |> Kino.DataTable.new()
+```
+
 ### Use in script or mix project
 
 ```elixir

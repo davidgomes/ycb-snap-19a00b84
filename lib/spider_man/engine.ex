@@ -394,6 +394,7 @@ defmodule SpiderMan.Engine do
     state = do_setup_ets_tables(state)
 
     :persistent_term.put(spider, %{
+      stats_tid: state.stats_tid,
       failed_tid: state.failed_tid,
       common_pipeline_tid: state.common_pipeline_tid,
       downloader_tid: state.downloader_tid,
