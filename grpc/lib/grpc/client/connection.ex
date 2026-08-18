@@ -184,7 +184,14 @@ defmodule GRPC.Client.Connection do
         ch = initial_state.virtual_channel
 
         case DynamicSupervisor.start_child(GRPC.Client.Supervisor, child_spec(initial_state)) do
-          {:ok, _pid} ->
+          {:ok, pid} ->
+            # The real channels were connected by the calling process (before
+            # the orchestrator process above existed), so some adapters (e.g.
+            # Gun) would tie the underlying connection's lifetime to it and
+            # tear it down as soon as this process exits. Transfer ownership
+            # to the now-running, long-lived orchestrator so named channels
+            # stay alive after the original caller exits.
+            transfer_ownership(initial_state, pid)
             {:ok, ch}
 
           {:error, {:already_started, _pid}} ->
@@ -514,6 +521,19 @@ defmodule GRPC.Client.Connection do
 
   defp via(ref) do
     {:via, Registry, {GRPC.Client.Registry, {__MODULE__, ref}}}
+  end
+
+  defp transfer_ownership(%__MODULE__{adapter: adapter} = state, new_owner) do
+    if function_exported?(adapter, :set_owner, 2) do
+      state.real_channels
+      |> Map.values()
+      |> Enum.each(fn
+        {:connected, channel} -> adapter.set_owner(channel, new_owner)
+        _ -> :ok
+      end)
+
+      adapter.set_owner(state.virtual_channel, new_owner)
+    end
   end
 
   defp do_disconnect(adapter, channel) do

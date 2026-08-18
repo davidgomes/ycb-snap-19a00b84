@@ -99,6 +99,23 @@ if Code.ensure_loaded?(:gun) do
       {:ok, channel}
     end
 
+    @doc """
+    Transfers ownership of the underlying `:gun` connection to `new_owner`.
+
+    Gun connections are owned by the process that opened them and are
+    gracefully shut down when that owner process exits. Since a channel may
+    initially be opened by the process calling `connect/2` (e.g. before the
+    long-lived orchestrator process that manages the named channel has
+    started), ownership must be transferred to a persistent process so the
+    connection stays alive after the original caller exits.
+    """
+    def set_owner(%{adapter_payload: %{conn_pid: gun_pid}}, new_owner)
+        when is_pid(gun_pid) and is_pid(new_owner) do
+      :gun.set_owner(gun_pid, new_owner)
+    end
+
+    def set_owner(_channel, _new_owner), do: :ok
+
     defp open({:local, socket_path}, _port, open_opts),
       do: :gun.open_unix(socket_path, open_opts)
 
