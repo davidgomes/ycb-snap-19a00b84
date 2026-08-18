@@ -230,6 +230,9 @@ defmodule Oban.Web.Components.Core do
   defp badge_icon(%{name: "link"} = assigns),
     do: ~H[<Icons.icon name="icon-link" class="h-4 w-4 shrink-0" />]
 
+  defp badge_icon(%{name: "bolt_circle"} = assigns),
+    do: ~H[<Icons.icon name="icon-bolt-circle" class="h-4 w-4 shrink-0" />]
+
   defp badge_icon(%{name: "power"} = assigns),
     do: ~H[<Icons.icon name="icon-power" class="h-4 w-4 shrink-0" />]
 

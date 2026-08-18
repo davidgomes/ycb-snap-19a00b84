@@ -65,6 +65,32 @@ defmodule Oban.Web.Jobs.DetailComponentTest do
     assert html =~ "ARGS REDACTED"
   end
 
+  test "displaying the deadline for a job awaiting a signal" do
+    meta = %{"await_until" => "2099-01-01T00:00:00Z"}
+    job = %Oban.Job{id: 1, worker: "MyApp.Worker", args: %{}, meta: meta}
+
+    html = render_component(Component, assigns(job), router: Router)
+
+    assert html =~ "Awaiting Signal"
+    assert html =~ "2099-01-01T00:00:00Z"
+    refute html =~ ~s(id="copy-signal")
+  end
+
+  test "displaying the decoded payload for a signaled job" do
+    signal = Base.encode64(:erlang.term_to_binary(%{decision: "approved"}), padding: false)
+    meta = %{"await_until" => "2099-01-01T00:00:00Z", "signal" => signal}
+    job = %Oban.Job{id: 1, worker: "MyApp.Worker", args: %{}, meta: meta}
+
+    html = render_component(Component, assigns(job), router: Router)
+
+    assert html =~ "Received Signal"
+    assert html =~ "approved"
+    assert html =~ ~s(id="copy-signal")
+
+    # The encoded value is hidden from the raw meta block
+    refute html =~ signal
+  end
+
   defp assigns(job, opts \\ []) do
     os_time = System.system_time(:second)
 

@@ -68,6 +68,7 @@ defmodule Oban.Web.Jobs.DetailComponent do
           <Core.status_badge :if={@job.meta["structured"]} icon="table_cells" label="Structured" />
           <Core.status_badge :if={@job.meta["decorated"]} icon="sparkles" label="Decorated" />
           <Core.status_badge :if={@job.meta["rescued"]} icon="life_buoy" label="Rescued" />
+          <Core.status_badge :if={signal?(@job)} icon="bolt_circle" label="Signal" />
 
           <Core.icon_button
             id="detail-cancel"
@@ -701,6 +702,37 @@ defmodule Oban.Web.Jobs.DetailComponent do
             <pre class="font-mono text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-all">{format_recorded(@job, @resolver)}</pre>
           </div>
         </div>
+
+        <div :if={signal?(@job)} id="job-signal" class="mt-4">
+          <div class="relative bg-gray-50 dark:bg-gray-800 rounded-md p-4">
+            <div class="flex justify-between items-start min-h-7 mb-2">
+              <div class="flex items-center space-x-2">
+                <h4 class="font-medium text-xs uppercase text-gray-500 dark:text-gray-400">
+                  {signal_title(@job)}
+                </h4>
+                <.pro_badge id="signal-pro-badge" tooltip="Signal from Oban.Pro.Worker" />
+              </div>
+              <button
+                :if={signaled?(@job)}
+                type="button"
+                id="copy-signal"
+                class="w-9 h-9 -mr-2 -mt-2 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-white dark:hover:bg-gray-700 cursor-pointer"
+                data-title="Copy to clipboard"
+                phx-hook="Tippy"
+                phx-click={copy_to_clipboard(format_signal(@job, @resolver))}
+              >
+                <Icons.icon name="icon-clipboard" class="w-4 h-4" />
+              </button>
+            </div>
+            <%= if signaled?(@job) do %>
+              <pre class="font-mono text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-all">{format_signal(@job, @resolver)}</pre>
+            <% else %>
+              <span class="text-sm text-gray-500 dark:text-gray-400">
+                {signal_deadline(@job)}
+              </span>
+            <% end %>
+          </div>
+        </div>
       </div>
     </div>
     """
@@ -805,12 +837,8 @@ defmodule Oban.Web.Jobs.DetailComponent do
   end
 
   defp format_meta(%{meta: meta} = job, resolver) do
-    job =
-      if meta["recorded"] do
-        %{job | meta: Map.delete(meta, "return")}
-      else
-        job
-      end
+    meta = if meta["recorded"], do: Map.delete(meta, "return"), else: meta
+    job = %{job | meta: Map.delete(meta, "signal")}
 
     Resolver.call_with_fallback(resolver, :format_job_meta, [job])
   end
@@ -827,6 +855,27 @@ defmodule Oban.Web.Jobs.DetailComponent do
         "Recording Not Enabled"
     end
   end
+
+  defp format_signal(%{meta: %{"signal" => signal}} = job, resolver) do
+    Resolver.call_with_fallback(resolver, :format_signal, [signal, job])
+  end
+
+  defp signal?(job), do: signaled?(job) or awaiting?(job)
+
+  defp signaled?(%{meta: meta}), do: Map.has_key?(meta, "signal")
+
+  defp awaiting?(%{meta: meta}), do: Map.has_key?(meta, "await_until")
+
+  defp signal_title(job), do: if(signaled?(job), do: "Received Signal", else: "Awaiting Signal")
+
+  defp signal_deadline(%{meta: %{"await_until" => until}}) when is_binary(until) do
+    case NaiveDateTime.from_iso8601(until) do
+      {:ok, deadline} -> "Deadline #{Timing.datetime_to_words(deadline)} (#{until})"
+      {:error, _reason} -> "Deadline #{until}"
+    end
+  end
+
+  defp signal_deadline(_job), do: "No deadline"
 
   defp error_entry(assigns) do
     error =
