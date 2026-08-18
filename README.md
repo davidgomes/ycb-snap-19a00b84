@@ -19,6 +19,9 @@ This example show how to crawly data from
 
 Import notebook from URL: [`elixirjobs.livemd`](./notebooks/elixirjobs.livemd)
 
+The notebook also show how to display the throughput infos of the spider by
+[kino](https://hexdocs.pm/kino), see `SpiderMan.Stats` for more details.
+
 ### Use in script or mix project
 
 ```elixir

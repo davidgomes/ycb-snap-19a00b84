@@ -92,7 +92,14 @@ defmodule SpiderMan.Configuration do
     ]
 
     [
-      print_stats: [type: :boolean, default: true, doc: "Print the stats of spider, "],
+      print_stats: [
+        type: {:or, [:boolean, {:custom, __MODULE__, :validate_print_stats, []}]},
+        default: true,
+        doc:
+          "Print the stats of spider, set `false` to turn it off, or set a keyword list " <>
+            "(`[interval: 1000, callback: &IO.inspect/1]`) to custom how often the stats " <>
+            "are refreshed and how to handle them, see `SpiderMan.Stats` for details, "
+      ],
       log2file: [type: {:or, [:boolean, :string]}, default: true, doc: "Save the log to files, "],
       status: [
         type: {:in, [:running, :suspended]},
@@ -228,6 +235,19 @@ defmodule SpiderMan.Configuration do
       pipelines: pipelines_spec
     ] ++ extra
   end
+
+  def validate_print_stats(options) when is_list(options) do
+    valid? =
+      Enum.all?(options, fn
+        {:interval, interval} -> is_integer(interval) and interval > 0
+        {:callback, callback} -> is_function(callback, 1)
+        _ -> false
+      end)
+
+    if valid?, do: {:ok, options}, else: {:error, "bad print_stats: #{inspect(options)}"}
+  end
+
+  def validate_print_stats(v), do: {:error, "bad print_stats: #{inspect(v)}"}
 
   def validate_pipeline(v = {fun, _arg}) when is_function(fun, 2), do: {:ok, v}
   def validate_pipeline(v = {mod, f, _arg}) when is_atom(mod) and is_atom(f), do: {:ok, v}

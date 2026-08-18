@@ -6,7 +6,8 @@
 Mix.install([
   {:spider_man, "~> 0.5"},
   {:floki, "~> 0.34"},
-  {:nimble_csv, "~> 1.2"}
+  {:nimble_csv, "~> 1.2"},
+  {:kino, "~> 0.10"}
 ])
 ```
 
@@ -138,6 +139,20 @@ end
 
 callbacks = [init: init, handle_response: handle_response]
 {:ok, settings} = SpiderMan.CommonSpider.check_callbacks_and_merge_settings(callbacks, settings)
+```
+
+show throughput infos of the spider while it's running
+
+```elixir
+frame = Kino.Frame.new() |> Kino.render()
+
+settings =
+  Keyword.put(settings, :print_stats,
+    interval: 1000,
+    callback: &Kino.Frame.render(frame, Kino.DataTable.new(&1))
+  )
+
+:ok
 ```
 
 run ther spider

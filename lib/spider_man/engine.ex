@@ -606,9 +606,15 @@ defmodule SpiderMan.Engine do
 
   defp setup_print_stats(%{stats_tid: tid, spider: spider, status: status} = state) do
     Stats.attach_spider_stats(spider, tid)
+    options = if is_list(state.print_stats), do: state.print_stats, else: []
 
     {:ok, stats_task_pid} =
-      Stats.Task.start_link(%{status: status, tid: tid, refresh_interval: 1000})
+      Stats.Task.start_link(%{
+        status: status,
+        tid: tid,
+        refresh_interval: Keyword.get(options, :interval, 1000),
+        callback: Keyword.get(options, :callback, &Stats.print_stats/1)
+      })
 
     Map.put(state, :stats_task_pid, stats_task_pid)
   end

@@ -55,6 +55,17 @@ defmodule SpiderMan.SpiderManTest do
            ] = SpiderMan.stats(spider)
   end
 
+  test "get_stats", %{spider: spider} do
+    assert [downloader, spider_stats, item_processor] = stats = SpiderMan.get_stats(spider)
+    assert %{component: :downloader, total: _, success: _, fail: _, duration_ms: _} = downloader
+    assert %{component: :spider} = spider_stats
+    assert %{component: :item_processor} = item_processor
+    assert Enum.all?(stats, &is_float(&1.tps))
+
+    assert SpiderMan.Stats.format_stats(stats) =~
+             ~r/^Downloader:\[.+\] Spider:\[.+\] ItemProcessor:\[.+\]$/
+  end
+
   test "list_spiders", %{spider: spider} do
     spiders = SpiderMan.list_spiders()
     assert is_list(spiders)

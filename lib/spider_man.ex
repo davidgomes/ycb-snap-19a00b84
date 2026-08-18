@@ -158,6 +158,14 @@ defmodule SpiderMan do
     [{:status, Engine.status(spider)} | components]
   end
 
+  @doc """
+  fetch spider's throughput infos
+
+  see `SpiderMan.Stats` for more details.
+  """
+  @spec get_stats(spider) :: [SpiderMan.Stats.component_stats()]
+  defdelegate get_stats(spider), to: SpiderMan.Stats
+
   @doc "fetch spider's statistics of all ets"
   @spec ets_stats(spider) :: [
           common_pipeline_tid: ets_stats,
