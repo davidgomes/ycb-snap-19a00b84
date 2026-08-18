@@ -43,12 +43,12 @@ defmodule BroadwayKafka.ProducerTest do
     defrecord :kafka_message, extract(:kafka_message, from_lib: "brod/include/brod.hrl")
 
     @impl true
-    def init(opts), do: {:ok, Map.new(opts)}
+    def init(opts), do: {:ok, opts[:child_specs], Map.new(opts)}
 
     @impl true
     def setup(_stage_pid, client_id, _callback_module, config) do
       if !Process.whereis(client_id) do
-        {:ok, _pid} = Agent.start(fn -> true end, name: client_id)
+        {:ok, _pid} = Agent.start(fn -> Map.put(config, :connected, true) end, name: client_id)
         Process.monitor(client_id)
       end
 
@@ -96,14 +96,17 @@ defmodule BroadwayKafka.ProducerTest do
     def connected?(client_id) do
       connected? =
         if pid = Process.whereis(client_id) do
-          Process.alive?(pid) && Agent.get(client_id, & &1)
+          Process.alive?(pid) && Agent.get(client_id, fn config -> config.connected end)
         end
 
       connected?
     end
 
     @impl true
-    def disconnect(_client_id) do
+    def disconnect(client_id) do
+      test_pid = Agent.get(client_id, fn config -> config.test_pid end)
+      send(test_pid, :disconnected)
+
       :ok
     end
 
@@ -569,13 +572,40 @@ defmodule BroadwayKafka.ProducerTest do
     Process.exit(Process.whereis(client_id), :kill)
     refute_receive {:setup, _}
 
-    {:ok, _} = Agent.start(fn -> false end, name: client_id)
+    {:ok, _} = Agent.start_link(fn -> %{test_pid: self(), connected: false} end, name: client_id)
     refute_receive {:setup, _}
 
-    Agent.update(client_id, fn _ -> true end)
+    Agent.update(client_id, fn state -> Map.put(state, :connected, true) end)
     assert_receive {:setup, ^client_id}
 
     stop_broadway(pid)
+  end
+
+  test "multiple producers share the same client when shared_client is true" do
+    {:ok, message_server} = MessageServer.start_link()
+
+    {:ok, pid} =
+      start_broadway(message_server,
+        producers_concurrency: 2,
+        shared_client: true,
+        shared_client_id: :shared_test_client
+      )
+
+    assert_receive {:setup, :shared_test_client}
+    assert_receive {:setup, :shared_test_client}
+
+    stop_broadway(pid)
+    refute_received :disconnected
+  end
+
+  test "disconnects the client on terminate when shared_client is false" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server)
+
+    assert_receive {:setup, _client_id}
+
+    stop_broadway(pid)
+    assert_receive :disconnected
   end
 
   test "keep the producer alive on ack errors and log the exception" do
@@ -630,7 +660,10 @@ defmodule BroadwayKafka.ProducerTest do
                max_bytes: 10,
                offset_commit_on_ack: false,
                begin_offset: :assigned,
-               ack_raises_on_offset: ack_raises_on_offset
+               ack_raises_on_offset: ack_raises_on_offset,
+               shared_client: opts[:shared_client] || false,
+               shared_client_id: opts[:shared_client_id],
+               child_specs: opts[:child_specs] || []
              ]},
           concurrency: producers_concurrency
         ],
