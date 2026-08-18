@@ -12,6 +12,16 @@ defmodule GenQueue.Adapters.ObanTest do
     use GenQueue, otp_app: :gen_queue_oban
   end
 
+  defmodule ConfiguredEnqueuer do
+    Application.put_env(:gen_queue_oban, __MODULE__,
+      adapter: GenQueue.Adapters.Oban,
+      repo: GenQueue.Oban.Repo,
+      queues: false
+    )
+
+    use GenQueue, otp_app: :gen_queue_oban
+  end
+
   defmodule Job do
     use Oban.Worker, queue: "default", max_attempts: 1
 
@@ -106,6 +116,13 @@ defmodule GenQueue.Adapters.ObanTest do
 
       assert_receive({:performed, %{"foo" => "bar"}})
     end
+  end
+
+  test "enqueuer can be started with its oban config" do
+    start_supervised!(ConfiguredEnqueuer)
+
+    assert {:ok, %GenQueue.Job{module: Job, args: [%{}]}} = ConfiguredEnqueuer.push(Job)
+    assert [%Oban.Job{args: %{}, queue: "default"}] = all_jobs()
   end
 
   test "enqueuer can be started as part of a supervision tree" do

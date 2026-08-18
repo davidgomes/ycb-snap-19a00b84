@@ -57,6 +57,17 @@ our new `Enqueuer` module to our supervision tree.
   ]
 ```
 
+Any `Oban` options in our config - or passed to `supervisor/2` - are handed to `Oban` when
+our `Enqueuer` starts.
+
+```elixir
+config :my_app, Enqueuer, [
+  adapter: GenQueue.Adapters.Oban,
+  repo: MyApp.Repo,
+  queues: [default: 10]
+]
+```
+
 ## Creating Jobs
 
 Jobs are simply modules with a `perform` method. With `Oban` we must add `use Oban.Worker`

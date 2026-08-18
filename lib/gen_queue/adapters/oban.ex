@@ -10,7 +10,8 @@ defmodule GenQueue.Adapters.Oban do
   @doc """
   Start an `Oban` supervisor named after the given `GenQueue`.
 
-  This adapter handles zero `Oban` related config. Please refer to the `Oban`
+  The config of the `GenQueue` - aside from the `:adapter` - is handed to
+  `Oban`, along with any options provided. Please refer to the `Oban`
   documentation for details on the options available.
 
   ## Parameters:
@@ -23,7 +24,9 @@ defmodule GenQueue.Adapters.Oban do
   """
   @spec start_link(gen_queue :: GenQueue.t(), opts :: Keyword.t()) :: Supervisor.on_start()
   def start_link(gen_queue, opts \\ []) do
-    opts
+    gen_queue.config()
+    |> Keyword.drop([:adapter])
+    |> Keyword.merge(opts)
     |> Keyword.merge(name: gen_queue)
     |> Oban.start_link()
   end
