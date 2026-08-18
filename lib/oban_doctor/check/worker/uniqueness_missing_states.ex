@@ -8,6 +8,12 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   Missing states means duplicate jobs could be enqueued when existing jobs are
   in the missing state.
 
+  Named state groups (`:all`, `:incomplete`, `:scheduled` and `:successful`) are
+  expanded to the states they cover before comparing. The `:scheduled` group is
+  skipped because it is the documented way to debounce jobs, and the `:all` and
+  `:successful` groups are reported by
+  `ObanDoctor.Check.Worker.StateGroupUsage` instead.
+
   ## Examples
 
   Bad - only checks available state:
@@ -15,11 +21,45 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
 
   Good - includes all non-final states:
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  Good - the `:incomplete` group covers every non-final state:
+      unique: [fields: [:args], states: :incomplete]
+
+  ## References
+
+    * [Unique Jobs](https://hexdocs.pm/oban/unique_jobs.html)
+    * [`Oban.Job.unique_states/1`](https://hexdocs.pm/oban/Oban.Job.html#unique_states/1)
   """
 
   use ObanDoctor.Check, category: :worker
 
+  @docs_ref "https://hexdocs.pm/oban/unique_jobs.html#unique-options"
+
   @recommended_states [:available, :scheduled, :executing, :retryable]
+
+  # Mirrors `Oban.Job.unique_states/1`.
+  @state_groups %{
+    all: [
+      :suspended,
+      :scheduled,
+      :available,
+      :executing,
+      :retryable,
+      :completed,
+      :discarded,
+      :cancelled
+    ],
+    incomplete: [:suspended, :available, :scheduled, :executing, :retryable],
+    scheduled: [:scheduled],
+    successful: [:suspended, :available, :scheduled, :executing, :retryable, :completed]
+  }
+
+  # Groups reported by other checks, or intentional by design.
+  @ignored_groups [:all, :successful, :scheduled]
+
+  # `:scheduled` is both a group and a state name, so inside a list it is only
+  # ever a state.
+  @ignored_group_names @ignored_groups -- [:scheduled]
 
   @impl true
   def id, do: :uniqueness_missing_states
@@ -38,6 +78,7 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
 
     workers
     |> Enum.filter(&has_unique_with_states?/1)
+    |> Enum.reject(&ignored_group?/1)
     |> Enum.filter(&missing_recommended_states?/1)
     |> Enum.map(&build_issue/1)
   end
@@ -48,42 +89,49 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
 
   defp has_unique_with_states?(_), do: false
 
-  defp missing_recommended_states?(%{unique: unique}) do
-    states = Keyword.get(unique, :states, [])
-
-    # Don't flag if they're using :all group (that's caught by another check)
-    if uses_all_group?(states) do
-      false
-    else
-      state_list = normalize_states(states)
-      missing = @recommended_states -- state_list
-      not Enum.empty?(missing)
+  defp ignored_group?(%{unique: unique}) do
+    case Keyword.get(unique, :states) do
+      group when is_atom(group) -> group in @ignored_groups
+      states when is_list(states) -> Enum.any?(states, &(&1 in @ignored_group_names))
+      _ -> false
     end
   end
 
-  defp uses_all_group?(:all), do: true
-  defp uses_all_group?([:all]), do: true
-  defp uses_all_group?(states) when is_list(states), do: :all in states
-  defp uses_all_group?(_), do: false
+  defp missing_recommended_states?(worker) do
+    not Enum.empty?(missing_states(worker))
+  end
 
-  defp normalize_states(states) when is_list(states), do: states
+  defp missing_states(%{unique: unique}) do
+    states = Keyword.get(unique, :states, [])
+
+    @recommended_states -- normalize_states(states)
+  end
+
+  defp normalize_states(states) when is_list(states) do
+    Enum.flat_map(states, &normalize_states/1)
+  end
+
+  defp normalize_states(state) when is_atom(state), do: Map.get(@state_groups, state, [state])
+
   defp normalize_states(_), do: []
 
   defp build_issue(worker) do
     states = Keyword.get(worker.unique, :states, [])
-    missing = @recommended_states -- normalize_states(states)
+    missing = missing_states(worker)
 
     Issue.new(
       check: __MODULE__,
       severity: default_severity(),
       message:
-        "Worker #{inspect(worker.module)} unique config missing states: #{inspect(missing)}",
+        "Worker #{inspect(worker.module)} unique config missing states: #{inspect(missing)}. " <>
+          "See #{@docs_ref}",
       file: worker.file,
       line: worker.line,
       meta: %{
         worker: worker.module,
         configured_states: states,
-        missing_states: missing
+        missing_states: missing,
+        docs: @docs_ref
       }
     )
   end

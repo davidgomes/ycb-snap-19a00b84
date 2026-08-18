@@ -109,6 +109,68 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       assert issues == []
     end
 
+    test "does not flag workers using the :incomplete state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.IncompleteGroupWorker,
+          file: "lib/my_app/workers/incomplete_group_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :incomplete],
+          max_attempts: nil
+        }
+      ]
+
+      assert UniquenessMissingStates.run(%{workers: workers}) == []
+    end
+
+    test "does not flag workers using the :scheduled state group for debouncing" do
+      workers = [
+        %{
+          module: MyApp.Workers.DebounceWorker,
+          file: "lib/my_app/workers/debounce_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :scheduled],
+          max_attempts: nil
+        }
+      ]
+
+      assert UniquenessMissingStates.run(%{workers: workers}) == []
+    end
+
+    test "does not flag workers using the :successful state group (handled by another check)" do
+      workers = [
+        %{
+          module: MyApp.Workers.SuccessfulGroupWorker,
+          file: "lib/my_app/workers/successful_group_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :successful],
+          max_attempts: nil
+        }
+      ]
+
+      assert UniquenessMissingStates.run(%{workers: workers}) == []
+    end
+
+    test "includes a documentation reference in the issue" do
+      workers = [
+        %{
+          module: MyApp.Workers.PartialWorker,
+          file: "lib/my_app/workers/partial_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: [:executing]],
+          max_attempts: nil
+        }
+      ]
+
+      assert [issue] = UniquenessMissingStates.run(%{workers: workers})
+      assert issue.meta.docs =~ "hexdocs.pm/oban/unique_jobs.html"
+      assert issue.message =~ "hexdocs.pm/oban/unique_jobs.html"
+    end
+
     test "detects workers missing only some states" do
       workers = [
         %{

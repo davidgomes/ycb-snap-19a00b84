@@ -66,6 +66,58 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsageTest do
       assert length(issues) == 1
     end
 
+    test "returns a warning when worker uses the :successful state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.DefaultWorker,
+          file: "lib/my_app/workers/default_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :successful],
+          max_attempts: nil
+        }
+      ]
+
+      issues = StateGroupUsage.run(%{workers: workers})
+
+      assert [issue] = issues
+      assert issue.severity == :warning
+      assert issue.message =~ ":successful state group"
+      assert issue.meta.state_group == :successful
+      assert issue.meta.terminal_states == [:completed]
+      assert issue.meta.docs =~ "hexdocs.pm/oban/unique_jobs.html"
+    end
+
+    test "returns no issues when worker uses the :incomplete state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.GoodWorker,
+          file: "lib/my_app/workers/good_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :incomplete],
+          max_attempts: nil
+        }
+      ]
+
+      assert StateGroupUsage.run(%{workers: workers}) == []
+    end
+
+    test "returns no issues when worker uses the :scheduled state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.DebounceWorker,
+          file: "lib/my_app/workers/debounce_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :scheduled],
+          max_attempts: nil
+        }
+      ]
+
+      assert StateGroupUsage.run(%{workers: workers}) == []
+    end
+
     test "returns no issues when worker uses explicit states" do
       workers = [
         %{

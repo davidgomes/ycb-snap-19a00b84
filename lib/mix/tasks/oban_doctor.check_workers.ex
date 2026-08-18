@@ -17,8 +17,12 @@ defmodule Mix.Tasks.ObanDoctor.CheckWorkers do
   This task runs the following checks:
 
     * **MissingQueue** - Detects workers using queues not defined in Oban config
-    * **StateGroupUsage** - Detects workers using :all state group (dangerous)
+    * **StateGroupUsage** - Detects workers using the :all or :successful state groups, which
+      include terminal states (dangerous)
     * **UniquenessMissingStates** - Detects workers with unique config missing recommended states
+
+  See Oban's [Unique Jobs](https://hexdocs.pm/oban/unique_jobs.html) guide and
+  `Oban.Job.unique_states/1` for details on the named state groups.
     * **UniqueWithoutKeys** - Detects workers with unique on :args without explicit keys
     * **NoMaxAttempts** - Detects workers using default max_attempts (20)
 
