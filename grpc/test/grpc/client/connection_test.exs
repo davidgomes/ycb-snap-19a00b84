@@ -16,13 +16,13 @@ defmodule GRPC.Client.ConnectionTest do
   end
 
   describe "pick_channel/2" do
-    test "returns {:error, :no_connection} when no persistent_term entry exists", %{ref: ref} do
+    test "returns {:error, :no_connection} when the ref was never published", %{ref: ref} do
       channel = %Channel{ref: ref}
 
       assert {:error, :no_connection} = Connection.pick_channel(channel)
     end
 
-    test "returns {:ok, channel} when a channel is stored in persistent_term", %{
+    test "returns {:ok, channel} by asking the load balancer", %{
       ref: ref,
       target: target,
       adapter: adapter
@@ -30,6 +30,21 @@ defmodule GRPC.Client.ConnectionTest do
       {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
 
       assert {:ok, ^channel} = Connection.pick_channel(%Channel{ref: ref})
+    end
+
+    test "picks without messaging the orchestrator", %{
+      ref: ref,
+      target: target,
+      adapter: adapter
+    } do
+      {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
+
+      pid = whereis_name(ref)
+      assert {:message_queue_len, 0} = Process.info(pid, :message_queue_len)
+
+      Enum.each(1..100, fn _ -> assert {:ok, _} = Connection.pick_channel(channel) end)
+
+      assert {:message_queue_len, 0} = Process.info(pid, :message_queue_len)
     end
   end
 
@@ -69,30 +84,83 @@ defmodule GRPC.Client.ConnectionTest do
       assert_receive {:DOWN, ^ref_mon, :process, ^pid, _reason}, 500
     end
 
-    test "pick_channel returns {:error, :no_connection} after disconnect (persistent_term is erased)",
-         %{ref: ref, target: target, adapter: adapter} do
-      {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
-
-      {:ok, _} = Connection.disconnect(channel)
-
-      assert {:error, :no_connection} = Connection.pick_channel(channel)
-    end
-  end
-
-  describe "terminate/2 - persistent_term cleanup on process kill" do
-    test "persistent_term is erased when process is killed without disconnect", %{
+    test "pick_channel returns {:error, :no_connection} after disconnect", %{
       ref: ref,
       target: target,
       adapter: adapter
     } do
       {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
 
+      {:ok, _} = Connection.disconnect(channel)
+
+      assert {:error, :no_connection} = Connection.pick_channel(channel)
+    end
+
+    test "the load balancer table is freed on disconnect", %{
+      ref: ref,
+      target: target,
+      adapter: adapter
+    } do
+      {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
+      table = lb_table(ref)
+
+      {:ok, _} = Connection.disconnect(channel)
+
+      assert :ets.info(table) == :undefined
+    end
+
+    test "picks racing a disconnect never crash the caller", %{
+      ref: ref,
+      target: target,
+      adapter: adapter
+    } do
+      {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
+
+      pickers =
+        for _ <- 1..50 do
+          Task.async(fn ->
+            Enum.each(1..100, fn _ -> Connection.pick_channel(channel) end)
+            :done
+          end)
+        end
+
+      {:ok, _} = Connection.disconnect(channel)
+
+      assert Enum.all?(Task.await_many(pickers, 5_000), &(&1 == :done))
+    end
+  end
+
+  describe "terminate/2 - cleanup on process kill" do
+    test "the published entry and the lb table are freed without disconnect", %{
+      ref: ref,
+      target: target,
+      adapter: adapter
+    } do
+      {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
+      table = lb_table(ref)
+
       pid = whereis_name(ref)
       ref_mon = Process.monitor(pid)
       GenServer.stop(pid, :shutdown)
       assert_receive {:DOWN, ^ref_mon, :process, ^pid, :shutdown}, 500
 
+      assert :ets.info(table) == :undefined
       assert {:error, :no_connection} = Connection.pick_channel(channel)
+    end
+
+    test "repeated connect/disconnect cycles leak no persistent_term entries", %{
+      target: target,
+      adapter: adapter
+    } do
+      before_keys = published_refs()
+
+      Enum.each(1..100, fn _ ->
+        {:ok, channel} = Connection.connect(target, adapter: adapter, name: make_ref())
+        assert {:ok, _} = Connection.pick_channel(channel)
+        {:ok, _} = Connection.disconnect(channel)
+      end)
+
+      assert published_refs() == before_keys
     end
   end
 
@@ -156,5 +224,14 @@ defmodule GRPC.Client.ConnectionTest do
       [{pid, _value}] -> pid
       [] -> nil
     end
+  end
+
+  defp lb_table(ref) do
+    ref |> whereis_name() |> :sys.get_state() |> Map.fetch!(:lb_state) |> Map.fetch!(:table)
+  end
+
+  defp published_refs do
+    :persistent_term.get()
+    |> Enum.count(fn {key, _value} -> match?({Connection, _ref}, key) end)
   end
 end

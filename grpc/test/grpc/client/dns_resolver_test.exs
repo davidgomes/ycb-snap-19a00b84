@@ -846,14 +846,14 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "stale persistent_term prevention" do
+  describe "unhealthy backends after re-resolution" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.99"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
       Map.put(ctx, :failing_adapter, GRPC.Test.FailingClientAdapter)
     end
 
-    test "falls back to healthy channel when LB picks a failed one", ctx do
+    test "only healthy channels are handed out after a partial failure", ctx do
       expect(ctx.resolver, :resolve, fn _target ->
         {:ok, %{addresses: [%{address: "10.0.0.1", port: 50051}], service_config: nil}}
       end)

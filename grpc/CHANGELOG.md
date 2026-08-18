@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Enhancements
+
+  * The load-balancing decision is now taken per RPC, on the calling process. `GRPC.Client.Connection.pick_channel/2` reads the `{lb_mod, lb_state}` pair from `:persistent_term` and asks the policy, which serves the ready channels from an ETS table (plus an `:atomics` cursor for `GRPC.Client.LoadBalancing.RoundRobin`). Re-resolution now rewrites that table in place, so scaling backends in or out no longer writes to `:persistent_term` and no longer triggers a global GC pass.
+  * `GRPC.Client.LoadBalancing` gained the `update/2` and `stop/1` callbacks, and `init/1` now takes the ready `GRPC.Channel` structs (`:channels`) instead of resolved addresses. `pick/1` returns `{:ok, channel}` rather than an address pair.
+
 ## v1.0.0 (2026-06-15)
 
 ### Enhancements

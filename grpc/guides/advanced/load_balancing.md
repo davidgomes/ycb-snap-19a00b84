@@ -41,3 +41,24 @@ iex> {:ok, channel} = GRPC.Stub.connect("unix:/tmp/my.sock")
 >__Note__: When using `DNS` target, the connection layer periodically refreshes endpoints.
 
 ---
+
+## Load Balancing Policies
+
+Once a target resolves to more than one endpoint, a policy decides which one carries each RPC. It comes either from the service config advertised by the resolver or from the `:lb_policy` option:
+
+| Policy          | Module                                    | Behaviour                                     |
+|:----------------|:------------------------------------------|:----------------------------------------------|
+| `:pick_first`   | `GRPC.Client.LoadBalancing.PickFirst`     | Always uses the first ready endpoint (default) |
+| `:round_robin`  | `GRPC.Client.LoadBalancing.RoundRobin`    | Rotates over the ready endpoints, one step per RPC |
+
+```elixir
+iex> {:ok, channel} = GRPC.Stub.connect("dns://orders.prod.svc.cluster.local:50051", lb_policy: :round_robin)
+```
+
+The pick happens on the process making the call, once per RPC: the policy is read from `:persistent_term` and the ready channels come from an ETS table owned by the connection. No message is sent to the connection process on the hot path.
+
+Re-resolution rewrites that table in place. Endpoints that fail to connect are left out of it, so an RPC is never routed to a backend that is known to be down, and a connection with no ready endpoint answers `{:error, :no_connection}` until one comes back.
+
+Custom policies implement the `GRPC.Client.LoadBalancing` behaviour.
+
+---
