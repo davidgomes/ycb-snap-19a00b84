@@ -146,9 +146,13 @@ defmodule Mix.Tasks.Compile.Surface do
 
   alias Mix.Task.Compiler.Diagnostic
 
+  @manifest "compile.surface"
+  @manifest_vsn 1
+
   @switches [
     return_errors: :boolean,
-    warnings_as_errors: :boolean
+    warnings_as_errors: :boolean,
+    force: :boolean
   ]
 
   @assets_opts [
@@ -169,16 +173,86 @@ defmodule Mix.Tasks.Compile.Surface do
       {compile_opts, _argv, _err} = OptionParser.parse(args, switches: @switches)
       opts = Application.get_env(:surface, :compiler, [])
       asset_opts = Keyword.take(opts, @assets_opts)
-      asset_components = Surface.components()
-      project_components = Surface.components(only_current_project: true)
 
+      case up_to_date_diagnostics(asset_opts, compile_opts) do
+        {:ok, diagnostics} ->
+          handle_diagnostics(diagnostics, compile_opts)
+
+        :stale ->
+          compile(asset_opts, compile_opts)
+      end
+    end
+  end
+
+  @doc false
+  def manifests, do: [manifest()]
+
+  @doc false
+  def clean do
+    File.rm(manifest())
+    :ok
+  end
+
+  defp compile(asset_opts, compile_opts) do
+    asset_components = Surface.components()
+    project_components = Surface.components(only_current_project: true)
+
+    diagnostics =
       [
         Mix.Tasks.Compile.Surface.ValidateComponents.validate(project_components),
         Mix.Tasks.Compile.Surface.AssetGenerator.run(asset_components, asset_opts)
       ]
       |> List.flatten()
-      |> handle_diagnostics(compile_opts)
+
+    {status, diagnostics} = result = handle_diagnostics(diagnostics, compile_opts)
+
+    # Keeping no manifest on errors makes sure the next run recompiles everything
+    if status == :error do
+      File.rm(manifest())
+    else
+      write_manifest(asset_opts, diagnostics)
     end
+
+    result
+  end
+
+  # Returns the diagnostics of the last successful run if there's nothing to be recompiled
+  defp up_to_date_diagnostics(asset_opts, compile_opts) do
+    if compile_opts[:force] do
+      :stale
+    else
+      case read_manifest() do
+        {@manifest_vsn, ^asset_opts, diagnostics} ->
+          if Mix.Utils.stale?(sources(), [manifest()]), do: :stale, else: {:ok, diagnostics}
+
+        _ ->
+          :stale
+      end
+    end
+  end
+
+  # Any change in the project's modules or in its config/deps might affect the
+  # components' validation and the generated assets
+  defp sources do
+    Mix.Tasks.Compile.Elixir.manifests() ++ [Mix.Project.config_mtime()]
+  end
+
+  defp manifest do
+    Path.join(Mix.Project.manifest_path(), @manifest)
+  end
+
+  defp read_manifest do
+    try do
+      manifest() |> File.read!() |> :erlang.binary_to_term()
+    rescue
+      _ -> nil
+    end
+  end
+
+  defp write_manifest(asset_opts, diagnostics) do
+    manifest = manifest()
+    File.mkdir_p!(Path.dirname(manifest))
+    File.write!(manifest, :erlang.term_to_binary({@manifest_vsn, asset_opts, diagnostics}))
   end
 
   @doc false
@@ -201,13 +275,10 @@ defmodule Mix.Tasks.Compile.Surface do
     end
   end
 
-  if Version.match?(System.version(), ">= 1.14.0") do
-    defp print_diagnostic(message, :warning, file, {line, col}) do
-      IO.warn(message, file: file, line: line, column: col)
-    end
+  defp print_diagnostic(message, :warning, file, {line, col}) do
+    IO.warn(message, file: file, line: line, column: col)
   end
 
-  # TODO: Remove this clause in Surface v0.13 and set required elixir to >= v1.14
   defp print_diagnostic(message, :warning, file, line) do
     rel_file = file |> Path.relative_to_cwd() |> to_charlist()
     IO.warn(message, [{nil, :__FILE__, 1, [file: rel_file, line: line]}])

@@ -366,7 +366,7 @@ defmodule Mix.Tasks.Surface.Init.ExPatcher do
 
   defp zipper_append_patch(zipper, text_to_append, original_code) do
     case zipper do
-      {{:., _, _}, _} ->
+      %Sourceror.Zipper{node: {:., _, _}} ->
         # We can't get the range of the dot call in a qualified call like
         # `foo.bar()`, so we apply the patch to the parent. We get into this
         # situation when the qualified call has no arguments: the first child

@@ -39,9 +39,12 @@ defmodule Mix.Tasks.Compile.SurfaceTest do
       File.rm_rf!(@css_output_file)
     end
 
+    clean()
+
     on_exit(fn ->
       File.rm_rf!(@hooks_output_dir)
       File.rm_rf!(@css_output_file)
+      clean()
     end)
 
     :ok
@@ -49,6 +52,50 @@ defmodule Mix.Tasks.Compile.SurfaceTest do
 
   test "do nothing when receivning --from-mix-deps-compile" do
     assert run(["--from-mix-deps-compile"]) == {:noop, []}
+  end
+
+  test "do nothing if there's no change since the last run" do
+    capture_io(:standard_error, fn -> run(["--return-errors"]) end)
+
+    File.rm_rf!(@hooks_output_dir)
+
+    assert run(["--return-errors"]) == {:noop, []}
+    refute File.exists?(@hooks_index_file)
+  end
+
+  test "run again if the manifest is removed" do
+    capture_io(:standard_error, fn -> run(["--return-errors"]) end)
+
+    File.rm_rf!(@hooks_output_dir)
+    clean()
+
+    capture_io(:standard_error, fn -> run(["--return-errors"]) end)
+
+    assert File.exists?(@hooks_index_file)
+  end
+
+  test "run again when passing --force" do
+    capture_io(:standard_error, fn -> run(["--return-errors"]) end)
+
+    File.rm_rf!(@hooks_output_dir)
+
+    capture_io(:standard_error, fn -> run(["--return-errors", "--force"]) end)
+
+    assert File.exists?(@hooks_index_file)
+  end
+
+  test "run again if the compiler's config changes" do
+    capture_io(:standard_error, fn -> run(["--return-errors"]) end)
+
+    File.rm_rf!(@hooks_output_dir)
+    conf_before = Application.get_env(:surface, :compiler, [])
+    Application.put_env(:surface, :compiler, Keyword.put(conf_before, :variants_output_file, "tmp/_variants.js"))
+
+    on_exit(fn -> Application.put_env(:surface, :compiler, conf_before) end)
+
+    capture_io(:standard_error, fn -> run(["--return-errors"]) end)
+
+    assert File.exists?(@hooks_index_file)
   end
 
   test "generate index.js with empty object if there's no hooks available" do
