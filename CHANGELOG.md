@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+  * Add `:shared_client` option to share a single Kafka client across producers
+
 ## v0.4.1 (2023-03-14)
 
   * Disable `offset_commit_on_ack` during revoke assignment call
