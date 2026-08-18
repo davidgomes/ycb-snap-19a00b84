@@ -145,6 +145,15 @@ defmodule AshOban.Transformers.DefineActionWorkers do
           end
 
           :ok
+        rescue
+          error ->
+            case AshOban.snooze_or_cancel(error) do
+              nil ->
+                reraise error, __STACKTRACE__
+
+              snooze_or_cancel ->
+                snooze_or_cancel
+            end
         end
       end,
       Macro.Env.location(__ENV__)

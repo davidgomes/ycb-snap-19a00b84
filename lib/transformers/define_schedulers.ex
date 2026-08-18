@@ -1088,6 +1088,15 @@ defmodule AshOban.Transformers.DefineSchedulers do
             {:error, error} ->
               raise Ash.Error.to_ash_error(error)
           end
+        rescue
+          error ->
+            case AshOban.snooze_or_cancel(error) do
+              nil ->
+                reraise error, __STACKTRACE__
+
+              snooze_or_cancel ->
+                snooze_or_cancel
+            end
         end
 
         defp build_input(args, action_input, read_metadata) do
@@ -1224,12 +1233,18 @@ defmodule AshOban.Transformers.DefineSchedulers do
             end
           rescue
             error ->
-              handle_error(
-                job,
-                Ash.Error.to_ash_error(error, __STACKTRACE__),
-                primary_key,
-                __STACKTRACE__
-              )
+              case AshOban.snooze_or_cancel(error) do
+                nil ->
+                  handle_error(
+                    job,
+                    Ash.Error.to_ash_error(error, __STACKTRACE__),
+                    primary_key,
+                    __STACKTRACE__
+                  )
+
+                snooze_or_cancel ->
+                  snooze_or_cancel
+              end
           end
         end
       else
@@ -1349,12 +1364,18 @@ defmodule AshOban.Transformers.DefineSchedulers do
             end
           rescue
             error ->
-              handle_error(
-                job,
-                Ash.Error.to_ash_error(error, __STACKTRACE__),
-                primary_key,
-                __STACKTRACE__
-              )
+              case AshOban.snooze_or_cancel(error) do
+                nil ->
+                  handle_error(
+                    job,
+                    Ash.Error.to_ash_error(error, __STACKTRACE__),
+                    primary_key,
+                    __STACKTRACE__
+                  )
+
+                snooze_or_cancel ->
+                  snooze_or_cancel
+              end
           end
         end
       end

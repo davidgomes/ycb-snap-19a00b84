@@ -963,6 +963,105 @@ defmodule AshOban do
     map
   end
 
+  @doc """
+  Builds an error that, when returned or raised by an action run by AshOban, snoozes the job.
+
+  Snoozing a job reschedules it to run again after the given number of seconds, without
+  counting the attempt against the job's `max_attempts`. See
+  [snoozing jobs](https://hexdocs.pm/oban/Oban.Worker.html#module-snoozing-jobs) for more.
+
+  ```elixir
+  update :process do
+    change fn changeset, _context ->
+      if rate_limited?() do
+        Ash.Changeset.add_error(changeset, AshOban.snooze(60))
+      else
+        changeset
+      end
+    end
+  end
+  ```
+
+  Generic actions can return it directly:
+
+  ```elixir
+  action :process do
+    run fn _input, _context ->
+      if rate_limited?() do
+        {:error, AshOban.snooze(60)}
+      else
+        {:ok, :done}
+      end
+    end
+  end
+  ```
+
+  If the action is not being run by AshOban, this behaves like any other error.
+  """
+  @spec snooze(non_neg_integer()) :: Exception.t()
+  def snooze(seconds \\ 60) when is_integer(seconds) and seconds >= 0 do
+    AshOban.Errors.Snooze.exception(seconds: seconds)
+  end
+
+  @doc """
+  Builds an error that, when returned or raised by an action run by AshOban, cancels the job.
+
+  Cancelled jobs are not retried, regardless of how many attempts remain. Keep in mind that
+  a trigger's scheduler will schedule a new job for the record if it still matches the
+  trigger's `where` clause.
+
+  ```elixir
+  update :process do
+    change fn changeset, _context ->
+      if changeset.data.abandoned do
+        Ash.Changeset.add_error(changeset, AshOban.cancel("record was abandoned"))
+      else
+        changeset
+      end
+    end
+  end
+  ```
+
+  If the action is not being run by AshOban, this behaves like any other error.
+  """
+  @spec cancel(term()) :: Exception.t()
+  def cancel(reason \\ nil) do
+    AshOban.Errors.Cancel.exception(reason: reason)
+  end
+
+  @doc false
+  @spec snooze_or_cancel(term()) :: {:snooze, non_neg_integer()} | {:cancel, term()} | nil
+  def snooze_or_cancel(error) do
+    case find_snooze_or_cancel(error) do
+      %AshOban.Errors.Snooze{seconds: seconds} ->
+        {:snooze, seconds}
+
+      %AshOban.Errors.Cancel{reason: reason} ->
+        {:cancel, reason}
+
+      nil ->
+        nil
+    end
+  end
+
+  defp find_snooze_or_cancel(%AshOban.Errors.Snooze{} = error), do: error
+  defp find_snooze_or_cancel(%AshOban.Errors.Cancel{} = error), do: error
+
+  defp find_snooze_or_cancel(errors) when is_list(errors) do
+    Enum.find_value(errors, &find_snooze_or_cancel/1)
+  end
+
+  defp find_snooze_or_cancel(%{errors: errors}) when is_list(errors) do
+    find_snooze_or_cancel(errors)
+  end
+
+  # `Ash.Error.Unknown.UnknownError` stores the original error in `:error`
+  defp find_snooze_or_cancel(%{error: error}) when not is_nil(error) do
+    find_snooze_or_cancel(error)
+  end
+
+  defp find_snooze_or_cancel(_), do: nil
+
   @config_schema [
     require?: [
       type: :boolean,
