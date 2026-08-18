@@ -36,6 +36,8 @@ if Mix.env() == :test do
       triggered_process_generic: 10,
       triggered_fail_oban_job: 10,
       triggered_notify_each_tenant: 10,
+      triggered_snooze_oban_job: 10,
+      triggered_cancel_oban_job: 10,
       triggered_tags_tagged: 10,
       triggered_tags_merged_tags: 10,
       triggered_tags_tagged_action: 10
