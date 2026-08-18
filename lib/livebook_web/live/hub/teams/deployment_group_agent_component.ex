@@ -212,7 +212,8 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
   end
 
   defp docker_instructions(image, env) do
-    envs = Enum.map_join(env, "\n", fn {key, value} -> ~s/  -e #{key}="#{value}" \\/ end)
+    envs =
+      Enum.map_join(env, "\n", fn {key, value} -> ~s/  -e #{key}=#{shell_escape(value)} \\/ end)
 
     """
     docker run -p 8080:8080 -p 8081:8081 --pull always \\
@@ -222,7 +223,7 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
   end
 
   defp fly_instructions(image, env, hub_name, deployment_group_name) do
-    envs = Enum.map_join(env, " \\\n", fn {key, value} -> ~s/  #{key}="#{value}"/ end)
+    envs = Enum.map_join(env, " \\\n", fn {key, value} -> ~s/  #{key}=#{shell_escape(value)}/ end)
 
     example_dir =
       "lb-server-#{hub_name}-#{deployment_group_name}"
@@ -242,6 +243,12 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
       fly deploy --ha=false
       """
     }
+  end
+
+  # Within single quotes every character is literal, except for the
+  # single quote itself, which we close, escape and open again.
+  defp shell_escape(value) do
+    "'" <> String.replace(value, "'", ~S/'\''/) <> "'"
   end
 
   defp k8s_instructions(image, env, deployment_group_name) do
