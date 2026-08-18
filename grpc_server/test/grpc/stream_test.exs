@@ -517,8 +517,10 @@ defmodule GRPC.StreamTest do
           |> GRPC.Stream.run_with(%GRPC.Server.Stream{}, dry_run: true)
         end)
 
+      # The merged stream never terminates on its own, so this only needs to be
+      # long enough to prove the join did not crash.
       result =
-        case Task.yield(task, 1000) || Task.shutdown(task) do
+        case Task.yield(task, 100) || Task.shutdown(task) do
           {:ok, _} -> :ok
           _ -> :ok
         end

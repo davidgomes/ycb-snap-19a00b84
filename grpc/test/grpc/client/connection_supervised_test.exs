@@ -104,7 +104,7 @@ defmodule GRPC.Client.ConnectionSupervisedTest do
                       %{retry_delay: _}, %{name: ^name, reason: :connection_refused}},
                      1_000
 
-      assert {:error, :timeout} = Connection.await_ready(name, 100)
+      assert {:error, :timeout} = Connection.await_ready(name, 20)
 
       Agent.update(hosts, fn _ -> [] end)
       send(whereis_connection(name), :retry_establish)
@@ -194,7 +194,7 @@ defmodule GRPC.Client.ConnectionSupervisedTest do
       caller = self()
 
       for _ <- 1..5 do
-        assert {:error, :timeout} = Connection.await_ready(name, 50)
+        assert {:error, :timeout} = Connection.await_ready(name, 20)
       end
 
       # Five starts prove the connection registered every call; each re-entry
@@ -286,7 +286,10 @@ defmodule GRPC.Client.ConnectionSupervisedTest do
 
       other = spawn(fn -> :ok end)
       send(conn, {:EXIT, other, :some_crash})
-      refute_receive {:resolver_init, _}, 200
+
+      # Syncing with the Connection guarantees the stray :EXIT has been handled.
+      _ = :sys.get_state(conn)
+      refute_received {:resolver_init, _}
 
       Process.exit(worker, :kill)
       assert_receive {:resolver_init, _new_worker}, 1_000

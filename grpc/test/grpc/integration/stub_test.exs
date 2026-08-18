@@ -9,11 +9,14 @@ defmodule GRPC.Integration.StubTest do
     end
   end
 
+  @deadline 100
+
   defmodule SlowServer do
     use GRPC.Server, service: Helloworld.Greeter.Service
 
+    # Comfortably longer than the client deadline, so the client always gives up first.
     def say_hello(_req, _stream) do
-      Process.sleep(1000)
+      Process.sleep(1_000)
     end
   end
 
@@ -40,7 +43,6 @@ defmodule GRPC.Integration.StubTest do
   test "you can disconnect stubs" do
     run_server(HelloServer, fn port ->
       {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
-      Process.sleep(100)
 
       %{adapter_payload: %{conn_pid: connection_process_pid}} = channel
       %{gun_pid: gun_pid} = :sys.get_state(connection_process_pid)
@@ -147,7 +149,7 @@ defmodule GRPC.Integration.StubTest do
               %GRPC.RPCError{
                 message: "Deadline expired",
                 status: GRPC.Status.deadline_exceeded()
-              }} == channel |> Helloworld.Greeter.Stub.say_hello(req, timeout: 500)
+              }} == channel |> Helloworld.Greeter.Stub.say_hello(req, timeout: @deadline)
     end)
   end
 end

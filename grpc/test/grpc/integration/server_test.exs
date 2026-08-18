@@ -176,11 +176,14 @@ defmodule GRPC.Integration.ServerTest do
     end
   end
 
+  # Deadline used by the two tests below; the servers sleep either side of it.
+  @deadline 100
+
   defmodule TimeoutServer do
     use GRPC.Server, service: Routeguide.RouteGuide.Service
 
     def list_features(_rectangle, _stream) do
-      Process.sleep(600)
+      Process.sleep(1_000)
     end
   end
 
@@ -188,7 +191,7 @@ defmodule GRPC.Integration.ServerTest do
     use GRPC.Server, service: Routeguide.RouteGuide.Service
 
     def list_features(rectangle, materializer) do
-      Process.sleep(400)
+      Process.sleep(50)
       server_stream = Stream.each([rectangle.lo, rectangle.hi], fn point -> point end)
 
       server_stream
@@ -244,9 +247,8 @@ defmodule GRPC.Integration.ServerTest do
 
         {:ok, conn_pid} = :gun.open(~c"localhost", port)
         stream_ref = :gun.get(conn_pid, "/status")
-        Process.sleep(100)
 
-        assert_received {:gun_response, ^conn_pid, ^stream_ref, :nofin, 200, _headers}
+        assert_receive {:gun_response, ^conn_pid, ^stream_ref, :nofin, 200, _headers}
       end,
       0,
       adapter_opts: [status_handler: status_handler]
@@ -423,7 +425,7 @@ defmodule GRPC.Integration.ServerTest do
           error = %GRPC.RPCError{message: "Deadline expired", status: 4}
 
           assert {:error, ^error} =
-                   channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 500)
+                   channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: @deadline)
         end)
       end)
 
@@ -437,7 +439,9 @@ defmodule GRPC.Integration.ServerTest do
       low = %Routeguide.Point{latitude: 400_000_000, longitude: -750_000_000}
       high = %Routeguide.Point{latitude: 420_000_000, longitude: -730_000_000}
       rect = %Routeguide.Rectangle{lo: low, hi: high}
-      {:ok, stream} = channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 500)
+
+      {:ok, stream} =
+        channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 5 * @deadline)
 
       Enum.each(stream, fn {:ok, feature} ->
         assert feature
@@ -813,7 +817,7 @@ defmodule GRPC.Integration.ServerTest do
                }
              } = metadata
 
-      refute_receive _
+      refute_received _
     end
 
     test "sends server start+exception events on success" do
@@ -903,7 +907,7 @@ defmodule GRPC.Integration.ServerTest do
                }
              } = metadata
 
-      refute_receive _
+      refute_received _
     end
   end
 end
