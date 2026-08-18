@@ -190,6 +190,51 @@ end
 > ### Chunk processing {: .info}
 > The `oban_job` is not available in chunk worker contexts, since those process a batch of jobs rather than a single one.
 
+### Snoozing and Cancelling Jobs
+
+Sometimes an action knows that it can't do its work right now, or that it should never do it.
+[Snoozing](https://hexdocs.pm/oban/Oban.Worker.html#module-snoozing-jobs) reschedules the job to
+run again later, without using up one of the job's attempts. Cancelling stops the job from being
+retried at all.
+
+Actions signal this with errors built by `AshOban.snooze/1` and `AshOban.cancel/1`. They can be
+added to a changeset, returned from a generic action, or raised:
+
+```elixir
+update :sync_with_external_service do
+  require_atomic? false
+
+  change fn changeset, _context ->
+    case ExternalService.rate_limit_status() do
+      {:limited, retry_after_seconds} ->
+        Ash.Changeset.add_error(changeset, AshOban.snooze(retry_after_seconds))
+
+      :ok ->
+        changeset
+    end
+  end
+end
+
+action :import_from_github, :string do
+  run fn input, _context ->
+    if Application.get_env(:my_app, :imports_disabled?) do
+      {:error, AshOban.cancel("imports are disabled")}
+    else
+      GitHub.import()
+    end
+  end
+end
+```
+
+This works for triggers and scheduled actions alike. If the action is called outside of AshOban,
+these behave like any other error, so the same action can still be used directly.
+
+> ### Snoozing, cancelling and `on_error` {: .info}
+> Snoozing or cancelling takes precedence over the trigger's `on_error` action, and neither one
+> is logged as an error. Keep in mind that cancelling a trigger's job does not prevent the
+> scheduler from scheduling a new job for that record later, as long as it still matches the
+> trigger's `where` clause.
+
 ### Scheduled Actions
 
 Scheduled actions are a much simpler concept than triggers. They are used to perform a generic action on a specified schedule. For example, lets say
