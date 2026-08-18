@@ -145,6 +145,9 @@ defprotocol Flop.Schema do
   means you cannot add alias fields to the list of filterable fields, and you
   cannot sort by an alias field if you are using cursor-based pagination.
 
+  If you don't want to select the calculated value, you can define a custom
+  field with a sorter function instead.
+
   ## Compound fields
 
   Sometimes you might need to apply a search term to multiple fields at once,

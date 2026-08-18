@@ -32,6 +32,22 @@ from p in MyApp.Pet,
   }
 ```
 
+A custom field with a sorter function does the same without touching the
+select clause.
+
+```elixir
+@derive {Flop.Schema,
+         filterable: [],
+         sortable: [:name_lower],
+         adapter_opts: [
+           custom_fields: [
+             name_lower: [sorter: {__MODULE__, :name_lower_sorter, []}]
+           ]
+         ]}
+
+def name_lower_sorter(_opts), do: dynamic([p], fragment("lower(?)", p.name))
+```
+
 ## Sorting and filtering, or cursor pagination
 
 Alias fields cannot be used for filtering or cursor pagination. You can expose
