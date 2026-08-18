@@ -4,7 +4,9 @@ defmodule Warehouse.Factory do
   alias Warehouse.Schemas.{Component, Configuration, Location, Part, Sku}
 
   def component_factory do
-    %Component{}
+    %Component{
+      removed: false
+    }
   end
 
   def configuration_factory do
@@ -18,6 +20,7 @@ defmodule Warehouse.Factory do
     %Location{
       area: :assembly,
       disabled: false,
+      name: sequence(:location, &"location#{&1}"),
       removed: false
     }
   end
