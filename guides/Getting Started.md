@@ -158,3 +158,11 @@ ErrorTracker tracks every error by default. In certain cases some errors may be 
 ErrorTracker provides functionality that allows you to ignore errors based on their attributes and context.
 
 Take a look at the `ErrorTracker.Ignorer` behaviour for more information about how to implement your own ignorer.
+
+## Muting errors
+
+Sometimes an error is too noisy but you still want to keep track of its occurrences. In those cases you can mute the
+error from the web UI (or by calling `ErrorTracker.mute/1`).
+
+Occurrences of muted errors keep being tracked and stored, but no Telemetry event is emitted for them. This way your
+integrations and notifications can ignore them.

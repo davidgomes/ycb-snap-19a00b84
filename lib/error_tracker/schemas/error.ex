@@ -20,6 +20,7 @@ defmodule ErrorTracker.Error do
     field :source_line, :string
     field :source_function, :string
     field :status, Ecto.Enum, values: [:resolved, :unresolved], default: :unresolved
+    field :muted, :boolean, default: false
     field :fingerprint, :binary
     field :last_occurrence_at, :utc_datetime_usec
 
