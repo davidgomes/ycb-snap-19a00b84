@@ -8,6 +8,9 @@ defmodule ErrorTracker.Error do
   The fingerprint currently does not include the reason itself because it can
   contain specific details that can change on the same error depending on
   runtime conditions.
+
+  Errors can be muted, which keeps storing their occurrences but stops emitting
+  Telemetry events for them. See `ErrorTracker.mute/1` for more details.
   """
 
   use Ecto.Schema
@@ -20,6 +23,7 @@ defmodule ErrorTracker.Error do
     field :source_line, :string
     field :source_function, :string
     field :status, Ecto.Enum, values: [:resolved, :unresolved], default: :unresolved
+    field :muted, :boolean, default: false
     field :fingerprint, :binary
     field :last_occurrence_at, :utc_datetime_usec
 
