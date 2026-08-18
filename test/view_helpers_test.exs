@@ -124,4 +124,25 @@ defmodule CoherenceTestWeb.ViewHelpers do
     assert ViewHelpers.coherence_links(conn, :layout, register: false)
            |> floki_link == {"/sessions/new", @signin_link}
   end
+
+  test "required_label with default title" do
+    html =
+      Phoenix.HTML.Form.form_for(:user, "/", fn f ->
+        ViewHelpers.required_label(f, :email)
+      end)
+      |> Phoenix.HTML.safe_to_string()
+
+    assert Floki.find(html, "abbr.required") |> Floki.attribute("title") == ["required"]
+  end
+
+  test "required_label with custom label" do
+    html =
+      Phoenix.HTML.Form.form_for(:user, "/", fn f ->
+        ViewHelpers.required_label(f, :email, label: "Custom Email")
+      end)
+      |> Phoenix.HTML.safe_to_string()
+
+    assert Floki.find(html, "label") |> Floki.text() =~ "Custom Email"
+    assert Floki.find(html, "abbr.required") |> Floki.attribute("title") == ["required"]
+  end
 end
