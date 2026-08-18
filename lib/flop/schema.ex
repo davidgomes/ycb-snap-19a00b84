@@ -378,12 +378,12 @@ defprotocol Flop.Schema do
   `{mod :: module, function :: atom, opts :: keyword}`.
 
   - `filter` is called to filter by the field. It receives the Ecto query, the
-    Flop filter and an options keyword list, and returns the updated query. A
-    custom field needs it to be filterable.
-  - `field_dynamic` is called to order by the field. It receives an options
-    keyword list and returns an `Ecto.Query.dynamic_expr`, which Flop applies
-    the order direction to. It receives neither the query nor the direction. A
-    custom field needs it to be sortable.
+    Flop filter and an options keyword list, and returns the updated query.
+  - `field_dynamic` is called to filter or order by the field. It receives an
+    options keyword list and returns an `Ecto.Query.dynamic_expr`. Flop builds the
+    filter conditions or applies the order direction using that expression. It
+    receives neither the query nor the direction. A custom field needs it to be
+    sortable, or filterable (if no `filter` function is configured).
 
   If runtime options are necessary (like the timezone of the request or the user
   ID of the current user), use the `extra_opts` option when calling Flop
@@ -624,11 +624,11 @@ defprotocol Flop.Schema do
   - `:filter` - A module/function/options tuple referencing a custom filter
     function. The function must take the Ecto query, the `Flop.Filter` struct,
     and the options from the tuple as arguments, and return the updated query.
-    Required if the field is filterable.
   - `:field_dynamic` - A module/function/options tuple referencing a function
     that returns the field expression as an `Ecto.Query.dynamic_expr`. The
     function takes the options from the tuple as its only argument. Flop applies
-    the order direction to the expression. Required if the field is sortable.
+    the filter operators or the order direction to the expression. Required if
+    the field is sortable, or filterable (unless `:filter` is configured).
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator
     and value validation is based on this option.
   - `:bindings` - If either callback requires certain named bindings to be
@@ -895,11 +895,9 @@ defimpl Flop.Schema, for: Any do
 
     adapter = Keyword.fetch!(options, :adapter)
 
-    adapter_opts =
-      Keyword.merge(legacy_adapter_opts, Keyword.fetch!(options, :adapter_opts))
+    adapter_opts = Keyword.merge(legacy_adapter_opts, Keyword.fetch!(options, :adapter_opts))
 
-    adapter_opts =
-      adapter.init_schema_opts(options, adapter_opts, __CALLER__.module, struct)
+    adapter_opts = adapter.init_schema_opts(options, adapter_opts, __CALLER__.module, struct)
 
     options = Keyword.put(options, :adapter_opts, adapter_opts)
 

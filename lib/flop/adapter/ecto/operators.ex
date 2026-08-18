@@ -63,158 +63,156 @@ defmodule Flop.Adapter.Ecto.Operators do
     end
   end
 
-  # The second argument says whether the repo adapter supports ILIKE. If it
-  # doesn't, ILIKE is replaced with LIKE. See Flop.Adapter.Ecto.Dialect.
-  def op_config(:=~, false), do: op_config(:like)
-  def op_config(:ilike, false), do: op_config(:like)
-  def op_config(:not_ilike, false), do: op_config(:not_like)
-  def op_config(:ilike_and, false), do: op_config(:like_and)
-  def op_config(:ilike_or, false), do: op_config(:like_or)
+  @default_field_ast quote(do: field(r, ^var!(field)))
 
-  def op_config(:starts_with, false) do
-    fragment = like_fragment(quote(do: ^var!(value)))
+  def op_config(op), do: op_config(op, @default_field_ast, true)
+  def op_config(op, ilike?) when is_boolean(ilike?), do: op_config(op, @default_field_ast, ilike?)
+  def op_config(op, field_ast), do: op_config(op, field_ast, true)
+
+  # The third argument says whether the repo adapter supports ILIKE. If it
+  # doesn't, ILIKE is replaced with LIKE. See Flop.Adapter.Ecto.Dialect.
+  def op_config(:=~, field_ast, false), do: op_config(:like, field_ast)
+  def op_config(:ilike, field_ast, false), do: op_config(:like, field_ast)
+  def op_config(:not_ilike, field_ast, false), do: op_config(:not_like, field_ast)
+  def op_config(:ilike_and, field_ast, false), do: op_config(:like_and, field_ast)
+  def op_config(:ilike_or, field_ast, false), do: op_config(:like_or, field_ast)
+
+  def op_config(:starts_with, field_ast, false) do
+    fragment = like_fragment(field_ast, quote(do: ^var!(value)))
     {fragment, prelude(:add_wildcard_suffix), nil}
   end
 
-  def op_config(:ends_with, false) do
-    fragment = like_fragment(quote(do: ^var!(value)))
+  def op_config(:ends_with, field_ast, false) do
+    fragment = like_fragment(field_ast, quote(do: ^var!(value)))
     {fragment, prelude(:add_wildcard_prefix), nil}
   end
 
-  def op_config(op, _ilike?), do: op_config(op)
+  def op_config(op, field_ast, _ilike?), do: op_config(op, field_ast)
 
-  def op_config(:==) do
+  def op_config(:==, field_ast) do
     fragment =
       quote do
-        field(r, ^var!(field)) == ^var!(value)
+        unquote(field_ast) == ^var!(value)
       end
 
     {fragment, nil, nil}
   end
 
-  def op_config(:!=) do
+  def op_config(:!=, field_ast) do
     fragment =
       quote do
-        field(r, ^var!(field)) != ^var!(value)
+        unquote(field_ast) != ^var!(value)
       end
 
     {fragment, nil, nil}
   end
 
-  def op_config(:>=) do
+  def op_config(:>=, field_ast) do
     fragment =
       quote do
-        field(r, ^var!(field)) >= ^var!(value)
+        unquote(field_ast) >= ^var!(value)
       end
 
     {fragment, nil, nil}
   end
 
-  def op_config(:<=) do
+  def op_config(:<=, field_ast) do
     fragment =
       quote do
-        field(r, ^var!(field)) <= ^var!(value)
+        unquote(field_ast) <= ^var!(value)
       end
 
     {fragment, nil, nil}
   end
 
-  def op_config(:>) do
+  def op_config(:>, field_ast) do
     fragment =
       quote do
-        field(r, ^var!(field)) > ^var!(value)
+        unquote(field_ast) > ^var!(value)
       end
 
     {fragment, nil, nil}
   end
 
-  def op_config(:<) do
+  def op_config(:<, field_ast) do
     fragment =
       quote do
-        field(r, ^var!(field)) < ^var!(value)
+        unquote(field_ast) < ^var!(value)
       end
 
     {fragment, nil, nil}
   end
 
-  def op_config(:in) do
+  def op_config(:in, field_ast) do
     fragment =
       quote do
-        field(r, ^var!(field)) in ^var!(value)
+        unquote(field_ast) in ^var!(value)
       end
 
     {fragment, nil, nil}
   end
 
-  def op_config(:contains) do
+  def op_config(:contains, field_ast) do
     fragment =
       quote do
-        ^var!(value) in field(r, ^var!(field))
+        ^var!(value) in unquote(field_ast)
       end
 
     {fragment, nil, nil}
   end
 
-  def op_config(:not_contains) do
+  def op_config(:not_contains, field_ast) do
     fragment =
       quote do
-        ^var!(value) not in field(r, ^var!(field))
+        ^var!(value) not in unquote(field_ast)
       end
 
     {fragment, nil, nil}
   end
 
-  def op_config(:like) do
-    fragment = like_fragment(quote(do: ^var!(value)))
+  def op_config(:like, field_ast) do
+    fragment = like_fragment(field_ast, quote(do: ^var!(value)))
     prelude = prelude(:add_wildcard)
     {fragment, prelude, nil}
   end
 
-  def op_config(:not_like) do
+  def op_config(:not_like, field_ast) do
     fragment =
       quote do
-        not unquote(like_fragment(quote(do: ^var!(value))))
-      end
-
-    prelude = prelude(:add_wildcard)
-    {fragment, prelude, nil}
-  end
-
-  def op_config(:=~) do
-    fragment =
-      quote do
-        ilike(field(r, ^var!(field)), ^var!(value))
+        not unquote(like_fragment(field_ast, quote(do: ^var!(value))))
       end
 
     prelude = prelude(:add_wildcard)
     {fragment, prelude, nil}
   end
 
-  def op_config(:ilike) do
+  def op_config(:=~, field_ast), do: op_config(:ilike, field_ast)
+
+  def op_config(:ilike, field_ast) do
     fragment =
       quote do
-        ilike(field(r, ^var!(field)), ^var!(value))
+        ilike(unquote(field_ast), ^var!(value))
       end
 
     prelude = prelude(:add_wildcard)
     {fragment, prelude, nil}
   end
 
-  def op_config(:not_ilike) do
+  def op_config(:not_ilike, field_ast) do
     fragment =
       quote do
-        not ilike(field(r, ^var!(field)), ^var!(value))
+        not ilike(unquote(field_ast), ^var!(value))
       end
 
     prelude = prelude(:add_wildcard)
     {fragment, prelude, nil}
   end
 
-  def op_config(:not_in) do
+  def op_config(:not_in, field_ast) do
     fragment =
       quote do
-        field(r, ^var!(field)) not in ^var!(processed_value) and
-          not (^var!(reject_nil?) and is_nil(field(r, ^var!(field))))
+        unquote(field_ast) not in ^var!(processed_value) and
+          not (^var!(reject_nil?) and is_nil(unquote(field_ast)))
       end
 
     prelude =
@@ -230,26 +228,26 @@ defmodule Flop.Adapter.Ecto.Operators do
     {fragment, prelude, nil}
   end
 
-  def op_config(:like_and) do
-    fragment = like_fragment(quote(do: ^substring))
+  def op_config(:like_and, field_ast) do
+    fragment = like_fragment(field_ast, quote(do: ^substring))
     combinator = :and
     prelude = prelude(:maybe_split_search_text)
 
     {fragment, prelude, combinator}
   end
 
-  def op_config(:like_or) do
-    fragment = like_fragment(quote(do: ^substring))
+  def op_config(:like_or, field_ast) do
+    fragment = like_fragment(field_ast, quote(do: ^substring))
     combinator = :or
     prelude = prelude(:maybe_split_search_text)
 
     {fragment, prelude, combinator}
   end
 
-  def op_config(:ilike_and) do
+  def op_config(:ilike_and, field_ast) do
     fragment =
       quote do
-        ilike(field(r, ^var!(field)), ^substring)
+        ilike(unquote(field_ast), ^substring)
       end
 
     combinator = :and
@@ -258,10 +256,10 @@ defmodule Flop.Adapter.Ecto.Operators do
     {fragment, prelude, combinator}
   end
 
-  def op_config(:ilike_or) do
+  def op_config(:ilike_or, field_ast) do
     fragment =
       quote do
-        ilike(field(r, ^var!(field)), ^substring)
+        ilike(unquote(field_ast), ^substring)
       end
 
     combinator = :or
@@ -270,20 +268,20 @@ defmodule Flop.Adapter.Ecto.Operators do
     {fragment, prelude, combinator}
   end
 
-  def op_config(:starts_with) do
+  def op_config(:starts_with, field_ast) do
     fragment =
       quote do
-        ilike(field(r, ^var!(field)), ^var!(value))
+        ilike(unquote(field_ast), ^var!(value))
       end
 
     prelude = prelude(:add_wildcard_suffix)
     {fragment, prelude, nil}
   end
 
-  def op_config(:ends_with) do
+  def op_config(:ends_with, field_ast) do
     fragment =
       quote do
-        ilike(field(r, ^var!(field)), ^var!(value))
+        ilike(unquote(field_ast), ^var!(value))
       end
 
     prelude = prelude(:add_wildcard_prefix)
@@ -293,50 +291,52 @@ defmodule Flop.Adapter.Ecto.Operators do
   # The escape character must be bound rather than written into the fragment
   # because no literal works everywhere. MySQL reads '\' as an incomplete string
   # escape, SQLite and Postgres read '\\' as two characters.
-  defp like_fragment(pattern) do
+  defp like_fragment(field_ast, pattern) do
     quote do
       fragment(
         "? LIKE ? ESCAPE ?",
-        field(r, ^var!(field)),
+        unquote(field_ast),
         unquote(pattern),
         ^"\\"
       )
     end
   end
 
-  defmacro empty(:array) do
+  defmacro empty(type, field_ast \\ quote(do: field(r, ^var!(field))))
+
+  defmacro empty(:array, field_ast) do
     quote do
-      is_nil(field(r, ^var!(field))) or
-        field(r, ^var!(field)) == type(^[], ^var!(ecto_type))
+      is_nil(unquote(field_ast)) or
+        unquote(field_ast) == type(^[], ^var!(ecto_type))
     end
   end
 
   # for adapters that store an array as a JSON column
-  defmacro empty(:json_array) do
+  defmacro empty(:json_array, field_ast) do
     quote do
-      is_nil(field(r, ^var!(field))) or
-        fragment("JSON_LENGTH(?) = 0", field(r, ^var!(field)))
+      is_nil(unquote(field_ast)) or
+        fragment("JSON_LENGTH(?) = 0", unquote(field_ast))
     end
   end
 
-  defmacro empty(:map) do
+  defmacro empty(:map, field_ast) do
     quote do
-      is_nil(field(r, ^var!(field))) or
-        field(r, ^var!(field)) == type(^%{}, ^var!(ecto_type))
+      is_nil(unquote(field_ast)) or
+        unquote(field_ast) == type(^%{}, ^var!(ecto_type))
     end
   end
 
-  defmacro empty(:other) do
+  defmacro empty(:other, field_ast) do
     quote do
-      is_nil(field(r, ^var!(field)))
+      is_nil(unquote(field_ast))
     end
   end
 
-  defmacro json_contains do
+  defmacro json_contains(field_ast \\ quote(do: field(r, ^var!(field)))) do
     quote do
       fragment(
         "JSON_CONTAINS(?, ?)",
-        field(r, ^var!(field)),
+        unquote(field_ast),
         ^[Dialect.dump_array_element(var!(value), var!(ecto_type))]
       )
     end

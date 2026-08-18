@@ -225,8 +225,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     test "orders by compound fields with join fields" do
       pets = insert_list(20, :pet, owner: fn -> build(:owner) end)
 
-      expected =
-        pets |> Enum.map(&{&1.name, &1.owner.name, &1.id}) |> Enum.sort()
+      expected = pets |> Enum.map(&{&1.name, &1.owner.name, &1.id}) |> Enum.sort()
 
       q =
         Pet
@@ -281,7 +280,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     test "warns if query passed to Flop already included ordering" do
-      query = from p in Pet, order_by: :species
+      query = from(p in Pet, order_by: :species)
 
       assert capture_log(fn ->
                Flop.all(query, %Flop{order_by: [:species, :name]})
@@ -292,7 +291,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     test "does not warn if no order parameters are set" do
-      query = from p in Pet, order_by: :species
+      query = from(p in Pet, order_by: :species)
 
       assert capture_log(fn ->
                Flop.all(query, %Flop{})
@@ -308,7 +307,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     test "warns if query has order bys and default order is set" do
-      query = from f in Fruit, order_by: :id
+      query = from(f in Fruit, order_by: :id)
       opts = [for: Fruit]
       flop = Flop.validate!(%{}, opts)
 
@@ -319,7 +318,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     test "does not warn if query has order bys and default order is disabled" do
-      query = from f in Fruit, order_by: :id
+      query = from(f in Fruit, order_by: :id)
       opts = [for: Fruit, default_order: false]
       flop = Flop.validate!(%{}, opts)
 
@@ -331,14 +330,16 @@ defmodule Flop.Adapters.Ecto.FlopTest do
 
   describe "filtering" do
     property "applies equality filter" do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                # all except compound fields
-                field <-
-                  member_of([:age, :name, :owner_age, :owner_name, :species]),
-                pet <- member_of(pets),
-                query_value <- pet |> Pet.get_field(field) |> constant(),
-                query_value != "" do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              # all except compound fields
+              field <-
+                member_of([:age, :name, :owner_age, :owner_name, :species]),
+              pet <- member_of(pets),
+              query_value <- pet |> Pet.get_field(field) |> constant(),
+              query_value != ""
+            ) do
         expected = filter_items(pets, field, :==, query_value)
 
         assert query_pets_with_owners(%{
@@ -392,14 +393,16 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies inequality filter" do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                # all except compound fields
-                field <-
-                  member_of([:age, :name, :owner_age, :owner_name, :species]),
-                pet <- member_of(pets),
-                query_value = Pet.get_field(pet, field),
-                query_value != "" do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              # all except compound fields
+              field <-
+                member_of([:age, :name, :owner_age, :owner_name, :species]),
+              pet <- member_of(pets),
+              query_value = Pet.get_field(pet, field),
+              query_value != ""
+            ) do
         expected = filter_items(pets, field, :!=, query_value)
 
         assert query_pets_with_owners(%{
@@ -419,16 +422,18 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     test "applies empty and not_empty filter" do
-      check all pet_count <- integer(@pet_count_range),
-                pets =
-                  insert_list_and_sort(pet_count, :pet,
-                    species: fn -> Enum.random([nil, "fox"]) end,
-                    owner: fn ->
-                      build(:owner, name: fn -> Enum.random([nil, "Carl"]) end)
-                    end
-                  ),
-                field <- member_of([:species, :owner_name]),
-                op <- member_of([:empty, :not_empty]) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets =
+                insert_list_and_sort(pet_count, :pet,
+                  species: fn -> Enum.random([nil, "fox"]) end,
+                  owner: fn ->
+                    build(:owner, name: fn -> Enum.random([nil, "Carl"]) end)
+                  end
+                ),
+              field <- member_of([:species, :owner_name]),
+              op <- member_of([:empty, :not_empty])
+            ) do
         [opposite_op] = [:empty, :not_empty] -- [op]
         expected = filter_items(pets, field, op)
         opposite_expected = filter_items(pets, field, opposite_op)
@@ -454,16 +459,18 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     test "applies empty and not_empty filter with string values" do
-      check all pet_count <- integer(@pet_count_range),
-                pets =
-                  insert_list_and_sort(pet_count, :pet,
-                    species: fn -> Enum.random([nil, "fox"]) end,
-                    owner: fn ->
-                      build(:owner, name: fn -> Enum.random([nil, "Carl"]) end)
-                    end
-                  ),
-                field <- member_of([:species, :owner_name]),
-                op <- member_of([:empty, :not_empty]) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets =
+                insert_list_and_sort(pet_count, :pet,
+                  species: fn -> Enum.random([nil, "fox"]) end,
+                  owner: fn ->
+                    build(:owner, name: fn -> Enum.random([nil, "Carl"]) end)
+                  end
+                ),
+              field <- member_of([:species, :owner_name]),
+              op <- member_of([:empty, :not_empty])
+            ) do
         [opposite_op] = [:empty, :not_empty] -- [op]
         expected = filter_items(pets, field, op)
         opposite_expected = filter_items(pets, field, opposite_op)
@@ -489,18 +496,20 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     test "applies empty and not_empty filter to array fields" do
-      check all pet_count <- integer(@pet_count_range),
-                pets =
-                  insert_list_and_sort(pet_count, :pet_with_owner,
-                    tags: fn -> Enum.random([nil, [], ["catdog"]]) end,
-                    owner: fn ->
-                      build(:owner,
-                        tags: fn -> Enum.random([nil, [], ["catlover"]]) end
-                      )
-                    end
-                  ),
-                field <- member_of([:tags, :owner_tags]),
-                op <- member_of([:empty, :not_empty]) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets =
+                insert_list_and_sort(pet_count, :pet_with_owner,
+                  tags: fn -> Enum.random([nil, [], ["catdog"]]) end,
+                  owner: fn ->
+                    build(:owner,
+                      tags: fn -> Enum.random([nil, [], ["catlover"]]) end
+                    )
+                  end
+                ),
+              field <- member_of([:tags, :owner_tags]),
+              op <- member_of([:empty, :not_empty])
+            ) do
         [opposite_op] = [:empty, :not_empty] -- [op]
         expected = filter_items(pets, field, op, true)
         opposite_expected = filter_items(pets, field, opposite_op, true)
@@ -526,27 +535,29 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     test "applies empty and not_empty filter to map fields" do
-      check all fruit_count <- integer(@pet_count_range),
-                fruits =
-                  insert_list_and_sort(fruit_count, :fruit,
-                    attributes: fn -> Enum.random([nil, %{}, %{"a" => "b"}]) end,
-                    extra: fn -> Enum.random([nil, %{}, %{"a" => "b"}]) end,
-                    owner:
-                      build(:owner,
-                        attributes: fn ->
-                          Enum.random([nil, %{}, %{"a" => "b"}])
-                        end,
-                        extra: fn -> Enum.random([nil, %{}, %{"a" => "b"}]) end
-                      )
-                  ),
-                field <-
-                  member_of([
-                    :attributes,
-                    :extra,
-                    :owner_attributes,
-                    :owner_extra
-                  ]),
-                op <- member_of([:empty, :not_empty]) do
+      check all(
+              fruit_count <- integer(@pet_count_range),
+              fruits =
+                insert_list_and_sort(fruit_count, :fruit,
+                  attributes: fn -> Enum.random([nil, %{}, %{"a" => "b"}]) end,
+                  extra: fn -> Enum.random([nil, %{}, %{"a" => "b"}]) end,
+                  owner:
+                    build(:owner,
+                      attributes: fn ->
+                        Enum.random([nil, %{}, %{"a" => "b"}])
+                      end,
+                      extra: fn -> Enum.random([nil, %{}, %{"a" => "b"}]) end
+                    )
+                ),
+              field <-
+                member_of([
+                  :attributes,
+                  :extra,
+                  :owner_attributes,
+                  :owner_extra
+                ]),
+              op <- member_of([:empty, :not_empty])
+            ) do
         [opposite_op] = [:empty, :not_empty] -- [op]
         expected = filter_items(fruits, field, op, true)
         opposite_expected = filter_items(fruits, field, opposite_op, true)
@@ -607,12 +618,14 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies like filter", %{ecto_adapter: ecto_adapter} do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- filterable_pet_field(:string),
-                pet <- member_of(pets),
-                value = Pet.get_field(pet, field),
-                query_value <- substring(value) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- filterable_pet_field(:string),
+              pet <- member_of(pets),
+              value = Pet.get_field(pet, field),
+              query_value <- substring(value)
+            ) do
         expected = filter_items(pets, field, :like, query_value, ecto_adapter)
 
         assert query_pets_with_owners(%{
@@ -728,14 +741,15 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies not like filter", %{ecto_adapter: ecto_adapter} do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- filterable_pet_field(:string),
-                pet <- member_of(pets),
-                value = Pet.get_field(pet, field),
-                query_value <- substring(value) do
-        expected =
-          filter_items(pets, field, :not_like, query_value, ecto_adapter)
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- filterable_pet_field(:string),
+              pet <- member_of(pets),
+              value = Pet.get_field(pet, field),
+              query_value <- substring(value)
+            ) do
+        expected = filter_items(pets, field, :not_like, query_value, ecto_adapter)
 
         assert query_pets_with_owners(%{
                  filters: [%{field: field, op: :not_like, value: query_value}]
@@ -746,13 +760,15 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies ilike filter" do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- filterable_pet_field(:string),
-                op <- member_of([:=~, :ilike]),
-                pet <- member_of(pets),
-                value = Pet.get_field(pet, field),
-                query_value <- substring(value) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- filterable_pet_field(:string),
+              op <- member_of([:=~, :ilike]),
+              pet <- member_of(pets),
+              value = Pet.get_field(pet, field),
+              query_value <- substring(value)
+            ) do
         expected = filter_items(pets, field, :ilike, query_value)
 
         assert query_pets_with_owners(%{
@@ -764,12 +780,14 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies not ilike filter" do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- filterable_pet_field(:string),
-                pet <- member_of(pets),
-                value = Pet.get_field(pet, field),
-                query_value <- substring(value) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- filterable_pet_field(:string),
+              pet <- member_of(pets),
+              value = Pet.get_field(pet, field),
+              query_value <- substring(value)
+            ) do
         expected = filter_items(pets, field, :not_ilike, query_value)
 
         assert query_pets_with_owners(%{
@@ -781,12 +799,14 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies like_and filter", %{ecto_adapter: ecto_adapter} do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- filterable_pet_field(:string),
-                pet <- member_of(pets),
-                value = Pet.get_field(pet, field),
-                search_text_or_list <- search_text_or_list(value) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- filterable_pet_field(:string),
+              pet <- member_of(pets),
+              value = Pet.get_field(pet, field),
+              search_text_or_list <- search_text_or_list(value)
+            ) do
         expected =
           filter_items(
             pets,
@@ -807,14 +827,15 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies like_or filter", %{ecto_adapter: ecto_adapter} do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- filterable_pet_field(:string),
-                pet <- member_of(pets),
-                value = Pet.get_field(pet, field),
-                search_text_or_list <- search_text_or_list(value) do
-        expected =
-          filter_items(pets, field, :like_or, search_text_or_list, ecto_adapter)
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- filterable_pet_field(:string),
+              pet <- member_of(pets),
+              value = Pet.get_field(pet, field),
+              search_text_or_list <- search_text_or_list(value)
+            ) do
+        expected = filter_items(pets, field, :like_or, search_text_or_list, ecto_adapter)
 
         assert query_pets_with_owners(%{
                  filters: [
@@ -827,12 +848,14 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies ilike_and filter" do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- filterable_pet_field(:string),
-                pet <- member_of(pets),
-                value = Pet.get_field(pet, field),
-                search_text_or_list <- search_text_or_list(value) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- filterable_pet_field(:string),
+              pet <- member_of(pets),
+              value = Pet.get_field(pet, field),
+              search_text_or_list <- search_text_or_list(value)
+            ) do
         expected = filter_items(pets, field, :ilike_and, search_text_or_list)
 
         assert query_pets_with_owners(%{
@@ -846,12 +869,14 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies ilike_or filter" do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- filterable_pet_field(:string),
-                pet <- member_of(pets),
-                value = Pet.get_field(pet, field),
-                search_text_or_list <- search_text_or_list(value) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- filterable_pet_field(:string),
+              pet <- member_of(pets),
+              value = Pet.get_field(pet, field),
+              search_text_or_list <- search_text_or_list(value)
+            ) do
         expected = filter_items(pets, field, :ilike_or, search_text_or_list)
 
         assert query_pets_with_owners(%{
@@ -865,12 +890,14 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies starts_with filter" do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- filterable_pet_field(:string),
-                pet <- member_of(pets),
-                value = Pet.get_field(pet, field),
-                query_value <- prefix(value) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- filterable_pet_field(:string),
+              pet <- member_of(pets),
+              value = Pet.get_field(pet, field),
+              query_value <- prefix(value)
+            ) do
         expected = filter_items(pets, field, :starts_with, query_value)
 
         assert query_pets_with_owners(%{
@@ -884,12 +911,14 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies ends_with filter" do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- filterable_pet_field(:string),
-                pet <- member_of(pets),
-                value = Pet.get_field(pet, field),
-                query_value <- suffix(value) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- filterable_pet_field(:string),
+              pet <- member_of(pets),
+              value = Pet.get_field(pet, field),
+              query_value <- suffix(value)
+            ) do
         expected = filter_items(pets, field, :ends_with, query_value)
 
         assert query_pets_with_owners(%{
@@ -901,14 +930,16 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies lte, lt, gt and gte filters" do
-      check all pet_count <- integer(@pet_count_range),
-                pets =
-                  pet_count
-                  |> insert_list(:pet_downcase, owner: fn -> build(:owner) end)
-                  |> Enum.sort_by(& &1.id),
-                field <- member_of([:age, :name, :owner_age]),
-                op <- one_of([:<=, :<, :>, :>=]),
-                query_value <- compare_value_by_field(field) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets =
+                pet_count
+                |> insert_list(:pet_downcase, owner: fn -> build(:owner) end)
+                |> Enum.sort_by(& &1.id),
+              field <- member_of([:age, :name, :owner_age]),
+              op <- one_of([:<=, :<, :>, :>=]),
+              query_value <- compare_value_by_field(field)
+            ) do
         expected = filter_items(pets, field, op, query_value)
 
         assert query_pets_with_owners(%{
@@ -920,14 +951,16 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies :in operator" do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- member_of([:age, :name, :owner_age]),
-                values = Enum.map(pets, &Map.get(&1, field)),
-                query_value <-
-                  list_of(one_of([member_of(values), value_by_field(field)]),
-                    max_length: 5
-                  ) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- member_of([:age, :name, :owner_age]),
+              values = Enum.map(pets, &Map.get(&1, field)),
+              query_value <-
+                list_of(one_of([member_of(values), value_by_field(field)]),
+                  max_length: 5
+                )
+            ) do
         expected = filter_items(pets, field, :in, query_value)
 
         assert query_pets_with_owners(%{
@@ -939,14 +972,16 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies :not_in operator" do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- member_of([:age, :name, :owner_age]),
-                values = Enum.map(pets, &Map.get(&1, field)),
-                query_value <-
-                  list_of(one_of([member_of(values), value_by_field(field)]),
-                    max_length: 5
-                  ) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- member_of([:age, :name, :owner_age]),
+              values = Enum.map(pets, &Map.get(&1, field)),
+              query_value <-
+                list_of(one_of([member_of(values), value_by_field(field)]),
+                  max_length: 5
+                )
+            ) do
         expected = filter_items(pets, field, :not_in, query_value)
 
         assert query_pets_with_owners(%{
@@ -958,11 +993,13 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies :contains operator" do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- member_of([:tags, :owner_tags]),
-                values = Enum.flat_map(pets, &Pet.get_field(&1, field)),
-                query_value <- member_of(values) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- member_of([:tags, :owner_tags]),
+              values = Enum.flat_map(pets, &Pet.get_field(&1, field)),
+              query_value <- member_of(values)
+            ) do
         expected = filter_items(pets, field, :contains, query_value)
 
         assert query_pets_with_owners(%{
@@ -974,11 +1011,13 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "applies :not_contains operator" do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                field <- member_of([:tags, :owner_tags]),
-                values = Enum.flat_map(pets, &Pet.get_field(&1, field)),
-                query_value <- member_of(values) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              field <- member_of([:tags, :owner_tags]),
+              values = Enum.flat_map(pets, &Pet.get_field(&1, field)),
+              query_value <- member_of(values)
+            ) do
         expected = filter_items(pets, field, :not_contains, query_value)
 
         assert query_pets_with_owners(%{
@@ -992,10 +1031,12 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "custom field filter" do
-      check all pet_count <- integer(@pet_count_range),
-                pets = insert_list_and_sort(pet_count, :pet_with_owner),
-                values = Enum.map(pets, &String.reverse(&1.name)),
-                query_value <- member_of(values) do
+      check all(
+              pet_count <- integer(@pet_count_range),
+              pets = insert_list_and_sort(pet_count, :pet_with_owner),
+              values = Enum.map(pets, &String.reverse(&1.name)),
+              query_value <- member_of(values)
+            ) do
         expected = filter_items(pets, :name, :==, query_value)
 
         assert query_pets_with_owners(%{
@@ -1021,8 +1062,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       receive do
         {:filter, filter} ->
           assert filter ==
-                   {%Flop.Filter{field: :custom, op: :==, value: "some_value"},
-                    [some: :options]}
+                   {%Flop.Filter{field: :custom, op: :==, value: "some_value"}, [some: :options]}
       end
 
       assert ^pets =
@@ -1044,6 +1084,89 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                       value: "some_other_value"
                     }, [other: :options, some: :options]}
       end
+    end
+
+    test "filtering with field_dynamic on a custom field" do
+      insert_custom_field_pets([10, 20, 30, 40])
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{
+            filters: [%Flop.Filter{field: :age_score, op: :==, value: 40}]
+          },
+          for: CustomFieldPet
+        )
+
+      assert Enum.map(result, & &1.age) == [20]
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{
+            filters: [%Flop.Filter{field: :age_score, op: :>, value: 40}]
+          },
+          for: CustomFieldPet
+        )
+
+      assert Enum.map(result, & &1.age) == [30, 40]
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{
+            filters: [
+              %Flop.Filter{field: :age_score, op: :in, value: [20, 60]}
+            ]
+          },
+          for: CustomFieldPet
+        )
+
+      assert Enum.map(result, & &1.age) == [10, 30]
+    end
+
+    test "merges runtime and compile-time options when filtering with field_dynamic" do
+      insert_custom_field_pets([10, 20, 30])
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{
+            filters: [%Flop.Filter{field: :age_score, op: :==, value: 40}]
+          },
+          for: CustomFieldPet,
+          extra_opts: [factor: 4, runtime_only: :available, test_pid: self()]
+        )
+
+      assert Enum.map(result, & &1.age) == [20]
+
+      assert_receive {:age_score_dynamic_opts, opts}
+      assert opts[:factor] == 2
+      assert opts[:compile_only] == :available
+      assert opts[:runtime_only] == :available
+    end
+
+    test "filters by a custom field on a named binding with field_dynamic" do
+      older = insert(:owner, age: 60)
+      younger = insert(:owner, age: 20)
+
+      Repo.insert!(%CustomFieldPet{age: 1, owner_id: older.id})
+      Repo.insert!(%CustomFieldPet{age: 2, owner_id: younger.id})
+
+      flop = %Flop{
+        filters: [%Flop.Filter{field: :owner_age_score, op: :>, value: 30}]
+      }
+
+      assert Flop.named_bindings(flop, CustomFieldPet) == [:owner]
+
+      query =
+        CustomFieldPet
+        |> join(:inner, [pet], owner in assoc(pet, :owner), as: :owner)
+        |> select([pet, owner: owner], {pet.id, owner.age})
+
+      assert query
+             |> Flop.all(flop, for: CustomFieldPet)
+             |> Enum.map(&elem(&1, 1)) == [60]
     end
 
     test "silently ignores nil values for field and value" do
@@ -1074,8 +1197,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       matching_pets = insert_list(6, :pet, age: 5)
       _non_matching_pets = insert_list(4, :pet, age: 6)
 
-      [_, _, %{name: name_1}, %{name: name_2}, _, _] =
-        Enum.sort_by(matching_pets, & &1.name)
+      [_, _, %{name: name_1}, %{name: name_2}, _, _] = Enum.sort_by(matching_pets, & &1.name)
 
       flop = %Flop{
         limit: 2,
@@ -1394,12 +1516,10 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       # only SQLite casts binary_id as a raw binary; the others use Ecto.UUID
       case ecto_adapter do
         :sqlite ->
-          assert {:ok, {[], %Flop.Meta{}}} =
-                   Flop.validate_and_run(Fruit, flop, for: Fruit)
+          assert {:ok, {[], %Flop.Meta{}}} = Flop.validate_and_run(Fruit, flop, for: Fruit)
 
         _ ->
-          assert {:error, meta} =
-                   Flop.validate_and_run(Fruit, flop, for: Fruit)
+          assert {:error, meta} = Flop.validate_and_run(Fruit, flop, for: Fruit)
 
           assert meta.errors == [filters: [[value: [{"is invalid", []}]]]]
       end
@@ -1412,12 +1532,10 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       # only SQLite casts binary_id as a raw binary; the others use Ecto.UUID
       case ecto_adapter do
         :sqlite ->
-          assert {:ok, %Flop{}} =
-                   Flop.validate(flop, for: Fruit, backend: TestProvider)
+          assert {:ok, %Flop{}} = Flop.validate(flop, for: Fruit, backend: TestProvider)
 
         _ ->
-          assert {:error, meta} =
-                   Flop.validate(flop, for: Fruit, backend: TestProvider)
+          assert {:error, meta} = Flop.validate(flop, for: Fruit, backend: TestProvider)
 
           assert meta.errors == [filters: [[value: [{"is invalid", []}]]]]
       end
@@ -1454,12 +1572,10 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       # only SQLite casts binary_id as a raw binary; the others use Ecto.UUID
       case ecto_adapter do
         :sqlite ->
-          assert {:ok, {[], %Flop.Meta{}}} =
-                   Flop.validate_and_run(Fruit, flop, for: Fruit)
+          assert {:ok, {[], %Flop.Meta{}}} = Flop.validate_and_run(Fruit, flop, for: Fruit)
 
         _ ->
-          assert {:error, meta} =
-                   Flop.validate_and_run(Fruit, flop, for: Fruit)
+          assert {:error, meta} = Flop.validate_and_run(Fruit, flop, for: Fruit)
 
           assert meta.errors == [filters: [[value: [{"is invalid", []}]]]]
       end
@@ -1527,9 +1643,11 @@ defmodule Flop.Adapters.Ecto.FlopTest do
 
   describe "cursor pagination" do
     property "querying cursor by cursor forward includes all items in order" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}) do
+      check all(
+              pets <- uniq_list_of_pets(length: 1..25),
+              cursor_fields <- cursor_fields(%Pet{}),
+              directions <- order_directions(%Pet{})
+            ) do
         checkin_checkout()
 
         # insert pets into DB, retrieve them so we have the IDs
@@ -1606,9 +1724,11 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "querying all items returns same list forward and backward" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}) do
+      check all(
+              pets <- uniq_list_of_pets(length: 1..25),
+              cursor_fields <- cursor_fields(%Pet{}),
+              directions <- order_directions(%Pet{})
+            ) do
         checkin_checkout()
         Enum.each(pets, &Repo.insert!(&1))
         pet_count = length(pets)
@@ -1640,9 +1760,11 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "querying cursor by cursor backward includes all items in order" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}) do
+      check all(
+              pets <- uniq_list_of_pets(length: 1..25),
+              cursor_fields <- cursor_fields(%Pet{}),
+              directions <- order_directions(%Pet{})
+            ) do
         checkin_checkout()
 
         # insert pets into DB, retrieve them so we have the IDs
@@ -1715,10 +1837,12 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_previous_page? is false without after and last" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}),
-                first <- integer(1..(length(pets) + 1)) do
+      check all(
+              pets <- uniq_list_of_pets(length: 1..25),
+              cursor_fields <- cursor_fields(%Pet{}),
+              directions <- order_directions(%Pet{}),
+              first <- integer(1..(length(pets) + 1))
+            ) do
         checkin_checkout()
         Enum.each(pets, &Repo.insert!(&1))
 
@@ -1736,11 +1860,13 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_previous_page? is true with after" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}),
-                first <- integer(1..(length(pets) + 1)),
-                cursor_pet <- member_of(pets) do
+      check all(
+              pets <- uniq_list_of_pets(length: 1..25),
+              cursor_fields <- cursor_fields(%Pet{}),
+              directions <- order_directions(%Pet{}),
+              first <- integer(1..(length(pets) + 1)),
+              cursor_pet <- member_of(pets)
+            ) do
         checkin_checkout()
         Enum.each(pets, &Repo.insert!(&1))
 
@@ -1766,12 +1892,14 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_previous_page? is true with last set and items left" do
-      check all pets <- uniq_list_of_pets(length: 3..50),
-                pet_count = length(pets),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}),
-                last <- integer(1..(pet_count - 2)),
-                cursor_index <- integer((last + 1)..(pet_count - 1)) do
+      check all(
+              pets <- uniq_list_of_pets(length: 3..50),
+              pet_count = length(pets),
+              cursor_fields <- cursor_fields(%Pet{}),
+              directions <- order_directions(%Pet{}),
+              last <- integer(1..(pet_count - 2)),
+              cursor_index <- integer((last + 1)..(pet_count - 1))
+            ) do
         checkin_checkout()
         Enum.each(pets, &Repo.insert!(&1))
 
@@ -1806,13 +1934,15 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_previous_page? is false with last set and no items left" do
-      check all pets <- uniq_list_of_pets(length: 3..50),
-                pet_count = length(pets),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}),
-                # include test with limits greater than item count
-                last <- integer(1..(pet_count + 20)),
-                cursor_index <- integer(0..min(pet_count - 1, last)) do
+      check all(
+              pets <- uniq_list_of_pets(length: 3..50),
+              pet_count = length(pets),
+              cursor_fields <- cursor_fields(%Pet{}),
+              directions <- order_directions(%Pet{}),
+              # include test with limits greater than item count
+              last <- integer(1..(pet_count + 20)),
+              cursor_index <- integer(0..min(pet_count - 1, last))
+            ) do
         checkin_checkout()
 
         # insert pets
@@ -1849,10 +1979,12 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_next_page? is false without first and before" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}),
-                last <- integer(1..(length(pets) + 1)) do
+      check all(
+              pets <- uniq_list_of_pets(length: 1..25),
+              cursor_fields <- cursor_fields(%Pet{}),
+              directions <- order_directions(%Pet{}),
+              last <- integer(1..(length(pets) + 1))
+            ) do
         checkin_checkout()
         Enum.each(pets, &Repo.insert!(&1))
 
@@ -1870,11 +2002,13 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_next_page? is true with before" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}),
-                last <- integer(1..(length(pets) + 1)),
-                cursor_pet <- member_of(pets) do
+      check all(
+              pets <- uniq_list_of_pets(length: 1..25),
+              cursor_fields <- cursor_fields(%Pet{}),
+              directions <- order_directions(%Pet{}),
+              last <- integer(1..(length(pets) + 1)),
+              cursor_pet <- member_of(pets)
+            ) do
         checkin_checkout()
         Enum.each(pets, &Repo.insert!(&1))
 
@@ -1900,12 +2034,14 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_next_page? is true with first set and items left" do
-      check all pets <- uniq_list_of_pets(length: 3..50),
-                pet_count = length(pets),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}),
-                first <- integer(1..(pet_count - 2)),
-                cursor_index <- integer((first + 1)..(pet_count - 1)) do
+      check all(
+              pets <- uniq_list_of_pets(length: 3..50),
+              pet_count = length(pets),
+              cursor_fields <- cursor_fields(%Pet{}),
+              directions <- order_directions(%Pet{}),
+              first <- integer(1..(pet_count - 2)),
+              cursor_index <- integer((first + 1)..(pet_count - 1))
+            ) do
         checkin_checkout()
         Enum.each(pets, &Repo.insert!(&1))
 
@@ -1941,14 +2077,16 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_next_page? is false with first set and no items left" do
-      check all pet_count <- integer(3..50),
-                pets <- uniq_list_of_pets(length: pet_count..pet_count),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}),
-                # include test with limits greater than item count
-                first <- integer(1..(pet_count + 20)),
-                cursor_index <-
-                  integer(max(0, pet_count - first)..(pet_count - 1)) do
+      check all(
+              pet_count <- integer(3..50),
+              pets <- uniq_list_of_pets(length: pet_count..pet_count),
+              cursor_fields <- cursor_fields(%Pet{}),
+              directions <- order_directions(%Pet{}),
+              # include test with limits greater than item count
+              first <- integer(1..(pet_count + 20)),
+              cursor_index <-
+                integer(max(0, pet_count - first)..(pet_count - 1))
+            ) do
         checkin_checkout()
 
         Enum.each(pets, &Repo.insert!(&1))
@@ -2017,9 +2155,11 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     test "nil values for cursors are ignored when using for option" do
-      check all pets <- uniq_list_of_pets(length: 2..2),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}) do
+      check all(
+              pets <- uniq_list_of_pets(length: 2..2),
+              cursor_fields <- cursor_fields(%Pet{}),
+              directions <- order_directions(%Pet{})
+            ) do
         checkin_checkout()
 
         # set name fields to nil and insert
@@ -2090,8 +2230,10 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     test "nil values for cursors are ignored when not using for option" do
-      check all pets <- uniq_list_of_pets(length: 2..2),
-                directions <- order_directions(%Pet{}) do
+      check all(
+              pets <- uniq_list_of_pets(length: 2..2),
+              directions <- order_directions(%Pet{})
+            ) do
         checkin_checkout()
         cursor_fields = [:name, :age]
 
@@ -2153,8 +2295,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     test "defines wrapper functions that pass default options" do
       insert_list(3, :pet)
 
-      assert {:ok, {_, %Meta{page_size: 35}}} =
-               TestProvider.validate_and_run(Pet, %{})
+      assert {:ok, {_, %Meta{page_size: 35}}} = TestProvider.validate_and_run(Pet, %{})
     end
 
     test "allows to override defaults" do
@@ -2176,8 +2317,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     test "defines wrapper functions that pass default options" do
       insert_list(3, :pet)
 
-      assert {:ok, {_, %Meta{page_size: 35}}} =
-               TestProviderNested.validate_and_run(Pet, %{})
+      assert {:ok, {_, %Meta{page_size: 35}}} = TestProviderNested.validate_and_run(Pet, %{})
     end
 
     test "allows to override defaults" do

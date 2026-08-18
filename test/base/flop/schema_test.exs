@@ -35,9 +35,9 @@ defmodule Flop.SchemaTest do
              ]}
 
     schema "paninis" do
-      field :name, :string
-      field :email, :string
-      field :age, :integer
+      field(:name, :string)
+      field(:email, :string)
+      field(:age, :integer)
     end
   end
 
@@ -376,8 +376,7 @@ defmodule Flop.SchemaTest do
       filters: [%{field: :pet_mood_as_enum, op: :==, value: "happy"}]
     }
 
-    assert {:ok, %Flop{filters: [filter]}} =
-             Flop.validate(params, for: MyApp.Owner)
+    assert {:ok, %Flop{filters: [filter]}} = Flop.validate(params, for: MyApp.Owner)
 
     assert filter.value == :happy
 
@@ -413,7 +412,7 @@ defmodule Flop.SchemaTest do
     assert error.message =~ ":inserted_at"
   end
 
-  test "raises error if a filterable custom field has no filter" do
+  test "raises error if a filterable custom field has neither filter nor field_dynamic" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Sage do
@@ -423,7 +422,6 @@ defmodule Flop.SchemaTest do
             sortable: [],
             custom_fields: [
               inserted_at: [
-                field_dynamic: {__MODULE__, :some_function, []},
                 ecto_type: :utc_datetime
               ]
             ]
@@ -433,9 +431,35 @@ defmodule Flop.SchemaTest do
       end
 
     assert error.message =~
-             "custom field without filter function marked as filterable"
+             "custom field without filter or field_dynamic function marked as filterable"
 
     assert error.message =~ ":inserted_at"
+  end
+
+  test "allows a custom field with field_dynamic to be filterable" do
+    defmodule Sage do
+      @derive {
+        Flop.Schema,
+        filterable: [:inserted_at],
+        sortable: [],
+        custom_fields: [
+          inserted_at: [
+            field_dynamic: {__MODULE__, :some_function, []},
+            ecto_type: :utc_datetime
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    assert %Flop.FieldInfo{
+             ecto_type: :utc_datetime,
+             extra: %{
+               type: :custom,
+               filter: nil,
+               field_dynamic: {Sage, :some_function, []}
+             }
+           } = Schema.field_info(struct(Sage), :inserted_at)
   end
 
   test "allows a custom field with only the callback it needs" do
