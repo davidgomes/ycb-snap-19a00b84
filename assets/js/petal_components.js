@@ -4775,7 +4775,7 @@ export const PetalDataTable = {
       if (!form) return;
 
       // event mode: the form pushes its own phx-submit - only the
-      // popover close is ours
+      // in-page popover close is ours
       if (!form.hasAttribute("data-pc-dt-filter")) {
         this.closePopover(form);
         return;

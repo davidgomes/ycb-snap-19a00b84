@@ -3,6 +3,11 @@
 
 #### Fixed
 
+- **`data_table` menus stay in the page.** Filter editors and the
+  columns dropdown no longer use top-layer (`position: fixed`)
+  popovers that chase the visual viewport on scroll, pinch-zoom, or
+  keyboard. They render as CSS-anchored in-page panels, so they
+  scroll with the table instead of floating after the viewport.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to

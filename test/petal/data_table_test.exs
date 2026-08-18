@@ -109,10 +109,12 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "Status is any of Pending, Paid"
     assert html =~ ~s(aria-label="Clear Status filter")
     # event mode carries the op grammar in hidden inputs; the hook mounts
-    # only to close top-layer popovers - no URL wiring
+    # only to close in-page popovers - no URL wiring
     assert html =~ ~s(name="op" value="filter")
     assert html =~ ~s(phx-hook="PetalDataTable")
-    assert html =~ ~s(popover="auto")
+    assert html =~ "pc-popover__panel--bottom-start"
+    refute html =~ ~s(popover="auto")
+    refute html =~ "pc-popover__panel--top-layer"
     refute html =~ "data-nav-template"
     refute html =~ "data-filters="
   end
@@ -334,6 +336,9 @@ defmodule PetalComponents.DataTableTest do
 
     # the hidden column leaves the table but stays listed in the dropdown
     refute html =~ "amy@x.com"
+    assert html =~ "pc-popover__panel--bottom-end"
+    refute html =~ ~s(popover="auto")
+    refute html =~ "pc-popover__panel--top-layer"
     assert html =~ ~s(phx-value-op="toggle_column")
     assert html =~ ~s(phx-value-field="email")
     # the last visible column's checkbox is disabled - a table needs one
