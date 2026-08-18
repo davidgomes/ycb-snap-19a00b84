@@ -464,6 +464,117 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
+  describe "load balancing across re-resolution" do
+    test "round robin rotates over the backends discovered on re-resolution", ctx do
+      {:ok, channel} =
+        connect_with_resolver(
+          ctx.ref,
+          ctx.resolver,
+          ctx.adapter,
+          [
+            %{address: "10.0.0.1", port: 50051}
+          ],
+          lb_policy: :round_robin
+        )
+
+      new_addrs = [
+        %{address: "10.0.0.1", port: 50051},
+        %{address: "10.0.0.2", port: 50051},
+        %{address: "10.0.0.3", port: 50051}
+      ]
+
+      stub(ctx.resolver, :resolve, fn _target ->
+        {:ok, %{addresses: new_addrs, service_config: nil}}
+      end)
+
+      Process.sleep(@wait)
+
+      hosts =
+        for _ <- 1..6 do
+          {:ok, picked} = Connection.pick_channel(channel)
+          picked.host
+        end
+
+      assert Enum.frequencies(hosts) == %{"10.0.0.1" => 2, "10.0.0.2" => 2, "10.0.0.3" => 2}
+
+      disconnect_and_wait(channel)
+    end
+
+    test "removed backends stop being picked", ctx do
+      {:ok, channel} =
+        connect_with_resolver(
+          ctx.ref,
+          ctx.resolver,
+          ctx.adapter,
+          [
+            %{address: "10.0.0.1", port: 50051},
+            %{address: "10.0.0.2", port: 50051},
+            %{address: "10.0.0.3", port: 50051}
+          ],
+          lb_policy: :round_robin
+        )
+
+      stub(ctx.resolver, :resolve, fn _target ->
+        {:ok, %{addresses: [%{address: "10.0.0.2", port: 50051}], service_config: nil}}
+      end)
+
+      Process.sleep(@wait)
+
+      hosts =
+        for _ <- 1..5 do
+          {:ok, picked} = Connection.pick_channel(channel)
+          picked.host
+        end
+
+      assert Enum.uniq(hosts) == ["10.0.0.2"]
+
+      disconnect_and_wait(channel)
+    end
+
+    test "concurrent pickers survive a shrinking backend set", ctx do
+      {:ok, channel} =
+        connect_with_resolver(
+          ctx.ref,
+          ctx.resolver,
+          ctx.adapter,
+          [
+            %{address: "10.0.0.1", port: 50051},
+            %{address: "10.0.0.2", port: 50051},
+            %{address: "10.0.0.3", port: 50051}
+          ],
+          lb_policy: :round_robin
+        )
+
+      stub(ctx.resolver, :resolve, fn _target ->
+        {:ok, %{addresses: [%{address: "10.0.0.1", port: 50051}], service_config: nil}}
+      end)
+
+      pickers =
+        for _ <- 1..30 do
+          Task.async(fn ->
+            Enum.map(1..200, fn _ ->
+              Process.sleep(1)
+              Connection.pick_channel(channel)
+            end)
+          end)
+        end
+
+      picks = pickers |> Task.await_many(10_000) |> List.flatten()
+
+      assert Enum.all?(picks, &match?({:ok, %GRPC.Channel{}}, &1))
+
+      hosts =
+        for _ <- 1..3 do
+          {:ok, picked} = Connection.pick_channel(channel)
+          picked.host
+        end
+
+      assert Enum.uniq(hosts) == ["10.0.0.1"]
+
+      disconnect_and_wait(channel)
+    end
+  end
+
   describe "repeated re-resolution cycles" do
     test "timer fires on every interval tick, accumulating changes", ctx do
       {:ok, channel} =

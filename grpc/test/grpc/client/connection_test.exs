@@ -11,6 +11,7 @@ defmodule GRPC.Client.ConnectionTest do
       ref: make_ref(),
       ip: "127.0.0.1",
       target: "ipv4:127.0.0.1:50051",
+      multi_target: "ipv4:10.0.0.1:50051,10.0.0.2:50051,10.0.0.3:50051",
       adapter: GRPC.Test.ClientAdapter
     }
   end
@@ -30,6 +31,145 @@ defmodule GRPC.Client.ConnectionTest do
       {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
 
       assert {:ok, ^channel} = Connection.pick_channel(%Channel{ref: ref})
+    end
+
+    test "asks the load-balancing module on every call", %{
+      ref: ref,
+      multi_target: target,
+      adapter: adapter
+    } do
+      {:ok, channel} =
+        Connection.connect(target, adapter: adapter, name: ref, lb_policy: :round_robin)
+
+      hosts =
+        for _ <- 1..7 do
+          {:ok, picked} = Connection.pick_channel(channel)
+          picked.host
+        end
+
+      assert hosts == [
+               "10.0.0.1",
+               "10.0.0.2",
+               "10.0.0.3",
+               "10.0.0.1",
+               "10.0.0.2",
+               "10.0.0.3",
+               "10.0.0.1"
+             ]
+
+      Connection.disconnect(channel)
+    end
+
+    test "concurrent pickers do not crash when the connection goes away", %{
+      ref: ref,
+      multi_target: target,
+      adapter: adapter
+    } do
+      {:ok, channel} =
+        Connection.connect(target, adapter: adapter, name: ref, lb_policy: :round_robin)
+
+      pickers =
+        for _ <- 1..50 do
+          Task.async(fn ->
+            Enum.map(1..100, fn _ -> Connection.pick_channel(channel) end)
+          end)
+        end
+
+      Connection.disconnect(channel)
+
+      results = pickers |> Task.await_many(5_000) |> List.flatten()
+
+      assert Enum.all?(results, fn
+               {:ok, %Channel{}} -> true
+               {:error, :no_connection} -> true
+               _other -> false
+             end)
+    end
+  end
+
+  describe "load balancing state" do
+    test "persistent_term holds the policy and its state, keyed by channel ref", %{
+      ref: ref,
+      target: target,
+      adapter: adapter
+    } do
+      {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
+
+      assert {GRPC.Client.LoadBalancing.PickFirst, lb_state} =
+               :persistent_term.get({Connection, ref})
+
+      assert %{table: table} = lb_state
+      assert :ets.info(table, :owner) == whereis_name(ref)
+
+      Connection.disconnect(channel)
+    end
+
+    test "re-resolution does not write to persistent_term", %{
+      ref: ref,
+      multi_target: target,
+      adapter: adapter
+    } do
+      {:ok, channel} =
+        Connection.connect(target, adapter: adapter, name: ref, lb_policy: :round_robin)
+
+      published = :persistent_term.get({Connection, ref})
+
+      send(
+        whereis_name(ref),
+        {:resolver_update, {:ok, %{addresses: [%{address: "10.0.0.9", port: 50051}]}}}
+      )
+
+      assert {:ok, %Channel{host: "10.0.0.9"}} = eventually_picks(channel, "10.0.0.9")
+      assert :persistent_term.get({Connection, ref}) == published
+
+      Connection.disconnect(channel)
+    end
+  end
+
+  describe "resource cleanup" do
+    test "disconnect frees the load balancer table", %{
+      ref: ref,
+      target: target,
+      adapter: adapter
+    } do
+      {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
+      {_lb_mod, %{table: table}} = :persistent_term.get({Connection, ref})
+
+      {:ok, _} = Connection.disconnect(channel)
+
+      assert :ets.info(table) == :undefined
+    end
+
+    test "an abrupt stop frees the load balancer table", %{
+      ref: ref,
+      target: target,
+      adapter: adapter
+    } do
+      {:ok, _channel} = Connection.connect(target, adapter: adapter, name: ref)
+      {_lb_mod, %{table: table}} = :persistent_term.get({Connection, ref})
+
+      pid = whereis_name(ref)
+      ref_mon = Process.monitor(pid)
+      GenServer.stop(pid, :shutdown)
+      assert_receive {:DOWN, ^ref_mon, :process, ^pid, :shutdown}, 500
+
+      assert :ets.info(table) == :undefined
+    end
+
+    test "repeated connect/disconnect cycles leak neither terms nor tables", %{
+      target: target,
+      adapter: adapter
+    } do
+      terms_before = count_lb_terms()
+      tables_before = count_lb_tables()
+
+      for _ <- 1..100 do
+        {:ok, channel} = Connection.connect(target, adapter: adapter, name: make_ref())
+        {:ok, _} = Connection.disconnect(channel)
+      end
+
+      assert count_lb_terms() == terms_before
+      assert count_lb_tables() == tables_before
     end
   end
 
@@ -156,5 +296,29 @@ defmodule GRPC.Client.ConnectionTest do
       [{pid, _value}] -> pid
       [] -> nil
     end
+  end
+
+  defp eventually_picks(channel, host, attempts \\ 50) do
+    case Connection.pick_channel(channel) do
+      {:ok, %Channel{host: ^host}} = picked ->
+        picked
+
+      _other when attempts > 0 ->
+        Process.sleep(10)
+        eventually_picks(channel, host, attempts - 1)
+
+      other ->
+        other
+    end
+  end
+
+  defp count_lb_terms do
+    Enum.count(:persistent_term.get(), &match?({{Connection, _ref}, _value}, &1))
+  end
+
+  defp count_lb_tables do
+    Enum.count(:ets.all(), fn table ->
+      :ets.info(table, :name) in [:grpc_lb_pick_first, :grpc_lb_round_robin]
+    end)
   end
 end
