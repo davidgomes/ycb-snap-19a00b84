@@ -266,6 +266,7 @@ defmodule Phoenix.LiveViewTest.UploadClient do
 
       # the LiveView already recorded the writer failure and retains the entry
       %Phoenix.Socket.Reply{ref: ^ref, status: :error, payload: %{reason: :writer_error}} ->
+        GenServer.reply(from, {:error, :writer_error})
         update_entry_percent(state, entry, stats.new_percent)
 
       %Phoenix.Socket.Reply{ref: ^ref, status: :error} ->
