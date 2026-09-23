@@ -125,6 +125,27 @@ defmodule GRPC.Integration.ServiceTest do
     end)
   end
 
+  test "cancelling a streaming RPC keeps the connection usable" do
+    run_server(FeatureServer, fn port ->
+      {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
+      point = %Routeguide.Point{latitude: 0, longitude: 1}
+      stream = channel |> Routeguide.RouteGuide.Stub.route_chat()
+      GRPC.Stub.send_request(stream, %Routeguide.RouteNote{location: point, message: "hi"})
+
+      %{payload: %{response_pid: response_pid}} = stream
+      monitor_ref = Process.monitor(response_pid)
+
+      canceled_stream = GRPC.Stub.cancel(stream)
+
+      assert {:error, %GRPC.RPCError{status: status}} = GRPC.Stub.recv(canceled_stream)
+      assert status == GRPC.Status.cancelled()
+      assert_receive {:DOWN, ^monitor_ref, :process, ^response_pid, :normal}, 500
+
+      assert {:ok, %Routeguide.Feature{location: ^point}} =
+               Routeguide.RouteGuide.Stub.get_feature(channel, point)
+    end)
+  end
+
   # There was a bug that blocks reading messages while sending the replies.
   # This is for the case.
   test "async bidirectional streaming RPC works" do
