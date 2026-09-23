@@ -43,17 +43,22 @@ config :my_app, MyApp.Endpoint,
 
 ## Generators
 
-This library also includes two `mix` tasks:
+This library includes `mix` tasks for Phoenix 1.2 and 1.3 generators:
 
 `mix phoenix.gen.html.slime`
 `mix phoenix.gen.layout.slime`
+`mix phx.gen.html.slime`
+`mix phx.gen.layout.slime`
 
-The first task creates a html resource in the same way `phoenix.gen.html` does
-with the exception that all files are `.slime` files instead of `.eex` files.
+`phoenix.gen.html.slime` creates an HTML resource the same way `phoenix.gen.html` does,
+except the templates are `.slime` files instead of `.eex` files.
+`phoenix.gen.layout.slime` creates `web/templates/layout/app.html.slime`.
+Remove the old `app.html.eex` file after generating it.
 
-The second task creates a new `web/templates/layout/app.html.slime` with the
-exact same content as the `app.html.eex` file. Do not forget to remove the old
-`app.html.eex` file.
+Phoenix 1.3 prefixes its generators with `phx` and places files under `lib/`.
+`phx.gen.html.slime` follows `phx.gen.html` (context, schema, and plural name)
+and writes Slime templates. `phx.gen.layout.slime` writes
+`lib/my_app_web/templates/layout/app.html.slime`.
 
 Generated files have `.slime` extension by default. If you prefer `.slim`, you could add the following line to your config:
 
