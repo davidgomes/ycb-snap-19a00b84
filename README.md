@@ -47,6 +47,8 @@ This library also includes two `mix` tasks:
 
 `mix phoenix.gen.html.slime`
 `mix phoenix.gen.layout.slime`
+`mix phx.gen.html.slime` (Phoenix 1.3 alias)
+`mix phx.gen.layout.slime` (Phoenix 1.3 alias)
 
 The first task creates a html resource in the same way `phoenix.gen.html` does
 with the exception that all files are `.slime` files instead of `.eex` files.
