@@ -35,7 +35,8 @@ defmodule GRPC.Integration.StubTest do
       {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
       Process.sleep(100)
 
-      %{adapter_payload: %{conn_pid: gun_conn_pid}} = channel
+      %{adapter_payload: %{conn_pid: conn_pid}} = channel
+      %{gun_pid: gun_conn_pid} = :sys.get_state(conn_pid)
 
       gun_port = port_for(gun_conn_pid)
       # Using :erlang.monitor to be compatible with <= 1.5
@@ -80,6 +81,41 @@ defmodule GRPC.Integration.StubTest do
       req = %Helloworld.HelloRequest{name: name}
       {:ok, reply} = %GRPC.Channel{ref: :my_channel} |> Helloworld.Greeter.Stub.say_hello(req)
       assert reply.message == "Hello, #{name}"
+    end)
+  end
+
+  test "named Gun connections survive the original caller exiting" do
+    run_server(HelloServer, fn port ->
+      parent = self()
+      channel_name = {:named_gun_connection, make_ref()}
+
+      {caller_pid, caller_ref} =
+        spawn_monitor(fn ->
+          {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", name: channel_name)
+          request = %Helloworld.HelloRequest{name: "first caller"}
+          {:ok, reply} = Helloworld.Greeter.Stub.say_hello(channel, request)
+          send(parent, {:initial_call_succeeded, reply.message})
+        end)
+
+      assert_receive {:initial_call_succeeded, "Hello, first caller"}
+      assert_receive {:DOWN, ^caller_ref, :process, ^caller_pid, :normal}
+
+      named_channel = %GRPC.Channel{ref: channel_name}
+      assert {:ok, picked_channel} = GRPC.Client.Connection.pick_channel(named_channel)
+      conn_pid = picked_channel.adapter_payload.conn_pid
+      %{gun_pid: gun_pid} = :sys.get_state(conn_pid)
+      assert Process.alive?(gun_pid)
+
+      assert {:ok, reused_channel} = GRPC.Stub.connect("localhost:#{port}", name: channel_name)
+      assert reused_channel.adapter_payload.conn_pid == conn_pid
+      assert %{gun_pid: ^gun_pid} = :sys.get_state(conn_pid)
+
+      request = %Helloworld.HelloRequest{name: "second caller"}
+      assert {:ok, reply} = Helloworld.Greeter.Stub.say_hello(named_channel, request)
+      assert reply.message == "Hello, second caller"
+
+      assert {:ok, _channel} = GRPC.Stub.disconnect(reused_channel)
+      refute Process.alive?(conn_pid)
     end)
   end
 
