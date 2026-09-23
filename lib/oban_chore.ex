@@ -127,6 +127,26 @@ defmodule ObanChore do
     |> Enum.map(fn job -> %{job | state: String.to_existing_atom(job.state)} end)
   end
 
+  @doc """
+  Lists the most recent finished (completed, cancelled, discarded) jobs for a given worker module.
+
+  Jobs are ordered from newest to oldest and at most `limit` jobs are returned.
+
+  Returns a list of `%Oban.Job{}` structs with the state converted to an atom.
+  """
+  def list_job_history(worker_module, oban_name \\ Oban, limit \\ 20) do
+    config = Oban.config(oban_name)
+    repo = config.repo
+
+    Oban.Job
+    |> where([j], j.state in ~w(completed cancelled discarded))
+    |> where([j], j.worker == ^normalize_worker(worker_module))
+    |> order_by([j], desc: j.id)
+    |> limit(^limit)
+    |> repo.all()
+    |> Enum.map(fn job -> %{job | state: String.to_existing_atom(job.state)} end)
+  end
+
   @doc false
   def pubsub_server do
     Application.fetch_env!(:oban_chore, :pubsub_server)

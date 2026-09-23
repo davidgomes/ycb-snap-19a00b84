@@ -71,6 +71,17 @@ defmodule ObanChoreWeb.DashboardLive do
               >
                 New Execution
               </button>
+              <button
+                phx-click="select_tab"
+                phx-value-tab="history"
+                data-role="history-tab"
+                class={[
+                  "oc-tab-item",
+                  if(@selected_tab == :history, do: "oc-tab-item--active", else: "")
+                ]}
+              >
+                History
+              </button>
               <%= for job_id <- Map.get(@chore_jobs, @selected_chore_module, []), job = @jobs[job_id] do %>
                 <button
                   phx-click="select_tab"
@@ -125,6 +136,10 @@ defmodule ObanChoreWeb.DashboardLive do
                     />
                   <% end %>
               <% end %>
+
+              <%= if @selected_tab == :history do %>
+                <.job_history jobs={@history} />
+              <% end %>
             </div>
           </div>
         <% else %>
@@ -156,6 +171,7 @@ defmodule ObanChoreWeb.DashboardLive do
        selected_chore_module: nil,
        jobs: %{},
        chore_jobs: %{},
+       history: [],
        selected_tab: :new,
        now: DateTime.utc_now()
      )}
@@ -227,6 +243,11 @@ defmodule ObanChoreWeb.DashboardLive do
   end
 
   @impl true
+  def handle_event("select_tab", %{"tab" => "history"}, socket) do
+    {:noreply, socket |> assign(selected_tab: :history) |> load_history()}
+  end
+
+  @impl true
   def handle_event("select_tab", %{"tab" => "job_" <> id_str}, socket) do
     id = String.to_integer(id_str)
     {:noreply, assign(socket, selected_tab: {:job, id})}
@@ -238,7 +259,11 @@ defmodule ObanChoreWeb.DashboardLive do
 
     if worker_module in allowed_modules do
       new_counts = Map.put(socket.assigns.counts, worker_module, count)
-      {:noreply, assign(socket, counts: new_counts)}
+
+      {:noreply,
+       socket
+       |> assign(counts: new_counts)
+       |> maybe_refresh_history(worker_module)}
     else
       {:noreply, socket}
     end
@@ -300,6 +325,22 @@ defmodule ObanChoreWeb.DashboardLive do
   @impl true
   def handle_info(:tick, socket) do
     {:noreply, assign(socket, now: DateTime.utc_now())}
+  end
+
+  defp load_history(socket) do
+    assign(socket, history: ObanChore.list_job_history(socket.assigns.selected_chore_module))
+  end
+
+  # Counts are broadcast after Oban has persisted every job transition of a chore,
+  # so they are also the signal that its history may have changed.
+  defp maybe_refresh_history(socket, worker_module) do
+    %{selected_tab: selected_tab, selected_chore_module: selected_chore_module} = socket.assigns
+
+    if selected_tab == :history and worker_module == selected_chore_module do
+      load_history(socket)
+    else
+      socket
+    end
   end
 
   defp fetch_counts(chores) do

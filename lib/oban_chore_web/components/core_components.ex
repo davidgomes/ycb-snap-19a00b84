@@ -131,6 +131,64 @@ defmodule ObanChoreWeb.CoreComponents do
   end
 
   @doc """
+  Renders a badge with the state of an Oban job.
+  """
+  attr(:state, :atom, required: true)
+
+  def state_badge(assigns) do
+    ~H"""
+    <span class="oc-badge" style={state_style(@state)}>
+      <%= String.capitalize(to_string(@state)) %>
+    </span>
+    """
+  end
+
+  @doc """
+  Renders the list of finished executions of a chore.
+  """
+  attr(:jobs, :list, required: true)
+
+  def job_history(assigns) do
+    ~H"""
+    <div class="oc-card" data-role="job-history">
+      <%= if @jobs == [] do %>
+        <p class="oc-history-empty">No finished executions yet.</p>
+      <% else %>
+        <div class="oc-table-wrapper">
+          <table class="oc-table">
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>State</th>
+                <th>Arguments</th>
+                <th>Attempts</th>
+                <th>Finished At</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={job <- @jobs} data-role="history-row" data-job-id={job.id}>
+                <td class="oc-font-mono">#<%= job.id %></td>
+                <td><.state_badge state={job.state} /></td>
+                <td class="oc-table-args">
+                  <div class="oc-truncate oc-font-mono" title={format_args(job.args)}>
+                    <%= format_args(job.args) %>
+                  </div>
+                  <div :if={error = last_error(job)} class="oc-truncate oc-history-error" title={error}>
+                    <%= error %>
+                  </div>
+                </td>
+                <td><%= job.attempt %>/<%= job.max_attempts %></td>
+                <td><%= format_datetime(job.completed_at || job.cancelled_at || job.discarded_at) %></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  @doc """
   Renders a warning banner for duplicate chore execution.
   """
   attr(:on_dismiss, :string, required: true)
@@ -386,6 +444,48 @@ defmodule ObanChoreWeb.CoreComponents do
   end
 
   defp normalize_value(assigns), do: assigns
+
+  defp state_style(state) do
+    case state do
+      :executing ->
+        "background-color: var(--oc-blue-50); color: var(--oc-blue-700); box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.1);"
+
+      :available ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+
+      :scheduled ->
+        "background-color: var(--oc-amber-50); color: var(--oc-amber-800); box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.2);"
+
+      :completed ->
+        "background-color: var(--oc-emerald-50); color: var(--oc-emerald-800); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.2);"
+
+      :discarded ->
+        "background-color: var(--oc-rose-50); color: var(--oc-rose-900); box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.1);"
+
+      _ ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+    end
+  end
+
+  defp format_args(args) when map_size(args) == 0, do: "-"
+
+  defp format_args(args) do
+    Enum.map_join(args, ", ", fn {key, value} -> "#{key}: #{inspect(value)}" end)
+  end
+
+  # Only the first line of the error is shown, the rest is usually the stacktrace.
+  defp last_error(%{state: state, errors: [_ | _] = errors})
+       when state in [:cancelled, :discarded] do
+    case List.last(errors) do
+      %{"error" => error} when is_binary(error) -> error |> String.split("\n", parts: 2) |> hd()
+      _ -> nil
+    end
+  end
+
+  defp last_error(_job), do: nil
+
+  defp format_datetime(nil), do: "-"
+  defp format_datetime(datetime), do: Calendar.strftime(datetime, "%Y-%m-%d %H:%M:%S UTC")
 
   @doc """
   Formats the remaining time between `scheduled_at` and `now`.

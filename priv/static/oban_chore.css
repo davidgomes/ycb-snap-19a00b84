@@ -536,6 +536,62 @@ textarea.oc-input {
   word-break: break-all;
 }
 
+/* History */
+.oc-table-wrapper {
+  overflow-x: auto;
+}
+
+.oc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.oc-table th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--oc-gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--oc-gray-200);
+}
+
+.oc-table td {
+  padding: 0.75rem 1rem;
+  color: var(--oc-gray-700);
+  white-space: nowrap;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--oc-gray-100);
+}
+
+.oc-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Lets the arguments column take the remaining width and truncate its content */
+.oc-table .oc-table-args {
+  width: 100%;
+  max-width: 0;
+}
+
+.oc-history-error {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--oc-rose-900);
+}
+
+.oc-history-empty {
+  margin: 0;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-style: italic;
+  color: var(--oc-gray-500);
+}
+
 /* Transitions */
 .oc-transition-show {
   transition: all 0.3s ease-out;
@@ -576,3 +632,4 @@ textarea.oc-input {
 .oc-font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 .oc-text-gray-500 { color: var(--oc-gray-500); }
 .oc-text-red-600 { color: var(--oc-red-600); }
+.oc-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
