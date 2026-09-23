@@ -4,23 +4,24 @@ defmodule ObanChore.Test.MockRepo do
   # A stand-in for an Ecto repo so Oban can boot and ObanChore's queries can run
   # without a database. Every query is sent back to the calling process, and
   # results are read from that process's dictionary, so stubs set with `stub/2`
-  # only apply to the test that set them.
+  # only apply to the test that set them. A stub may be a one-arity function,
+  # which is called with the query.
 
   def stub(function, result), do: Process.put({__MODULE__, function}, result)
 
   def aggregate(query, :count, :id) do
     send(self(), {:repo_aggregate, query})
-    Process.get({__MODULE__, :aggregate}, 0)
+    result(:aggregate, query, 0)
   end
 
   def exists?(query) do
     send(self(), {:repo_exists, query})
-    Process.get({__MODULE__, :exists?}, false)
+    result(:exists?, query, false)
   end
 
   def all(query) do
     send(self(), {:repo_all, query})
-    Process.get({__MODULE__, :all}, [])
+    result(:all, query, [])
   end
 
   # Oban reads the migrated version of `oban_jobs` before booting in a testing
@@ -33,4 +34,11 @@ defmodule ObanChore.Test.MockRepo do
   def __adapter__, do: Ecto.Adapters.Postgres
 
   def config, do: [priv: "priv", otp_app: :oban_chore]
+
+  defp result(function, query, default) do
+    case Process.get({__MODULE__, function}, default) do
+      stub when is_function(stub, 1) -> stub.(query)
+      result -> result
+    end
+  end
 end
