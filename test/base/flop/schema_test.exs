@@ -388,7 +388,7 @@ defmodule Flop.SchemaTest do
              )
   end
 
-  test "raises error if custom field is added to sortable list" do
+  test "raises error if a sortable custom field has no field_dynamic" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Parsley do
@@ -407,6 +407,73 @@ defmodule Flop.SchemaTest do
         end
       end
 
-    assert error.message =~ "cannot sort by custom field"
+    assert error.message =~
+             "custom field without field_dynamic function marked as sortable"
+  end
+
+  test "raises error if a filterable custom field has no callback" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Cilantro do
+          @derive {
+            Flop.Schema,
+            filterable: [:inserted_at],
+            sortable: [],
+            custom_fields: [
+              inserted_at: [ecto_type: :utc_datetime]
+            ]
+          }
+          defstruct [:id, :inserted_at]
+        end
+      end
+
+    assert error.message =~
+             "custom field without a callback marked as filterable"
+  end
+
+  test "allows a custom field with only the callback it needs" do
+    defmodule Sage do
+      use Ecto.Schema
+
+      @derive {
+        Flop.Schema,
+        filterable: [:inserted_at],
+        sortable: [:sorted],
+        custom_fields: [
+          inserted_at: [
+            field_dynamic: {__MODULE__, :field_dynamic, []},
+            ecto_type: :utc_datetime
+          ],
+          sorted: [
+            field_dynamic: {__MODULE__, :field_dynamic, [source: :inserted_at]},
+            ecto_type: :utc_datetime,
+            path: [:inserted_at]
+          ]
+        ]
+      }
+
+      schema "sages" do
+        field :inserted_at, :utc_datetime
+      end
+
+      def field_dynamic(_opts), do: nil
+    end
+
+    assert %Flop.FieldInfo{
+             extra: %{
+               type: :custom,
+               filter: nil,
+               field_dynamic: {Sage, :field_dynamic, []},
+               path: [:inserted_at]
+             }
+           } = Schema.field_info(struct(Sage), :inserted_at)
+
+    assert %Flop.FieldInfo{
+             extra: %{
+               type: :custom,
+               field_dynamic: {Sage, :field_dynamic, [source: :inserted_at]},
+               path: [:inserted_at]
+             }
+           } = Schema.field_info(struct(Sage), :sorted)
   end
 end

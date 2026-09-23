@@ -17,6 +17,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
   alias Flop.Filter
   alias Flop.Meta
   alias Flop.Repo
+  alias MyApp.CustomFieldPet
   alias MyApp.Fruit
   alias MyApp.Owner
   alias MyApp.Pet
@@ -32,6 +33,47 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       adapter_opts: [repo: Flop.Repo],
       default_limit: 35
   end
+
+  defp insert_custom_field_pets(ages) do
+    Enum.map(ages, &Repo.insert!(%CustomFieldPet{age: &1}))
+  end
+
+  defp page_cursor_by_cursor(q, module, order_by, direction, travel \\ :forward) do
+    flop = %Flop{order_by: order_by, order_directions: [direction]}
+
+    flop =
+      case travel do
+        :forward -> %{flop | first: 1}
+        :backward -> %{flop | last: 1}
+      end
+
+    stream =
+      Stream.unfold(flop, fn
+        nil ->
+          nil
+
+        flop ->
+          {:ok, {items, %Meta{} = meta}} =
+            Flop.validate_and_run(q, flop, for: module)
+
+          case items do
+            [item] -> {item, next_page(flop, meta, travel)}
+            [] -> nil
+          end
+      end)
+
+    Enum.to_list(stream)
+  end
+
+  defp next_page(flop, %Meta{has_next_page?: true} = meta, :forward) do
+    %{flop | after: meta.end_cursor}
+  end
+
+  defp next_page(flop, %Meta{has_previous_page?: true} = meta, :backward) do
+    %{flop | before: meta.start_cursor}
+  end
+
+  defp next_page(_flop, %Meta{}, _travel), do: nil
 
   describe "ordering" do
     test "adds order_by to query if set" do
@@ -168,6 +210,108 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                %Flop{order_by: [:pet_count], order_directions: [:desc]},
                for: Owner
              ) == Enum.reverse(expected)
+    end
+
+    test "orders by a custom field" do
+      insert_custom_field_pets([30, 10, 40, 20])
+
+      for {direction, expected} <- [
+            {:asc, [10, 20, 30, 40]},
+            {:desc, [40, 30, 20, 10]}
+          ] do
+        result =
+          Flop.all(
+            CustomFieldPet,
+            %Flop{order_by: [:age_score], order_directions: [direction]},
+            for: CustomFieldPet
+          )
+
+        assert Enum.map(result, & &1.age) == expected
+      end
+    end
+
+    test "applies every nulls order direction to a custom field" do
+      insert_custom_field_pets([10, nil, 20])
+
+      for {direction, expected} <- [
+            {:asc_nulls_first, [nil, 10, 20]},
+            {:asc_nulls_last, [10, 20, nil]},
+            {:desc_nulls_first, [nil, 20, 10]},
+            {:desc_nulls_last, [20, 10, nil]}
+          ] do
+        result =
+          Flop.all(
+            CustomFieldPet,
+            %Flop{order_by: [:age_score], order_directions: [direction]},
+            for: CustomFieldPet
+          )
+
+        assert Enum.map(result, & &1.age) == expected
+      end
+    end
+
+    test "merges runtime and compile-time custom field options" do
+      insert_custom_field_pets([30, 10, 20])
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{order_by: [:age_score]},
+          for: CustomFieldPet,
+          extra_opts: [factor: -1, runtime_only: :available, test_pid: self()]
+        )
+
+      assert Enum.map(result, & &1.age) == [10, 20, 30]
+
+      assert_receive {:age_score_dynamic_opts, opts}
+      assert opts[:factor] == 2
+      assert opts[:compile_only] == :available
+      assert opts[:runtime_only] == :available
+    end
+
+    test "orders by a custom field on a named binding" do
+      older = insert(:owner, age: 60)
+      younger = insert(:owner, age: 20)
+
+      Repo.insert!(%CustomFieldPet{age: 1, owner_id: older.id})
+      Repo.insert!(%CustomFieldPet{age: 2, owner_id: younger.id})
+
+      flop = %Flop{order_by: [:owner_age_score]}
+      assert Flop.named_bindings(flop, CustomFieldPet) == [:owner]
+
+      query =
+        CustomFieldPet
+        |> join(:inner, [pet], owner in assoc(pet, :owner), as: :owner)
+        |> select([pet, owner: owner], {pet.id, owner.age})
+
+      assert query
+             |> Flop.all(flop, for: CustomFieldPet)
+             |> Enum.map(&elem(&1, 1)) == [20, 60]
+    end
+
+    test "composes custom field ordering with pagination" do
+      insert_custom_field_pets([40, 10, 30, 20])
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{order_by: [:age_score], limit: 2, offset: 1},
+          for: CustomFieldPet
+        )
+
+      assert Enum.map(result, & &1.age) == [20, 30]
+    end
+
+    test "raises when ordering by a custom field without field_dynamic" do
+      assert_raise ArgumentError,
+                   ~r/ordering by a custom field requires a field_dynamic/,
+                   fn ->
+                     Flop.all(
+                       Pet,
+                       %Flop{order_by: [:custom]},
+                       for: Pet
+                     )
+                   end
     end
 
     test "warns if query passed to Flop already included ordering" do
@@ -896,6 +1040,128 @@ defmodule Flop.Adapters.Ecto.FlopTest do
 
         checkin_checkout()
       end
+    end
+
+    test "filters by a custom field with a field_dynamic" do
+      insert_custom_field_pets([10, 20, 30])
+
+      for {op, value, expected} <- [
+            {:==, 40, [20]},
+            {:!=, 40, [10, 30]},
+            {:>, 40, [30]},
+            {:>=, 40, [20, 30]},
+            {:<, 40, [10]},
+            {:<=, 40, [10, 20]},
+            {:in, [20, 60], [10, 30]},
+            {:not_in, [20, 60], [20]}
+          ] do
+        result =
+          Flop.all(
+            CustomFieldPet,
+            %Flop{
+              filters: [%Filter{field: :age_score, op: op, value: value}],
+              order_by: [:age_score]
+            },
+            for: CustomFieldPet
+          )
+
+        assert Enum.map(result, & &1.age) == expected,
+               "#{op} returned wrong rows"
+      end
+    end
+
+    test "uses the filter function when a custom field sets both callbacks" do
+      Repo.insert!(%CustomFieldPet{name: "Rosa"})
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{
+            filters: [%Filter{field: :blocked_name, op: :==, value: "rosa"}]
+          },
+          for: CustomFieldPet
+        )
+
+      assert result == []
+    end
+
+    test "filters by a custom field with the like operators" do
+      Repo.insert!(%CustomFieldPet{name: "Rosa"})
+      Repo.insert!(%CustomFieldPet{name: "Rubi"})
+
+      for {op, value, expected} <- [
+            {:like, "os", ["Rosa"]},
+            {:not_like, "os", ["Rubi"]},
+            {:ilike, "OS", ["Rosa"]},
+            {:starts_with, "ru", ["Rubi"]},
+            {:ends_with, "bi", ["Rubi"]}
+          ] do
+        result =
+          Flop.all(
+            CustomFieldPet,
+            %Flop{
+              filters: [%Filter{field: :name_lower, op: op, value: value}],
+              order_by: [:name_lower]
+            },
+            for: CustomFieldPet
+          )
+
+        assert Enum.map(result, & &1.name) == expected,
+               "#{op} returned wrong rows"
+      end
+    end
+
+    test "filters by an empty custom field" do
+      Repo.insert!(%CustomFieldPet{name: "set"})
+      Repo.insert!(%CustomFieldPet{name: nil})
+
+      for {op, value, expected} <- [
+            {:empty, true, [nil]},
+            {:empty, false, ["set"]},
+            {:not_empty, true, ["set"]},
+            {:not_empty, false, [nil]}
+          ] do
+        result =
+          Flop.all(
+            CustomFieldPet,
+            %Flop{filters: [%Filter{field: :name_lower, op: op, value: value}]},
+            for: CustomFieldPet
+          )
+
+        assert Enum.map(result, & &1.name) == expected,
+               "#{op} with #{value} returned wrong rows"
+      end
+    end
+
+    test "filters by an empty custom field of array type" do
+      Repo.insert!(%CustomFieldPet{name: "set", tags: ["a"]})
+      Repo.insert!(%CustomFieldPet{name: "empty", tags: []})
+      Repo.insert!(%CustomFieldPet{name: "nil", tags: nil})
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{filters: [%Filter{field: :tag_list, op: :empty, value: true}]},
+          for: CustomFieldPet
+        )
+
+      assert result |> Enum.map(& &1.name) |> Enum.sort() == ["empty", "nil"]
+    end
+
+    test "passes runtime options to a filtering field_dynamic" do
+      insert_custom_field_pets([10, 20])
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{filters: [%Filter{field: :age_score, op: :==, value: 40}]},
+          for: CustomFieldPet,
+          extra_opts: [test_pid: self()]
+        )
+
+      assert Enum.map(result, & &1.age) == [20]
+      assert_receive {:age_score_dynamic_opts, opts}
+      assert opts[:test_pid] == self()
     end
 
     test "filtering with custom fields" do
@@ -1940,6 +2206,67 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                    for: Pet
                  )
       end
+    end
+
+    test "pages by a custom field" do
+      insert_custom_field_pets([30, 10, 20])
+
+      q =
+        select_merge(
+          CustomFieldPet,
+          ^%{age_score: CustomFieldPet.age_score_dynamic(factor: 2)}
+        )
+
+      pets = page_cursor_by_cursor(q, CustomFieldPet, [:age_score], :asc)
+
+      assert Enum.map(pets, & &1.age_score) == [20, 40, 60]
+    end
+
+    test "pages backward by a custom field" do
+      insert_custom_field_pets([30, 10, 20])
+
+      q =
+        select_merge(
+          CustomFieldPet,
+          ^%{age_score: CustomFieldPet.age_score_dynamic(factor: 2)}
+        )
+
+      pets =
+        page_cursor_by_cursor(q, CustomFieldPet, [:age_score], :asc, :backward)
+
+      assert Enum.map(pets, & &1.age_score) == [60, 40, 20]
+    end
+
+    test "pages by a custom field on a named binding" do
+      for age <- [30, 10, 20] do
+        owner = insert(:owner, age: age)
+        Repo.insert!(%CustomFieldPet{age: 1, owner_id: owner.id})
+      end
+
+      q =
+        CustomFieldPet
+        |> join(:inner, [p], o in assoc(p, :owner), as: :owner)
+        |> select_merge([owner: o], %{owner_age: o.age})
+
+      pets = page_cursor_by_cursor(q, CustomFieldPet, [:owner_age_score], :asc)
+
+      assert Enum.map(pets, & &1.owner_age) == [10, 20, 30]
+    end
+
+    test "raises if a custom field without field_dynamic is used" do
+      cursor = Flop.Cursor.encode(%{custom: 1})
+
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.paginate(
+            Pet,
+            %Flop{first: 1, after: cursor, order_by: [:custom]},
+            for: Pet
+          )
+        end
+
+      assert error.message =~
+               "cursor pagination by a custom field requires a field_dynamic"
     end
 
     test "raises if alias field is used" do

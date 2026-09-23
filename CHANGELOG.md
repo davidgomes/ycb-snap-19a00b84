@@ -12,6 +12,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Support SQLite.
 - Support MySQL.
+- Support ordering by custom fields. Set `field_dynamic` to a function that
+  returns an `Ecto.Query` dynamic expression. Flop uses that expression for
+  `ORDER BY` and for cursor pagination. The same expression is used for filters
+  when no `filter` function is configured. `path` says where to read the cursor
+  value from the result and defaults to the field name.
 
 ### Fixed
 
