@@ -10,6 +10,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Support cursor pagination on nullable columns. `nil` cursor values are now
+  compared according to the null ordering of the order direction instead of
+  being ignored.
+
 - Support SQLite.
 - Support MySQL.
 - Support ordering and filtering by custom fields via a new `field_dynamic`
