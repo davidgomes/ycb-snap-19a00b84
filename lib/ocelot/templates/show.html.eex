@@ -1,0 +1,34 @@
+<% job = assigns[:job] %>
+<p><a href="<%= h(assigns[:base]) %>/?state=<%= job.state %>">&larr; Back to <%= job.state %> jobs</a></p>
+
+<h2>Job <%= job.id %></h2>
+<dl>
+  <dt>Worker</dt><dd><%= h(job.worker) %></dd>
+  <dt>Queue</dt><dd><%= h(job.queue) %></dd>
+  <dt>State</dt><dd><%= job.state %></dd>
+  <dt>Attempt</dt><dd><%= job.attempt %>/<%= job.max_attempts %></dd>
+  <dt>Priority</dt><dd><%= job.priority %></dd>
+  <dt>Tags</dt><dd><%= h(Enum.join(job.tags, ", ")) %></dd>
+  <dt>Inserted at</dt><dd><%= timestamp(job.inserted_at) %></dd>
+  <dt>Scheduled at</dt><dd><%= timestamp(job.scheduled_at) %></dd>
+  <dt>Attempted at</dt><dd><%= timestamp(job.attempted_at) %></dd>
+  <dt>Completed at</dt><dd><%= timestamp(job.completed_at) %></dd>
+  <dt>Discarded at</dt><dd><%= timestamp(job.discarded_at) %></dd>
+  <dt>Cancelled at</dt><dd><%= timestamp(job.cancelled_at) %></dd>
+</dl>
+
+<h2>Args</h2>
+<pre><%= json(job.args) %></pre>
+
+<h2>Meta</h2>
+<pre><%= json(job.meta) %></pre>
+
+<h2>Errors</h2>
+<%= if job.errors == [] do %>
+  <p class="empty">No errors recorded.</p>
+<% else %>
+  <%= for error <- Enum.reverse(job.errors) do %>
+    <p>Attempt <%= h(error["attempt"]) %> at <%= h(error["at"]) %></p>
+    <pre><%= h(error["error"]) %></pre>
+  <% end %>
+<% end %>

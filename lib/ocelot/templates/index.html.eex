@@ -1,0 +1,59 @@
+<nav class="states">
+  <%= for {state, count} <- assigns[:state_counts] do %>
+    <a href="<%= h(assigns[:base]) %>/?state=<%= state %>" class="<%= if state == assigns[:state], do: "active" %>">
+      <span><%= state %></span><b><%= count %></b>
+    </a>
+  <% end %>
+</nav>
+
+<h2>Queues</h2>
+<%= if assigns[:queue_counts] == [] do %>
+  <p class="empty">No queues have jobs yet.</p>
+<% else %>
+  <table>
+    <thead>
+      <tr>
+        <th>Queue</th>
+        <%= for state <- Ocelot.Jobs.states() do %><th class="num"><%= state %></th><% end %>
+      </tr>
+    </thead>
+    <tbody>
+      <%= for {queue, counts} <- assigns[:queue_counts] do %>
+        <tr>
+          <td><%= h(queue) %></td>
+          <%= for state <- Ocelot.Jobs.states() do %><td class="num"><%= Map.get(counts, state, 0) %></td><% end %>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
+
+<h2><%= String.capitalize(assigns[:state]) %> jobs</h2>
+<%= if assigns[:jobs] == [] do %>
+  <p class="empty">No <%= assigns[:state] %> jobs.</p>
+<% else %>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Worker</th>
+        <th>Queue</th>
+        <th>Args</th>
+        <th class="num">Attempt</th>
+        <th>Scheduled at</th>
+      </tr>
+    </thead>
+    <tbody>
+      <%= for job <- assigns[:jobs] do %>
+        <tr>
+          <td><a href="<%= h(assigns[:base]) %>/jobs/<%= job.id %>"><%= job.id %></a></td>
+          <td><%= h(job.worker) %></td>
+          <td><%= h(job.queue) %></td>
+          <td><code><%= h(Jason.encode!(job.args)) %></code></td>
+          <td class="num"><%= job.attempt %>/<%= job.max_attempts %></td>
+          <td><%= timestamp(job.scheduled_at) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>

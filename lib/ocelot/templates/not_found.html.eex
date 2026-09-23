@@ -1,0 +1,2 @@
+<h2>Not found</h2>
+<p><a href="<%= h(assigns[:base]) %>/">Back to dashboard</a></p>
