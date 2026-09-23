@@ -14,8 +14,13 @@ end
 owasp_questions = [
   %{
     question_id: 1,
-    answer: "A",
-    help_text: "A"
+    answer: :entry_granted_op2,
+    help_text: "Use a strong, salted, slow hashing algorithm such as bcrypt instead of MD5."
+  },
+  %{
+    question_id: 2,
+    answer: :plug,
+    help_text: "Check the versions of the dependencies installed at the top of the Livebook."
   }
 ]
 

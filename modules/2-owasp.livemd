@@ -122,8 +122,11 @@ end
 
 # DO NOT CHANGE CODE ABOVE THIS LINE =========================
 
-# PasswordCompare.option_one("users_password", md5_hash)
-# PasswordCompare.option_two("users_password", bcrypt_salted_hash)
+# answer = PasswordCompare.option_one("users_password", md5_hash)
+# answer = PasswordCompare.option_two("users_password", bcrypt_salted_hash)
+
+# DO NOT CHANGE CODE BELOW THIS LINE =========================
+GradingClient.check_answer(answer, OWASP, 1)
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -257,6 +260,8 @@ vulnerable_dependency = :vulnerable_dependency
 # DO NOT CHANGE CODE BELOW THIS LINE ============================
 Application.spec(vulnerable_dependency)[:vsn] |> List.to_string() |> IO.puts()
 IO.puts(vulnerable_dependency)
+
+GradingClient.check_answer(vulnerable_dependency, OWASP, 2)
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
