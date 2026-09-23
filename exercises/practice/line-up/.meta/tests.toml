@@ -1,0 +1,64 @@
+# This is an auto-generated file.
+#
+# Regenerating this file via `configlet sync` will:
+# - Recreate every `description` key/value pair
+# - Recreate every `uuid` key/value pair
+# - Remove any `include = true` key/value pair (an omitted `include` key implies inclusion)
+# - Preserve any other key/value pair
+#
+# As user-added comments (using the # character) will be removed when this file
+# is regenerated, comments can be added via a `comment` key.
+
+[7c8bb6a6-8e4f-4e1f-b4c4-0e0c6c8c1a2f]
+description = "format 1st ordinal numeral"
+
+[1a2b0e6b-3f1a-4c5d-9e8f-2b3c4d5e6f70]
+description = "format 2nd ordinal numeral"
+
+[2b3c4d5e-6f70-4a1b-8c2d-3e4f5a6b7c81]
+description = "format 3rd ordinal numeral"
+
+[3c4d5e6f-7081-4b2c-9d3e-4f5a6b7c8d92]
+description = "format 4th ordinal numeral"
+
+[4d5e6f70-8192-4c3d-8e4f-5a6b7c8d9ea3]
+description = "format 9th ordinal numeral"
+
+[5e6f7081-92a3-4d4e-9f5a-6b7c8d9eafb4]
+description = "format 11th ordinal numeral"
+
+[6f708192-a3b4-4e5f-8a6b-7c8d9eafb0c5]
+description = "format 12th ordinal numeral"
+
+[708192a3-b4c5-4f6a-9b7c-8d9eafb0c1d6]
+description = "format 13th ordinal numeral"
+
+[8192a3b4-c5d6-4a7b-8c8d-9eafb0c1d2e7]
+description = "format 21st ordinal numeral"
+
+[92a3b4c5-d6e7-4b8c-9d9e-afb0c1d2e3f8]
+description = "format 22nd ordinal numeral"
+
+[a3b4c5d6-e7f8-4c9d-8eaf-b0c1d2e3f409]
+description = "format 23rd ordinal numeral"
+
+[b4c5d6e7-f809-4dae-9fb0-c1d2e3f4051a]
+description = "format 100th ordinal numeral"
+
+[c5d6e7f8-091a-4ebf-80c1-d2e3f405162b]
+description = "format 101st ordinal numeral"
+
+[d6e7f809-1a2b-4fc0-91d2-e3f405162738]
+description = "format 111th ordinal numeral"
+
+[e7f8091a-2b3c-40d1-a2e3-f40516273849]
+description = "format 112th ordinal numeral"
+
+[f8091a2b-3c4d-41e2-b3f4-05162738495a]
+description = "format 113th ordinal numeral"
+
+[091a2b3c-4d5e-42f3-8405-162738495a6b]
+description = "format 162nd ordinal numeral"
+
+[1a2b3c4d-5e6f-4304-9516-2738495a6b7c]
+description = "format 999th ordinal numeral"

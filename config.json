@@ -1536,6 +1536,22 @@
         "difficulty": 3
       },
       {
+        "slug": "line-up",
+        "name": "Line Up",
+        "uuid": "b922d6d6-5cc7-46d8-af2d-41f2fb693014",
+        "practices": [
+          "strings",
+          "integers"
+        ],
+        "prerequisites": [
+          "strings",
+          "integers",
+          "multiple-clause-functions",
+          "guards"
+        ],
+        "difficulty": 2
+      },
+      {
         "slug": "matching-brackets",
         "name": "Matching Brackets",
         "uuid": "cf0084a0-7b1d-4714-b7b2-618e3ad6e147",
