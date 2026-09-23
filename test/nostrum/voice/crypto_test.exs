@@ -1,4 +1,6 @@
 defmodule Nostrum.Voice.CryptoTest do
+  alias Nostrum.Struct.VoiceWSState
+  alias Nostrum.Voice.Crypto
   alias Nostrum.Voice.Crypto.Aes
   alias Nostrum.Voice.Crypto.Chacha
   alias Nostrum.Voice.Crypto.Salsa
@@ -68,6 +70,34 @@ defmodule Nostrum.Voice.CryptoTest do
       altered_cipher_text = <<Bitwise.bxor(first_byte, 0xFF), rest::binary>>
 
       :error = Salsa.decrypt(altered_cipher_text, key, nonce)
+    end
+  end
+
+  describe "DAVE" do
+    setup do
+      %{session: Dave.new_session(1, 1, 1), frame: :crypto.strong_rand_bytes(100)}
+    end
+
+    test "session is only active when the protocol version isn't 0", %{session: session} do
+      state = %VoiceWSState{dave_session: session, dave_protocol_version: 0}
+      assert Crypto.active_dave_session(state) == nil
+
+      state = %VoiceWSState{dave_session: session, dave_protocol_version: 1}
+      assert Crypto.active_dave_session(state) == session
+    end
+
+    test "frames aren't encrypted without an active session", %{frame: frame} do
+      assert Crypto.dave_encrypt(nil, frame) == frame
+      assert Crypto.dave_decrypt(nil, 2, frame) == {:ok, frame}
+    end
+
+    test "frames aren't encrypted before joining the MLS group", %{session: session, frame: frame} do
+      assert Crypto.dave_encrypt(session, frame) == frame
+    end
+
+    test "decryption fails without the sender's key", %{session: session, frame: frame} do
+      assert Crypto.dave_decrypt(session, nil, frame) == :error
+      assert Crypto.dave_decrypt(session, 2, frame) == :error
     end
   end
 end
