@@ -1435,6 +1435,76 @@ export const PetalInputOTP = {
   },
 };
 
+// Dropdown panels are shown and hidden by LiveView.JS (display toggle).
+// This hook only watches that visibility and flips the panel above the
+// trigger when the viewport has no room below and more room above.
+export const PetalDropdown = {
+  mounted() {
+    this.panel = this.el.querySelector(".pc-dropdown__menu-items-wrapper");
+    this.trigger = this.el.querySelector("button");
+    if (!this.panel) return;
+    this.watching = false;
+    this.onReposition = () => this.positionPanel();
+    this.observer = new MutationObserver(() => this.sync());
+    this.observer.observe(this.panel, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+  },
+
+  updated() {
+    this.sync();
+  },
+
+  destroyed() {
+    this.observer?.disconnect();
+    this.unwatch();
+  },
+
+  isOpen() {
+    const display = this.panel.style.display;
+    return display !== "" && display !== "none";
+  },
+
+  sync() {
+    if (!this.panel) return;
+    if (this.isOpen()) {
+      this.positionPanel();
+      if (!this.watching) {
+        window.addEventListener("scroll", this.onReposition, true);
+        window.addEventListener("resize", this.onReposition);
+        this.watching = true;
+      }
+    } else if (this.watching) {
+      this.unwatch();
+      this.panel.removeAttribute("data-flip");
+    }
+  },
+
+  unwatch() {
+    window.removeEventListener("scroll", this.onReposition, true);
+    window.removeEventListener("resize", this.onReposition);
+    this.watching = false;
+  },
+
+  // Same rule as the combobox: flip only when the panel cannot fit below
+  // AND the space above is larger. Measured with the flip cleared so the
+  // natural height decides.
+  positionPanel() {
+    if (!this.panel || !this.isOpen() || !this.trigger) return;
+    this.panel.removeAttribute("data-flip");
+    const control = this.trigger.getBoundingClientRect();
+    const panelH = this.panel.offsetHeight;
+    if (!panelH || (!control.top && !control.bottom)) return;
+    const gap = 8;
+    const below = window.innerHeight - control.bottom - gap;
+    const above = control.top - gap;
+    if (panelH > below && above > below) {
+      this.panel.setAttribute("data-flip", "");
+    }
+  },
+};
+
 // Positions a top-layer popover (<div popover>) next to its trigger.
 // The browser handles open/close and light-dismiss via the popover attribute;
 // this hook only computes fixed coordinates, flipping to the opposite side
@@ -5467,6 +5537,7 @@ export default {
   PetalTypingEffect,
   PetalInputOTP,
   PetalPopover,
+  PetalDropdown,
   PetalCommand,
   PetalCommandTrigger,
   PetalAurora,
