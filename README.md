@@ -81,12 +81,17 @@ Add `ObanChore.Plugin` to your Oban configuration. This plugin automatically dis
 config :my_app, Oban,
   repo: MyApp.Repo,
   plugins: [
-    {ObanChore.Plugin, otp_app: :my_app, pubsub_server: MyApp.PubSub},
+      {ObanChore.Plugin, otp_app: :my_app, pubsub_server: MyApp.PubSub},
     # ... other plugins
   ],
   queues: [default: 10]
 ```
 
+Pass either `:otp_app` or an explicit `:chores` list. The two options are mutually exclusive:
+
+```elixir
+{ObanChore.Plugin, chores: [MyApp.Chores.UserBackfill], pubsub_server: MyApp.PubSub}
+```
 
 ### 4. Define a Chore
 
