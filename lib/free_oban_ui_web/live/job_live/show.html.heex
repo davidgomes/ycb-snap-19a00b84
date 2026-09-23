@@ -1,0 +1,59 @@
+<div class="space-y-6">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <.link navigate={~p"/jobs"} class="text-sm font-medium text-zinc-500 hover:text-zinc-800">
+        ← Jobs
+      </.link>
+      <h1 class="mt-2 text-2xl font-semibold text-zinc-900">Job #{@job.id}</h1>
+      <p class="mt-1 text-sm text-zinc-600">{@job.worker}</p>
+    </div>
+    <div class="flex gap-2">
+      <button
+        :if={@job.state in ["completed", "discarded", "cancelled", "retryable"]}
+        phx-click="retry"
+        class="rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-700"
+      >
+        Retry
+      </button>
+      <button
+        :if={@job.state in ["available", "scheduled", "retryable", "executing"]}
+        phx-click="cancel"
+        data-confirm="Cancel this job?"
+        class="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white hover:bg-rose-500"
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+
+  <dl class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <div class="rounded-xl border border-zinc-200 p-4">
+      <dt class="text-xs font-semibold uppercase tracking-wide text-zinc-500">State</dt>
+      <dd class="mt-1 text-sm text-zinc-900">{@job.state}</dd>
+    </div>
+    <div class="rounded-xl border border-zinc-200 p-4">
+      <dt class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Queue</dt>
+      <dd class="mt-1 text-sm text-zinc-900">{@job.queue}</dd>
+    </div>
+    <div class="rounded-xl border border-zinc-200 p-4">
+      <dt class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Attempt</dt>
+      <dd class="mt-1 text-sm text-zinc-900">{@job.attempt} / {@job.max_attempts}</dd>
+    </div>
+    <div class="rounded-xl border border-zinc-200 p-4">
+      <dt class="text-xs font-semibold uppercase tracking-wide text-zinc-500">Scheduled</dt>
+      <dd class="mt-1 text-sm text-zinc-900">
+        {Calendar.strftime(@job.scheduled_at, "%Y-%m-%d %H:%M:%S UTC")}
+      </dd>
+    </div>
+  </dl>
+
+  <section class="space-y-2">
+    <h2 class="text-sm font-semibold text-zinc-900">Args</h2>
+    <pre class="overflow-x-auto rounded-xl bg-zinc-900 p-4 text-xs text-zinc-100"><code>{Jason.encode!(@job.args, pretty: true)}</code></pre>
+  </section>
+
+  <section :if={@job.errors != []} class="space-y-2">
+    <h2 class="text-sm font-semibold text-zinc-900">Errors</h2>
+    <pre class="overflow-x-auto rounded-xl bg-rose-950 p-4 text-xs text-rose-100"><code>{Jason.encode!(@job.errors, pretty: true)}</code></pre>
+  </section>
+</div>
