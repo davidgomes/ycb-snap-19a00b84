@@ -713,6 +713,8 @@ defmodule HexpmWeb.Dashboard.Policy.Components.PolicyEdit do
           </span>
         </div>
 
+        <input type="hidden" name={@override_name <> "_drop[]"} value="" />
+
         <div data-override-rows class="space-y-2">
           <%= inputs_for @form, :overrides, fn of -> %>
             <.override_row
