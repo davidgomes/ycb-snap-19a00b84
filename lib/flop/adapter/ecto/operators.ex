@@ -304,7 +304,40 @@ defmodule Flop.Adapter.Ecto.Operators do
     end
   end
 
-  defmacro empty(:array) do
+  # The fragments reference the filtered field as `field(r, ^field)`. For custom
+  # fields, that reference is replaced with the `field_dynamic` expression.
+  def put_source(expr, :field), do: expr
+
+  def put_source(expr, :field_dynamic) do
+    Macro.prewalk(expr, fn
+      {:field, _, [{:r, _, _}, {:^, _, [{:var!, _, [{:field, _, _}]}]}]} ->
+        quote do: ^var!(field_dynamic)
+
+      expr ->
+        expr
+    end)
+  end
+
+  defmacro empty(kind, source \\ :field)
+
+  # Ecto types a bare interpolation like `^field_dynamic` after the other
+  # operand, which fails if that operand is a `type/2` call with an interpolated
+  # type. The typed empty value is interpolated as a dynamic of its own instead.
+  defmacro empty(kind, :field_dynamic) when kind in [:array, :map] do
+    empty_value = if kind == :array, do: [], else: Macro.escape(%{})
+
+    quote do
+      is_nil(^var!(field_dynamic)) or
+        ^var!(field_dynamic) ==
+          ^dynamic(type(^unquote(empty_value), ^var!(ecto_type)))
+    end
+  end
+
+  defmacro empty(kind, source) do
+    kind |> empty_expr() |> put_source(source)
+  end
+
+  defp empty_expr(:array) do
     quote do
       is_nil(field(r, ^var!(field))) or
         field(r, ^var!(field)) == type(^[], ^var!(ecto_type))
@@ -312,34 +345,37 @@ defmodule Flop.Adapter.Ecto.Operators do
   end
 
   # for adapters that store an array as a JSON column
-  defmacro empty(:json_array) do
+  defp empty_expr(:json_array) do
     quote do
       is_nil(field(r, ^var!(field))) or
         fragment("JSON_LENGTH(?) = 0", field(r, ^var!(field)))
     end
   end
 
-  defmacro empty(:map) do
+  defp empty_expr(:map) do
     quote do
       is_nil(field(r, ^var!(field))) or
         field(r, ^var!(field)) == type(^%{}, ^var!(ecto_type))
     end
   end
 
-  defmacro empty(:other) do
+  defp empty_expr(:other) do
     quote do
       is_nil(field(r, ^var!(field)))
     end
   end
 
-  defmacro json_contains do
-    quote do
-      fragment(
-        "JSON_CONTAINS(?, ?)",
-        field(r, ^var!(field)),
-        ^[Dialect.dump_array_element(var!(value), var!(ecto_type))]
-      )
-    end
+  defmacro json_contains(source \\ :field) do
+    expr =
+      quote do
+        fragment(
+          "JSON_CONTAINS(?, ?)",
+          field(r, ^var!(field)),
+          ^[Dialect.dump_array_element(var!(value), var!(ecto_type))]
+        )
+      end
+
+    put_source(expr, source)
   end
 
   defp prelude(:add_wildcard) do
