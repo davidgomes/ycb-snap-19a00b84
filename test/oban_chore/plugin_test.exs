@@ -36,6 +36,32 @@ defmodule ObanChore.PluginTest do
     GenServer.stop(pid)
   end
 
+  test "registers only the given chores when :chores is set" do
+    {:ok, pid} =
+      ObanChore.Plugin.start_link(
+        chores: [TestChore, ObanChore.Test.UniqueChore, String],
+        pubsub_server: TestPubSub
+      )
+
+    _ = :sys.get_state(pid)
+
+    assert [
+             %{module: TestChore, name: "Plugin Test Chore", unique: false},
+             %{module: ObanChore.Test.UniqueChore, name: "Unique Chore", unique: true}
+           ] = ObanChore.Plugin.get_chores()
+
+    GenServer.stop(pid)
+  end
+
+  test "validate/1 checks the :chores option" do
+    assert ObanChore.Plugin.validate(chores: [TestChore], pubsub_server: TestPubSub) == :ok
+
+    assert {:error, _} = ObanChore.Plugin.validate(chores: TestChore, pubsub_server: TestPubSub)
+
+    assert {:error, _} =
+             ObanChore.Plugin.validate(chores: [TestChore, "nope"], pubsub_server: TestPubSub)
+  end
+
   test "validate/1 checks for correct format" do
     assert ObanChore.Plugin.validate(pubsub_server: TestPubSub) == :ok
     assert ObanChore.Plugin.validate(otp_app: :my_app, pubsub_server: TestPubSub) == :ok

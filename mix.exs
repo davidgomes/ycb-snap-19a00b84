@@ -8,6 +8,7 @@ defmodule ObanChore.MixProject do
       app: :oban_chore,
       version: @version,
       elixir: "~> 1.15",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       description: description(),
       package: package(),
@@ -29,6 +30,9 @@ defmodule ObanChore.MixProject do
     ]
   end
 
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
   defp description do
     "UI-driven operational tools for Oban workers."
   end
@@ -49,7 +53,11 @@ defmodule ObanChore.MixProject do
       {:phoenix_live_view, "~> 0.20 or ~> 1.0"},
       {:phoenix_html, "~> 3.3 or ~> 4.0"},
       {:ecto, "~> 3.10"},
-      {:ex_doc, "~> 0.31", runtime: false, only: :dev}
+      {:ex_doc, "~> 0.31", runtime: false, only: :dev},
+      {:phoenix_ecto, "~> 4.4", only: :test},
+      {:postgrex, "~> 0.17", only: :test},
+      {:jason, "~> 1.4", only: :test},
+      {:lazy_html, ">= 0.1.0", only: :test}
     ]
   end
 
