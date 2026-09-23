@@ -18,7 +18,7 @@ See these [0.5.x to 0.6.x upgrade instructions](https://gist.github.com/smpallen
 
 * Bug Fixes
   * Fixed detection of remember me checkbox on session new page
-  * Fixed compiled gettext in view helpers
+  * Fixed compiled gettext in view helpers #391
   * Fix new session screen issue on newly generated project #390
 
 * Deprecations
