@@ -1,0 +1,51 @@
+<p><a href="<%= jobs_path(@base, state: @job.state) %>">← <%= @job.state %> jobs</a></p>
+
+<h1>
+  <span class="mono"><%= @job.worker %></span>
+  <span class="state state-<%= @job.state %>"><%= @job.state %></span>
+</h1>
+
+<dl class="details">
+  <dt>ID</dt>
+  <dd><%= @job.id %></dd>
+  <dt>Queue</dt>
+  <dd><%= @job.queue %></dd>
+  <dt>Attempt</dt>
+  <dd><%= @job.attempt %> of <%= @job.max_attempts %></dd>
+  <dt>Priority</dt>
+  <dd><%= @job.priority %></dd>
+  <dt>Tags</dt>
+  <dd><%= if @job.tags == [], do: "—", else: Enum.join(@job.tags, ", ") %></dd>
+  <dt>Attempted by</dt>
+  <dd class="mono"><%= if @job.attempted_by in [nil, []], do: "—", else: Enum.join(@job.attempted_by, ", ") %></dd>
+  <dt>Inserted at</dt>
+  <dd><%= format_datetime(@job.inserted_at) %></dd>
+  <dt>Scheduled at</dt>
+  <dd><%= format_datetime(@job.scheduled_at) %></dd>
+  <dt>Attempted at</dt>
+  <dd><%= format_datetime(@job.attempted_at) %></dd>
+  <dt>Completed at</dt>
+  <dd><%= format_datetime(@job.completed_at) %></dd>
+  <dt>Discarded at</dt>
+  <dd><%= format_datetime(@job.discarded_at) %></dd>
+  <dt>Cancelled at</dt>
+  <dd><%= format_datetime(@job.cancelled_at) %></dd>
+</dl>
+
+<h2>Args</h2>
+<pre><%= Jason.encode!(@job.args, pretty: true) %></pre>
+
+<h2>Meta</h2>
+<pre><%= Jason.encode!(@job.meta, pretty: true) %></pre>
+
+<h2>Errors</h2>
+<%= if @job.errors == [] do %>
+  <p class="empty">No errors.</p>
+<% else %>
+  <%= for error <- Enum.reverse(@job.errors) do %>
+    <div class="error">
+      <div class="muted">Attempt <%= error["attempt"] %> · <%= error["at"] %></div>
+      <pre><%= error["error"] %></pre>
+    </div>
+  <% end %>
+<% end %>

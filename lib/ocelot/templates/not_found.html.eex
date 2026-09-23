@@ -1,0 +1,3 @@
+<h1>Not found</h1>
+<p class="muted"><%= @message %></p>
+<p><a href="<%= jobs_path(@base, []) %>">← Back to jobs</a></p>

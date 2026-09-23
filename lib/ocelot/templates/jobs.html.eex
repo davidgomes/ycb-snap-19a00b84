@@ -1,0 +1,54 @@
+<nav class="states">
+  <a href="<%= jobs_path(@base, []) %>" class="<%= if is_nil(@state), do: "active" %>">
+    all<span class="count"><%= @all_count %></span>
+  </a>
+  <%= for {state, count} <- @counts do %>
+    <a href="<%= jobs_path(@base, state: state) %>" class="<%= if state == @state, do: "active" %>">
+      <%= state %><span class="count"><%= count %></span>
+    </a>
+  <% end %>
+</nav>
+
+<%= if @jobs == [] do %>
+  <p class="empty">No jobs found.</p>
+<% else %>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Worker</th>
+        <th>Queue</th>
+        <th>State</th>
+        <th>Attempt</th>
+        <th>Args</th>
+        <th>Time</th>
+      </tr>
+    </thead>
+    <tbody>
+      <%= for job <- @jobs do %>
+        <% {label, at} = state_timestamp(job) %>
+        <tr>
+          <td><a href="<%= job_path(@base, job) %>"><%= job.id %></a></td>
+          <td class="mono"><%= job.worker %></td>
+          <td><%= job.queue %></td>
+          <td><span class="state state-<%= job.state %>"><%= job.state %></span></td>
+          <td><%= job.attempt %>/<%= job.max_attempts %></td>
+          <td class="mono args"><%= truncate(Jason.encode!(job.args), 80) %></td>
+          <td title="<%= format_datetime(at) %>"><%= label %> <%= relative_time(at) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
+
+<%= if @total_pages > 1 do %>
+  <nav class="pagination">
+    <%= if @page > 1 do %>
+      <a href="<%= jobs_path(@base, state: @state, page: @page - 1) %>">← Newer</a>
+    <% end %>
+    <span class="muted">Page <%= @page %> of <%= @total_pages %></span>
+    <%= if @page < @total_pages do %>
+      <a href="<%= jobs_path(@base, state: @state, page: @page + 1) %>">Older →</a>
+    <% end %>
+  </nav>
+<% end %>
