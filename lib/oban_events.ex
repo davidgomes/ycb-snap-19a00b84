@@ -66,6 +66,10 @@ defmodule ObanEvents do
   - `priority`: `2` (0-3, lower is higher priority)
   - `tags`: `[]`
 
+  Any other option accepted by `Oban.Worker.new/2` (`meta`, `unique`, `schedule_in`,
+  `scheduled_at`, `replace`, and so on) can be set globally or per handler. Per-handler
+  options replace the global value for the same key.
+
   Per-handler options (override globals):
   - Handlers can be atoms (use defaults) or tuples with options: `{Handler, oban: [priority: 0, max_attempts: 10, queue: :critical, tags: ["urgent"]]}`
 
@@ -124,17 +128,12 @@ defmodule ObanEvents do
     # Parse oban option - can be:
     # - atom (just module): oban: MyApp.Oban
     # - tuple with config: oban: {MyApp.Oban, queue: :custom, ...}
+    # Options stay as AST and are merged when the caller module compiles.
     {oban_module, oban_opts} =
       case Keyword.get(opts, :oban, Oban) do
         {module, config} when is_list(config) -> {module, config}
         module -> {module, []}
       end
-
-    # Extract Oban options with defaults
-    queue = Keyword.get(oban_opts, :queue, :oban_events)
-    max_attempts = Keyword.get(oban_opts, :max_attempts, 3)
-    priority = Keyword.get(oban_opts, :priority, 2)
-    tags = Keyword.get(oban_opts, :tags, [])
 
     quote do
       use ObanEvents.Registry
@@ -142,20 +141,62 @@ defmodule ObanEvents do
       # Oban instance (cannot be overridden per-handler)
       @oban_instance unquote(oban_module)
 
-      # Global Oban job defaults (can be overridden per-handler)
-      @oban_queue unquote(queue)
-      @oban_max_attempts unquote(max_attempts)
-      @oban_priority unquote(priority)
-      @oban_tags unquote(tags)
+      # Global Oban job defaults. Per-handler `:oban` options are merged over these.
+      @oban_opts ObanEvents.merge_oban_opts(unquote(oban_opts))
 
       @before_compile ObanEvents
     end
   end
 
-  # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
+  @doc false
+  def merge_oban_opts(overrides) when is_list(overrides) do
+    unless Keyword.keyword?(overrides) do
+      raise ArgumentError, oban_opts_error(overrides)
+    end
+
+    Keyword.merge(default_oban_opts(), overrides)
+  end
+
+  def merge_oban_opts(other), do: raise(ArgumentError, oban_opts_error(other))
+
+  @doc false
+  def handler_oban_opts(defaults, handler_module, handler_opts) when is_list(handler_opts) do
+    overrides =
+      case Keyword.get(handler_opts, :oban, []) do
+        opts when is_list(opts) -> opts
+        other -> raise ArgumentError, oban_opts_error(other, handler_module)
+      end
+
+    unless Keyword.keyword?(overrides) do
+      raise ArgumentError, oban_opts_error(overrides, handler_module)
+    end
+
+    Keyword.merge(defaults, overrides)
+  end
+
+  defp default_oban_opts do
+    [queue: :oban_events, max_attempts: 3, priority: 2, tags: []]
+  end
+
+  defp oban_opts_error(value, handler_module \\ nil) do
+    subject =
+      if handler_module do
+        "Invalid :oban options for handler #{inspect(handler_module)}."
+      else
+        "Invalid Oban options."
+      end
+
+    """
+    #{subject}
+
+    Expected a keyword list of options accepted by Oban.Worker.new/2.
+    Got: #{inspect(value)}
+    """
+  end
+
   defmacro __before_compile__(_env) do
     quote do
-      alias ObanEvents.{DispatchWorker, Event}
+      alias ObanEvents.DispatchWorker
 
       @doc """
       Emit an event.
@@ -208,7 +249,6 @@ defmodule ObanEvents do
       Raises `ArgumentError` if the event is not registered.
       """
       @spec emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
-      # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
       def emit(event_name, data, opts \\ []) when is_atom(event_name) and is_map(data) do
         handlers = get_handlers!(event_name)
 
@@ -217,82 +257,29 @@ defmodule ObanEvents do
         causation_id = Keyword.get(opts, :causation_id)
         correlation_id = Keyword.get(opts, :correlation_id)
 
-        # Build Event struct for :if conditions (idempotency_key is per-job, not available yet)
-        event = %Event{
-          data: data,
-          event_id: event_id,
-          causation_id: causation_id,
-          correlation_id: correlation_id,
-          idempotency_key: nil
-        }
-
         jobs =
-          Enum.flat_map(handlers, fn handler_spec ->
+          Enum.map(handlers, fn handler_spec ->
             # Parse handler - can be atom or {atom, opts}
             {handler_module, handler_opts} =
               case handler_spec do
-                {module, opts} when is_atom(module) -> {module, opts}
+                {module, opts} when is_atom(module) and is_list(opts) -> {module, opts}
                 module when is_atom(module) -> {module, []}
               end
 
-            # Check :if condition - defaults to always true
-            if_condition = Keyword.get(handler_opts, :if)
+            job_opts = ObanEvents.handler_oban_opts(@oban_opts, handler_module, handler_opts)
 
-            should_schedule =
-              case if_condition do
-                nil ->
-                  true
-
-                fun when is_function(fun, 1) ->
-                  fun.(event)
-
-                {module, function, args}
-                when is_atom(module) and is_atom(function) and is_list(args) ->
-                  apply(module, function, args ++ [event])
-
-                invalid ->
-                  raise ArgumentError, """
-                  Invalid :if condition for handler #{inspect(handler_module)}.
-
-                  Expected: function/1 or MFA tuple {Module, :function, [args]}
-                  Got: #{inspect(invalid)}
-
-                  Examples:
-                    if: fn event -> event.data["enabled"] end
-                    if: {FunWithFlags, :enabled?, [:my_flag]}
-                  """
-              end
-
-            if should_schedule do
-              # Extract oban-specific options (grouped under :oban key)
-              oban_opts = Keyword.get(handler_opts, :oban, [])
-
-              # Merge per-handler oban options with global defaults
-              job_opts = [
-                queue: Keyword.get(oban_opts, :queue, @oban_queue),
-                max_attempts: Keyword.get(oban_opts, :max_attempts, @oban_max_attempts),
-                priority: Keyword.get(oban_opts, :priority, @oban_priority),
-                tags: Keyword.get(oban_opts, :tags, @oban_tags)
-              ]
-
-              [
-                DispatchWorker.new(
-                  %{
-                    event: Atom.to_string(event_name),
-                    handler: Atom.to_string(handler_module),
-                    data: data,
-                    event_id: event_id,
-                    idempotency_key: UUIDv7.generate(),
-                    causation_id: causation_id,
-                    correlation_id: correlation_id
-                  },
-                  job_opts
-                )
-              ]
-            else
-              # Condition not met, skip this handler
-              []
-            end
+            DispatchWorker.new(
+              %{
+                event: Atom.to_string(event_name),
+                handler: Atom.to_string(handler_module),
+                data: data,
+                event_id: event_id,
+                idempotency_key: UUIDv7.generate(),
+                causation_id: causation_id,
+                correlation_id: correlation_id
+              },
+              job_opts
+            )
           end)
 
         if jobs == [] do
