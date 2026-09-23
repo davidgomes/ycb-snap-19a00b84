@@ -11,6 +11,8 @@ defmodule ObanChore.Plugin do
 
     * `:otp_app` - An atom or list of atoms representing the OTP application(s) to search for chores.
       If not provided, all loaded applications will be searched.
+    * `:chores` - A list of chore modules to register. When given, automatic discovery is
+      skipped and only these modules are exposed in the dashboard.
     * `:pubsub_server` - (Required) The name of your application's Phoenix PubSub server.
 
   ## Examples
@@ -32,8 +34,24 @@ defmodule ObanChore.Plugin do
   @impl Oban.Plugin
   def validate(opts) do
     with :ok <- validate_otp_app(opts),
+         :ok <- validate_chores(opts),
          :ok <- validate_pubsub_server(opts) do
       :ok
+    end
+  end
+
+  defp validate_chores(opts) do
+    case Keyword.get(opts, :chores) do
+      nil ->
+        :ok
+
+      chores when is_list(chores) ->
+        if Enum.all?(chores, &is_atom/1),
+          do: :ok,
+          else: {:error, "all chores elements must be modules"}
+
+      _ ->
+        {:error, "chores must be a list of modules"}
     end
   end
 
@@ -202,6 +220,24 @@ defmodule ObanChore.Plugin do
 
   # TODO: Improve the discovery
   defp discover_chores(opts) do
+    case Keyword.get(opts, :chores) do
+      nil ->
+        opts |> discover_modules() |> to_chore_infos()
+
+      modules ->
+        to_chore_infos(modules)
+    end
+  end
+
+  defp to_chore_infos(modules) do
+    modules
+    |> Enum.filter(fn module ->
+      Code.ensure_loaded?(module) and function_exported?(module, :__chore_info__, 0)
+    end)
+    |> Enum.map(fn module -> module.__chore_info__() end)
+  end
+
+  defp discover_modules(opts) do
     apps =
       case Keyword.get(opts, :otp_app) do
         nil ->
@@ -222,9 +258,5 @@ defmodule ObanChore.Plugin do
         _ -> []
       end
     end)
-    |> Enum.filter(fn module ->
-      Code.ensure_loaded?(module) and function_exported?(module, :__chore_info__, 0)
-    end)
-    |> Enum.map(fn module -> module.__chore_info__() end)
   end
 end
