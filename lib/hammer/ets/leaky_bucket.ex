@@ -168,7 +168,17 @@ defmodule Hammer.ETS.LeakyBucket do
     now = System.system_time(:second)
     older_than = now - div(config.key_older_than, 1000)
 
-    match_spec = [{{:_, :_, :"$1"}, [], [{:<, :"$1", {:const, older_than}}]}]
-    :ets.select_delete(config.table, match_spec)
+    guard = [{:<, :"$1", {:const, older_than}}]
+
+    case Map.get(config, :before_clean) do
+      nil ->
+        :ok
+
+      callback ->
+        expired = :ets.select(config.table, [{{:"$2", :_, :"$1"}, guard, [:"$2"]}])
+        if expired != [], do: callback.(expired)
+    end
+
+    :ets.select_delete(config.table, [{{:_, :_, :"$1"}, [], guard}])
   end
 end

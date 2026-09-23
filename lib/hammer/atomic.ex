@@ -23,6 +23,7 @@ defmodule Hammer.Atomic do
   @type start_option ::
           {:clean_period, pos_integer()}
           | {:key_older_than, pos_integer()}
+          | {:before_clean, ([term()] -> any())}
           | GenServer.option()
 
   @type config :: %{
@@ -129,6 +130,8 @@ defmodule Hammer.Atomic do
   Options:
   - `:clean_period` - How often to run cleanup (ms). Default 1 minute.
   - `:key_older_than` - Max age for entries (ms). Default 24 hours.
+  - `:before_clean` - Optional 1-arity function called with the list of expired
+    bucket keys (`:token_bucket` and `:leaky_bucket`) right before they are removed.
   """
   @spec start_link([start_option]) :: GenServer.on_start()
   def start_link(opts) do
@@ -138,6 +141,7 @@ defmodule Hammer.Atomic do
     {table, opts} = Keyword.pop!(opts, :table)
     {algorithm_module, opts} = Keyword.pop!(opts, :algorithm_module)
     {key_older_than, opts} = Keyword.pop(opts, :key_older_than, :timer.hours(24))
+    {before_clean, opts} = Keyword.pop(opts, :before_clean)
 
     case opts do
       [] ->
@@ -154,6 +158,7 @@ defmodule Hammer.Atomic do
       table_opts: algorithm_module.ets_opts(),
       clean_period: clean_period,
       key_older_than: key_older_than,
+      before_clean: before_clean,
       algorithm_module: algorithm_module
     }
 
@@ -217,20 +222,21 @@ defmodule Hammer.Atomic do
     now = System.system_time(:second)
     older_than = now - div(config.key_older_than, 1000)
 
-    :ets.foldl(
-      fn {_key, atomic} = term, deleted ->
-        last_update = :atomics.get(atomic, 2)
+    expired =
+      :ets.foldl(
+        fn {_key, atomic} = term, acc ->
+          if :atomics.get(atomic, 2) < older_than, do: [term | acc], else: acc
+        end,
+        [],
+        config.table
+      )
 
-        if last_update < older_than do
-          :ets.delete_object(config.table, term)
-          deleted + 1
-        else
-          deleted
-        end
-      end,
-      0,
-      config.table
-    )
+    if config.before_clean && expired != [] do
+      config.before_clean.(Enum.map(expired, &elem(&1, 0)))
+    end
+
+    Enum.each(expired, &:ets.delete_object(config.table, &1))
+    length(expired)
   end
 
   defp schedule(clean_period) do
