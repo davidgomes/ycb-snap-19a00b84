@@ -109,30 +109,32 @@ of replacing it. Replacing the order could drop the field that made it unique.
 
 ## Nullable fields
 
-Ordering by a nullable column loses the rows where it is `NULL`.
+Nullable columns are supported. Rows where the order field is `NULL` stay in
+the result, in the position the database gives them.
 
 ```elixir
 %{first: 2, order_by: [:age, :id]}
 ```
 
-| page | rows |
-|---|---|
-| 1 | Bo 1, Ada 3 |
-| 2 | Ada 5, Ada 7 |
-| 3 | — |
+On PostgreSQL, `:asc` sorts nulls last and `:desc` sorts them first. With
+`id` kept ascending, the pages are:
 
-Cy and Dee never appear, and page 3 reports `has_next_page?: false`. PostgreSQL
-sorts them last, but the cursor comparison is `age > 7`, and no comparison with
-`NULL` is ever true. A second order field does not help, because the `NULL` is
-in the first one.
+| page | `[:asc, :asc]` | `[:desc, :asc]` |
+|---|---|---|
+| 1 | Bo 1, Ada 3 | Cy, Dee |
+| 2 | Ada 5, Ada 7 | Ada 7, Ada 5 |
+| 3 | Cy, Dee | Ada 3, Bo 1 |
 
-Until Flop builds null-aware predicates, order by a column that has no `NULL`,
-or sort on a computed field that substitutes a value, as in the [computed fields
-recipe](computed_and_embedded_fields.md):
+The directions `:asc_nulls_first`, `:asc_nulls_last`, `:desc_nulls_first` and
+`:desc_nulls_last` place the nulls explicitly, and they mean the same thing on
+PostgreSQL, SQLite and MySQL. A plain `:asc` or `:desc` follows the database.
+PostgreSQL sorts nulls last when ascending and first when descending. SQLite
+and MySQL sort nulls first when ascending and last when descending.
 
-```sql
-SELECT coalesce(age, -1) AS age_sortable
-```
+The cursor comparison has to use that same placement. Flop reads it from the
+repo's Ecto adapter, so a cursor query with `:asc` or `:desc` raises when no
+repo is configured. Set the repo, or use a direction that states where the
+nulls go.
 
 ## Reading the cursor value
 
