@@ -254,4 +254,18 @@ defmodule PetalComponents.TableTest do
     assert html =~ "pc-table__tfoot"
     assert html =~ "Total: 1"
   end
+
+  test "a col header renders in place of the label text" do
+    assigns = %{header: Phoenix.HTML.raw(~s(<input type="checkbox" data-all />))}
+
+    html =
+      rendered_to_string(~H"""
+      <.table rows={[%{n: 1}]}>
+        <:col :let={r} label="Pick" header={@header}>{r.n}</:col>
+      </.table>
+      """)
+
+    assert html =~ ~r/<th[^>]*>\s*<input type="checkbox" data-all/
+    refute html =~ "Pick"
+  end
 end
