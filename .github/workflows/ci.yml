@@ -1,0 +1,172 @@
+---
+name: CI
+
+'on':
+  pull_request:
+    branches:
+      - "**"
+  push:
+    branches:
+      - master
+
+jobs:
+  check_format:
+    runs-on: ubuntu-latest
+    name: Check format
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: 28.x
+          elixir-version: 1.20.x
+      - name: Retrieve dependencies cache
+        uses: actions/cache@v4
+        id: mix-deps-cache
+        with:
+          path: deps
+          key: v2-28.x-1.20.x-deps-${{ hashFiles('mix.lock') }}
+      - name: Install Dependencies
+        run: mix deps.get 1>/dev/null
+      - name: Check format
+        run: mix format --check-formatted
+  tests:
+    runs-on: ubuntu-latest
+    name: OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
+    strategy:
+      matrix:
+        otp: [24.x, 25.x, 26.1.x]
+        elixir: [1.15.x]
+        include:
+          - otp: 28.x
+            elixir: 1.20.x
+
+    needs: check_format
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{matrix.otp}}
+          elixir-version: ${{matrix.elixir}}
+      - name: Retrieve dependencies cache
+        uses: actions/cache@v4
+        id: mix-deps-cache
+        with:
+          path: |
+            grpc/deps
+            grpc_core/deps
+            grpc_server/deps
+          key: >-
+            v2-${{ matrix.otp }}-${{ matrix.elixir }}-deps-${{
+            hashFiles('grpc/mix.lock', 'grpc_core/mix.lock', 'grpc_server/mix.lock') }}
+      - name: Retrieve build cache
+        uses: actions/cache@v4
+        id: mix-build-cache
+        with:
+          path: |
+            grpc/_build
+            grpc_core/_build
+            grpc_server/_build
+          key: >-
+            v2-${{ matrix.otp }}-${{ matrix.elixir }}-build-${{
+            hashFiles('grpc/mix.lock', 'grpc_core/mix.lock', 'grpc_server/mix.lock') }}
+      - name: Install Dependencies
+        run: mix setup 1>/dev/null
+      - name: Compile with warnings as errors
+        run: MIX_ENV=test mix compile --warnings-as-errors
+      - name: Run Tests
+        run: mix test --warnings-as-errors
+      - name: Run Warning Tests
+        run: mix test --only warning_test
+      - name: Retrieve mint install cache
+        uses: actions/cache@v4
+        id: mix-mint-cache
+        with:
+          path: ${{ runner.temp }}/mix-install-mint
+          key: >-
+            v2-${{ matrix.otp }}-${{ matrix.elixir }}-adapter-mint-${{
+            hashFiles('grpc/mix.lock', 'grpc_core/mix.lock', 'grpc_server/mix.lock') }}
+      - name: Run :mint optional dependency test
+        run: MIX_INSTALL_DIR="${{ runner.temp }}/mix-install-mint" elixir script/adapter_test.exs mint
+        working-directory: ./grpc
+      - name: Retrieve gun install cache
+        uses: actions/cache@v4
+        id: mix-gun-cache
+        with:
+          path: ${{ runner.temp }}/mix-install-gun
+          key: >-
+            v2-${{ matrix.otp }}-${{ matrix.elixir }}-adapter-gun-${{
+            hashFiles('grpc/mix.lock', 'grpc_core/mix.lock', 'grpc_server/mix.lock') }}
+      - name: Run :gun optional dependency test
+        run: MIX_INSTALL_DIR="${{ runner.temp }}/mix-install-gun" elixir script/adapter_test.exs gun
+        working-directory: ./grpc
+  interop-tests:
+    runs-on: ubuntu-latest
+    name: Interop tests
+    needs: check_format
+    if: ${{ github.ref != 'refs/heads/master' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: 28.x
+          elixir-version: 1.20.x
+      - name: Retrieve dependencies cache
+        uses: actions/cache@v4
+        id: mix-deps-cache
+        with:
+          path: interop/deps
+          key: v2-28.x-1.20.x-interop-deps-${{ hashFiles('interop/mix.lock') }}
+      - name: Retrieve build cache
+        uses: actions/cache@v4
+        id: mix-build-cache
+        with:
+          path: interop/_build
+          key: v2-28.x-1.20.x-interop-build-${{ hashFiles('interop/mix.lock') }}
+      - name: Install Dependencies
+        run: mix deps.get 1>/dev/null
+        working-directory: ./interop
+      - name: Run interop tests
+        run: mix run script/run.exs
+        working-directory: ./interop
+
+  interop-tests-all:
+    runs-on: ubuntu-latest
+    name: Interop tests OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
+    needs: check_format
+    if: ${{ github.ref == 'refs/heads/master' }}
+    strategy:
+      matrix:
+        otp: [24.x, 25.x, 26.1.x]
+        elixir: [1.15.x]
+        include:
+          - otp: 28.x
+            elixir: 1.20.x
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+      - name: Retrieve dependencies cache
+        uses: actions/cache@v4
+        id: mix-deps-cache
+        with:
+          path: interop/deps
+          key: >-
+            v2-${{ matrix.otp }}-${{ matrix.elixir }}-interop-deps-${{
+            hashFiles('interop/mix.lock') }}
+      - name: Retrieve build cache
+        uses: actions/cache@v4
+        id: mix-build-cache
+        with:
+          path: interop/_build
+          key: >-
+            v2-${{ matrix.otp }}-${{ matrix.elixir }}-interop-build-${{
+            hashFiles('interop/mix.lock') }}
+      - name: Install Dependencies
+        run: mix deps.get 1>/dev/null
+        working-directory: ./interop
+      - name: Run interop tests
+        run: mix run script/run.exs
+        working-directory: ./interop
