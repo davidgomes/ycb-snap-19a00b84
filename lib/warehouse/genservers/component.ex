@@ -108,11 +108,12 @@ defmodule Warehouse.GenServers.Component do
   defp events_module(), do: Application.get_env(:warehouse, :events)
 
   defp update_demands(component_id) do
-    Assembly.request_component_demands()
-    |> Stream.filter(fn %{component_id: id} -> to_string(id) == to_string(component_id) end)
-    |> Stream.each(fn %{component_id: id, demand_quantity: demand} ->
-      Component.update_component_demand(id, demand)
-    end)
-    |> Stream.run()
+    demand =
+      Assembly.request_component_demands()
+      |> Enum.find_value(0, fn %{component_id: id, demand_quantity: demand} ->
+        if to_string(id) == to_string(component_id), do: demand
+      end)
+
+    Component.update_component_demand(component_id, demand)
   end
 end
