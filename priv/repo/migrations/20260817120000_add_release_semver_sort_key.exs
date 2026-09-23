@@ -11,8 +11,8 @@ defmodule Hexpm.Repo.Migrations.AddReleaseSemverSortKey do
   # Encodes a version so that comparing keys bytewise matches SemVer precedence.
   # Build metadata does not affect precedence and is left out.
   #
-  #   * major, minor and patch are each their digit count byte followed by
-  #     their digits, the regex rejects leading zeros
+  #   * major, minor and patch are each their digit count as two bytes followed
+  #     by their digits, the regex rejects leading zeros
   #   * then 0x02 for a stable version, which sorts it after its pre-releases,
   #     or 0x01 followed by the pre-release identifiers
   #   * a numeric identifier is 0x01 and the number encoded as above, an
@@ -21,8 +21,10 @@ defmodule Hexpm.Repo.Migrations.AddReleaseSemverSortKey do
   #     one it prefixes
   #   * fewer identifiers sort first because their key prefixes the longer key
   #
-  # The accepted grammar is Elixir's Version.parse/1, with numbers of up to 255
-  # digits instead of 14.
+  # The accepted grammar is Elixir's Version.parse/1 without its 14 digit limit
+  # on numbers. Bounded repetitions make PostgreSQL's regex engine an order of
+  # magnitude slower, so the digit count cast raises for overlong numbers
+  # instead.
   @semver_key ~S"""
   CREATE OR REPLACE FUNCTION semver_key(version text, OUT sort_key bytea, OUT stable boolean)
   LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE AS $$
@@ -33,9 +35,9 @@ defmodule Hexpm.Repo.Migrations.AddReleaseSemverSortKey do
   BEGIN
     parts := regexp_match(
       version,
-      '^(0|[1-9][0-9]{0,254})[.](0|[1-9][0-9]{0,254})[.](0|[1-9][0-9]{0,254})' ||
-      '(?:-((?:0|[1-9][0-9]{0,254}|[0-9]*[A-Za-z-][0-9A-Za-z-]*)' ||
-      '(?:[.](?:0|[1-9][0-9]{0,254}|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?' ||
+      '^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)' ||
+      '(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)' ||
+      '(?:[.](?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?' ||
       '(?:[+][0-9A-Za-z-]+(?:[.][0-9A-Za-z-]+)*)?$'
     );
 
@@ -46,8 +48,7 @@ defmodule Hexpm.Repo.Migrations.AddReleaseSemverSortKey do
     sort_key := '\x'::bytea;
 
     FOREACH number IN ARRAY parts[1:3] LOOP
-      sort_key := sort_key || set_byte('\x00'::bytea, 0, length(number)) ||
-        convert_to(number, 'UTF8');
+      sort_key := sort_key || int2send(length(number)::smallint) || convert_to(number, 'UTF8');
     END LOOP;
 
     stable := parts[4] IS NULL;
@@ -59,8 +60,8 @@ defmodule Hexpm.Repo.Migrations.AddReleaseSemverSortKey do
 
       FOREACH identifier IN ARRAY string_to_array(parts[4], '.') LOOP
         IF identifier ~ '^[0-9]+$' THEN
-          sort_key := sort_key || '\x01'::bytea ||
-            set_byte('\x00'::bytea, 0, length(identifier)) || convert_to(identifier, 'UTF8');
+          sort_key := sort_key || '\x01'::bytea || int2send(length(identifier)::smallint) ||
+            convert_to(identifier, 'UTF8');
         ELSE
           sort_key := sort_key || '\x02'::bytea || convert_to(identifier, 'UTF8') ||
             '\x00'::bytea;
