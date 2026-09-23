@@ -81,6 +81,18 @@ options and burst mode configuration.
 
 ### Changes
 
+- [Jobs] Display awaitable signals in the job details page
+
+  Add a section that decodes and displays signal payloads sent via
+  `Oban.Pro.Worker.signal/2`. While a job is parked waiting, the section
+  shows "Awaiting Signal" with the deadline. Once a signal arrives, it
+  switches to "Received Signal".
+
+- [Resolver] Add `format_signal/2` resolver callback
+
+  This allows customizing the decoded output, mirroring what's available
+  with `format_recorded/2`.
+
 - [Dashboard] Upgrade oban_pro dependency to full v1.7 release
 
   Require the full v1.7 release rather than a release candidate.
