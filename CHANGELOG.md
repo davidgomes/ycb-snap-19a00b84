@@ -1,3 +1,9 @@
+## Unreleased
+
+### New Features ✨
+
+- Support for `log_byte` and `trace_metric_byte` in [#1134](https://github.com/getsentry/sentry-elixir/pull/1134)
+
 ## 13.3.0
 
 ### New Features ✨
