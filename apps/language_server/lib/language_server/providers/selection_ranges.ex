@@ -146,7 +146,7 @@ defmodule ElixirLS.LanguageServer.Providers.SelectionRanges do
 
   # Outer/inner ranges for delimiter pairs - `()`/`[]`/`{}`/`%{}`/`<<>>` and `do`/`end` blocks -
   # derived from the toxic2 `closing:` / `do:` / `end:` node metadata. This replaces the old
-  # tokenizer-driven token-pair pass (FoldingRange.Token/TokenPair). String/heredoc/sigil ranges,
+  # tokenizer-driven token-pair pass. String/heredoc/sigil ranges,
   # which the old special-token pass produced, already come from `ast_node_ranges` (the toxic AST
   # nodes carry `range:`), so they are not reproduced here.
   def delimiter_pair_ranges({:ok, ast}, lines, line, character) do
