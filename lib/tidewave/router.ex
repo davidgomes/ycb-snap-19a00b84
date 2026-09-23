@@ -11,6 +11,8 @@ defmodule Tidewave.Router do
   plug(:check_origin)
   plug(:dispatch)
 
+  require Logger
+
   @allowed_upload_content_types ["image/png", "image/jpeg", "video/webm"]
   @allowed_upload_types ["screenshot", "recording"]
 
@@ -59,7 +61,7 @@ defmodule Tidewave.Router do
 
     conn
     |> Plug.Parsers.call(opts)
-    |> MCP.Server.handle_http_message()
+    |> handle_mcp_message()
     |> halt()
   end
 
@@ -228,7 +230,6 @@ defmodule Tidewave.Router do
   end
 
   defp log_and_send_403(conn, message) do
-    require Logger
     Logger.warning(message)
 
     conn
@@ -325,5 +326,36 @@ defmodule Tidewave.Router do
     File.close(file)
 
     ct in @allowed_upload_content_types and Tidewave.MagicBytes.type(magic_bytes) != :unknown
+  end
+
+  @doc false
+  def handle_mcp_message(conn) do
+    Logger.info("Received #{conn.method} message")
+    conn = fetch_query_params(conn)
+    include_browser_tools? = conn.query_params["include_browser_tools"] != "false"
+    Logger.debug("Raw params: #{inspect(conn.body_params, pretty: true)}")
+
+    case MCP.Server.handle_jsonrpc_message(
+           conn.body_params,
+           conn.private.tidewave_config,
+           include_browser_tools?
+         ) do
+      {:ok, nil} ->
+        send_mcp_json(conn, 202, %{status: "ok"})
+
+      {:ok, response} ->
+        Logger.debug("Sending HTTP response: #{inspect(response, pretty: true)}")
+        send_mcp_json(conn, 200, response)
+
+      {:error, error_response} ->
+        Logger.warning("Error handling message: #{inspect(error_response)}")
+        send_mcp_json(conn, 400, error_response)
+    end
+  end
+
+  defp send_mcp_json(conn, status, data) do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(status, Jason.encode!(data))
   end
 end
