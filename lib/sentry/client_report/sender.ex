@@ -6,7 +6,17 @@ defmodule Sentry.ClientReport.Sender do
 
   use GenServer
 
-  alias Sentry.{Client, ClientReport, Config, Envelope, Transaction}
+  alias Sentry.{
+    Client,
+    ClientReport,
+    Config,
+    Envelope,
+    LogBatch,
+    LogEvent,
+    Metric,
+    MetricBatch,
+    Transaction
+  }
 
   @send_interval 30_000
 
@@ -39,6 +49,10 @@ defmodule Sentry.ClientReport.Sender do
                | Sentry.CheckIn.t()
                | ClientReport.t()
                | Sentry.Event.t()
+               | LogBatch.t()
+               | LogEvent.t()
+               | MetricBatch.t()
+               | Metric.t()
                | Sentry.Transaction.t()
   def record_discarded_events(reason, event_items, genserver)
       when is_list(event_items) do
@@ -46,7 +60,7 @@ defmodule Sentry.ClientReport.Sender do
     # https://develop.sentry.dev/sdk/client-reports/
     if Enum.member?(@client_report_reasons, reason) do
       Enum.each(event_items, fn item ->
-        for {category, quantity} <- data_categories(item) do
+        for {category, quantity} <- data_categories(item), quantity > 0 do
           GenServer.cast(genserver, {:record_discarded_events, reason, category, quantity})
         end
       end)
@@ -65,8 +79,29 @@ defmodule Sentry.ClientReport.Sender do
     [{Envelope.get_data_category(transaction), 1}, {"span", span_count}]
   end
 
+  # Dropped logs and metrics are reported both by count and by their approximate
+  # serialized size, under a separate byte category.
+  # https://develop.sentry.dev/sdk/telemetry/client-reports/#log-byte-outcomes
+  # https://develop.sentry.dev/sdk/telemetry/client-reports/#metric-byte-outcomes
+  defp data_categories(%LogBatch{log_events: log_events}),
+    do: count_and_byte_outcomes("log_item", "log_byte", log_events)
+
+  defp data_categories(%LogEvent{} = log_event),
+    do: count_and_byte_outcomes("log_item", "log_byte", [log_event])
+
+  defp data_categories(%MetricBatch{metrics: metrics}),
+    do: count_and_byte_outcomes("trace_metric", "trace_metric_byte", metrics)
+
+  defp data_categories(%Metric{} = metric),
+    do: count_and_byte_outcomes("trace_metric", "trace_metric_byte", [metric])
+
   defp data_categories(item) do
     [{Envelope.get_data_category(item), 1}]
+  end
+
+  defp count_and_byte_outcomes(count_category, byte_category, items) do
+    byte_size = items |> Enum.map(&Envelope.item_byte_size/1) |> Enum.sum()
+    [{count_category, length(items)}, {byte_category, byte_size}]
   end
 
   ## Callbacks

@@ -525,26 +525,15 @@ defmodule Sentry.Telemetry.Scheduler do
   end
 
   # Drains all items from a rate-limited buffer and records client reports
-  # so Sentry knows data was dropped due to rate limiting.
+  # so Sentry knows data was dropped due to rate limiting. The actual structs are
+  # passed to the recorder so that it can derive the additional outcomes some of
+  # them carry ("span" for transactions, byte sizes for logs and metrics).
   defp drain_rate_limited(state, category) do
     buffer = Map.fetch!(state.buffers, category)
-    items = Buffer.drain(buffer)
 
-    cond do
-      items == [] ->
-        :ok
-
-      # Transactions carry spans, so pass the actual structs through the
-      # list-based recorder to also record the discarded "span" outcomes.
-      category == :transaction ->
-        ClientReport.Sender.record_discarded_events(:ratelimit_backoff, items)
-
-      true ->
-        data_category = Category.data_category(category)
-
-        Enum.each(items, fn _item ->
-          ClientReport.Sender.record_discarded_events(:ratelimit_backoff, data_category)
-        end)
+    case Buffer.drain(buffer) do
+      [] -> :ok
+      items -> ClientReport.Sender.record_discarded_events(:ratelimit_backoff, items)
     end
 
     state
@@ -555,7 +544,7 @@ defmodule Sentry.Telemetry.Scheduler do
 
   defp category_rate_limited?(_state, category) do
     data_category = Category.data_category(category)
-    RateLimiter.rate_limited?(data_category)
+    RateLimiter.rate_limited_for_category?(data_category)
   end
 
   defp default_weights do
