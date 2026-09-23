@@ -1424,6 +1424,7 @@ export default class LiveSocket {
     window.addEventListener(
       "popstate",
       (event) => {
+        const prevLocation = this.currentLocation;
         if (!this.registerNewLocation(window.location)) {
           return;
         }
@@ -1433,6 +1434,22 @@ export default class LiveSocket {
         // Compare positions to determine direction
         const isForward = position > this.currentHistoryPosition;
         const navType = isForward ? type : backType || type;
+
+        if (
+          !this.dispatchBeforeNavigate({
+            href,
+            patch: navType === "patch",
+            pop: true,
+            direction: isForward ? "forward" : "backward",
+          })
+        ) {
+          // the URL has already changed, so we undo the history traversal;
+          // the resulting popstate is ignored as the location matches again
+          this.currentLocation = prevLocation;
+          const delta = (position || 0) - this.currentHistoryPosition;
+          history.go(delta !== 0 ? -delta : isForward ? -1 : 1);
+          return;
+        }
 
         // Update current position
         this.currentHistoryPosition = position || 0;
@@ -1548,10 +1565,34 @@ export default class LiveSocket {
     return callback ? callback(done) : done;
   }
 
+  /**
+   * Dispatches the cancelable `phx:before-navigate` event.
+   * Returns false if a listener called `preventDefault()`.
+   * @internal
+   */
+  dispatchBeforeNavigate(detail: {
+    href: string;
+    patch: boolean;
+    pop: boolean;
+    direction: "forward" | "backward";
+  }): boolean {
+    return DOM.dispatchEvent(window, "phx:before-navigate", { detail });
+  }
+
   /** @internal */
   pushHistoryPatch(e, href, linkState, targetEl) {
     if (!this.isConnected() || !(this.main && this.main.isMain())) {
       return Browser.redirect(href);
+    }
+    if (
+      !this.dispatchBeforeNavigate({
+        href,
+        patch: true,
+        pop: false,
+        direction: "forward",
+      })
+    ) {
+      return;
     }
 
     this.withPageLoading({ to: href, kind: "patch" }, (done) => {
@@ -1602,11 +1643,10 @@ export default class LiveSocket {
     flash: string | null,
     targetEl?: Element | null,
   ) {
-    const clickLoading = targetEl && e.isTrusted && e.type !== "popstate";
-    if (clickLoading) {
-      targetEl.classList.add("phx-click-loading");
-    }
     if (!this.isConnected() || !(this.main && this.main.isMain())) {
+      if (targetEl && e.isTrusted && e.type !== "popstate") {
+        targetEl.classList.add("phx-click-loading");
+      }
       return Browser.redirect(href, flash);
     }
 
@@ -1614,6 +1654,20 @@ export default class LiveSocket {
     if (/^\/$|^\/[^\/]+.*$/.test(href)) {
       const { protocol, host } = window.location;
       href = `${protocol}//${host}${href}`;
+    }
+    if (
+      !this.dispatchBeforeNavigate({
+        href,
+        patch: false,
+        pop: false,
+        direction: "forward",
+      })
+    ) {
+      return;
+    }
+    const clickLoading = targetEl && e.isTrusted && e.type !== "popstate";
+    if (clickLoading) {
+      targetEl.classList.add("phx-click-loading");
     }
     const scroll = window.scrollY;
     this.withPageLoading({ to: href, kind: "redirect" }, (done) => {

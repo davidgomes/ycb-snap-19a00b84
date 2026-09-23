@@ -498,6 +498,72 @@ describe("LiveSocket", () => {
       expect(el.getAttribute("open")).toEqual("true");
     });
   });
+
+  describe("phx:before-navigate", () => {
+    let liveSocket, main, listener;
+
+    beforeEach(() => {
+      liveSocket = new LiveSocket("/live", Socket);
+      main = {
+        id: "main",
+        isMain: () => true,
+        pushLinkPatch: jest.fn(),
+      };
+      liveSocket.main = main;
+      liveSocket.isConnected = () => true;
+      liveSocket.replaceMain = jest.fn();
+    });
+
+    afterEach(() => {
+      window.removeEventListener("phx:before-navigate", listener);
+      liveSocket = null;
+    });
+
+    test("dispatches with navigation details", () => {
+      const details: any[] = [];
+      listener = (e) => details.push(e.detail);
+      window.addEventListener("phx:before-navigate", listener);
+
+      liveSocket.pushHistoryPatch(new CustomEvent("phx:exec"), "/a", "push");
+      liveSocket.historyRedirect(
+        new CustomEvent("phx:exec"),
+        "/b",
+        "push",
+        null,
+      );
+
+      expect(details).toEqual([
+        { href: "/a", patch: true, pop: false, direction: "forward" },
+        {
+          href: `${window.location.protocol}//${window.location.host}/b`,
+          patch: false,
+          pop: false,
+          direction: "forward",
+        },
+      ]);
+      expect(main.pushLinkPatch).toHaveBeenCalled();
+      expect(liveSocket.replaceMain).toHaveBeenCalled();
+    });
+
+    test("cancels patch and redirect when prevented", () => {
+      listener = (e) => e.preventDefault();
+      window.addEventListener("phx:before-navigate", listener);
+      const link = document.createElement("a");
+
+      liveSocket.pushHistoryPatch(new CustomEvent("phx:exec"), "/a", "push");
+      liveSocket.historyRedirect(
+        new CustomEvent("phx:exec"),
+        "/b",
+        "push",
+        null,
+        link,
+      );
+
+      expect(main.pushLinkPatch).not.toHaveBeenCalled();
+      expect(liveSocket.replaceMain).not.toHaveBeenCalled();
+      expect(link.classList.contains("phx-click-loading")).toBe(false);
+    });
+  });
 });
 
 describe("liveSocket.js()", () => {
