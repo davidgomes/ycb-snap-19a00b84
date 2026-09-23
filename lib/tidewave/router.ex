@@ -59,7 +59,7 @@ defmodule Tidewave.Router do
 
     conn
     |> Plug.Parsers.call(opts)
-    |> MCP.Server.handle_http_message()
+    |> handle_mcp_message()
     |> halt()
   end
 
@@ -265,6 +265,51 @@ defmodule Tidewave.Router do
       <body></body>
     </html>
     """
+  end
+
+  defp handle_mcp_message(conn) do
+    require Logger
+    Logger.info("Received #{conn.method} message")
+    params = conn.body_params
+    conn = fetch_query_params(conn)
+    include_browser_tools? = conn.query_params["include_browser_tools"] != "false"
+    Logger.debug("Raw params: #{inspect(params, pretty: true)}")
+
+    case MCP.Server.validate_jsonrpc_message(params) do
+      {:ok, message} ->
+        case MCP.Server.handle_message(
+               message,
+               conn.private.tidewave_config,
+               include_browser_tools?
+             ) do
+          {:ok, nil} ->
+            # Notifications that don't return a response
+            send_json(conn, 202, %{status: "ok"})
+
+          {:ok, response} ->
+            Logger.debug("Sending HTTP response: #{inspect(response, pretty: true)}")
+            send_json(conn, 200, response)
+
+          {:error, error_response} ->
+            Logger.warning("Error handling message: #{inspect(error_response)}")
+            send_json(conn, 400, error_response)
+        end
+
+      {:error, :invalid_jsonrpc} ->
+        Logger.warning("Invalid JSON-RPC message format")
+
+        send_json(conn, 200, %{
+          jsonrpc: "2.0",
+          id: nil,
+          error: %{code: -32600, message: "Could not parse message"}
+        })
+    end
+  end
+
+  defp send_json(conn, status, data) do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(status, Jason.encode!(data))
   end
 
   defp handle_upload(conn) do
