@@ -8,9 +8,9 @@ defmodule Nostrum.Voice.Payload do
 
   require Logger
 
-  # All functions in this module that end with a call to `build_payload/1`
-  # with an all-caps string return JSON payloads which are response messages
-  # to incoming voice websocket messages.
+  # All functions in this module that end with a call to `build_payload/2` or
+  # `build_binary_payload/2` with an all-caps string return websocket frames
+  # which are response messages to incoming voice websocket messages.
   # Other functions which return a map with keys `:t` and `:d` are for
   # generating voice-related events to be consumed by a Consumer process.
 
@@ -27,7 +27,8 @@ defmodule Nostrum.Voice.Payload do
       server_id: state.guild_id,
       user_id: Me.get().id,
       token: state.token,
-      session_id: state.session
+      session_id: state.session,
+      max_dave_protocol_version: Dave.max_protocol_version()
     }
     |> build_payload("IDENTIFY")
   end
@@ -63,6 +64,26 @@ defmodule Nostrum.Voice.Payload do
     |> build_payload("SPEAKING")
   end
 
+  def dave_transition_ready_payload(transition_id) do
+    %{transition_id: transition_id}
+    |> build_payload("DAVE_TRANSITION_READY")
+  end
+
+  def dave_mls_key_package_payload(key_package) do
+    key_package
+    |> build_binary_payload("DAVE_MLS_KEY_PACKAGE")
+  end
+
+  def dave_mls_commit_welcome_payload(commit, welcome) do
+    [commit | List.wrap(welcome)]
+    |> build_binary_payload("DAVE_MLS_COMMIT_WELCOME")
+  end
+
+  def dave_mls_invalid_commit_welcome_payload(transition_id) do
+    %{transition_id: transition_id}
+    |> build_payload("DAVE_MLS_INVALID_COMMIT_WELCOME")
+  end
+
   def speaking_update_payload(%VoiceState{} = voice, timed_out \\ false) do
     %{
       t: :VOICE_SPEAKING_UPDATE,
@@ -96,7 +117,14 @@ defmodule Nostrum.Voice.Payload do
   def build_payload(data, opcode_name) do
     opcode = Constants.voice_opcode_from_name(opcode_name)
 
-    %{op: opcode, d: data}
-    |> Jason.encode_to_iodata!()
+    {:text, Jason.encode_to_iodata!(%{op: opcode, d: data})}
+  end
+
+  # Binary messages sent by the client are the opcode byte followed by the payload,
+  # only the messages sent by the server are prefixed with a sequence number
+  def build_binary_payload(data, opcode_name) do
+    opcode = Constants.voice_opcode_from_name(opcode_name)
+
+    {:binary, [opcode, data]}
   end
 end

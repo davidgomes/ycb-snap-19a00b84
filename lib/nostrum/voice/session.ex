@@ -8,6 +8,7 @@ defmodule Nostrum.Voice.Session do
   alias Nostrum.Struct.VoiceState
   alias Nostrum.Struct.VoiceWSState
   alias Nostrum.Voice
+  alias Nostrum.Voice.Audio
   alias Nostrum.Voice.Crypto
   alias Nostrum.Voice.Event
   alias Nostrum.Voice.Opus
@@ -72,6 +73,9 @@ defmodule Nostrum.Voice.Session do
       guild_id: voice.guild_id,
       channel_id: voice.channel_id,
       ssrc_map: Map.new(),
+      dave_protocol_version: 0,
+      dave_pending_transitions: Map.new(),
+      dave_connected_users: MapSet.new(),
       session: voice.session,
       token: voice.token,
       gateway: voice.gateway,
@@ -104,19 +108,18 @@ defmodule Nostrum.Voice.Session do
   end
 
   def handle_info({:gun_ws, _worker, stream, {:text, frame}}, state) do
-    from_handle =
-      frame
-      |> Jason.decode!()
-      |> Event.handle(state)
+    frame
+    |> Jason.decode!()
+    |> Event.handle(state)
+    |> reply(stream)
+  end
 
-    case from_handle do
-      {new_state, reply} ->
-        :ok = :gun.ws_send(state.conn, stream, {:text, reply})
-        {:noreply, new_state}
+  def handle_info({:gun_ws, _worker, stream, {:binary, frame}}, state) do
+    <<seq::integer-16, opcode::integer-8, payload::binary>> = frame
 
-      new_state ->
-        {:noreply, new_state}
-    end
+    %{"seq" => seq, "op" => opcode, "d" => payload}
+    |> Event.handle(state)
+    |> reply(stream)
   end
 
   def handle_info({:gun_ws, _conn, _stream, :close}, state) do
@@ -153,17 +156,12 @@ defmodule Nostrum.Voice.Session do
   end
 
   def handle_info({:udp, _erl_port, _ip, _port, packet}, state) do
-    case packet do
-      # Skip RTCP packets
-      <<2::2, 0::1, 1::5, 201::8, _rest::binary>> ->
-        :noop
-
-      <<header::bytes-size(12), _::binary>> = data ->
-        payload = Crypto.decrypt(state, data)
-        <<_::16, seq::integer-16, time::integer-32, ssrc::integer-32>> = header
-        opus = Opus.strip_rtp_ext(payload)
-        incoming_packet = Payload.voice_incoming_packet({{seq, time, ssrc}, opus})
-        Dispatch.handle(incoming_packet, state)
+    if not Audio.rtcp?(packet) do
+      <<_::16, seq::integer-16, time::integer-32, ssrc::integer-32, _::binary>> = packet
+      opus = state |> Crypto.decrypt(packet) |> Opus.strip_rtp_ext()
+      opus = Crypto.decrypt_dave(state, ssrc, opus)
+      incoming_packet = Payload.voice_incoming_packet({{seq, time, ssrc}, opus})
+      Dispatch.handle(incoming_packet, state)
     end
 
     {:noreply, state}
@@ -188,7 +186,7 @@ defmodule Nostrum.Voice.Session do
         :heartbeat
       ])
 
-    :ok = :gun.ws_send(state.conn, state.stream, {:text, Payload.heartbeat_payload(state)})
+    :ok = :gun.ws_send(state.conn, state.stream, Payload.heartbeat_payload(state))
 
     {:noreply,
      %{state | heartbeat_ref: ref, heartbeat_ack: false, last_heartbeat_send: DateTime.utc_now()}}
@@ -210,7 +208,7 @@ defmodule Nostrum.Voice.Session do
 
     Dispatch.handle(speaking_update, state)
 
-    :ok = :gun.ws_send(state.conn, state.stream, {:text, payload})
+    :ok = :gun.ws_send(state.conn, state.stream, payload)
     {:noreply, state}
   end
 
@@ -246,4 +244,13 @@ defmodule Nostrum.Voice.Session do
       end
     end)
   end
+
+  defp reply({state, []}, _stream), do: {:noreply, state}
+
+  defp reply({state, frames}, stream) do
+    :ok = :gun.ws_send(state.conn, stream, frames)
+    {:noreply, state}
+  end
+
+  defp reply(state, _stream), do: {:noreply, state}
 end
