@@ -40,6 +40,14 @@ defmodule SpiderMan do
   @type requests :: [request]
   @type component :: :downloader | :spider | :item_processor
   @type ets_stats :: [size: pos_integer, memory: pos_integer] | nil
+  @type throughput :: %{
+          component: component,
+          total: non_neg_integer,
+          success: non_neg_integer,
+          fail: non_neg_integer,
+          tps: number,
+          duration: non_neg_integer
+        }
   @type prepare_for_start_stage :: :pre | :post
 
   @callback handle_response(Response.t(), context :: map) :: %{
@@ -142,24 +150,64 @@ defmodule SpiderMan do
           downloader_tid: ets_stats,
           failed_tid: ets_stats,
           spider_tid: ets_stats,
-          item_processor_tid: ets_stats
+          item_processor_tid: ets_stats,
+          throughputs: [throughput]
         ]
   def stats(spider) do
     components =
       :persistent_term.get(spider)
       |> Enum.sort()
-      |> Enum.map(fn {key, tid} ->
-        {key,
-         tid
-         |> :ets.info()
-         |> Keyword.take([:size, :memory])}
+      |> Enum.map(fn
+        {:stats_tid, tid} ->
+          {:throughputs, throughput(tid)}
+
+        {key, tid} ->
+          {key,
+           tid
+           |> :ets.info()
+           |> Keyword.take([:size, :memory])}
       end)
 
     [{:status, Engine.status(spider)} | components]
   end
 
+  @doc """
+  fetch spider's throughput infos of each component
+
+  Components are ordered by message flow: `downloader`, `spider`, `item_processor`.
+  `tps` means successes per second of processing time.
+  """
+  @spec throughput(spider | :ets.tid()) :: [throughput]
+  def throughput(spider) when is_atom(spider) do
+    :persistent_term.get(spider)
+    |> Map.fetch!(:stats_tid)
+    |> throughput()
+  end
+
+  def throughput(stats_tid) do
+    Enum.map(components(), fn component ->
+      [{^component, total, success, fail, duration}] = :ets.lookup(stats_tid, component)
+
+      tps =
+        case System.convert_time_unit(duration, :native, :millisecond) do
+          0 -> 0
+          ms -> Float.floor(success / (ms / 1000), 2)
+        end
+
+      %{
+        component: component,
+        total: total,
+        success: success,
+        fail: fail,
+        tps: tps,
+        duration: duration
+      }
+    end)
+  end
+
   @doc "fetch spider's statistics of all ets"
   @spec ets_stats(spider) :: [
+          stats_tid: ets_stats,
           common_pipeline_tid: ets_stats,
           downloader_tid: ets_stats,
           failed_tid: ets_stats,
@@ -190,16 +238,10 @@ defmodule SpiderMan do
   @spec run_until_zero(spider, settings, check_interval :: integer) :: millisecond :: integer
   def run_until_zero(spider, settings \\ [], check_interval \\ 1500) do
     run_until(spider, settings, fn ->
-      ets_list =
-        :persistent_term.get(spider)
-        |> Map.take([:downloader_tid, :failed_tid, :spider_tid])
-
-      fun = fn {_, tid} -> :ets.info(tid, :size) == 0 end
-
-      if Enum.all?(ets_list, fun) do
+      if check_zero_task?(spider) do
         Process.sleep(check_interval)
 
-        if Enum.all?(ets_list, fun) do
+        if check_zero_task?(spider) do
           :stop
         else
           check_interval
@@ -208,6 +250,14 @@ defmodule SpiderMan do
         check_interval
       end
     end)
+  end
+
+  @doc "check if spider has no pending requests in downloader, spider and failed ets"
+  @spec check_zero_task?(spider) :: boolean
+  def check_zero_task?(spider) do
+    :persistent_term.get(spider)
+    |> Map.take([:downloader_tid, :failed_tid, :spider_tid])
+    |> Enum.all?(fn {_, tid} -> :ets.info(tid, :size) == 0 end)
   end
 
   @spec run_until(spider, settings, fun) :: millisecond :: integer
