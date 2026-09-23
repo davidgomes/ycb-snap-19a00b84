@@ -387,7 +387,8 @@ defprotocol Flop.Schema do
 
   If runtime options are necessary (like the timezone of the request or the user
   ID of the current user), use the `extra_opts` option when calling Flop
-  functions. They are merged with the options from the tuple.
+  functions. They are merged with the options from the tuple, which take
+  precedence.
 
   Schema:
 
