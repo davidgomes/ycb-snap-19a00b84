@@ -88,11 +88,11 @@ defmodule Nostrum.Struct.VoiceWSState do
   @typedoc since: "0.11.0"
   @type dave_protocol_version :: non_neg_integer()
 
-  @typedoc "Announced DAVE protocol transitions awaiting execution, mapping transition id to protocol version"
+  @typedoc "Announced DAVE protocol transitions awaiting execution, by transition id"
   @typedoc since: "0.11.0"
   @type dave_pending_transitions :: %{non_neg_integer() => non_neg_integer()}
 
-  @typedoc "Users connected to the voice channel, the only users that may be added to the DAVE MLS group"
+  @typedoc "Users connected to the voice channel that may be added to the DAVE MLS group"
   @typedoc since: "0.11.0"
   @type dave_connected_users :: MapSet.t(Nostrum.Struct.User.id())
 
