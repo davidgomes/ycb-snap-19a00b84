@@ -82,15 +82,20 @@ defmodule Warehouse.GenServers.Component do
 
   def handle_info(:update_available, state) do
     new_available = Kit.get_kit_availability(state.kits)
+    new_sku_demands = Kit.kit_sku_demand(state.kits, state.demand)
+
+    if new_sku_demands != state.sku_demands do
+      Task.Supervisor.async_nolink(Warehouse.TaskSupervisor, Sku, :update_sku_demands, [])
+    end
+
+    new_state = %{state | available: new_available, sku_demands: new_sku_demands}
 
     if new_available != state.available do
       Logger.info("Updating available quantity to #{new_available}")
-      new_state = %{state | available: new_available}
       events_module().broadcast_component_quantities(state.component.id, new_state)
-      {:noreply, new_state}
-    else
-      {:noreply, state}
     end
+
+    {:noreply, new_state}
   end
 
   @impl true
