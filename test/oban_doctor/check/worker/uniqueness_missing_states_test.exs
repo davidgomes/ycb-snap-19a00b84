@@ -25,6 +25,9 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       assert issue.severity == :warning
       assert issue.check == UniquenessMissingStates
       assert issue.message =~ "missing states"
+      assert issue.message =~ ":incomplete"
+      assert issue.message =~ "https://oban.hexdocs.pm/unique_jobs.html"
+      assert issue.meta.doc == "https://oban.hexdocs.pm/unique_jobs.html"
       assert :available in issue.meta.missing_states
       assert :scheduled in issue.meta.missing_states
       assert :retryable in issue.meta.missing_states
@@ -90,23 +93,36 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       assert issues == []
     end
 
-    test "does not flag workers using :all state group (handled by another check)" do
+    test "does not flag workers using a named state group" do
+      for group <- [:all, :incomplete, :scheduled, :successful] do
+        workers = [
+          %{
+            module: MyApp.Workers.AllStatesWorker,
+            file: "lib/my_app/workers/all_states_worker.ex",
+            line: 1,
+            queue: :default,
+            unique: [fields: [:args], states: group],
+            max_attempts: nil
+          }
+        ]
+
+        assert UniquenessMissingStates.run(%{workers: workers}) == []
+      end
+    end
+
+    test "does not flag lists that embed a named state group" do
       workers = [
         %{
           module: MyApp.Workers.AllStatesWorker,
           file: "lib/my_app/workers/all_states_worker.ex",
           line: 1,
           queue: :default,
-          unique: [fields: [:args], states: :all],
+          unique: [fields: [:args], states: [:incomplete]],
           max_attempts: nil
         }
       ]
 
-      context = %{workers: workers}
-
-      issues = UniquenessMissingStates.run(context)
-
-      assert issues == []
+      assert UniquenessMissingStates.run(%{workers: workers}) == []
     end
 
     test "detects workers missing only some states" do
