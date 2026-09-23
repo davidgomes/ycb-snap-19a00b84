@@ -165,6 +165,15 @@ defmodule Guardian.Token.JwtTest do
 
       assert jwt.fields == ctx.claims
     end
+
+    test "does not fall back to the configured secret when the secret is nil", ctx do
+      assert {:error, :secret_not_found} = Jwt.create_token(ctx.impl, ctx.claims, secret: nil)
+    end
+
+    test "does not fall back to the configured secret when an {m, f, a} resolves to nil", ctx do
+      secret = {ctx.impl, :the_secret_yo, [nil]}
+      assert {:error, :secret_not_found} = Jwt.create_token(ctx.impl, ctx.claims, secret: secret)
+    end
   end
 
   describe "decode_token" do
@@ -196,6 +205,23 @@ defmodule Guardian.Token.JwtTest do
       secret = {ctx.impl, :the_secret_yo, [the_secret]}
       result = Jwt.decode_token(ctx.impl, ctx.jwt, secret: secret)
       assert {:ok, ctx.claims} == result
+    end
+
+    test "uses the configured secret when no secret is given", ctx do
+      assert {:ok, ctx.claims} == Jwt.decode_token(ctx.impl, ctx.jwt, [])
+    end
+
+    test "does not fall back to the configured secret when the secret is nil", ctx do
+      assert {:error, :secret_not_found} = Jwt.decode_token(ctx.impl, ctx.jwt, secret: nil)
+    end
+
+    test "does not fall back to the configured secret when an {m, f, a} resolves to nil", ctx do
+      secret = {ctx.impl, :the_secret_yo, [nil]}
+      assert {:error, :secret_not_found} = Jwt.decode_token(ctx.impl, ctx.jwt, secret: secret)
+    end
+
+    test "reports a missing secret through decode_and_verify", ctx do
+      assert {:error, :secret_not_found} = Guardian.decode_and_verify(ctx.impl, ctx.jwt, %{}, secret: nil)
     end
   end
 

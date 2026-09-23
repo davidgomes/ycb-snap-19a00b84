@@ -174,4 +174,68 @@ defmodule Guardian.Plug.VerifyCookieTest do
       refute new_conn.status == 401
     end
   end
+
+  describe "with a secret selected from the connection" do
+    defmodule ImplJwt do
+      @moduledoc false
+
+      use Guardian,
+        otp_app: :guardian,
+        token_module: Guardian.Token.Jwt,
+        issuer: "MyApp",
+        secret_key: "foo-de-fafa"
+
+      def subject_for_token(%{id: id}, _claims), do: {:ok, "User:#{id}"}
+      def resource_from_claims(%{"sub" => "User:" <> sub}), do: {:ok, %{id: sub}}
+    end
+
+    @host_secrets %{"a.example.com" => "tenant-a-secret", "b.example.com" => "tenant-b-secret"}
+
+    def host_secret(conn), do: Map.get(@host_secrets, conn.host)
+
+    setup do
+      impl = __MODULE__.ImplJwt
+
+      {:ok, refresh_a, _} =
+        impl.encode_and_sign(@resource, %{}, token_type: "refresh", secret: @host_secrets["a.example.com"])
+
+      {:ok, app_refresh, _} = impl.encode_and_sign(@resource, %{}, token_type: "refresh")
+
+      {:ok, %{impl: impl, refresh_a: refresh_a, app_refresh: app_refresh}}
+    end
+
+    defp call_for_host(ctx, host, token) do
+      :get
+      |> conn("http://#{host}/")
+      |> put_req_cookie("guardian_default_token", token)
+      |> Pipeline.put_module(ctx.impl)
+      |> Pipeline.put_error_handler(ctx.handler)
+      |> VerifyCookie.call(secret: &__MODULE__.host_secret/1)
+    end
+
+    test "verifies and signs the exchanged token with the selected secret", ctx do
+      conn = call_for_host(ctx, "a.example.com", ctx.refresh_a)
+
+      refute conn.halted
+      assert new_t = Guardian.Plug.current_token(conn)
+      assert %{"sub" => "User:bobby", "typ" => "access"} = Guardian.Plug.current_claims(conn)
+      assert {:ok, _} = ctx.impl.decode_and_verify(new_t, %{}, secret: @host_secrets["a.example.com"])
+      assert {:error, :invalid_token} = ctx.impl.decode_and_verify(new_t)
+    end
+
+    test "rejects a token signed with another connection's secret", ctx do
+      conn = call_for_host(ctx, "b.example.com", ctx.refresh_a)
+
+      assert conn.halted
+      assert {401, _, "{:invalid_token, :invalid_token}"} = sent_resp(conn)
+    end
+
+    test "fails closed instead of falling back to the configured secret", ctx do
+      conn = call_for_host(ctx, "unknown.example.com", ctx.app_refresh)
+
+      assert conn.halted
+      assert {401, _, "{:invalid_token, :secret_not_found}"} = sent_resp(conn)
+      refute Guardian.Plug.current_token(conn)
+    end
+  end
 end

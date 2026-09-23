@@ -336,4 +336,65 @@ defmodule Guardian.Plug.VerifySessionTest do
       assert %{"sub" => "User:jane", "typ" => "access"} = Guardian.Plug.current_claims(conn)
     end
   end
+
+  describe "with a secret selected from the connection" do
+    @host_secrets %{"a.example.com" => "tenant-a-secret", "b.example.com" => "tenant-b-secret"}
+
+    def host_secret(conn) do
+      send(self(), :host_secret_called)
+      Map.get(@host_secrets, conn.host)
+    end
+
+    setup do
+      impl = __MODULE__.ImplJwt
+      {:ok, token_a, claims_a} = impl.encode_and_sign(@resource, %{}, secret: @host_secrets["a.example.com"])
+      {:ok, app_token, _} = impl.encode_and_sign(@resource)
+
+      {:ok, %{impl: impl, handler: __MODULE__.Handler, token_a: token_a, claims_a: claims_a, app_token: app_token}}
+    end
+
+    defp call_for_host(ctx, host, token) do
+      :get
+      |> conn("http://#{host}/")
+      |> init_test_session(%{guardian_default_token: token})
+      |> VerifySession.call(module: ctx.impl, error_handler: ctx.handler, secret: &__MODULE__.host_secret/1)
+    end
+
+    test "verifies a token signed with the secret selected for the connection", ctx do
+      conn = call_for_host(ctx, "a.example.com", ctx.token_a)
+
+      refute conn.halted
+      assert Guardian.Plug.current_token(conn) == ctx.token_a
+      assert Guardian.Plug.current_claims(conn) == ctx.claims_a
+    end
+
+    test "rejects a token signed with another connection's secret", ctx do
+      conn = call_for_host(ctx, "b.example.com", ctx.token_a)
+
+      assert conn.status == 401
+      assert conn.halted
+      assert conn.resp_body == inspect({:invalid_token, :invalid_token})
+    end
+
+    test "fails closed instead of falling back to the configured secret", ctx do
+      conn = call_for_host(ctx, "unknown.example.com", ctx.app_token)
+
+      assert conn.status == 401
+      assert conn.halted
+      assert conn.resp_body == inspect({:invalid_token, :secret_not_found})
+      refute Guardian.Plug.current_token(conn)
+    end
+
+    test "does not call the function when there is no token in the session", ctx do
+      conn =
+        :get
+        |> conn("http://a.example.com/")
+        |> init_test_session(%{})
+        |> VerifySession.call(module: ctx.impl, error_handler: ctx.handler, secret: &__MODULE__.host_secret/1)
+
+      refute conn.halted
+      refute Guardian.Plug.current_token(conn)
+      refute_received :host_secret_called
+    end
+  end
 end

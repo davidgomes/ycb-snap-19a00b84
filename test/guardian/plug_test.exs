@@ -727,4 +727,43 @@ defmodule Guardian.PlugTest do
       assert Keys.key_from_other(:plug_session) == nil
     end
   end
+
+  describe "resolve_secret/2" do
+    def secret_from_host(conn), do: "secret-for-#{conn.host}"
+    def static_secret(value), do: value
+
+    test "calls a one argument function with the connection" do
+      conn = conn(:get, "https://tenant.example.com/")
+      opts = Guardian.Plug.resolve_secret(conn, secret: &__MODULE__.secret_from_host/1, key: :default)
+
+      assert opts[:secret] == "secret-for-tenant.example.com"
+      assert opts[:key] == :default
+    end
+
+    test "keeps a nil result so verification fails closed" do
+      opts = Guardian.Plug.resolve_secret(conn(:get, "/"), secret: fn _conn -> nil end)
+
+      assert Keyword.fetch(opts, :secret) == {:ok, nil}
+    end
+
+    test "leaves an {m, f, a} secret to be resolved without the connection" do
+      mfa = {__MODULE__, :static_secret, ["abc"]}
+
+      assert Guardian.Plug.resolve_secret(conn(:get, "/"), secret: mfa) == [secret: mfa]
+    end
+
+    test "leaves literal secrets untouched" do
+      assert Guardian.Plug.resolve_secret(conn(:get, "/"), secret: "abc") == [secret: "abc"]
+    end
+
+    test "does not add a secret when none is given" do
+      assert Guardian.Plug.resolve_secret(conn(:get, "/"), key: :default) == [key: :default]
+    end
+
+    test "leaves functions of other arities untouched" do
+      fun = fn -> "abc" end
+
+      assert Guardian.Plug.resolve_secret(conn(:get, "/"), secret: fun) == [secret: fun]
+    end
+  end
 end
