@@ -3687,6 +3687,77 @@ export const PetalToast = {
   },
 };
 
+// The open-direction rule for in-page panels hung under a trigger (the
+// combobox and the dropdown share it, so it can't drift between them):
+// open downward by default, flip above only when the panel doesn't fit
+// below AND there is more room above. Null when nothing is laid out yet
+// (jsdom, a display:none ancestor) - no numbers, no case for flipping.
+function flipDecision(anchor, panelHeight) {
+  const rect = anchor.getBoundingClientRect();
+  if (!panelHeight || (!rect.top && !rect.bottom)) return null;
+  const gap = 8;
+  const below = window.innerHeight - rect.bottom - gap;
+  const above = rect.top - gap;
+  return { flip: panelHeight > below && above > below, above, below };
+}
+
+// Dropdown panel: LiveView.JS still owns open and close (JS.toggle on the
+// trigger, JS.hide on click-away and Escape) - this hook only picks the
+// side, marking data-flip for the CSS. It watches the inline display
+// those commands write rather than phx:show-start: LiveView fires that
+// event frames BEFORE the panel is displayed, when there is nothing to
+// measure, while an observer runs after the write and before the paint.
+export const PetalDropdown = {
+  mounted() {
+    this.open = false;
+    this.onReposition = () => this.position();
+    this.observer = new MutationObserver(() => this.sync());
+    this.observer.observe(this.el, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+    this.sync();
+  },
+
+  // A patch merges server attributes onto the panel, which drops the
+  // data-flip the server never renders - re-assert it while open.
+  updated() {
+    if (this.open) this.position();
+  },
+
+  destroyed() {
+    this.observer.disconnect();
+    this.listen("removeEventListener");
+  },
+
+  sync() {
+    const open = this.el.style.display !== "none";
+    if (open === this.open) return;
+    this.open = open;
+    if (open) {
+      this.listen("addEventListener");
+      this.position();
+    } else {
+      this.listen("removeEventListener");
+      // already hidden, so this can't jump the panel mid-fade
+      this.el.removeAttribute("data-flip");
+    }
+  },
+
+  listen(method) {
+    window[method]("scroll", this.onReposition, true);
+    window[method]("resize", this.onReposition);
+  },
+
+  // Measured against the .pc-dropdown root: the panel hangs off its
+  // bottom edge, and bottom-full pins a flipped one to its top edge.
+  // offsetHeight, not the rect - the entrance transition scales the panel.
+  position() {
+    const decision = flipDecision(this.el.parentElement, this.el.offsetHeight);
+    if (decision) this.el.toggleAttribute("data-flip", decision.flip);
+  },
+};
+
 // Combo box: the command palette's filter + keyboard core wired to a real
 // hidden <select>. The select IS the form control - choosing an option sets
 // its value and dispatches bubbling input/change events, so phx-change and
@@ -4250,23 +4321,20 @@ export const PetalComboBox = {
 
   // Open downward by default; flip above when the viewport has no room
   // below AND more room above (the bottom-of-form combobox that used to
-  // open 200px off-screen). When NEITHER side fits the whole panel, the
-  // winning side's space caps the scroll area instead - the list scrolls
-  // within what fits, so no option ever sits outside the viewport.
-  // Measured with flip and cap cleared so natural height decides.
+  // open 200px off-screen) - see flipDecision. When NEITHER side fits the
+  // whole panel, the winning side's space caps the scroll area instead -
+  // the list scrolls within what fits, so no option ever sits outside the
+  // viewport. Measured with flip and cap cleared so natural height decides.
   positionPanel() {
     if (this.panel.hidden) return;
     this.panel.removeAttribute("data-flip");
     this.list.style.maxHeight = "";
     const anchor = this.control || this.trigger;
     if (!anchor) return;
-    const control = anchor.getBoundingClientRect();
     const panelH = this.panel.offsetHeight;
-    if (!panelH || (!control.top && !control.bottom)) return; // jsdom / unrendered
-    const gap = 8;
-    const below = window.innerHeight - control.bottom - gap;
-    const above = control.top - gap;
-    const flip = panelH > below && above > below;
+    const decision = flipDecision(anchor, panelH);
+    if (!decision) return;
+    const { flip, above, below } = decision;
     if (flip) this.panel.setAttribute("data-flip", "");
     const room = flip ? above : below;
     if (panelH > room) {
@@ -5472,6 +5540,7 @@ export default {
   PetalAurora,
   PetalNavMenu,
   PetalCommandDialog,
+  PetalDropdown,
   PetalComboBox,
   PetalDataTable,
 };

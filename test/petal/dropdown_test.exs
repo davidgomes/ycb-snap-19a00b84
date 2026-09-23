@@ -87,6 +87,20 @@ defmodule PetalComponents.DropdownTest do
       refute html =~ "x-show"
       assert_attribute(html, "phx-click")
     end
+
+    test "the panel mounts the PetalDropdown hook", %{assigns: assigns} do
+      html =
+        rendered_to_string(~H"""
+        <.dropdown label="Dropdown" options_container_id="account-menu">
+          <.dropdown_menu_item label="Option" />
+        </.dropdown>
+        """)
+
+      # on the panel, which already carries the id JS.toggle targets
+      hooked = html |> parse_html() |> LazyHTML.query("[phx-hook]")
+      assert LazyHTML.attribute(hooked, "phx-hook") == ["PetalDropdown"]
+      assert LazyHTML.attribute(hooked, "id") == ["account-menu"]
+    end
   end
 
   describe "dropdown/1 - placement options" do
