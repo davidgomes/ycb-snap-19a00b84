@@ -53,6 +53,29 @@ defmodule Oban.Web.ResolverTest do
     end
   end
 
+  describe "decode_signal/2" do
+    test "decoding signals with the same safety as recorded output" do
+      assert %{decision: "approved"} ==
+               %{decision: "approved"}
+               |> encode_recorded()
+               |> Resolver.decode_signal()
+
+      assert_raise ArgumentError, fn ->
+        %{fun: fn -> :no end}
+        |> encode_recorded()
+        |> Resolver.decode_signal()
+      end
+    end
+  end
+
+  describe "format_signal/2" do
+    test "decoding and inspecting the signal payload" do
+      signal = encode_recorded(%{decision: "approved"})
+
+      assert ~s|%{decision: "approved"}| == Resolver.format_signal(signal, %Oban.Job{})
+    end
+  end
+
   defp encode_recorded(data) do
     data
     |> :erlang.term_to_binary()
