@@ -47,12 +47,7 @@ defmodule FreeObanUiWeb.JobLive.Index do
 
     <nav id="job-states" class="mt-8 flex flex-wrap gap-2 text-sm">
       <.state_tab current={@state} count={@counts |> Map.values() |> Enum.sum()} />
-      <.state_tab
-        :for={state <- Jobs.states()}
-        state={state}
-        current={@state}
-        count={@counts[state]}
-      />
+      <.state_tab :for={state <- Jobs.states()} state={state} current={@state} count={@counts[state]} />
     </nav>
 
     <p :if={@jobs == []} id="no-jobs" class="mt-11 text-sm text-zinc-500">
