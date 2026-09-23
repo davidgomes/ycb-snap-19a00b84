@@ -109,7 +109,7 @@ of replacing it. Replacing the order could drop the field that made it unique.
 
 ## Nullable fields
 
-Ordering by a nullable column loses the rows where it is `NULL`.
+Order fields may contain `NULL`.
 
 ```elixir
 %{first: 2, order_by: [:age, :id]}
@@ -119,20 +119,21 @@ Ordering by a nullable column loses the rows where it is `NULL`.
 |---|---|
 | 1 | Bo 1, Ada 3 |
 | 2 | Ada 5, Ada 7 |
-| 3 | — |
+| 3 | Cy, Dee |
 
-Cy and Dee never appear, and page 3 reports `has_next_page?: false`. PostgreSQL
-sorts them last, but the cursor comparison is `age > 7`, and no comparison with
-`NULL` is ever true. A second order field does not help, because the `NULL` is
-in the first one.
+No comparison with `NULL` is ever true, so a plain `age > 7` would lose Cy and
+Dee. Flop adds `IS NULL` and `IS NOT NULL` conditions to the cursor comparison
+depending on where the `NULL` values sort, and compares the rows that share a
+`NULL` by the next order field.
 
-Until Flop builds null-aware predicates, order by a column that has no `NULL`,
-or sort on a computed field that substitutes a value, as in the [computed fields
-recipe](computed_and_embedded_fields.md):
-
-```sql
-SELECT coalesce(age, -1) AS age_sortable
-```
+Where that is depends on the direction and on the database. With
+`:asc_nulls_first`, `:asc_nulls_last`, `:desc_nulls_first` and
+`:desc_nulls_last`, it is the same everywhere. With plain `:asc` and `:desc`,
+PostgreSQL sorts `NULL` as larger than any value, and MySQL and SQLite as
+smaller. Flop reads the database from the adapter of the configured repo, and
+assumes the PostgreSQL order if there is no repo, for example when you call
+`Flop.query/3` without the `repo` option. Use a direction with an explicit
+`NULL` position if the query may run without a repo.
 
 ## Reading the cursor value
 
