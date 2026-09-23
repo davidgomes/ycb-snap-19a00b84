@@ -2,6 +2,7 @@
 
 ### New Features ✨
 
+- Support for `log_byte` and `trace_metric_byte` client outcomes and rate limits ([#1134](https://github.com/getsentry/sentry-elixir/pull/1134))
 - (logs) Support for `capture_*` config by @solnic in [#1077](https://github.com/getsentry/sentry-elixir/pull/1077)
 - Add spans to client reports by @whatyouhide in [#1104](https://github.com/getsentry/sentry-elixir/pull/1104)
 - Remove SDK-side data truncation, defer to Relay by @dingsdax in [#1093](https://github.com/getsentry/sentry-elixir/pull/1093)
