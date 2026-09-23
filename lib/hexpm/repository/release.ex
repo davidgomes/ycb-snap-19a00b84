@@ -10,6 +10,10 @@ defmodule Hexpm.Repository.Release do
     field :inner_checksum, :binary
     field :outer_checksum, :binary
     field :has_docs, :boolean, default: false
+    field :version_major, :integer, read_after_writes: true
+    field :version_minor, :integer, read_after_writes: true
+    field :version_patch, :integer, read_after_writes: true
+    field :version_pre, :boolean, read_after_writes: true
     field :vulnerable?, :boolean, virtual: true, default: false
     timestamps()
 
