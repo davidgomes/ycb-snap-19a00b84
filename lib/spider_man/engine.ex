@@ -401,6 +401,8 @@ defmodule SpiderMan.Engine do
       item_processor_tid: state.item_processor_tid
     })
 
+    :persistent_term.put({spider, :stats_tid}, state.stats_tid)
+
     Logger.info("#{log_prefix} setup ets tables finish.")
     state
   end

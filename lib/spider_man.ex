@@ -176,6 +176,10 @@ defmodule SpiderMan do
     end)
   end
 
+  @doc "fetch spider's throughput infos of all components, easy to show on livebook"
+  @spec throughput_infos(spider) :: [map]
+  def throughput_infos(spider), do: SpiderMan.Stats.throughput_infos(spider)
+
   @spec components :: [component]
   def components, do: [:downloader, :spider, :item_processor]
 

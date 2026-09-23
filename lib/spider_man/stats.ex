@@ -30,32 +30,41 @@ defmodule SpiderMan.Stats do
     def print_spider_stats(tid), do: format_stats(tid)
   end
 
-  defp format_stats(tid) do
-    [downloader, item_processor, spider] = :ets.tab2list(tid) |> Enum.sort()
+  @doc "get throughput infos of all components, easy to show on livebook(e.g. by `Kino.DataTable`)"
+  def throughput_infos(spider) when is_atom(spider) do
+    case :persistent_term.get({spider, :stats_tid}, nil) do
+      nil -> []
+      tid -> throughput_infos(tid)
+    end
+  end
 
-    [downloader, spider, item_processor]
+  def throughput_infos(tid) do
+    [downloader, item_processor, spider] = :ets.tab2list(tid) |> Enum.sort()
+    Enum.map([downloader, spider, item_processor], &component_info/1)
+  end
+
+  defp component_info({component, total, success, fail, duration}) do
+    tps =
+      case System.convert_time_unit(duration, :native, :millisecond) do
+        0 -> 0
+        ms -> Float.floor(success / (ms / 1000), 2)
+      end
+
+    %{component: component, total: total, success: success, fail: fail, tps: tps}
+  end
+
+  @doc "format throughput infos as one line string"
+  def format_stats(spider_or_tid) do
+    spider_or_tid
+    |> throughput_infos()
     |> Enum.map(&format_component_stats/1)
     |> Enum.join(" ")
   end
 
-  defp format_component_stats({component, total, success, fail, duration}) do
-    tps =
-      case System.convert_time_unit(duration, :native, :millisecond) do
-        0 ->
-          0
-
-        ms ->
-          tps = Float.floor(success / (ms / 1000), 2)
-
-          if tps > 999 do
-            "999+"
-          else
-            tps
-          end
-      end
-
+  defp format_component_stats(%{component: component} = info) do
+    tps = if info.tps > 999, do: "999+", else: info.tps
     component = Atom.to_string(component) |> Macro.camelize()
-    "#{component}:[#{success}/#{total} #{tps}/s F:#{fail}]"
+    "#{component}:[#{info.success}/#{info.total} #{tps}/s F:#{info.fail}]"
   end
 
   def update_spider_stats([_, component, :start], measurements, metadata, {name, tid}) do

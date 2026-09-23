@@ -145,3 +145,9 @@ run ther spider
 ```elixir
 SpiderMan.run_until_zero(spider, settings, 5_000)
 ```
+
+show throughput infos
+
+```elixir
+SpiderMan.throughput_infos(spider)
+```
