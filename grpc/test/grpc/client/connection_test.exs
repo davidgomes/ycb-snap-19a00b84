@@ -22,14 +22,19 @@ defmodule GRPC.Client.ConnectionTest do
       assert {:error, :no_connection} = Connection.pick_channel(channel)
     end
 
-    test "returns {:ok, channel} when a channel is stored in persistent_term", %{
+    test "returns {:ok, channel} once the connection has published its LB state", %{
       ref: ref,
       target: target,
       adapter: adapter
     } do
       {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
 
+      assert {GRPC.Client.LoadBalancing.PickFirst, %{tid: _}} =
+               :persistent_term.get({Connection, ref})
+
       assert {:ok, ^channel} = Connection.pick_channel(%Channel{ref: ref})
+
+      Connection.disconnect(channel)
     end
   end
 
@@ -50,6 +55,19 @@ defmodule GRPC.Client.ConnectionTest do
       assert second_channel.port == 50051
 
       Connection.disconnect(first_channel)
+    end
+
+    test "returns {:error, :no_connection} when the running connection has no published LB state",
+         %{ref: ref, target: target, adapter: adapter} do
+      {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
+
+      entry = :persistent_term.get({Connection, ref})
+      :persistent_term.erase({Connection, ref})
+
+      assert {:error, :no_connection} = Connection.connect(target, adapter: adapter, name: ref)
+
+      :persistent_term.put({Connection, ref}, entry)
+      Connection.disconnect(channel)
     end
   end
 
@@ -96,6 +114,108 @@ defmodule GRPC.Client.ConnectionTest do
     end
   end
 
+  describe "LB ETS table lifecycle" do
+    test "the table is owned by the connection process and outlives the caller", %{
+      ref: ref,
+      target: target,
+      adapter: adapter
+    } do
+      parent = self()
+
+      {caller, caller_mon} =
+        spawn_monitor(fn ->
+          opts = [adapter: adapter, name: ref, lb_policy: :round_robin]
+          send(parent, {:connected, Connection.connect(target, opts)})
+        end)
+
+      assert_receive {:connected, {:ok, channel}}
+      assert_receive {:DOWN, ^caller_mon, :process, ^caller, :normal}
+
+      assert :ets.info(lb_tid(ref), :owner) == whereis_name(ref)
+      assert {:ok, %Channel{host: "127.0.0.1"}} = Connection.pick_channel(channel)
+
+      Connection.disconnect(channel)
+    end
+
+    test "disconnect/1 frees the table", %{ref: ref, target: target, adapter: adapter} do
+      {:ok, channel} =
+        Connection.connect(target, adapter: adapter, name: ref, lb_policy: :round_robin)
+
+      tid = lb_tid(ref)
+      pid = whereis_name(ref)
+      ref_mon = Process.monitor(pid)
+
+      {:ok, _} = Connection.disconnect(channel)
+      assert_receive {:DOWN, ^ref_mon, :process, ^pid, _reason}, 500
+
+      assert :ets.info(tid) == :undefined
+    end
+
+    test "the table is freed when the process is stopped without disconnect", %{
+      ref: ref,
+      target: target,
+      adapter: adapter
+    } do
+      {:ok, _channel} = Connection.connect(target, adapter: adapter, name: ref)
+
+      tid = lb_tid(ref)
+      pid = whereis_name(ref)
+      ref_mon = Process.monitor(pid)
+
+      GenServer.stop(pid, :shutdown)
+      assert_receive {:DOWN, ^ref_mon, :process, ^pid, :shutdown}, 500
+
+      assert :ets.info(tid) == :undefined
+    end
+  end
+
+  describe "pick_channel/2 racing disconnect/1" do
+    test "concurrent picks either succeed or return :no_connection", %{
+      ref: ref,
+      target: target,
+      adapter: adapter
+    } do
+      {:ok, channel} =
+        Connection.connect(target, adapter: adapter, name: ref, lb_policy: :round_robin)
+
+      pickers =
+        for _ <- 1..50 do
+          Task.async(fn -> for _ <- 1..200, do: Connection.pick_channel(channel) end)
+        end
+
+      {:ok, _} = Connection.disconnect(channel)
+
+      for result <- Enum.flat_map(pickers, &Task.await/1) do
+        assert match?({:ok, %Channel{}}, result) or result == {:error, :no_connection}
+      end
+
+      assert {:error, :no_connection} = Connection.pick_channel(channel)
+    end
+  end
+
+  describe "resource leaks over repeated connect/disconnect" do
+    test "no persistent_term entries or LB tables are left behind", %{
+      target: target,
+      adapter: adapter
+    } do
+      tables_before = length(:ets.all())
+      entries_before = connection_pt_count()
+
+      for lb_policy <- [:pick_first, :round_robin], _ <- 1..250 do
+        {:ok, channel} =
+          Connection.connect(target, adapter: adapter, name: make_ref(), lb_policy: lb_policy)
+
+        {:ok, _} = Connection.disconnect(channel)
+      end
+
+      assert connection_pt_count() == entries_before
+
+      # disconnect/1 replies before the process exits, so the last few
+      # tables may still be alive at this point.
+      assert length(:ets.all()) - tables_before <= 5
+    end
+  end
+
   describe "connect/2 - distributed named channels" do
     test "named channels do not conflict across connected nodes" do
       {:ok, _, port} = GRPC.Server.start(FeatureServer, 0)
@@ -126,6 +246,15 @@ defmodule GRPC.Client.ConnectionTest do
       assert {:ok, %Channel{ref: ^ref}} =
                @peer.call(peer2, Connection, :connect, [target, [name: ref]])
     end
+  end
+
+  defp connection_pt_count do
+    Enum.count(:persistent_term.get(), &match?({{Connection, _}, _}, &1))
+  end
+
+  defp lb_tid(ref) do
+    %{lb_state: %{tid: tid}} = :sys.get_state(whereis_name(ref))
+    tid
   end
 
   defp start_peer do
