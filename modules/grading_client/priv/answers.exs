@@ -14,11 +14,18 @@ end
 owasp_questions = [
   %{
     question_id: 1,
-    answer: "A",
-    help_text: "A"
+    answer: :entry_granted_op2,
+    help_text:
+      "Uncomment exactly one function call. MD5 is a fast, unsalted hash that is no longer considered safe for passwords - revisit the Cryptographic Failures prevention list for better options."
+  },
+  %{
+    question_id: 2,
+    answer: :plug,
+    help_text:
+      "Check the version requirements in the setup cell at the top of this notebook. One package is locked to a release line that reached end-of-life years ago and has published security advisories."
   }
 ]
 
 List.flatten([
-  to_answers.(OWASP, owasp_questions)
+  to_answers.(2, owasp_questions)
 ])
