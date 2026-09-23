@@ -330,6 +330,30 @@ defmodule Livebook.Utils do
     end
   end
 
+  @doc ~S"""
+  Quotes the given string, so that it is interpreted literally as a
+  single argument by POSIX-compatible shells.
+
+  ## Examples
+
+      iex> Livebook.Utils.shell_quote("KEY=value")
+      "'KEY=value'"
+
+      iex> Livebook.Utils.shell_quote("")
+      "''"
+
+      iex> Livebook.Utils.shell_quote("KEY=\"$(whoami)\" `id` \\ $HOME")
+      "'KEY=\"$(whoami)\" `id` \\ $HOME'"
+
+      iex> Livebook.Utils.shell_quote("it's")
+      "'it'\\''s'"
+
+  """
+  @spec shell_quote(String.t()) :: String.t()
+  def shell_quote(string) do
+    "'" <> String.replace(string, "'", "'\\''") <> "'"
+  end
+
   @doc """
   Changes the first letter in the given string to upper case.
 
