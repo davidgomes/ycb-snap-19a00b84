@@ -222,6 +222,23 @@ defmodule PetalComponents.TableTest do
     assert html =~ "pc-table__sort-icon--active"
   end
 
+  test "a column's header renders custom content in place of the label" do
+    assigns = %{}
+
+    html =
+      rendered_to_string(~H"""
+      <.table rows={[%{n: 1}]}>
+        <:col :let={r} label="" header={Phoenix.HTML.raw(~s(<input type="checkbox" data-all />))}>
+          {r.n}
+        </:col>
+        <:col :let={r} label="N">{r.n}</:col>
+      </.table>
+      """)
+
+    assert [_] = html |> parse_html() |> LazyHTML.query("th input[data-all]") |> Enum.to_list()
+    assert html =~ ~r{<th[^>]*>\s*N\s*</th>}
+  end
+
   test "density, striped and sticky header classes" do
     assigns = %{}
 
