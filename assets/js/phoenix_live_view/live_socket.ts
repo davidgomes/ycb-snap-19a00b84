@@ -1501,6 +1501,15 @@ export default class LiveSocket {
           return;
         }
 
+        const navigateEvent = new CustomEvent("phx:navigate-start", {
+          bubbles: true,
+          cancelable: true,
+          detail: { href, patch: type === "patch", target, originalEvent: e },
+        });
+        if (!window.dispatchEvent(navigateEvent)) {
+          return;
+        }
+
         this.requestDOMUpdate(() => {
           if (type === "patch") {
             this.pushHistoryPatch(e, href, linkState, target);

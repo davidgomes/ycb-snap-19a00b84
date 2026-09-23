@@ -224,3 +224,16 @@ A lower level `phx:navigate` event is also triggered any time the browser's URL 
 
 For navigation-aware logic, prefer `phx:navigate` over hook callbacks like `updated()`,
 as hooks may fire before `window.location` is updated.
+
+Before a live navigation triggered by clicking a `<.link navigate={...}>` or `<.link patch={...}>`
+starts, a cancelable `phx:navigate-start` event is dispatched on `window`. Its `detail` contains
+`href`, `patch`, `target` (the clicked link) and `originalEvent`. Calling `preventDefault()` on
+this event cancels the navigation, for example to warn about unsaved changes:
+
+```javascript
+window.addEventListener("phx:navigate-start", (e) => {
+  if (hasUnsavedChanges() && !confirm("Discard unsaved changes?")) {
+    e.preventDefault()
+  }
+})
+```
