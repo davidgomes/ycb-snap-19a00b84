@@ -85,6 +85,25 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsageTest do
       assert issues == []
     end
 
+    test "returns no issues when worker uses other named state groups" do
+      for group <- [:incomplete, :scheduled, :successful] do
+        workers = [
+          %{
+            module: MyApp.Workers.NamedGroupWorker,
+            file: "lib/my_app/workers/named_group_worker.ex",
+            line: 1,
+            queue: :default,
+            unique: [fields: [:args], states: group],
+            max_attempts: nil
+          }
+        ]
+
+        context = %{workers: workers}
+
+        assert StateGroupUsage.run(context) == [], "expected no issues for #{group}"
+      end
+    end
+
     test "returns no issues when worker has no unique config" do
       workers = [
         %{
