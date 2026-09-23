@@ -120,10 +120,8 @@ defmodule ErrorTracker.Web.Layouts do
   end
 
   defp navbar_item_class do
-    [
-      "whitespace-nowrap flex-0 block py-2 px-3 rounded-lg md:border-0",
-      "text-gray-700 hover:text-gray-900 hover:bg-gray-200 md:hover:bg-transparent md:hover:text-sky-600",
+    "whitespace-nowrap flex-0 block py-2 px-3 rounded-lg md:border-0 " <>
+      "text-gray-700 hover:text-gray-900 hover:bg-gray-200 md:hover:bg-transparent md:hover:text-sky-600 " <>
       "dark:text-white dark:hover:text-white dark:hover:bg-gray-700 md:dark:hover:bg-transparent md:dark:hover:text-sky-500"
-    ]
   end
 end
