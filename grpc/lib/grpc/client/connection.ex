@@ -20,7 +20,8 @@ defmodule GRPC.Client.Connection do
   * The target string is resolved using a [Resolver](GRPC.Client.Resolver).
   * Depending on the target and service config, a load-balancing module is chosen
     (e.g. `PickFirst`, `RoundRobin`).
-  * The orchestrator periodically refreshes the LB decision to adapt to changes.
+  * Healthy channels are published in a shared ETS table. Each request picks
+    from that table, so round-robin advances per call instead of on a timer.
 
   ## Target syntax
 
@@ -70,7 +71,8 @@ defmodule GRPC.Client.Connection do
 
   ## Notes
 
-    * The orchestrator refreshes the LB pick every 15 seconds.
+    * Load-balancing state lives in ETS (`GRPC.Client.LoadBalancing`). Picks do
+      not write `persistent_term`.
   """
   use GenServer
   alias GRPC.Channel
@@ -79,7 +81,7 @@ defmodule GRPC.Client.Connection do
 
   @insecure_scheme "http"
   @secure_scheme "https"
-  @refresh_interval 15_000
+  @lb_table GRPC.Client.LoadBalancing
   @default_resolve_interval 30_000
   @default_max_resolve_interval 300_000
   @default_min_resolve_interval 5_000
@@ -121,15 +123,7 @@ defmodule GRPC.Client.Connection do
   @impl GenServer
   def init(%__MODULE__{} = state) do
     Process.flag(:trap_exit, true)
-
-    # only now persist the chosen channel (which should already have adapter_payload
-    # because build_initial_state connected real channels and set virtual_channel)
-    :persistent_term.put(
-      {__MODULE__, :lb_state, state.virtual_channel.ref},
-      state.virtual_channel
-    )
-
-    Process.send_after(self(), :refresh, @refresh_interval)
+    publish_lb(state)
 
     state =
       if function_exported?(state.resolver, :init, 2) do
@@ -244,13 +238,24 @@ defmodule GRPC.Client.Connection do
   """
   @spec pick_channel(Channel.t(), keyword()) :: {:ok, Channel.t()} | {:error, term()}
   def pick_channel(%Channel{ref: ref} = _channel, _opts \\ []) do
-    case :persistent_term.get({__MODULE__, :lb_state, ref}, nil) do
-      nil ->
-        {:error, :no_connection}
+    case :ets.lookup(@lb_table, ref) do
+      [{^ref, :round_robin, channels}] ->
+        n = tuple_size(channels)
 
-      %Channel{} = channel ->
-        {:ok, channel}
+        idx =
+          :ets.update_counter(@lb_table, {:rr, ref}, {2, 1, n, 1}, {{:rr, ref}, 0})
+
+        {:ok, elem(channels, idx - 1)}
+
+      [{^ref, _policy, channels}] when tuple_size(channels) > 0 ->
+        {:ok, elem(channels, 0)}
+
+      _ ->
+        {:error, :no_connection}
     end
+  rescue
+    ArgumentError ->
+      {:error, :no_connection}
   end
 
   @doc """
@@ -280,7 +285,7 @@ defmodule GRPC.Client.Connection do
     end
 
     resp = {:ok, %Channel{channel | adapter_payload: %{conn_pid: nil}}}
-    :persistent_term.erase({__MODULE__, :lb_state, channel.ref})
+    delete_lb(channel.ref)
 
     if Map.has_key?(state, :real_channels) do
       Enum.map(state.real_channels, fn
@@ -301,34 +306,8 @@ defmodule GRPC.Client.Connection do
   end
 
   @impl GenServer
-  def handle_info(
-        :refresh,
-        %{lb_mod: lb_mod, lb_state: lb_state, real_channels: channels, virtual_channel: vc} =
-          state
-      )
-      when not is_nil(lb_mod) do
-    {:ok, {prefer_host, prefer_port}, new_lb_state} = lb_mod.pick(lb_state)
-
-    channel_key = build_address_key(prefer_host, prefer_port)
-
-    case Map.get(channels, channel_key) do
-      {:connected, %Channel{} = picked_channel} ->
-        :persistent_term.put({__MODULE__, :lb_state, vc.ref}, picked_channel)
-
-        Process.send_after(self(), :refresh, @refresh_interval)
-        {:noreply, %{state | lb_state: new_lb_state, virtual_channel: picked_channel}}
-
-      _nil_or_failed ->
-        # LB picked a channel that is missing or in {:failed, _} state.
-        # Don't update persistent_term — keep serving from the current
-        # virtual_channel until re-resolution provides healthy backends.
-        Logger.warning("LB picked #{channel_key}, but channel is unavailable")
-
-        Process.send_after(self(), :refresh, @refresh_interval)
-        {:noreply, %{state | lb_state: new_lb_state}}
-    end
-  end
-
+  # Picks happen in `pick_channel/2`. A refresh message must not rotate or
+  # republish the selected channel.
   def handle_info(:refresh, state), do: {:noreply, state}
 
   def handle_info({:resolver_update, result}, state) do
@@ -378,7 +357,7 @@ defmodule GRPC.Client.Connection do
 
   @impl GenServer
   def terminate(_reason, %{virtual_channel: %{ref: ref}}) do
-    :persistent_term.erase({__MODULE__, :lb_state, ref})
+    delete_lb(ref)
   rescue
     _ -> :ok
   end
@@ -446,63 +425,62 @@ defmodule GRPC.Client.Connection do
   end
 
   defp rebalance_after_reconcile(new_addresses, real_channels, state) do
-    if state.lb_mod do
-      case state.lb_mod.init(addresses: new_addresses) do
-        {:ok, new_lb_state} ->
-          {:ok, {host, port}, picked_lb_state} = state.lb_mod.pick(new_lb_state)
-          key = build_address_key(host, port)
-
-          case Map.get(real_channels, key) do
-            {:connected, picked_channel} ->
-              maybe_update_persistent_term(state.virtual_channel, picked_channel)
-
-              %{
-                state
-                | real_channels: real_channels,
-                  lb_state: picked_lb_state,
-                  virtual_channel: picked_channel
-              }
-
-            _ ->
-              fallback_to_healthy_channel(state, real_channels, picked_lb_state)
-          end
-
-        {:error, _} ->
-          fallback_to_healthy_channel(state, real_channels, state.lb_state)
+    lb_state =
+      if state.lb_mod do
+        case state.lb_mod.init(addresses: new_addresses) do
+          {:ok, new_lb_state} -> new_lb_state
+          {:error, _} -> state.lb_state
+        end
+      else
+        state.lb_state
       end
-    else
-      fallback_to_healthy_channel(state, real_channels, state.lb_state)
-    end
-  end
 
-  defp fallback_to_healthy_channel(state, real_channels, lb_state) do
-    ref = state.virtual_channel.ref
+    state = %{state | real_channels: real_channels, lb_state: lb_state}
 
-    case Enum.find_value(real_channels, fn {_k, v} -> match?({:connected, _}, v) && v end) do
+    case first_connected(real_channels) do
       {:connected, healthy_channel} ->
-        maybe_update_persistent_term(state.virtual_channel, healthy_channel)
-
-        %{
-          state
-          | real_channels: real_channels,
-            lb_state: lb_state,
-            virtual_channel: healthy_channel
-        }
+        state = %{state | virtual_channel: healthy_channel}
+        publish_lb(state)
+        state
 
       nil ->
         Logger.warning("No healthy channels available after re-resolution")
-        :persistent_term.erase({__MODULE__, :lb_state, ref})
-        %{state | real_channels: real_channels, lb_state: lb_state}
+        delete_lb(state.virtual_channel.ref)
+        state
     end
   end
 
-  defp maybe_update_persistent_term(current_channel, new_channel) do
-    if current_channel != new_channel do
-      :persistent_term.put(
-        {__MODULE__, :lb_state, new_channel.ref},
-        new_channel
-      )
+  defp first_connected(real_channels) do
+    Enum.find_value(real_channels, fn
+      {_k, {:connected, _} = entry} -> entry
+      _ -> nil
+    end)
+  end
+
+  defp publish_lb(%{virtual_channel: %{ref: ref}, real_channels: real_channels, lb_mod: lb_mod}) do
+    channels =
+      real_channels
+      |> Enum.flat_map(fn
+        {_key, {:connected, ch}} -> [ch]
+        _ -> []
+      end)
+      |> List.to_tuple()
+
+    if tuple_size(channels) == 0 do
+      delete_lb(ref)
+    else
+      policy =
+        if lb_mod == GRPC.Client.LoadBalancing.RoundRobin, do: :round_robin, else: :pick_first
+
+      :ets.insert(@lb_table, {ref, policy, channels})
     end
+  end
+
+  defp delete_lb(ref) do
+    :ets.delete(@lb_table, ref)
+    :ets.delete(@lb_table, {:rr, ref})
+  rescue
+    ArgumentError -> :ok
   end
 
   defp channel_alive?({:connected, %{adapter_payload: %{conn_pid: pid}}}) when is_pid(pid) do

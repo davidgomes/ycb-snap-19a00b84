@@ -404,6 +404,32 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
+  describe "per-request round robin" do
+    test "successive picks rotate across healthy backends", ctx do
+      {:ok, channel} =
+        connect_with_resolver(
+          ctx.ref,
+          ctx.resolver,
+          ctx.adapter,
+          [
+            %{address: "10.0.0.1", port: 50051},
+            %{address: "10.0.0.2", port: 50051}
+          ],
+          lb_policy: :round_robin
+        )
+
+      assert {:ok, first} = Connection.pick_channel(channel)
+      assert {:ok, second} = Connection.pick_channel(channel)
+      assert {:ok, third} = Connection.pick_channel(channel)
+
+      assert first.host == "10.0.0.1"
+      assert second.host == "10.0.0.2"
+      assert third.host == "10.0.0.1"
+
+      disconnect_and_wait(channel)
+    end
+  end
+
   describe "pick_channel stability during re-resolution" do
     test "pick_channel continues to work while addresses change", ctx do
       {:ok, channel} =
@@ -846,7 +872,7 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "stale persistent_term prevention" do
+  describe "stale LB entry prevention" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.99"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Enhancements
+
+  * Client load balancing is stored in ETS and a backend is chosen on every request. Round-robin no longer rotates on a timer, and `GRPC.Client.Connection` no longer writes `persistent_term`.
+
 ## v1.0.0 (2026-06-15)
 
 ### Enhancements
