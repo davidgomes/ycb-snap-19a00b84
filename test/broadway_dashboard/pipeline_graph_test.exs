@@ -115,5 +115,56 @@ defmodule BroadwayDashboard.PipelineGraphTest do
 
       assert batch_proc_s3 == :"#{broadway}.Broadway.BatchProcessor_s3_0"
     end
+
+    test "with batchers when pipeline is registered using via" do
+      registry = PipelineGraphTestRegistry
+      start_supervised!({Registry, keys: :unique, name: registry})
+      broadway = {:via, Registry, {registry, new_unique_name()}}
+
+      broadway_opts = [
+        name: broadway,
+        producer: [module: {Broadway.DummyProducer, []}],
+        processors: [default: [concurrency: 2]],
+        batchers: [default: [concurrency: 2], s3: [concurrency: 1]]
+      ]
+
+      start_supervised!(%{
+        id: UsesRegistry,
+        start: {Broadway, :start_link, [UsesRegistry, broadway_opts]}
+      })
+
+      topology = Broadway.topology(broadway)
+      counters = Counters.build(topology)
+
+      topology_workload = Counters.topology_workload(counters, topology)
+
+      assert [
+               [%{id: prod_id, children: [proc_0, proc_1], data: "prod_0"}],
+               [
+                 %{id: proc_0, children: [default_batcher, s3_batcher]},
+                 %{id: proc_1, children: [default_batcher, s3_batcher]}
+               ],
+               [
+                 %{id: default_batcher, children: [batch_proc_0, batch_proc_1]},
+                 %{id: s3_batcher, children: [batch_proc_s3]}
+               ],
+               [
+                 %{id: batch_proc_0, children: []},
+                 %{id: batch_proc_1, children: []},
+                 %{id: batch_proc_s3, children: []}
+               ]
+             ] = PipelineGraph.build_layers(topology_workload)
+
+      assert prod_id == {UsesRegistry.process_name(broadway, "Producer"), 0}
+      assert proc_0 == {UsesRegistry.process_name(broadway, "Processor_default"), 0}
+      assert proc_1 == {UsesRegistry.process_name(broadway, "Processor_default"), 1}
+
+      assert default_batcher == UsesRegistry.process_name(broadway, "Batcher_default")
+      assert s3_batcher == UsesRegistry.process_name(broadway, "Batcher_s3")
+
+      assert batch_proc_0 == {UsesRegistry.process_name(broadway, "BatchProcessor_default"), 0}
+      assert batch_proc_1 == {UsesRegistry.process_name(broadway, "BatchProcessor_default"), 1}
+      assert batch_proc_s3 == {UsesRegistry.process_name(broadway, "BatchProcessor_s3"), 0}
+    end
   end
 end
