@@ -101,7 +101,7 @@ Notable CWEs included are CWE-259: Use of Hard-coded Password, CWE-327: Broken o
 
 **Which of the following functions is performing password comparisons in the most secure way?**
 
-_Please uncomment the function call that you believe is correct._
+_Please uncomment the function call that you believe is correct, then run the cell to check your answer._
 
 ```elixir
 defmodule PasswordCompare do
@@ -122,8 +122,11 @@ end
 
 # DO NOT CHANGE CODE ABOVE THIS LINE =========================
 
-# PasswordCompare.option_one("users_password", md5_hash)
-# PasswordCompare.option_two("users_password", bcrypt_salted_hash)
+# answer = PasswordCompare.option_one("users_password", md5_hash)
+# answer = PasswordCompare.option_two("users_password", bcrypt_salted_hash)
+
+# DO NOT CHANGE CODE BELOW THIS LINE =========================
+GradingClient.check_answer(answer, OWASP, 1)
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -250,13 +253,17 @@ _Please change the atom below to the name of the vulnerable package installed in
 
 _HINT: Installed dependencies can be found at the very top, it was the very first cell you ran._
 
+_After updating the package, reconnect the runtime and run the setup cell again before running the cell below to check your answer._
+
 ```elixir
 # CHANGE ME
 vulnerable_dependency = :vulnerable_dependency
 
 # DO NOT CHANGE CODE BELOW THIS LINE ============================
-Application.spec(vulnerable_dependency)[:vsn] |> List.to_string() |> IO.puts()
-IO.puts(vulnerable_dependency)
+installed_version = Application.spec(vulnerable_dependency, :vsn)
+IO.puts("#{vulnerable_dependency}: #{installed_version || "not installed"}")
+
+GradingClient.check_answer({vulnerable_dependency, installed_version}, OWASP, 2)
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
