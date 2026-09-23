@@ -53,6 +53,14 @@ defmodule Oban.Web.ResolverTest do
     end
   end
 
+  describe "format_signal/2" do
+    test "decoding and inspecting the signal payload" do
+      signal = encode_recorded(%{decision: "approved"})
+
+      assert Resolver.format_signal(signal, %Oban.Job{}) =~ ~s(decision: "approved")
+    end
+  end
+
   defp encode_recorded(data) do
     data
     |> :erlang.term_to_binary()
