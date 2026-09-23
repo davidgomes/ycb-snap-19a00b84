@@ -5,7 +5,25 @@ defmodule Warehouse.Components do
   alias Warehouse.Schemas.{Component, Configuration}
 
   @spec number_available(Component.t()) :: integer
-  def number_available(%Component{id: component_id}) do
+  def number_available(%Component{} = component) do
+    component
+    |> available_configurations()
+    |> Enum.map(&configuration_available/1)
+    |> Enum.sum()
+  end
+
+  @doc """
+  Returns every SKU that can fulfill the given component, along with the
+  quantity required per kit and the pickable locations holding those parts.
+  """
+  @spec picking_options(Component.t()) :: [map()]
+  def picking_options(%Component{} = component) do
+    component
+    |> available_configurations()
+    |> Enum.map(&configuration_picking_option/1)
+  end
+
+  defp available_configurations(%Component{id: component_id}) do
     query =
       from c in Configuration,
         join: s in assoc(c, :sku),
@@ -18,10 +36,7 @@ defmodule Warehouse.Components do
         where: l.id not in ^excluded_picking_locations(),
         preload: [sku: {s, parts: {p, location: l}}]
 
-    query
-    |> Repo.all()
-    |> Enum.map(&configuration_available/1)
-    |> Enum.sum()
+    Repo.all(query)
   end
 
   defp excluded_picking_locations() do
@@ -32,5 +47,22 @@ defmodule Warehouse.Components do
     parts
     |> length()
     |> div(quantity)
+  end
+
+  defp configuration_picking_option(%{sku: sku, quantity: quantity} = configuration) do
+    available_locations =
+      sku.parts
+      |> Enum.group_by(& &1.location)
+      |> Enum.map(fn {location, location_parts} ->
+        %{location: location, available_quantity: length(location_parts)}
+      end)
+      |> Enum.sort_by(& &1.available_quantity, :desc)
+
+    %{
+      sku: sku,
+      required_quantity_per_kit: quantity,
+      available_quantity: configuration_available(configuration),
+      available_locations: available_locations
+    }
   end
 end
