@@ -405,6 +405,24 @@ defmodule Canary.PlugsTest do
     expected = Plug.Conn.assign(conn, :authorized, false)
 
     assert authorize_resource(conn, opts) == expected
+
+    # when the resource cannot be found
+    params = %{"id" => "3"}
+
+    conn =
+      conn(
+        %Plug.Conn{
+          private: %{},
+          assigns: %{current_user: nil, canary_action: :show}
+        },
+        :get,
+        "/posts/3",
+        params
+      )
+
+    expected = Plug.Conn.assign(conn, :authorized, false)
+
+    assert authorize_resource(conn, opts) == expected
   end
 
   test "it authorizes the resource correctly when using :id_field option" do

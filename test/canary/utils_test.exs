@@ -106,4 +106,38 @@ defmodule UtilsTest do
       assert conn.assigns[:ok_custom_handler] == true
     end
   end
+
+  describe "non_id_action?/2" do
+    test "returns true for default and additional non-id actions" do
+      assert non_id_action?(:index, [])
+      assert non_id_action?(:new, [])
+      assert non_id_action?(:create, [])
+      assert non_id_action?(:find_by_name, non_id_actions: [:find_by_name])
+      refute non_id_action?(:show, [])
+    end
+
+    test "returns false when the resource is persisted or required" do
+      refute non_id_action?(:index, persisted: true)
+      refute non_id_action?(:new, required: true)
+      refute non_id_action?(:find_by_name, non_id_actions: [:find_by_name], required: true)
+    end
+  end
+
+  describe "get_resource_name/1" do
+    test "infers the name from the model" do
+      assert get_resource_name(model: Post) == :post
+      assert get_resource_name(model: Some.Project.BlogPost) == :blog_post
+    end
+
+    test "uses the :as option" do
+      assert get_resource_name(model: Post, as: :my_post) == :my_post
+    end
+  end
+
+  describe "get_current_user_name/1" do
+    test "uses the :current_user option or defaults to :current_user" do
+      assert get_current_user_name(current_user: :current_member) == :current_member
+      assert get_current_user_name([]) == :current_user
+    end
+  end
 end

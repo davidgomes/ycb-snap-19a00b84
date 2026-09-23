@@ -317,6 +317,96 @@ defmodule Canary.HooksTest do
       assert socket.assigns.authorized == false
     end
 
+    test "authorize_resource loads the resource for id actions when it's not assigned" do
+      uri = "http://localhost/post"
+      metadata = %{hook: :authorize_resource, stage: :handle_params, opts: [model: Post]}
+      socket = build_socket() |> put_assigns(%{current_user: %User{id: 1}})
+
+      assert {:cont, socket} =
+               Canary.Hooks.handle_hook(metadata, [%{"id" => "1"}, uri, socket])
+
+      assert socket.assigns.authorized == true
+      refute Map.has_key?(socket.assigns, :post)
+
+      socket = build_socket() |> put_assigns(%{current_user: %User{id: 1}})
+
+      assert {:halt, socket} =
+               Canary.Hooks.handle_hook(metadata, [%{"id" => "2"}, uri, socket])
+
+      assert socket.assigns.authorized == false
+
+      socket = build_socket() |> put_assigns(%{current_user: %User{id: 1}})
+
+      assert {:halt, socket} =
+               Canary.Hooks.handle_hook(metadata, [%{"id" => "13"}, uri, socket])
+
+      assert socket.assigns.authorized == false
+    end
+
+    test "authorize_resource accepts :non_id_actions to authorize by the model name" do
+      socket = build_socket() |> put_assigns(%{current_user: %User{id: 1}})
+
+      metadata = %{
+        hook: :authorize_resource,
+        stage: :handle_event,
+        opts: [model: Post, non_id_actions: [:other_action]]
+      }
+
+      assert {:cont, socket} =
+               Canary.Hooks.handle_hook(metadata, ["other_action", %{}, socket])
+
+      assert socket.assigns.authorized == true
+
+      metadata = %{hook: :authorize_resource, stage: :handle_event, opts: [model: Post]}
+
+      assert {:halt, socket} =
+               Canary.Hooks.handle_hook(metadata, ["other_action", %{}, socket])
+
+      assert socket.assigns.authorized == false
+    end
+
+    test "load_resource skips non-id actions unless the resource is required" do
+      uri = "http://localhost/post"
+      params = %{"id" => "1"}
+      metadata = %{hook: :load_resource, stage: :handle_params, opts: [model: Post]}
+
+      assert {:cont, socket} =
+               Canary.Hooks.handle_hook(metadata, [params, uri, build_socket(:new)])
+
+      refute Map.has_key?(socket.assigns, :post)
+
+      socket = build_socket(:index) |> put_assigns(%{post: %Post{id: 2}})
+
+      assert {:cont, socket} =
+               Canary.Hooks.handle_hook(metadata, [params, uri, socket])
+
+      assert socket.assigns.post == %Post{id: 2}
+
+      metadata = %{hook: :load_resource, stage: :handle_params, opts: [model: Post, required: true]}
+
+      assert {:cont, socket} =
+               Canary.Hooks.handle_hook(metadata, [params, uri, build_socket(:new)])
+
+      assert socket.assigns.post == %Post{id: 1}
+
+      assert {:halt, socket} =
+               Canary.Hooks.handle_hook(metadata, [%{"id" => "13"}, uri, build_socket(:new)])
+
+      assert socket.assigns.post == nil
+    end
+
+    test "load_and_authorize_resource purges the resource when unauthorized" do
+      uri = "http://localhost/post"
+      metadata = %{hook: :load_and_authorize_resource, stage: :handle_params, opts: [model: Post]}
+      socket = build_socket() |> put_assigns(%{current_user: %User{id: 1}})
+
+      assert {:halt, socket} =
+               Canary.Hooks.handle_hook(metadata, [%{"id" => "2"}, uri, socket])
+
+      assert socket.assigns.post == nil
+      assert socket.assigns.authorized == false
+    end
+
     test "emits a warning when the hook is not defined" do
       metadata = %{hook: :invalid_hook, stage: :handle_params, opts: [model: Post]}
 
