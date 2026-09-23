@@ -185,6 +185,13 @@ Once scheduled, the dashboard displays a **live remaining time countdown** (e.g.
 
 ---
 
+## 📜 Runs History
+
+Each chore has a **Runs History** tab listing the most recent finished jobs (completed, discarded, retryable, and cancelled). Columns can be sorted by job id, state, start time, or finish time. Opening **Details** loads that run into its own tab, including arguments and any recorded errors.
+
+
+---
+
 ## 🛠️ Field Configuration
 
 ### Supported Types
