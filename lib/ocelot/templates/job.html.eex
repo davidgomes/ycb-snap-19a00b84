@@ -1,0 +1,33 @@
+<p><a href="<%= path(@base, "/") %>">&larr; All jobs</a></p>
+
+<h1>Job <%= @job.id %> <span class="badge <%= @job.state %>"><%= @job.state %></span></h1>
+
+<dl>
+  <dt>Worker</dt><dd><%= h(@job.worker) %></dd>
+  <dt>Queue</dt><dd><a href="<%= path(@base, "/", queue: @job.queue) %>"><%= h(@job.queue) %></a></dd>
+  <dt>Attempt</dt><dd><%= @job.attempt %>/<%= @job.max_attempts %></dd>
+  <dt>Priority</dt><dd><%= @job.priority %></dd>
+  <dt>Tags</dt><dd><%= h(Enum.join(@job.tags, ", ")) %></dd>
+  <dt>Inserted at</dt><dd><%= datetime(@job.inserted_at) %></dd>
+  <dt>Scheduled at</dt><dd><%= datetime(@job.scheduled_at) %></dd>
+  <dt>Attempted at</dt><dd><%= datetime(@job.attempted_at) %></dd>
+  <dt>Completed at</dt><dd><%= datetime(@job.completed_at) %></dd>
+  <dt>Cancelled at</dt><dd><%= datetime(@job.cancelled_at) %></dd>
+  <dt>Discarded at</dt><dd><%= datetime(@job.discarded_at) %></dd>
+</dl>
+
+<h2>Args</h2>
+<pre><%= h(json(@job.args, pretty: true)) %></pre>
+
+<h2>Meta</h2>
+<pre><%= h(json(@job.meta, pretty: true)) %></pre>
+
+<h2>Errors</h2>
+<%= if @job.errors == [] do %>
+  <p class="empty">No errors.</p>
+<% else %>
+  <%= for error <- Enum.reverse(@job.errors) do %>
+    <p>Attempt <%= error["attempt"] %> at <%= h(error["at"]) %></p>
+    <pre><%= h(error["error"]) %></pre>
+  <% end %>
+<% end %>

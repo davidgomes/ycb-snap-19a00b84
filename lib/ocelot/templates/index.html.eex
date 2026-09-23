@@ -1,0 +1,62 @@
+<h1>Jobs</h1>
+
+<nav class="states">
+  <a href="<%= path(@base, "/", queue: @queue) %>" class="<%= if is_nil(@state), do: "active" %>">
+    <span class="count"><%= @counts |> Enum.map(&elem(&1, 1)) |> Enum.sum() %></span>
+    <span class="label">all</span>
+  </a>
+  <%= for {state, count} <- @counts do %>
+    <a href="<%= path(@base, "/", state: state, queue: @queue) %>" class="<%= if state == @state, do: "active" %>">
+      <span class="count"><%= count %></span>
+      <span class="label"><%= state %></span>
+    </a>
+  <% end %>
+</nav>
+
+<form class="filters" method="get" action="<%= path(@base, "/") %>">
+  <%= if @state do %><input type="hidden" name="state" value="<%= h(@state) %>"><% end %>
+  <label for="queue">Queue</label>
+  <select id="queue" name="queue" onchange="this.form.submit()">
+    <option value="">All queues</option>
+    <%= for queue <- @queues do %>
+      <option value="<%= h(queue) %>"<%= if queue == @queue, do: " selected" %>><%= h(queue) %></option>
+    <% end %>
+  </select>
+  <noscript><button type="submit">Filter</button></noscript>
+</form>
+
+<%= if @jobs == [] do %>
+  <p class="empty">No jobs found.</p>
+<% else %>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Worker</th>
+        <th>Queue</th>
+        <th>State</th>
+        <th>Attempt</th>
+        <th>Args</th>
+        <th>Scheduled at</th>
+      </tr>
+    </thead>
+    <tbody>
+      <%= for job <- @jobs do %>
+        <tr>
+          <td><a href="<%= path(@base, "/jobs/#{job.id}") %>"><%= job.id %></a></td>
+          <td><%= h(job.worker) %></td>
+          <td><%= h(job.queue) %></td>
+          <td><span class="badge <%= job.state %>"><%= job.state %></span></td>
+          <td><%= job.attempt %>/<%= job.max_attempts %></td>
+          <td class="args" title="<%= h(json(job.args)) %>"><%= h(json(job.args)) %></td>
+          <td><%= datetime(job.scheduled_at) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
+
+<div class="pagination">
+  <span><%= if @page > 1 do %><a href="<%= path(@base, "/", state: @state, queue: @queue, page: @page - 1) %>">&larr; Newer</a><% end %></span>
+  <span><%= if @more? do %><a href="<%= path(@base, "/", state: @state, queue: @queue, page: @page + 1) %>">Older &rarr;</a><% end %></span>
+</div>
