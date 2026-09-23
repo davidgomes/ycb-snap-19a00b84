@@ -417,6 +417,30 @@ defmodule Phoenix.LiveView.UploadConfigTest do
     end
   end
 
+  describe "fail_entry/3" do
+    test "retains the entry with the error and disallows registering it again" do
+      socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any)
+      client_entry = build_client_entry(:avatar)
+      ref = client_entry["ref"]
+
+      {:ok, config} = UploadConfig.put_entries(socket.assigns.uploads.avatar, [client_entry])
+      {:ok, config} = UploadConfig.register_entry_upload(config, self(), ref)
+
+      config = UploadConfig.fail_entry(config, ref, {:writer_failure, :boom})
+      config = UploadConfig.fail_entry(config, ref, {:writer_failure, :boom})
+      [entry] = config.entries
+
+      assert config.errors == [{ref, {:writer_failure, :boom}}]
+      assert UploadConfig.entry_pid(config, entry) == nil
+      assert UploadConfig.register_entry_upload(config, self(), ref) == {:error, :disallowed}
+      assert UploadConfig.unregister_completed_entry(config, ref) == config
+
+      config = UploadConfig.cancel_entry(config, entry)
+      assert config.entries == []
+      assert config.errors == []
+    end
+  end
+
   test "supports binary upload name" do
     assert LiveView.allow_upload(build_socket(), "avatar", accept: ~w(image/png .jpeg))
   end
