@@ -3,6 +3,11 @@
 
 #### Fixed
 
+- **`data_table` filter and columns menus live in the page.** They
+  were top-layer panels, so `PetalPopover` kept them `position: fixed`
+  and chased the viewport (scroll, resize, and the mobile keyboard).
+  They now use the CSS-anchored popover, which scrolls with the
+  toolbar.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to
