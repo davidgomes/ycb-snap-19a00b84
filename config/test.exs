@@ -35,3 +35,9 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+# Manual mode keeps the Basic engine so retry/cancel update rows, and it
+# disables queues so tests don't race the sandbox.
+config :free_oban_ui, Oban,
+  repo: FreeObanUi.Repo,
+  testing: :manual
