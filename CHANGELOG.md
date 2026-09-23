@@ -17,6 +17,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Page through `NULL` values with cursor pagination. The cursor comparison uses
+  the same null position as the order clause, including the explicit
+  `*_nulls_first` and `*_nulls_last` directions and the default of PostgreSQL
+  (nulls last when ascending), SQLite and MySQL (nulls first when ascending).
 - Build the `:=~`, `:ilike`, `:not_ilike`, `:ilike_and`, `:ilike_or`,
   `:starts_with` and `:ends_with` filters with `LIKE` on databases that have no
   `ILIKE`, such as SQLite and MySQL, instead of raising an `Ecto.QueryError`.

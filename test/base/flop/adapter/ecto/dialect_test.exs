@@ -34,10 +34,20 @@ defmodule Flop.Adapter.Ecto.DialectTest do
                %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
 
       assert Dialect.new(MyXQLRepo) ==
-               %Dialect{arrays?: false, ilike?: false, nulls_ordering?: false}
+               %Dialect{
+                 arrays?: false,
+                 ilike?: false,
+                 nulls_ordering?: false,
+                 asc_nulls_last?: false
+               }
 
       assert Dialect.new(SQLite3Repo) ==
-               %Dialect{arrays?: true, ilike?: false, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: false,
+                 nulls_ordering?: true,
+                 asc_nulls_last?: false
+               }
     end
 
     test "returns the defaults for an unknown adapter" do
@@ -51,7 +61,12 @@ defmodule Flop.Adapter.Ecto.DialectTest do
 
     test "defaults to leaving the query unmodified" do
       assert %Dialect{} ==
-               %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: true,
+                 nulls_ordering?: true,
+                 asc_nulls_last?: true
+               }
     end
   end
 
@@ -148,6 +163,57 @@ defmodule Flop.Adapter.Ecto.DialectTest do
     |> String.trim_trailing(">")
   end
 
+  describe "nulls_last?/2" do
+    test "follows the adapter default for plain directions" do
+      assert Dialect.nulls_last?(Dialect.new(PostgresRepo), :asc)
+      refute Dialect.nulls_last?(Dialect.new(PostgresRepo), :desc)
+      refute Dialect.nulls_last?(Dialect.new(SQLite3Repo), :asc)
+      assert Dialect.nulls_last?(Dialect.new(SQLite3Repo), :desc)
+      refute Dialect.nulls_last?(Dialect.new(MyXQLRepo), :asc)
+      assert Dialect.nulls_last?(Dialect.new(MyXQLRepo), :desc)
+    end
+
+    test "uses the named null position" do
+      for dialect <- [Dialect.new(PostgresRepo), Dialect.new(MyXQLRepo)] do
+        assert Dialect.nulls_last?(dialect, :asc_nulls_last)
+        assert Dialect.nulls_last?(dialect, :desc_nulls_last)
+        refute Dialect.nulls_last?(dialect, :asc_nulls_first)
+        refute Dialect.nulls_last?(dialect, :desc_nulls_first)
+      end
+    end
+  end
+
+  describe "the query built for a cursor on a nullable column" do
+    test "includes nulls that sort after a value" do
+      assert cursor_where(PostgresRepo, [:asc, :asc], %{age: 7, name: "Ada"}) =~
+               "p0.age > type(^7, p0.age) or is_nil(p0.age)"
+
+      assert cursor_where(MyXQLRepo, [:desc, :asc], %{age: 7, name: "Ada"}) =~
+               "p0.age < type(^7, p0.age) or is_nil(p0.age)"
+    end
+
+    test "leaves nulls out when they sort before a value" do
+      where = cursor_where(SQLite3Repo, [:asc, :asc], %{age: 7, name: "Ada"})
+      assert where =~ "p0.age > type(^7, p0.age)"
+      refute where =~ "is_nil(p0.age)"
+    end
+
+    test "continues inside the null group when the cursor value is nil" do
+      where =
+        cursor_where(PostgresRepo, [:asc_nulls_last, :asc], %{age: nil, name: "Cy"})
+
+      assert where =~ "is_nil(p0.age) and p0.name >"
+      refute where =~ "not is_nil(p0.age)"
+    end
+
+    test "steps past the null group when nulls sort first" do
+      where =
+        cursor_where(PostgresRepo, [:asc_nulls_first, :asc], %{age: nil, name: "Cy"})
+
+      assert where =~ "not is_nil(p0.age) or p0.name >"
+    end
+  end
+
   describe "the query built for the array operators" do
     test "uses the array itself on an adapter that has one" do
       assert where_clause(PostgresRepo, :tags, :contains, "pear") ==
@@ -182,6 +248,19 @@ defmodule Flop.Adapter.Ecto.DialectTest do
       assert Dialect.dump_array_element("pear", nil) == "pear"
       assert Dialect.dump_array_element("pear", {:array, :integer}) == "pear"
     end
+  end
+
+  defp cursor_where(repo, directions, cursor) do
+    flop = %Flop{
+      first: 2,
+      after: Flop.Cursor.encode(cursor),
+      order_by: [:age, :name],
+      order_directions: directions
+    }
+
+    MyApp.Pet
+    |> Flop.query(flop, for: MyApp.Pet, repo: repo)
+    |> inspect()
   end
 
   defp where_clause(repo) do

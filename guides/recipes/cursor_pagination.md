@@ -109,30 +109,30 @@ of replacing it. Replacing the order could drop the field that made it unique.
 
 ## Nullable fields
 
-Ordering by a nullable column loses the rows where it is `NULL`.
+A cursor comparison follows the same null position as the order clause. `NULL`
+never compares as greater or smaller than a value, so Flop adds an explicit
+null check wherever nulls sort after the cursor value.
+
+With the default ascending order, PostgreSQL sorts nulls last and MySQL and
+SQLite sort them first. The `:asc_nulls_first`, `:asc_nulls_last`,
+`:desc_nulls_first` and `:desc_nulls_last` directions name the position, and
+the cursor uses that position even when the database emulates it.
 
 ```elixir
-%{first: 2, order_by: [:age, :id]}
+%{first: 2, order_by: [:age, :id], order_directions: [:asc_nulls_last, :asc]}
 ```
 
 | page | rows |
 |---|---|
 | 1 | Bo 1, Ada 3 |
 | 2 | Ada 5, Ada 7 |
-| 3 | — |
+| 3 | Cy, Dee |
 
-Cy and Dee never appear, and page 3 reports `has_next_page?: false`. PostgreSQL
-sorts them last, but the cursor comparison is `age > 7`, and no comparison with
-`NULL` is ever true. A second order field does not help, because the `NULL` is
-in the first one.
+The page after Ada 7 asks for `age > 7` or `age IS NULL`. The page after Cy
+stays inside the nulls and uses `id` to tell Cy and Dee apart.
 
-Until Flop builds null-aware predicates, order by a column that has no `NULL`,
-or sort on a computed field that substitutes a value, as in the [computed fields
-recipe](computed_and_embedded_fields.md):
-
-```sql
-SELECT coalesce(age, -1) AS age_sortable
-```
+The order still has to be unique. Two rows with the same nulls and the same
+remaining order values cannot be told apart.
 
 ## Reading the cursor value
 

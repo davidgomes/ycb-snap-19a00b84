@@ -12,6 +12,7 @@ defmodule Flop.Adapter.Ecto.Dialect do
   # ascending and last descending, so two of the four directions are plain ASC
   # and DESC, and the other two need `field IS NULL` as an extra sort key.
   @without_nulls_ordering [Ecto.Adapters.MyXQL]
+  @asc_nulls_first [Ecto.Adapters.MyXQL, Ecto.Adapters.SQLite3]
 
   # Ecto's MyXQL adapter can store arrays in JSON columns, but it cannot build
   # array operations. Flop uses JSON_CONTAINS and JSON_LENGTH instead.
@@ -24,10 +25,14 @@ defmodule Flop.Adapter.Ecto.Dialect do
   @type t :: %__MODULE__{
           arrays?: boolean,
           ilike?: boolean,
-          nulls_ordering?: boolean
+          nulls_ordering?: boolean,
+          asc_nulls_last?: boolean
         }
 
-  defstruct arrays?: true, ilike?: true, nulls_ordering?: true
+  # Postgres treats NULL as larger than every value, so plain ASC sorts nulls
+  # last and plain DESC sorts them first. MySQL and SQLite do the opposite.
+  # Explicit `*_nulls_first` / `*_nulls_last` directions are independent of this.
+  defstruct arrays?: true, ilike?: true, nulls_ordering?: true, asc_nulls_last?: true
 
   @nulls_ordering_fallback %{
     asc_nulls_first: {:native, :asc},
@@ -47,9 +52,32 @@ defmodule Flop.Adapter.Ecto.Dialect do
     %__MODULE__{
       arrays?: adapter not in @without_arrays,
       ilike?: adapter not in @without_ilike,
-      nulls_ordering?: adapter not in @without_nulls_ordering
+      nulls_ordering?: adapter not in @without_nulls_ordering,
+      asc_nulls_last?: adapter not in @asc_nulls_first
     }
   end
+
+  @doc """
+  Whether `NULL` sorts after every other value for this direction.
+
+  Plain `:asc` and `:desc` follow the adapter default. The `*_nulls_first` and
+  `*_nulls_last` directions name the position explicitly, including when an
+  adapter emulates it with an `IS NULL` sort key.
+  """
+  @spec nulls_last?(t, atom) :: boolean
+  def nulls_last?(%__MODULE__{}, direction)
+      when direction in [:asc_nulls_last, :desc_nulls_last],
+      do: true
+
+  def nulls_last?(%__MODULE__{}, direction)
+      when direction in [:asc_nulls_first, :desc_nulls_first],
+      do: false
+
+  def nulls_last?(%__MODULE__{asc_nulls_last?: asc_nulls_last?}, :asc),
+    do: asc_nulls_last?
+
+  def nulls_last?(%__MODULE__{asc_nulls_last?: asc_nulls_last?}, :desc),
+    do: not asc_nulls_last?
 
   @doc """
   Dumps a filter value with the element type of an array field.
