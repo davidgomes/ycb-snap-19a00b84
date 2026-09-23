@@ -141,6 +141,15 @@ defmodule ErrorTrackerTest do
 
       assert occurrence.breadcrumbs == ["breadcrumb 1", "breadcrumb 2", "breadcrumb 3"]
     end
+
+    test "keeps muted errors muted when new occurrences are reported" do
+      %Occurrence{error: error} = report_error(fn -> raise "This is a test" end)
+      {:ok, _muted} = ErrorTracker.mute(error)
+
+      %Occurrence{error: error} = report_error(fn -> raise "This is a test" end)
+
+      assert error.muted
+    end
   end
 
   describe inspect(&ErrorTracker.resolve/1) do
@@ -158,6 +167,24 @@ defmodule ErrorTrackerTest do
       {:ok, resolved} = ErrorTracker.resolve(error)
 
       assert {:ok, %Error{status: :unresolved}} = ErrorTracker.unresolve(resolved)
+    end
+  end
+
+  describe inspect(&ErrorTracker.mute/1) do
+    test "marks the error as muted" do
+      %Occurrence{error: error} = report_error(fn -> raise "This is a test" end)
+
+      assert {:ok, %Error{muted: true}} = ErrorTracker.mute(error)
+    end
+  end
+
+  describe inspect(&ErrorTracker.unmute/1) do
+    test "marks the error as unmuted" do
+      %Occurrence{error: error} = report_error(fn -> raise "This is a test" end)
+      # Manually mark the error as muted
+      {:ok, muted} = ErrorTracker.mute(error)
+
+      assert {:ok, %Error{muted: false}} = ErrorTracker.unmute(muted)
     end
   end
 

@@ -180,6 +180,36 @@ defmodule ErrorTracker do
   end
 
   @doc """
+  Mutes an error.
+
+  Occurrences of muted errors are still tracked and stored, but the
+  `[:error_tracker, :occurrence, :new]` Telemetry event is emitted with
+  `muted: true` in its metadata so integrations and notifications can ignore
+  them. Take a look at `ErrorTracker.Telemetry` for more information.
+
+  Muting an error does not change its status.
+  """
+  @spec mute(Error.t()) :: {:ok, Error.t()} | {:error, Ecto.Changeset.t()}
+  def mute(error = %Error{muted: false}) do
+    changeset = Ecto.Changeset.change(error, muted: true)
+
+    Repo.update(changeset)
+  end
+
+  @doc """
+  Unmutes an error.
+
+  Telemetry events for new occurrences of the error will be emitted with
+  `muted: false` again.
+  """
+  @spec unmute(Error.t()) :: {:ok, Error.t()} | {:error, Ecto.Changeset.t()}
+  def unmute(error = %Error{muted: true}) do
+    changeset = Ecto.Changeset.change(error, muted: false)
+
+    Repo.update(changeset)
+  end
+
+  @doc """
   Sets the current process context.
 
   The given context will be merged into the current process context. The given context
@@ -300,8 +330,10 @@ defmodule ErrorTracker do
   end
 
   defp upsert_error!(error, stacktrace, context, breadcrumbs, reason) do
-    existing_status =
-      Repo.one(from e in Error, where: [fingerprint: ^error.fingerprint], select: e.status)
+    status_and_muted_query =
+      from e in Error, where: [fingerprint: ^error.fingerprint], select: {e.status, e.muted}
+
+    {existing_status, muted} = Repo.one(status_and_muted_query) || {nil, false}
 
     {:ok, {error, occurrence}} =
       Repo.transaction(fn ->
@@ -333,6 +365,10 @@ defmodule ErrorTracker do
         {error, occurrence}
       end)
 
+    # The upsert does not overwrite the muted flag of existing errors, but the
+    # returned struct only contains the default value
+    error = %Error{error | muted: muted}
+
     # If the error existed and was marked as resolved before this exception,
     # sent a Telemetry event
     # If it is a new error, sent a Telemetry event
@@ -342,8 +378,8 @@ defmodule ErrorTracker do
       nil -> Telemetry.new_error(error)
     end
 
-    # Always send a new occurrence Telemetry event
-    Telemetry.new_occurrence(occurrence)
+    # Always send a new occurrence Telemetry event, even for muted errors
+    Telemetry.new_occurrence(occurrence, error)
 
     {error, occurrence}
   end
