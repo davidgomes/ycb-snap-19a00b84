@@ -3,6 +3,15 @@
 
 #### Fixed
 
+- **A dropdown menu flips upward when the viewport leaves no room
+  below.** The panel was absolutely positioned under its trigger and
+  kept going, so a menu opened near the bottom of the screen rendered
+  off the page. `PetalDropdown` measures on open and again on scroll
+  and resize while the menu is open: it flips above the trigger when
+  there is more room there, and when neither side can hold the whole
+  menu it caps the height so the items scroll inside the viewport.
+  LiveView.JS still owns open, close, click-away and Escape.
+
 - **`command_dialog` now locks background scroll while the palette is
   open.** A native modal `<dialog>` hands you the top layer, the focus
   trap and Escape, but it does not stop the page underneath from

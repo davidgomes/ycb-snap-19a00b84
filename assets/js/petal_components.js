@@ -5444,6 +5444,113 @@ export const PetalDataTable = {
   },
 };
 
+// Dropdown menu. LiveView.JS owns open/close (toggle, click-away, Escape);
+// this hook only places the panel. Open downward by default; flip above
+// when the viewport has no room below AND more room above. When neither
+// side fits, the winning side's space caps the menu so it scrolls inside
+// the viewport instead of spilling past it. Measured with flip and cap
+// cleared so natural height decides.
+export const PetalDropdown = {
+  mounted() {
+    this.panel = this.el.querySelector(".pc-dropdown__menu-items-wrapper");
+    this.trigger = this.el.querySelector("button");
+    if (!this.panel || !this.trigger) return;
+
+    this.listening = false;
+    this.onReposition = () => {
+      if (this.isOpen()) this.position();
+    };
+    this.observer = new MutationObserver(() => this.sync());
+    this.observe();
+  },
+
+  updated() {
+    this.sync();
+  },
+
+  destroyed() {
+    if (this.observer) this.observer.disconnect();
+    if (this.listening) this.listen(false);
+  },
+
+  observe() {
+    this.observer.observe(this.panel, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+  },
+
+  isOpen() {
+    return this.panel.style.display !== "none";
+  },
+
+  sync() {
+    if (!this.panel) return;
+    if (!this.isOpen()) {
+      this.observer.disconnect();
+      this.panel.removeAttribute("data-flip");
+      this.panel.style.maxHeight = "";
+      this.panel.style.overflowY = "";
+      this.observe();
+      this.listen(false);
+      return;
+    }
+    this.listen(true);
+    this.position();
+  },
+
+  listen(on) {
+    if (this.listening === on) return;
+    this.listening = on;
+    const method = on ? "addEventListener" : "removeEventListener";
+    window[method]("scroll", this.onReposition, true);
+    window[method]("resize", this.onReposition);
+    if (window.visualViewport) {
+      window.visualViewport[method]("resize", this.onReposition);
+      window.visualViewport[method]("scroll", this.onReposition);
+    }
+  },
+
+  // The visible region when a keyboard or pinch-zoom has shrunk it,
+  // otherwise the window. Same box the popover hook measures against.
+  viewport() {
+    const vv = window.visualViewport;
+    return vv
+      ? { top: vv.offsetTop, height: vv.height }
+      : { top: 0, height: window.innerHeight };
+  },
+
+  position() {
+    if (!this.isOpen()) return;
+    // Writing max-height mutates `style`, which is what we observe.
+    // Disconnect so the measurement pass cannot re-enter itself.
+    this.observer.disconnect();
+    this.panel.removeAttribute("data-flip");
+    this.panel.style.maxHeight = "";
+    this.panel.style.overflowY = "";
+
+    const control = this.trigger.getBoundingClientRect();
+    const panelH = this.panel.offsetHeight;
+    if (!panelH || (!control.top && !control.bottom)) {
+      this.observe();
+      return;
+    }
+
+    const gap = 8;
+    const vp = this.viewport();
+    const below = vp.top + vp.height - control.bottom - gap;
+    const above = control.top - vp.top - gap;
+    const flip = panelH > below && above > below;
+    if (flip) this.panel.setAttribute("data-flip", "");
+    const room = flip ? above : below;
+    if (panelH > room) {
+      this.panel.style.maxHeight = `${Math.max(Math.round(room), 0)}px`;
+      this.panel.style.overflowY = "auto";
+    }
+    this.observe();
+  },
+};
+
 export default {
   PetalChart,
   PetalColorScheme,
@@ -5473,5 +5580,6 @@ export default {
   PetalNavMenu,
   PetalCommandDialog,
   PetalComboBox,
+  PetalDropdown,
   PetalDataTable,
 };

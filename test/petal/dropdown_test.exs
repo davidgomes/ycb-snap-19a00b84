@@ -29,6 +29,19 @@ defmodule PetalComponents.DropdownTest do
       assert html =~ "Option 2"
       assert_has_class(html, "pc-dropdown")
       assert_has_class(html, "pc-dropdown__menu-items-wrapper")
+      assert html =~ ~s(phx-hook="PetalDropdown")
+    end
+
+    test "uses a caller-supplied id for the placement hook", %{assigns: assigns} do
+      html =
+        rendered_to_string(~H"""
+        <.dropdown id="account-menu" label="Dropdown Menu">
+          <.dropdown_menu_item label="Option 1" />
+        </.dropdown>
+        """)
+
+      assert html =~ ~s(id="account-menu")
+      assert html =~ ~s(phx-hook="PetalDropdown")
     end
 
     test "renders dropdown with custom CSS classes", %{assigns: assigns} do
