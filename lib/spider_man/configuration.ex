@@ -92,7 +92,14 @@ defmodule SpiderMan.Configuration do
     ]
 
     [
-      print_stats: [type: :boolean, default: true, doc: "Print the stats of spider, "],
+      print_stats: [
+        type: {:or, [:boolean, {:fun, 1}]},
+        default: true,
+        doc:
+          "Print the throughput stats of spider every second, " <>
+            "or set a `fun/1` to receive the throughput infos (see `SpiderMan.throughput/1`) " <>
+            "and show them by yourself, such as updating a `Kino.DataTable` on livebook, "
+      ],
       log2file: [type: {:or, [:boolean, :string]}, default: true, doc: "Save the log to files, "],
       status: [
         type: {:in, [:running, :suspended]},

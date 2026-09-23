@@ -27,7 +27,7 @@ defmodule SpiderMan do
       3. `Spider.prepare_for_stop_component(:item_processor, state)`
       4. `Spider.prepare_for_stop(state)`
   """
-  alias SpiderMan.{Configuration, Engine, Item, Request, Response}
+  alias SpiderMan.{Configuration, Engine, Item, Request, Response, Stats}
 
   @type spider :: module | atom
 
@@ -40,6 +40,18 @@ defmodule SpiderMan do
   @type requests :: [request]
   @type component :: :downloader | :spider | :item_processor
   @type ets_stats :: [size: pos_integer, memory: pos_integer] | nil
+  @typedoc """
+  Throughput of a component, `duration` is the total processing time in millisecond
+  and `tps` is the count of success per second of processing time.
+  """
+  @type throughput :: %{
+          component: component,
+          total: non_neg_integer,
+          success: non_neg_integer,
+          fail: non_neg_integer,
+          duration: non_neg_integer,
+          tps: float
+        }
   @type prepare_for_start_stage :: :pre | :post
 
   @callback handle_response(Response.t(), context :: map) :: %{
@@ -185,6 +197,19 @@ defmodule SpiderMan do
     if info = :persistent_term.get(spider, nil) do
       info[:"#{component}_tid"] |> :ets.info() |> Keyword.take([:size, :memory])
     end
+  end
+
+  @doc """
+  fetch spider's throughput infos, one map per component
+
+  The result is a list of maps, so it can be shown as a table on livebook directly:
+
+      spider |> SpiderMan.throughput() |> Kino.DataTable.new()
+  """
+  @spec throughput(spider) :: [throughput]
+  def throughput(spider) do
+    %{stats_tid: tid} = Engine.get_state(spider)
+    Stats.get_throughput(tid)
   end
 
   @spec run_until_zero(spider, settings, check_interval :: integer) :: millisecond :: integer
