@@ -3,6 +3,7 @@ defmodule Warehouse.GenServers.InsertMonitorTest do
 
   import Mox
 
+  alias Warehouse.{AdditiveMap, Component}
   alias Warehouse.GenServers.InsertMonitor
 
   describe "init/0" do
@@ -65,6 +66,37 @@ defmodule Warehouse.GenServers.InsertMonitorTest do
       Process.sleep(:timer.seconds(2))
 
       assert Warehouse.ComponentSupervisor |> DynamicSupervisor.which_children() |> length() == 3
+    end
+  end
+
+  describe "component demands" do
+    setup do
+      stub(Warehouse.MockEvents, :broadcast_component_quantities, fn _, _ -> :ok end)
+      stub(Warehouse.MockEvents, :broadcast_sku_quantities, fn _, _ -> :ok end)
+      :ok
+    end
+
+    test "sets demand to zero for components assembly no longer lists", context do
+      sku = insert(:sku)
+      component = insert(:component)
+      insert(:kit, component: component, sku: sku, quantity: 1)
+
+      stub(Warehouse.Clients.Assembly.Mock, :request_component_demands, fn ->
+        [%{component_id: to_string(component.id), demand_quantity: 4}]
+      end)
+
+      start_supervised!({InsertMonitor, name: context.test, fetch_interval: :timer.seconds(1)})
+      Process.sleep(500)
+
+      assert AdditiveMap.get(Component.get_sku_demands(), sku.id) == 4
+
+      stub(Warehouse.Clients.Assembly.Mock, :request_component_demands, fn -> [] end)
+
+      # A new component triggers another demand pull
+      insert(:component)
+      Process.sleep(:timer.seconds(2))
+
+      assert AdditiveMap.get(Component.get_sku_demands(), sku.id) == 0
     end
   end
 end

@@ -53,4 +53,40 @@ defmodule Warehouse.ComponentTest do
     component = :component |> insert() |> supervise()
     assert :ok = Component.update_component_demand(component.id, 5)
   end
+
+  describe "update_component_kits/1" do
+    setup do
+      stub(Warehouse.MockEvents, :broadcast_component_quantities, fn _, _ -> :ok end)
+      stub(Warehouse.MockEvents, :broadcast_sku_quantities, fn _, _ -> :ok end)
+
+      sku = :sku |> insert() |> supervise()
+      component = insert(:component)
+      insert(:kit, component: component, sku: sku, quantity: 2)
+
+      %{component: supervise(component), sku: sku}
+    end
+
+    test "updates demand from assembly", %{component: component, sku: sku} do
+      stub(Warehouse.Clients.Assembly.Mock, :request_component_demands, fn ->
+        [%{component_id: to_string(component.id), demand_quantity: 3}]
+      end)
+
+      assert :ok = Component.update_component_kits(component.id)
+      Process.sleep(100)
+
+      assert AdditiveMap.get(Component.get_sku_demands(), sku.id) == 6
+    end
+
+    test "sets demand to zero when assembly does not list the component", %{component: component, sku: sku} do
+      Component.update_component_demand(component.id, 5)
+      assert AdditiveMap.get(Component.get_sku_demands(), sku.id) == 10
+
+      stub(Warehouse.Clients.Assembly.Mock, :request_component_demands, fn -> [] end)
+
+      assert :ok = Component.update_component_kits(component.id)
+      Process.sleep(100)
+
+      assert AdditiveMap.get(Component.get_sku_demands(), sku.id) == 0
+    end
+  end
 end
