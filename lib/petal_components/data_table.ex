@@ -231,7 +231,7 @@ defmodule PetalComponents.DataTable do
     # property, which markup alone cannot express.
     hooked? =
       (link_mode? and (assigns.searchable or assigns.page_size_options != [])) or
-        filter_cols != [] or assigns.selectable
+        filter_cols != [] or assigns.selectable or assigns.column_toggle
 
     assigns =
       assigns

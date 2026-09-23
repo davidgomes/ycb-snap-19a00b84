@@ -13,8 +13,10 @@
   triggers, so the browser moves both together at compositor speed:
   there are no scroll listeners left, and nothing to drift. Geometry
   (flip above, slide sideways into view, cap height) runs once on open
-  and on resize. The `PetalDataTable` hook owns open state, so a menu
+  and on resize.   The `PetalDataTable` hook owns open state, so a menu
   survives the patches that a filter or column toggle triggers.
+  `column_toggle` on its own mounts that hook, so the Columns
+  trigger can open its menu.
   `<.popover top_layer>` is unchanged and remains the tool for panels
   that must escape a clipping container.
 - **Top-layer popovers stay anchored to their trigger.** They were
