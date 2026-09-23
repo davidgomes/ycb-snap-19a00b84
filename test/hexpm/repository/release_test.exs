@@ -594,4 +594,108 @@ defmodule Hexpm.Repository.ReleaseTest do
              |> Hexpm.Repo.all()
              |> Release.latest_version(only_stable: true, with_docs: true)
   end
+
+  @semver_versions ~w(
+    0.0.0 0.0.1 0.1.0 0.9.0 0.10.0 1.0.0-0 1.0.0-1 1.0.0-2 1.0.0-10 1.0.0-0a
+    1.0.0--- 1.0.0-A 1.0.0-Z 1.0.0-a 1.0.0-a.0 1.0.0-a.1 1.0.0-a.10 1.0.0-a.a
+    1.0.0-a-b 1.0.0-ab 1.0.0-alpha 1.0.0-alpha.1 1.0.0-alpha.beta 1.0.0-beta
+    1.0.0-beta.2 1.0.0-beta.11 1.0.0-rc.1 1.0.0 1.0.1 1.2.0 1.10.0 2.0.0-dev
+    2.0.0 10.0.0 123456789012345678901234567890.0.0
+  )
+
+  test "stored sort keys order releases by SemVer precedence" do
+    package = insert(:package)
+
+    for version <- Enum.shuffle(@semver_versions) do
+      insert(:release, package: package, version: version)
+    end
+
+    rows =
+      from(r in Release,
+        where: r.package_id == ^package.id,
+        order_by: r.semver_sort_key,
+        select: {r.version, r.stable}
+      )
+      |> Hexpm.Repo.all()
+
+    expected = @semver_versions |> Enum.map(&Version.parse!/1) |> Enum.sort(Version)
+
+    assert Enum.map(rows, &elem(&1, 0)) == expected
+    assert Enum.all?(rows, fn {version, stable} -> stable == (version.pre == []) end)
+  end
+
+  test "stored sort keys follow version changes" do
+    package = insert(:package)
+    release = insert(:release, package: package, version: "2.0.0")
+    insert(:release, package: package, version: "1.0.0")
+
+    from(r in Release, where: r.id == ^release.id, update: [set: [version: ^"0.1.0-rc.1"]])
+    |> Hexpm.Repo.update_all([])
+
+    assert [{%Version{major: 0, minor: 1, pre: ["rc", 1]}, false}, {%Version{major: 1}, true}] =
+             from(r in Release,
+               where: r.package_id == ^package.id,
+               order_by: r.semver_sort_key,
+               select: {r.version, r.stable}
+             )
+             |> Hexpm.Repo.all()
+  end
+
+  test "latest_query/2 selects the same release as latest_version/2" do
+    stable_package = insert(:package)
+    insert(:release, package: stable_package, version: "0.9.0", has_docs: true)
+    insert(:release, package: stable_package, version: "0.10.0")
+    insert(:release, package: stable_package, version: "0.11.0-rc.1", has_docs: true)
+
+    prerelease_package = insert(:package)
+    insert(:release, package: prerelease_package, version: "1.0.0-rc.2")
+    insert(:release, package: prerelease_package, version: "1.0.0-rc.10", has_docs: true)
+
+    options =
+      for only_stable <- [true, false],
+          unstable_fallback <- [true, false],
+          with_docs <- [true, false] do
+        [only_stable: only_stable, unstable_fallback: unstable_fallback, with_docs: with_docs]
+      end
+
+    for package <- [stable_package, prerelease_package], opts <- options do
+      expected = package |> Release.all() |> Hexpm.Repo.all() |> Release.latest_version(opts)
+
+      latest =
+        package
+        |> Release.all()
+        |> Release.latest_query(opts)
+        |> Hexpm.Repo.one()
+
+      assert (latest && latest.id) == (expected && expected.id),
+             "#{package.name} with #{inspect(opts)}"
+    end
+  end
+
+  test "versions must have numbers of at most 255 digits", %{
+    publisher: publisher,
+    packages: [_, package2, _]
+  } do
+    number = String.duplicate("9", 255)
+
+    assert %Release{} =
+             Release.build(
+               package2,
+               publisher,
+               rel_meta(%{version: "1.#{number}.0-rc.#{number}", app: package2.name}),
+               "",
+               ""
+             )
+             |> Hexpm.Repo.insert!()
+
+    assert %{version: "numbers can have at most 255 digits"} =
+             Release.build(
+               package2,
+               publisher,
+               rel_meta(%{version: "1.0.0-rc.#{number}9", app: package2.name}),
+               "",
+               ""
+             )
+             |> errors_on()
+  end
 end
