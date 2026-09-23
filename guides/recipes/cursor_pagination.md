@@ -109,30 +109,33 @@ of replacing it. Replacing the order could drop the field that made it unique.
 
 ## Nullable fields
 
-Ordering by a nullable column loses the rows where it is `NULL`.
+Order fields may be `NULL`. No comparison with `NULL` is ever true, so Flop adds
+`IS NULL` conditions to the cursor comparison wherever the `NULL`s are sorted.
 
 ```elixir
 %{first: 2, order_by: [:age, :id]}
 ```
 
-| page | rows |
-|---|---|
-| 1 | Bo 1, Ada 3 |
-| 2 | Ada 5, Ada 7 |
-| 3 | — |
+| page | rows | cursor |
+|---|---|---|
+| 1 | Bo 1, Ada 3 | `%{age: 3, id: 1}` |
+| 2 | Ada 5, Ada 7 | `%{age: 7, id: 3}` |
+| 3 | Cy, Dee | |
 
-Cy and Dee never appear, and page 3 reports `has_next_page?: false`. PostgreSQL
-sorts them last, but the cursor comparison is `age > 7`, and no comparison with
-`NULL` is ever true. A second order field does not help, because the `NULL` is
-in the first one.
+PostgreSQL sorts the `NULL`s last, so page 3 asks for the rows with an age
+greater than 7 _or_ no age at all. A cursor that holds a `NULL` works the same
+way: the rows after Cy's cursor `%{age: nil, id: 5}` are those without an age
+and a greater ID, which is Dee.
 
-Until Flop builds null-aware predicates, order by a column that has no `NULL`,
-or sort on a computed field that substitutes a value, as in the [computed fields
-recipe](computed_and_embedded_fields.md):
+With `:asc` and `:desc`, the position of the `NULL`s depends on the database.
+PostgreSQL sorts `NULL` as larger than any value, MySQL and SQLite as smaller.
+Use the `_nulls_first` and `_nulls_last` directions if the order has to be the
+same everywhere.
 
-```sql
-SELECT coalesce(age, -1) AS age_sortable
-```
+Whenever the `NULL`s come after the cursor value, the condition starts with
+`age IS NULL OR`, which can keep the database from limiting an index scan to the
+range after the cursor. Flop cannot tell whether a column is nullable, so with
+`:asc` on PostgreSQL this also applies to columns declared `NOT NULL`.
 
 ## Reading the cursor value
 
