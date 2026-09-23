@@ -1662,6 +1662,61 @@ export const PetalPopover = {
   },
 };
 
+// Dropdown panel: opens below its trigger and flips above when the
+// viewport has no room below AND more room above. LiveView's JS.toggle
+// still shows and hides it; this hook only picks the side, on
+// phx:show-start - that fires while the panel is still display:none, so
+// the first painted frame is already on the chosen side.
+export const PetalDropdown = {
+  mounted() {
+    this.flip = false;
+    this.onShowStart = () => this.place();
+    this.onHideEnd = () => {
+      this.flip = false;
+      this.el.removeAttribute("data-flip");
+    };
+    this.el.addEventListener("phx:show-start", this.onShowStart);
+    this.el.addEventListener("phx:hide-end", this.onHideEnd);
+  },
+
+  // A patch drops the data-flip the server never renders. Re-assert the
+  // side the panel opened on rather than re-measuring, so a patch never
+  // moves an open panel.
+  updated() {
+    if (this.flip) this.el.setAttribute("data-flip", "");
+  },
+
+  destroyed() {
+    this.el.removeEventListener("phx:show-start", this.onShowStart);
+    this.el.removeEventListener("phx:hide-end", this.onHideEnd);
+  },
+
+  place() {
+    this.flip = false;
+    this.el.removeAttribute("data-flip");
+
+    // Still display:none: lay it out just long enough to read its natural
+    // height. Nothing paints inside this task.
+    const display = this.el.style.display;
+    this.el.style.display = "block";
+    const panelH = this.el.offsetHeight;
+    // positioned against .pc-dropdown, whose box is the trigger's
+    const t = this.el.parentElement.getBoundingClientRect();
+    this.el.style.display = display;
+    if (!panelH) return; // jsdom / unrendered
+
+    const vv = window.visualViewport;
+    const viewTop = vv ? vv.offsetTop : 0;
+    const viewHeight = vv ? vv.height : window.innerHeight;
+    const gap = 8; // the panel's mt-2
+    const below = viewTop + viewHeight - t.bottom;
+    const above = t.top - viewTop;
+
+    this.flip = panelH + gap > below && above > below;
+    if (this.flip) this.el.setAttribute("data-flip", "");
+  },
+};
+
 // Command palette: client-side filtering + WAI-ARIA combobox keyboard model.
 // Items are hidden, never reordered - the server owns DOM order, so the
 // palette stays safe under LiveView patches. Scoring: value prefix beats
@@ -5467,6 +5522,7 @@ export default {
   PetalTypingEffect,
   PetalInputOTP,
   PetalPopover,
+  PetalDropdown,
   PetalCommand,
   PetalCommandTrigger,
   PetalAurora,

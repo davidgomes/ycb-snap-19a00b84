@@ -49,6 +49,10 @@ defmodule PetalComponents.Dropdown do
       <.dropdown_menu_item link_type="live_patch" to="/" label="Live Patch item" />
       <.dropdown_menu_item link_type="live_redirect" to="/" label="Live Redirect item" />
     </.dropdown>
+
+  The panel opens below the trigger and flips above it when the viewport has
+  no room below. The flip comes from the `PetalDropdown` hook, so it needs the
+  petal_components hooks registered; without them the panel always opens below.
   """
   def dropdown(assigns) do
     assigns =
@@ -96,6 +100,7 @@ defmodule PetalComponents.Dropdown do
         ]}
         role="menu"
         id={@options_container_id}
+        phx-hook="PetalDropdown"
         aria-orientation="vertical"
         aria-labelledby="options-menu"
       >

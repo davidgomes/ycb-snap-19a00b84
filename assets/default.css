@@ -1973,6 +1973,18 @@
   .pc-dropdown__menu-items-wrapper-placement--right {
     @apply left-0 origin-top-left;
   }
+  /* flipped: no room below the trigger and more room above - the
+     PetalDropdown hook measures as the panel opens. The scale-in grows
+     from the corner nearest the trigger on either side. */
+  .pc-dropdown__menu-items-wrapper[data-flip] {
+    @apply bottom-full mt-0 mb-2;
+  }
+  .pc-dropdown__menu-items-wrapper-placement--left[data-flip] {
+    @apply origin-bottom-right;
+  }
+  .pc-dropdown__menu-items-wrapper-placement--right[data-flip] {
+    @apply origin-bottom-left;
+  }
   /* The one trigger chevron for the dropdown family - user menu,
      language select and friends share this so the colour can't drift. */
   /* THE decorative-chevron rule for the dropdown family (dropdown,

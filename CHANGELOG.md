@@ -17,6 +17,20 @@
   patch that removes an open dialog fires no close event at all, so
   `destroyed()` releases it too, guarded on `open` so tearing down a
   closed palette cannot strip a lock another overlay owns.
+- **`dropdown` panels flip upward when the viewport leaves no room
+  below.** The panel always dropped below its trigger, so a dropdown near
+  the bottom of the screen (the row-actions menu on the last table row,
+  a user menu in a bottom sidebar) opened off-screen. It now opens above
+  when the room below can't hold it and there is more room above - the
+  same call `combo_box` and the data table's menus already make. A new
+  `PetalDropdown` hook on the panel decides on `phx:show-start`, which
+  `JS.toggle` fires while the panel is still `display: none`, so the
+  first painted frame is already on the right side; the scale-in grows
+  from the bottom corner when flipped. An open panel keeps its side
+  through LiveView patches. The show/hide itself is still plain
+  `LiveView.JS`, so without the hooks registered the dropdown behaves
+  exactly as before. `user_dropdown_menu`, `language_select` and the
+  dropdown `color_scheme_switch` pick this up for free.
 
 ### 4.14.0 - 2026-08-11
 

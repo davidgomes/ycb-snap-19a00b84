@@ -87,6 +87,22 @@ defmodule PetalComponents.DropdownTest do
       refute html =~ "x-show"
       assert_attribute(html, "phx-click")
     end
+
+    test "the menu panel carries the PetalDropdown hook that flips it", %{assigns: assigns} do
+      html =
+        rendered_to_string(~H"""
+        <.dropdown label="Dropdown" options_container_id="actions-menu">
+          <.dropdown_menu_item label="Option" />
+        </.dropdown>
+        """)
+
+      panel =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query(~s(#actions-menu[role="menu"][phx-hook="PetalDropdown"]))
+
+      assert Enum.count(panel) == 1
+    end
   end
 
   describe "dropdown/1 - placement options" do
