@@ -501,7 +501,14 @@ defmodule GRPC.StreamTest do
         def handle_demand(demand, state) when demand > 0 do
           {events, remaining} = Enum.split(state, demand)
 
+          # The flow only completes once its producers exit
+          if remaining == [], do: GenStage.async_info(self(), :terminate)
+
           {:noreply, events, remaining}
+        end
+
+        def handle_info(:terminate, state) do
+          {:stop, :normal, state}
         end
       end
 
@@ -517,17 +524,7 @@ defmodule GRPC.StreamTest do
           |> GRPC.Stream.run_with(%GRPC.Server.Stream{}, dry_run: true)
         end)
 
-      result =
-        case Task.yield(task, 1000) || Task.shutdown(task) do
-          {:ok, _} -> :ok
-          _ -> :ok
-        end
-
-      if Process.alive?(producer_pid) do
-        Process.exit(producer_pid, :normal)
-      end
-
-      assert result == :ok
+      assert {:ok, :ok} = Task.yield(task, 1000)
     end
   end
 
