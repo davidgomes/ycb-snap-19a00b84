@@ -374,4 +374,64 @@ defmodule PetalComponents.DataTableTest do
       """)
     end
   end
+
+  describe "row selection" do
+    defp selection_html(selected) do
+      assigns = base(%{selected: selected})
+
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        path={@path}
+        selected={@selected}
+        on_select="select"
+        row_key={& &1.name}
+        searchable
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:bulk_action :let={keys}>
+          <button id="bulk">Delete {length(keys)}</button>
+        </:bulk_action>
+      </.data_table>
+      """)
+    end
+
+    test "tri-state header tracks the page's selection" do
+      assert selection_html([]) =~ ~s(data-state="none")
+      assert selection_html(["Amy"]) =~ ~s(data-state="some")
+      assert selection_html(["Amy"]) =~ ~s(aria-checked="mixed")
+      assert selection_html(["Amy", "Bea"]) =~ ~s(data-state="all")
+      assert selection_html(["Amy", "Bea"]) =~ "deselect_page"
+      assert selection_html([]) =~ ~s(phx-hook="PetalDataTable")
+    end
+
+    test "the toolbar morphs into a selection bar while rows are selected" do
+      html = selection_html([])
+      assert html =~ "data-pc-dt-search"
+      refute html =~ "pc-data-table__toolbar--selection"
+
+      html = selection_html(["Amy"])
+      assert html =~ "pc-data-table__toolbar--selection"
+      assert html =~ "1 selected"
+      assert html =~ "Delete 1"
+      assert html =~ "clear_selection"
+      refute html =~ "data-pc-dt-search"
+    end
+
+    test "no selected attr, no checkbox column" do
+      refute selection_html(nil) =~ "pc-data-table__select"
+    end
+
+    test "apply_selection speaks the op grammar" do
+      set = apply_selection([], %{"op" => "select", "key" => "a"})
+      assert set == MapSet.new(["a"])
+      assert apply_selection(set, %{"op" => "select", "key" => "a"}) == MapSet.new()
+      set = apply_selection(set, %{"op" => "select_page", "keys" => ["a", "b"]})
+      assert apply_selection(set, %{"op" => "deselect_page", "keys" => ["b"]}) == MapSet.new(["a"])
+      assert apply_selection(set, %{"op" => "clear_selection"}) == MapSet.new()
+      assert apply_selection(set, %{"op" => "bogus"}) == set
+    end
+  end
 end

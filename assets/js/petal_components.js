@@ -4659,6 +4659,18 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+    this.syncSelectAll();
+  },
+
+  updated() {
+    this.syncSelectAll();
+  },
+
+  // the header checkbox's "some" state lives only in the indeterminate
+  // DOM property, which no attribute (and so no patch) can carry
+  syncSelectAll() {
+    const box = this.el.querySelector("[data-pc-dt-select-all]");
+    if (box) box.indeterminate = box.dataset.state === "some";
   },
 
   destroyed() {

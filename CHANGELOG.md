@@ -3,6 +3,18 @@
 
 #### Added
 
+- **`<.data_table>` row selection.** Pass `selected` (keys, list or
+  MapSet) to render a checkbox column keyed by `row_key` (default
+  `row.id`). The header checkbox is tri-state - checked, unchecked, or
+  indeterminate (`aria-checked="mixed"`, mirrored onto the DOM property
+  by the `PetalDataTable` hook) - and toggles the current page. While
+  anything is selected the toolbar morphs into a selection bar: "N
+  selected", the new `:bulk_action` slot (`:let` gets the keys) and a
+  clear button. Selection is never URL state: it pushes
+  `select`/`select_page`/`deselect_page`/`clear_selection` ops to
+  `on_select` (or `on_change`) in both wiring modes, and
+  `DataTable.apply_selection/2` speaks the grammar. `table` `:col`
+  gains `header` for rendered header content.
 - **`<.data_table>` - the component core (4.12 data table, milestone 1).**
   Composed around `<.table>`, driven entirely by `DataTable.State`:
   `:col` slots (field, label, sortable, align), sortable headers with
