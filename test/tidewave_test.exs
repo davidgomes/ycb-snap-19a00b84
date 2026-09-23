@@ -174,6 +174,51 @@ defmodule TidewaveTest do
 
       assert conn.status == 404
     end
+
+    test "200 with JSON-RPC response for requests" do
+      conn =
+        mcp_post("/tidewave/mcp", %{"jsonrpc" => "2.0", "method" => "tools/list", "id" => "1"})
+
+      assert conn.status == 200
+      assert ["application/json" <> _] = get_resp_header(conn, "content-type")
+      body = Jason.decode!(conn.resp_body)
+      assert body["id"] == "1"
+      assert "browser_eval" in Enum.map(body["result"]["tools"], & &1["name"])
+    end
+
+    test "202 for notifications" do
+      conn =
+        mcp_post("/tidewave/mcp", %{"jsonrpc" => "2.0", "method" => "notifications/initialized"})
+
+      assert conn.status == 202
+      assert conn.resp_body == ~s({"status":"ok"})
+    end
+
+    test "400 for errors" do
+      conn = mcp_post("/tidewave/mcp", %{"jsonrpc" => "2.0", "method" => "unknown", "id" => "1"})
+
+      assert conn.status == 400
+      assert Jason.decode!(conn.resp_body)["error"]["code"] == -32601
+    end
+
+    test "excludes browser tools with include_browser_tools=false" do
+      conn =
+        mcp_post("/tidewave/mcp?include_browser_tools=false", %{
+          "jsonrpc" => "2.0",
+          "method" => "tools/list",
+          "id" => "1"
+        })
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      refute "browser_eval" in Enum.map(body["result"]["tools"], & &1["name"])
+    end
+  end
+
+  defp mcp_post(path, message) do
+    conn(:post, path, Jason.encode!(message))
+    |> put_req_header("content-type", "application/json")
+    |> Tidewave.call(Tidewave.init([]))
   end
 
   describe "/config" do
