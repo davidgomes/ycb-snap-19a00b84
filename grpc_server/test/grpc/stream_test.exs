@@ -1,5 +1,5 @@
 defmodule GRPC.StreamTest do
-  use GRPC.Integration.TestCase
+  use GRPC.Integration.TestCase, async: true
   doctest GRPC.Stream
 
   describe "simple test" do
@@ -501,33 +501,36 @@ defmodule GRPC.StreamTest do
         def handle_demand(demand, state) when demand > 0 do
           {events, remaining} = Enum.split(state, demand)
 
+          # Stopping once drained lets the merged flow terminate
+          if remaining == [], do: GenStage.async_info(self(), :stop)
+
           {:noreply, events, remaining}
         end
+
+        def handle_info(:stop, state), do: {:stop, :normal, state}
       end
 
       elements = Enum.to_list(4..1000)
       {:ok, producer_pid} = TestProducer.start_link(elements)
 
       input = [1, 2, 3]
+      parent = self()
 
       task =
         Task.async(fn ->
           GRPC.Stream.from(input, join_with: producer_pid, max_demand: 500)
-          |> GRPC.Stream.map(fn it -> it end)
+          |> GRPC.Stream.map(fn it ->
+            send(parent, {:item, it})
+            it
+          end)
           |> GRPC.Stream.run_with(%GRPC.Server.Stream{}, dry_run: true)
         end)
 
-      result =
-        case Task.yield(task, 1000) || Task.shutdown(task) do
-          {:ok, _} -> :ok
-          _ -> :ok
-        end
+      assert Task.await(task) == :ok
 
-      if Process.alive?(producer_pid) do
-        Process.exit(producer_pid, :normal)
+      for item <- 1..1000 do
+        assert_received {:item, ^item}
       end
-
-      assert result == :ok
     end
   end
 
