@@ -39,6 +39,12 @@ defmodule PetalComponents.Dropdown do
   slot :inner_block, required: false
 
   @doc """
+  A menu that opens below its trigger.
+
+  The `PetalDropdown` hook flips the panel upward when the viewport has no
+  room below and more room above, and caps its height so a taller menu
+  scrolls inside that space. Open, click-away and Escape stay on LiveView.JS.
+
     <.dropdown label="Dropdown">
       <.dropdown_menu_item link_type="button">
         <.icon name="hero-home" class="w-5 h-5 text-gray-500" />
@@ -89,6 +95,7 @@ defmodule PetalComponents.Dropdown do
       </div>
       <div
         {js_attributes("options_container", @options_container_id)}
+        phx-hook="PetalDropdown"
         class={[
           placement_class(@placement),
           @menu_items_wrapper_class,

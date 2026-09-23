@@ -86,6 +86,7 @@ defmodule PetalComponents.DropdownTest do
       refute html =~ "x-data"
       refute html =~ "x-show"
       assert_attribute(html, "phx-click")
+      assert html =~ ~s(phx-hook="PetalDropdown")
     end
   end
 

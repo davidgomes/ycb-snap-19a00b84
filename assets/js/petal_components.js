@@ -5444,6 +5444,154 @@ export const PetalDataTable = {
   },
 };
 
+// Dropdown menu placement. LiveView.JS owns open, click-away and Escape
+// (display toggled on the panel). This hook only places it: downward by
+// default, flipped above the trigger when the viewport has no room below
+// AND more room above — the menu at the bottom of a long page that used to
+// paint off-screen. When neither side fits, the winning side's space caps
+// the panel so items scroll inside the viewport. Measured with the flip and
+// the cap cleared so natural height decides.
+export const PetalDropdown = {
+  mounted() {
+    this.listening = false;
+    this.onReposition = () => {
+      if (!this.isShown()) {
+        this.unlisten();
+        return;
+      }
+      this.position();
+    };
+
+    this.observer = new MutationObserver(() => this.sync());
+    this.observe();
+    this.sync();
+  },
+
+  // A patch merges the server's `display: none` and drops data-flip (the
+  // server never renders it). If the menu is still shown, place it again.
+  updated() {
+    this.sync();
+  },
+
+  destroyed() {
+    if (this.observer) this.observer.disconnect();
+    this.unlisten();
+  },
+
+  observe() {
+    this.observer.observe(this.el, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+  },
+
+  isShown() {
+    return this.el.style.display !== "none";
+  },
+
+  sync() {
+    if (this.isShown()) {
+      this.listen();
+      this.position();
+    } else {
+      this.unlisten();
+      this.clear();
+    }
+  },
+
+  // Writes to style re-fire the observer. Disconnect across the write so a
+  // placement pass cannot schedule another one.
+  position() {
+    if (!this.isShown()) return;
+    this.observer.disconnect();
+    try {
+      this.el.removeAttribute("data-flip");
+      this.el.style.maxHeight = "";
+      this.el.style.overflowY = "";
+
+      const trigger = this.el.closest(".pc-dropdown")?.querySelector("button");
+      if (!trigger) return;
+
+      const control = trigger.getBoundingClientRect();
+      const panelH = this.el.offsetHeight;
+      // jsdom and an unrendered panel report no box — leave the CSS default
+      if (!panelH || (!control.top && !control.bottom)) return;
+
+      const gap = 8;
+      const view = this.viewport();
+      const below = view.top + view.height - control.bottom - gap;
+      const above = control.top - view.top - gap;
+      const flip = panelH > below && above > below;
+      if (flip) this.el.setAttribute("data-flip", "");
+
+      const room = Math.max(flip ? above : below, 0);
+      if (panelH > room) {
+        this.el.style.maxHeight = `${room}px`;
+        this.el.style.overflowY = "auto";
+      }
+    } finally {
+      this.observe();
+    }
+  },
+
+  clear() {
+    if (
+      !this.el.hasAttribute("data-flip") &&
+      !this.el.style.maxHeight &&
+      !this.el.style.overflowY
+    ) {
+      return;
+    }
+    this.observer.disconnect();
+    this.el.removeAttribute("data-flip");
+    this.el.style.maxHeight = "";
+    this.el.style.overflowY = "";
+    this.observe();
+  },
+
+  // The visual viewport shrinks and offsets when a mobile keyboard opens,
+  // without a window resize. Fall back to the layout viewport elsewhere.
+  viewport() {
+    const vv = window.visualViewport;
+    if (vv && vv.height) {
+      return {
+        top: vv.offsetTop || 0,
+        left: vv.offsetLeft || 0,
+        width: vv.width,
+        height: vv.height,
+      };
+    }
+    return {
+      top: 0,
+      left: 0,
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+  },
+
+  listen() {
+    if (this.listening) return;
+    this.listening = true;
+    window.addEventListener("scroll", this.onReposition, true);
+    window.addEventListener("resize", this.onReposition);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", this.onReposition);
+      window.visualViewport.addEventListener("scroll", this.onReposition);
+    }
+  },
+
+  unlisten() {
+    if (!this.listening) return;
+    this.listening = false;
+    window.removeEventListener("scroll", this.onReposition, true);
+    window.removeEventListener("resize", this.onReposition);
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener("resize", this.onReposition);
+      window.visualViewport.removeEventListener("scroll", this.onReposition);
+    }
+  },
+};
+
 export default {
   PetalChart,
   PetalColorScheme,
@@ -5467,6 +5615,7 @@ export default {
   PetalTypingEffect,
   PetalInputOTP,
   PetalPopover,
+  PetalDropdown,
   PetalCommand,
   PetalCommandTrigger,
   PetalAurora,
