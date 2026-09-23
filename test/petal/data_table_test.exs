@@ -202,7 +202,9 @@ defmodule PetalComponents.DataTableTest do
       assert [_] = attrs(html, "th input[data-pc-dt-select-page]", "checked")
 
       [[["push", push]]] =
-        html |> attrs("td input.pc-data-table__select-row", "phx-click") |> Enum.map(&Jason.decode!/1)
+        html
+        |> attrs("td input.pc-data-table__select-row", "phx-click")
+        |> Enum.map(&Jason.decode!/1)
 
       assert push["value"] == %{"op" => "select", "id" => "a-1"}
       assert push["target"] == "#orders"

@@ -353,7 +353,9 @@ defmodule PetalComponents.DataTable do
               class="pc-checkbox pc-data-table__select-row"
               checked={MapSet.member?(@selected, @row_key.(row))}
               aria-label={@select_row_label}
-              phx-click={select_js(@select_event, @target, %{"op" => "select", "id" => @row_key.(row)})}
+              phx-click={
+                select_js(@select_event, @target, %{"op" => "select", "id" => @row_key.(row)})
+              }
             />
           </:col>
           <:col
