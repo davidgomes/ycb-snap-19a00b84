@@ -2,6 +2,10 @@
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
+.dark {
+  color-scheme: dark;
+}
+
 ::-webkit-scrollbar {
   height: 6px;
   width: 6px;

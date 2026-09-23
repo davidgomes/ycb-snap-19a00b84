@@ -5,6 +5,40 @@ let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("
 let livePath = document.querySelector("meta[name='live-path']").getAttribute("content");
 let liveTransport = document .querySelector("meta[name='live-transport']") .getAttribute("content");
 
+const themeStorageKey = "error-tracker-theme";
+const systemDarkTheme = window.matchMedia("(prefers-color-scheme: dark)");
+
+// Storage access throws when the browser blocks it, which must not break the dashboard.
+function getStoredTheme() {
+  try {
+    return localStorage.getItem(themeStorageKey);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function storeTheme(theme) {
+  try {
+    localStorage.setItem(themeStorageKey, theme);
+  } catch (_error) {}
+}
+
+function applyTheme(theme) {
+  document.documentElement.classList.toggle("dark", theme === "dark");
+}
+
+applyTheme(getStoredTheme() || (systemDarkTheme.matches ? "dark" : "light"));
+
+systemDarkTheme.addEventListener("change", (event) => {
+  if (!getStoredTheme()) applyTheme(event.matches ? "dark" : "light");
+});
+
+window.addEventListener("error-tracker:toggle-theme", () => {
+  const theme = document.documentElement.classList.contains("dark") ? "light" : "dark";
+  storeTheme(theme);
+  applyTheme(theme);
+});
+
 const Hooks = {
   JsonPrettyPrint: {
     mounted() {
