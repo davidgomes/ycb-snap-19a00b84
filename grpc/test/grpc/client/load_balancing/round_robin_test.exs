@@ -44,6 +44,36 @@ defmodule GRPC.Client.LoadBalancing.RoundRobinTest do
              %{"10.0.0.7" => 2, "10.0.0.8" => 2}
   end
 
+  test "update/2 drops rows for indexes beyond the new size" do
+    {:ok, %{tid: tid} = state} = RoundRobin.init(channels: channels(5))
+
+    assert :ok = RoundRobin.update(state, channels(2))
+
+    assert :ets.info(tid, :size) == 3
+    assert Enum.uniq(picked_hosts(state, 4)) |> Enum.sort() == ["10.0.0.1", "10.0.0.2"]
+  end
+
+  test "picks racing grow/shrink updates always return a channel" do
+    all = channels(5)
+    {:ok, state} = RoundRobin.init(channels: all)
+
+    pickers =
+      for _ <- 1..8 do
+        Task.async(fn ->
+          for _ <- 1..5_000 do
+            assert {:ok, channel} = RoundRobin.pick(state)
+            assert channel in all
+          end
+        end)
+      end
+
+    for i <- 1..2_000 do
+      :ok = RoundRobin.update(state, if(rem(i, 2) == 0, do: all, else: Enum.take(all, 1)))
+    end
+
+    Task.await_many(pickers, 10_000)
+  end
+
   test "pick/1 returns :no_connection after updating to no channels, and recovers" do
     {:ok, state} = RoundRobin.init(channels: channels(2))
 
