@@ -180,6 +180,31 @@ defmodule ErrorTracker do
   end
 
   @doc """
+  Mutes the error so new occurrences are flagged as muted in telemetry events.
+
+  Muted errors keep storing their occurrences and can still be resolved and
+  unresolved, but the `[:error_tracker, :occurrence, :new]` event of each new
+  occurrence will include `muted: true` in its metadata so that listeners
+  (for example, notifiers) can ignore them.
+  """
+  @spec mute(Error.t()) :: {:ok, Error.t()} | {:error, Ecto.Changeset.t()}
+  def mute(error = %Error{}) do
+    changeset = Ecto.Changeset.change(error, muted: true)
+
+    Repo.update(changeset)
+  end
+
+  @doc """
+  Unmutes the error so new occurrences are no longer flagged as muted.
+  """
+  @spec unmute(Error.t()) :: {:ok, Error.t()} | {:error, Ecto.Changeset.t()}
+  def unmute(error = %Error{}) do
+    changeset = Ecto.Changeset.change(error, muted: false)
+
+    Repo.update(changeset)
+  end
+
+  @doc """
   Sets the current process context.
 
   The given context will be merged into the current process context. The given context
@@ -300,8 +325,10 @@ defmodule ErrorTracker do
   end
 
   defp upsert_error!(error, stacktrace, context, breadcrumbs, reason) do
-    existing_status =
-      Repo.one(from e in Error, where: [fingerprint: ^error.fingerprint], select: e.status)
+    {existing_status, muted} =
+      Repo.one(
+        from e in Error, where: [fingerprint: ^error.fingerprint], select: {e.status, e.muted}
+      ) || {nil, false}
 
     {:ok, {error, occurrence}} =
       Repo.transaction(fn ->
@@ -330,7 +357,7 @@ defmodule ErrorTracker do
           })
           |> Repo.insert!()
 
-        {error, occurrence}
+        {%Error{error | muted: muted}, occurrence}
       end)
 
     # If the error existed and was marked as resolved before this exception,
@@ -343,7 +370,7 @@ defmodule ErrorTracker do
     end
 
     # Always send a new occurrence Telemetry event
-    Telemetry.new_occurrence(occurrence)
+    Telemetry.new_occurrence(occurrence, muted)
 
     {error, occurrence}
   end
