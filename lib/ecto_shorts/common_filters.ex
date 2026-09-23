@@ -98,7 +98,7 @@ defmodule EctoShorts.CommonFilters do
   end
 
   @doc """
-  Implementation for `c:EctoShorts.QueryBuilder.create_schema_filter/2`.
+  Implementation for `c:EctoShorts.QueryBuilder.create_schema_filter/3`.
 
   ### Examples
 
@@ -111,11 +111,11 @@ defmodule EctoShorts.CommonFilters do
     filter_value :: filter_value()
   ) :: query()
   def create_schema_filter(query, filter, value) when filter in @common_filters do
-    QueryBuilder.create_schema_filter(QueryBuilder.Common, {filter, value}, query)
+    QueryBuilder.create_schema_filter(QueryBuilder.Common, query, filter, value)
   end
 
   def create_schema_filter(query, filter, value) do
-    QueryBuilder.create_schema_filter(QueryBuilder.Schema, {filter, value}, query)
+    QueryBuilder.create_schema_filter(QueryBuilder.Schema, query, filter, value)
   end
 
   defp ensure_last_is_final_filter(params) do
