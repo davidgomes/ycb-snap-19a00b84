@@ -133,7 +133,9 @@ defmodule EctoJob.Producer do
   end
 
   # Starts listening to notifications from postgrex for new jobs
-  @spec start_listener(notifier, schema, timeout_ms) :: reference
+  @spec start_listener(notifier | nil, schema, timeout_ms) :: reference | nil
+  defp start_listener(nil, _schema, _notifications_listen_timeout), do: nil
+
   defp start_listener(notifier, schema, notifications_listen_timeout) do
     table_name = schema.__schema__(:source)
     Notifications.listen!(notifier, table_name, timeout: notifications_listen_timeout)
