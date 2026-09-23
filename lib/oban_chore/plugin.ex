@@ -11,6 +11,8 @@ defmodule ObanChore.Plugin do
 
     * `:otp_app` - An atom or list of atoms representing the OTP application(s) to search for chores.
       If not provided, all loaded applications will be searched.
+    * `:chores` - (Optional) An explicit list of chore modules to register. When given,
+      automatic discovery is skipped and `:otp_app` is ignored.
     * `:pubsub_server` - (Required) The name of your application's Phoenix PubSub server.
 
   ## Examples
@@ -32,8 +34,24 @@ defmodule ObanChore.Plugin do
   @impl Oban.Plugin
   def validate(opts) do
     with :ok <- validate_otp_app(opts),
+         :ok <- validate_chores(opts),
          :ok <- validate_pubsub_server(opts) do
       :ok
+    end
+  end
+
+  defp validate_chores(opts) do
+    case Keyword.get(opts, :chores) do
+      nil ->
+        :ok
+
+      chores when is_list(chores) ->
+        if Enum.all?(chores, &is_atom/1),
+          do: :ok,
+          else: {:error, "all chores elements must be modules"}
+
+      _ ->
+        {:error, "chores must be a list of modules"}
     end
   end
 
@@ -121,6 +139,9 @@ defmodule ObanChore.Plugin do
     oban_name = if state.opts[:conf], do: state.opts[:conf].name, else: Oban
     handler_id = {:oban_chore_counts, oban_name}
 
+    # A handler left behind by a previous plugin process would keep a stale chore list.
+    :telemetry.detach(handler_id)
+
     :telemetry.attach_many(
       handler_id,
       [
@@ -202,6 +223,13 @@ defmodule ObanChore.Plugin do
 
   # TODO: Improve the discovery
   defp discover_chores(opts) do
+    case Keyword.get(opts, :chores) do
+      nil -> discover_chores_in_apps(opts)
+      chores -> Enum.map(chores, fn module -> module.__chore_info__() end)
+    end
+  end
+
+  defp discover_chores_in_apps(opts) do
     apps =
       case Keyword.get(opts, :otp_app) do
         nil ->
