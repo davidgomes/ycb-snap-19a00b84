@@ -26,7 +26,7 @@ defmodule Oban.Notifiers.Phoenix do
   ```
 
   Finally, configure Oban to use `Oban.Notifiers.Phoenix` as the notifier with the `PubSub`
-  intance name as the `:pubusb` option:
+  instance name as the `:pubsub` option:
 
   ```elixir
   config :my_app, Oban,
