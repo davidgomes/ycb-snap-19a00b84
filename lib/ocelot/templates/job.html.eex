@@ -1,0 +1,76 @@
+<nav class="breadcrumbs">
+  <a href="<%= @base %>">Jobs</a> /
+  <a href="<%= jobs_path(@base, %{state: @job.state}) %>"><%= @job.state %></a> /
+  <%= @job.id %>
+</nav>
+
+<div class="job-header">
+  <h1><%= @job.worker %></h1>
+  <span class="badge state-<%= @job.state %>"><%= @job.state %></span>
+</div>
+
+<div class="grid">
+  <section class="card card-body">
+    <h2>Details</h2>
+    <dl class="details">
+      <dt>ID</dt>
+      <dd><%= @job.id %></dd>
+      <dt>Queue</dt>
+      <dd><a href="<%= jobs_path(@base, %{queue: @job.queue}) %>"><%= @job.queue %></a></dd>
+      <dt>Attempt</dt>
+      <dd><%= @job.attempt %> of <%= @job.max_attempts %></dd>
+      <dt>Priority</dt>
+      <dd><%= @job.priority %></dd>
+      <dt>Tags</dt>
+      <dd>
+        <%= for tag <- @job.tags do %><span class="tag"><%= tag %></span><% end %>
+        <%= if @job.tags == [] do %><span class="muted">None</span><% end %>
+      </dd>
+      <dt>Attempted by</dt>
+      <dd>
+        <%= if @job.attempted_by in [nil, []] do %>
+          <span class="muted">None</span>
+        <% else %>
+          <code><%= Enum.join(@job.attempted_by, ", ") %></code>
+        <% end %>
+      </dd>
+    </dl>
+  </section>
+
+  <section class="card card-body">
+    <h2>Timeline</h2>
+    <dl class="details">
+      <%= for {label, at} <- timeline(@job) do %>
+        <dt><%= label %></dt>
+        <dd>
+          <time datetime="<%= iso8601(at) %>"><%= iso8601(at) %></time>
+          <span class="muted">(<%= relative_time(at, @now) %>)</span>
+        </dd>
+      <% end %>
+    </dl>
+  </section>
+</div>
+
+<section class="card card-body">
+  <h2>Args</h2>
+  <pre><%= json(@job.args, pretty: true) %></pre>
+</section>
+
+<section class="card card-body">
+  <h2>Meta</h2>
+  <pre><%= json(@job.meta, pretty: true) %></pre>
+</section>
+
+<section class="card card-body">
+  <h2>Errors (<%= length(@job.errors) %>)</h2>
+  <%= if @job.errors == [] do %>
+    <span class="muted">No errors recorded</span>
+  <% else %>
+    <%= for error <- Enum.reverse(@job.errors) do %>
+      <div class="error">
+        <div class="error-meta">Attempt <%= error["attempt"] %> · <%= error["at"] %></div>
+        <pre><%= error["error"] %></pre>
+      </div>
+    <% end %>
+  <% end %>
+</section>

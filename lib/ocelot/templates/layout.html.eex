@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><%= @title %> · Ocelot</title>
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --surface: #ffffff;
+        --surface-muted: #f1f3f5;
+        --border: #e2e5e9;
+        --text: #1f2328;
+        --muted: #667080;
+        --accent: #d97706;
+        --link: #1d4ed8;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f1115;
+          --surface: #171a21;
+          --surface-muted: #1e222b;
+          --border: #2a2f3a;
+          --text: #e6e8eb;
+          --muted: #9aa3b2;
+          --link: #7aa2ff;
+        }
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+
+      a { color: var(--link); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+
+      h1 { margin: 0; font-size: 20px; font-weight: 600; }
+      h2 { margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+
+      code, pre { font-family: var(--mono); font-size: 12px; }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 24px;
+        background: #111827;
+        color: #f9fafb;
+      }
+
+      .brand { color: inherit; font-size: 16px; font-weight: 700; letter-spacing: .02em; }
+      .brand:hover { text-decoration: none; }
+      .brand::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 50%; background: var(--accent); }
+
+      .instance { padding: 2px 8px; border-radius: 999px; background: #1f2937; color: #cbd5e1; font-family: var(--mono); font-size: 12px; }
+
+      .container { max-width: 1280px; margin: 0 auto; padding: 24px; }
+
+      .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
+
+      @media (max-width: 800px) {
+        .layout { grid-template-columns: 1fr; }
+      }
+
+      .sidebar section + section { margin-top: 24px; }
+
+      .nav { margin: 0; padding: 0; list-style: none; }
+
+      .nav a {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 6px;
+        color: var(--text);
+      }
+
+      .nav a:hover { background: var(--surface-muted); text-decoration: none; }
+      .nav a.active { background: var(--surface); box-shadow: inset 3px 0 0 var(--accent), 0 0 0 1px var(--border); font-weight: 600; }
+      .nav .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .nav .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+      .nav .empty-note { padding: 6px 10px; color: var(--muted); }
+
+      .content-header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+
+      .muted { color: var(--muted); }
+
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+      .card + .card { margin-top: 16px; }
+      .card-body { padding: 16px; }
+
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+      th { font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+      tbody tr:last-child td { border-bottom: 0; }
+      tbody tr:hover { background: var(--surface-muted); }
+
+      .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .nowrap { white-space: nowrap; }
+      .worker { font-weight: 600; }
+      .args { display: block; margin-top: 2px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60ch; }
+
+      .empty { padding: 48px 16px; text-align: center; color: var(--muted); }
+
+      .pagination { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; }
+      .pagination .disabled { color: var(--muted); }
+
+      .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--state, var(--muted)); flex: none; }
+
+      .badge {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 999px;
+        color: var(--state, var(--muted));
+        background: color-mix(in srgb, var(--state, var(--muted)) 14%, transparent);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .state-suspended { --state: #6b7280; }
+      .state-scheduled { --state: #7c3aed; }
+      .state-available { --state: #2563eb; }
+      .state-executing { --state: #d97706; }
+      .state-retryable { --state: #ea580c; }
+      .state-completed { --state: #16a34a; }
+      .state-discarded { --state: #dc2626; }
+      .state-cancelled { --state: #64748b; }
+
+      .breadcrumbs { margin-bottom: 8px; color: var(--muted); }
+
+      .job-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px; }
+      .grid .card + .card { margin-top: 0; }
+
+      .details { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+      .details dt { color: var(--muted); }
+      .details dd { margin: 0; overflow-wrap: anywhere; }
+
+      .tag { display: inline-block; margin: 0 4px 4px 0; padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; font-family: var(--mono); font-size: 12px; }
+
+      pre { margin: 0; padding: 12px; overflow: auto; border-radius: 6px; background: var(--surface-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+      .error + .error { margin-top: 16px; }
+      .error-meta { margin-bottom: 6px; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="<%= @base %>">Ocelot</a>
+      <span class="instance"><%= inspect(@oban) %></span>
+    </header>
+    <main class="container">
+      <%= @inner_content %>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,106 @@
+<div class="layout">
+  <aside class="sidebar">
+    <section>
+      <h2>States</h2>
+      <ul class="nav">
+        <li>
+          <a class="<%= active_class(is_nil(@filters.state)) %>" href="<%= jobs_path(@base, %{@filters | state: nil, page: 1}) %>">
+            <span class="dot"></span>
+            <span class="label">all</span>
+            <span class="count"><%= total(@state_counts) %></span>
+          </a>
+        </li>
+        <%= for state <- @states do %>
+          <li>
+            <a class="state-<%= state %> <%= active_class(@filters.state == state) %>" href="<%= jobs_path(@base, %{@filters | state: state, page: 1}) %>">
+              <span class="dot"></span>
+              <span class="label"><%= state %></span>
+              <span class="count"><%= Map.get(@state_counts, state, 0) %></span>
+            </a>
+          </li>
+        <% end %>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Queues</h2>
+      <ul class="nav">
+        <%= if @filters.queue do %>
+          <li>
+            <a href="<%= jobs_path(@base, %{@filters | queue: nil, page: 1}) %>">
+              <span class="label">all queues</span>
+            </a>
+          </li>
+        <% end %>
+        <%= for {queue, count} <- @queue_counts do %>
+          <li>
+            <a class="<%= active_class(@filters.queue == queue) %>" href="<%= jobs_path(@base, %{@filters | queue: queue, page: 1}) %>">
+              <span class="label"><%= queue %></span>
+              <span class="count"><%= count %></span>
+            </a>
+          </li>
+        <% end %>
+        <%= if @queue_counts == [] and is_nil(@filters.queue) do %>
+          <li class="empty-note">None</li>
+        <% end %>
+      </ul>
+    </section>
+  </aside>
+
+  <section>
+    <div class="content-header">
+      <h1><%= @title %></h1>
+      <span class="muted">Page <%= @filters.page %></span>
+    </div>
+
+    <div class="card">
+      <%= if @jobs == [] do %>
+        <div class="empty">No jobs found</div>
+      <% else %>
+        <table>
+          <thead>
+            <tr>
+              <th class="num">ID</th>
+              <th>Worker</th>
+              <th>Queue</th>
+              <th>State</th>
+              <th class="num">Attempt</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            <%= for job <- @jobs do %>
+              <% {time_label, time} = job_time(job) %>
+              <tr>
+                <td class="num"><a href="<%= job_path(@base, job) %>"><%= job.id %></a></td>
+                <td>
+                  <a class="worker" href="<%= job_path(@base, job) %>"><%= job.worker %></a>
+                  <code class="args" title="<%= json(job.args) %>"><%= truncate(json(job.args), 160) %></code>
+                </td>
+                <td class="nowrap"><%= job.queue %></td>
+                <td><span class="badge state-<%= job.state %>"><%= job.state %></span></td>
+                <td class="num"><%= job.attempt %> / <%= job.max_attempts %></td>
+                <td class="nowrap">
+                  <time datetime="<%= iso8601(time) %>" title="<%= iso8601(time) %>"><%= time_label %> <%= relative_time(time, @now) %></time>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      <% end %>
+    </div>
+
+    <nav class="pagination">
+      <%= if @filters.page > 1 do %>
+        <a href="<%= jobs_path(@base, %{@filters | page: @filters.page - 1}) %>">← Previous</a>
+      <% else %>
+        <span class="disabled">← Previous</span>
+      <% end %>
+      <%= if @has_more do %>
+        <a href="<%= jobs_path(@base, %{@filters | page: @filters.page + 1}) %>">Next →</a>
+      <% else %>
+        <span class="disabled">Next →</span>
+      <% end %>
+    </nav>
+  </section>
+</div>

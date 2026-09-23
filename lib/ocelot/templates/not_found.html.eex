@@ -1,0 +1,5 @@
+<div class="card empty">
+  <h1>Not found</h1>
+  <p><%= @message %></p>
+  <a href="<%= @base %>">Back to jobs</a>
+</div>
