@@ -35,9 +35,59 @@ defmodule Surface.Components.Link do
   @moduledoc deprecated: "Use liveview's built-in `<.link>` instead"
 
   use Surface.Component
-  use Surface.Components.Events
 
   import Surface.Components.Utils
+  import Surface, only: [event_to_opts: 2]
+
+  @events [
+    capture_click: :"phx-capture-click",
+    click: :"phx-click",
+    click_away: :"phx-click-away",
+    window_focus: :"phx-window-focus",
+    window_blur: :"phx-window-blur",
+    focus: :"phx-focus",
+    blur: :"phx-blur",
+    window_keyup: :"phx-window-keyup",
+    window_keydown: :"phx-window-keydown",
+    keyup: :"phx-keyup",
+    keydown: :"phx-keydown"
+  ]
+
+  @doc "Triggered when the component captures click"
+  prop capture_click, :event
+
+  @doc "Triggered when the component receives click"
+  prop click, :event
+
+  @doc "Triggered when a click event happens outside of the element"
+  prop click_away, :event
+
+  @doc "Triggered when the page receives focus"
+  prop window_focus, :event
+
+  @doc "Triggered when the page loses focus"
+  prop window_blur, :event
+
+  @doc "Triggered when the component receives focus"
+  prop focus, :event
+
+  @doc "Triggered when the component loses focus"
+  prop blur, :event
+
+  @doc "Triggered when a key on the keyboard is released (window-level)"
+  prop window_keyup, :event
+
+  @doc "Triggered when a key on the keyboard is pressed (window-level)"
+  prop window_keydown, :event
+
+  @doc "Triggered when a key on the keyboard is released"
+  prop keyup, :event
+
+  @doc "Triggered when a key on the keyboard is pressed"
+  prop keydown, :event
+
+  @doc "List values that will be sent as part of the payload triggered by an event"
+  prop values, :keyword, default: []
 
   @doc "The page to link to"
   prop to, :any, required: true
@@ -84,6 +134,20 @@ defmodule Surface.Components.Link do
     ~F"""
     <a id={@id} class={@class} href={@to} :attrs={@opts}><#slot>{@label}</#slot></a>
     """
+  end
+
+  defp events_to_opts(assigns) do
+    events =
+      for {prop, phx_event} <- @events do
+        event_to_opts(assigns[prop], phx_event)
+      end
+
+    values =
+      for {key, value} <- List.wrap(assigns.values) do
+        {:"phx-value-#{key}", value}
+      end
+
+    List.flatten(events) ++ values
   end
 
   defp link_method(method, to, opts) do

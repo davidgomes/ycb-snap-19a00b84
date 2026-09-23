@@ -1,6 +1,5 @@
 defmodule Surface.Components.Utils do
   @moduledoc false
-  import Surface, only: [event_to_opts: 2]
 
   @valid_uri_schemes [
     "http:",
@@ -73,50 +72,5 @@ defmodule Surface.Components.Utils do
 
   def skip_csrf(opts) do
     Keyword.delete(opts, :csrf_token)
-  end
-
-  def opts_to_phx_opts(opts) do
-    for {key, value} <- opts do
-      case key do
-        :trigger_action -> {:"phx-trigger-action", value}
-        _ -> {key, value}
-      end
-    end
-  end
-
-  def events_to_opts(assigns) do
-    [
-      event_to_opts(assigns.capture_click, :"phx-capture-click"),
-      event_to_opts(assigns.click, :"phx-click"),
-      event_to_opts(assigns.click_away, :"phx-click-away"),
-      event_to_opts(assigns.window_focus, :"phx-window-focus"),
-      event_to_opts(assigns.window_blur, :"phx-window-blur"),
-      event_to_opts(assigns.focus, :"phx-focus"),
-      event_to_opts(assigns.blur, :"phx-blur"),
-      event_to_opts(assigns.window_keyup, :"phx-window-keyup"),
-      event_to_opts(assigns.window_keydown, :"phx-window-keydown"),
-      event_to_opts(assigns.keyup, :"phx-keyup"),
-      event_to_opts(assigns.keydown, :"phx-keydown"),
-      values_to_opts(assigns.values)
-    ]
-    |> List.flatten()
-  end
-
-  defp values_to_opts([]) do
-    []
-  end
-
-  defp values_to_opts(values) when is_list(values) do
-    values_to_attrs(values)
-  end
-
-  defp values_to_opts(_values) do
-    []
-  end
-
-  defp values_to_attrs(values) when is_list(values) do
-    for {key, value} <- values do
-      {:"phx-value-#{key}", value}
-    end
   end
 end
