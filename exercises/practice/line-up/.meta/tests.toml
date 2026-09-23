@@ -1,0 +1,67 @@
+# This is an auto-generated file.
+#
+# Regenerating this file via `configlet sync` will:
+# - Recreate every `description` key/value pair
+# - Recreate every `reimplements` key/value pair, where they exist in problem-specifications
+# - Remove any `include = true` key/value pair (an omitted `include` key implies inclusion)
+# - Preserve any other key/value pair
+#
+# As user-added comments (using the # character) will be removed when this file
+# is regenerated, comments can be added via a `comment` key.
+
+[66782c52-7e99-4638-90a6-3d4fec3a7cff]
+description = "format smallest non-exceptional ordinal numeral 4"
+
+[17bb0a90-99d9-4728-bf8f-cc4ed33776a1]
+description = "format greatest single digit non-exceptional ordinal numeral 9"
+
+[0dd3a223-de08-430f-98df-01258a53dd53]
+description = "format non-exceptional ordinal numeral 5"
+
+[4075cb4a-349d-4c11-9fb2-92a86b9b6d77]
+description = "format non-exceptional ordinal numeral 6"
+
+[da0a25d1-2da8-4394-9b53-09659f148269]
+description = "format non-exceptional ordinal numeral 7"
+
+[4a1d05cb-f995-4a1f-b577-9a5b7dec0701]
+description = "format non-exceptional ordinal numeral 8"
+
+[e7cb599e-52e2-4a84-ae5e-867d0c538717]
+description = "format exceptional ordinal numeral 1"
+
+[b93e85cf-af00-4334-af5d-5e9acec9e0be]
+description = "format exceptional ordinal numeral 2"
+
+[6aab15bc-1d58-4826-b565-0e97de65d108]
+description = "format exceptional ordinal numeral 3"
+
+[bf7afd40-b12e-47fd-814d-d0c03d35ca0b]
+description = "format smallest two digit non-exceptional ordinal numeral 10"
+
+[95665776-8bf3-4078-bc4a-1d0c04a2885d]
+description = "format non-exceptional ordinal numeral 11"
+
+[87288ae0-ca70-4344-a270-a21b482a5c71]
+description = "format non-exceptional ordinal numeral 12"
+
+[a8bf01bb-1085-48c0-82b9-d82bf213657d]
+description = "format non-exceptional ordinal numeral 13"
+
+[d906cb4a-53ad-4e6a-9232-a49fe71191d6]
+description = "format exceptional ordinal numeral 21"
+
+[d7cf6982-6ff6-4f8e-bfba-789237fb7fb4]
+description = "format exceptional ordinal numeral 62"
+
+[8eb2cb14-4317-421d-8368-c463bfe8c1f5]
+description = "format exceptional ordinal numeral 100"
+
+[91dfc30b-8dd7-483d-a50b-9b0ab5b6eb66]
+description = "format exceptional ordinal numeral 101"
+
+[2d75e78f-1b46-4b90-9af5-eb6b2e843498]
+description = "format non-exceptional ordinal numeral 112"
+
+[ccf0eb04-330c-4395-a5db-d0af1364e3a9]
+description = "format exceptional ordinal numeral 123"
