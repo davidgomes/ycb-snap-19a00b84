@@ -441,3 +441,124 @@ test("back and forward navigation types are tracked", async ({ page }) => {
     webSocketEvents.filter((e) => e.payload.indexOf("live_patch") !== -1),
   ).toHaveLength(3);
 });
+
+const guardNavigation = (page) =>
+  page.evaluate(() => {
+    window.beforeNavigateEvents = [];
+    window.cancelNavigation = true;
+    window.addEventListener("phx:before-navigate", (e) => {
+      window.beforeNavigateEvents.push(e.detail);
+      if (window.cancelNavigation) {
+        e.preventDefault();
+      }
+    });
+  });
+
+test("phx:before-navigate can cancel live navigation and patches", async ({
+  page,
+}) => {
+  await page.goto("/navigation/a");
+  await syncLV(page);
+  await guardNavigation(page);
+  networkEvents = [];
+  webSocketEvents = [];
+
+  await page.getByRole("link", { name: "Patch this LiveView" }).click();
+  await page.getByRole("link", { name: "LiveView B" }).click();
+  await syncLV(page);
+
+  await expect(page).toHaveURL("/navigation/a");
+  await expect(page.getByText("This is page A")).toBeVisible();
+  expect(await page.evaluate(() => window.beforeNavigateEvents)).toEqual([
+    {
+      href: expect.stringMatching(/\/navigation\/a\?param=.*/),
+      patch: true,
+      pop: false,
+      direction: "forward",
+    },
+    {
+      href: "http://localhost:4004/navigation/b",
+      patch: false,
+      pop: false,
+      direction: "forward",
+    },
+  ]);
+  expect(networkEvents).toEqual([]);
+  expect(webSocketEvents).toEqual([]);
+
+  // navigation works again once it is not cancelled anymore
+  await page.evaluate(() => (window.cancelNavigation = false));
+  await page.getByRole("link", { name: "LiveView B" }).click();
+  await syncLV(page);
+  await expect(page).toHaveURL("/navigation/b");
+  await expect(page.getByText("This is page B")).toBeVisible();
+});
+
+test("phx:before-navigate can cancel back and forward navigation", async ({
+  page,
+}) => {
+  await page.goto("/navigation/a");
+  await syncLV(page);
+  await page.getByRole("link", { name: "Patch this LiveView" }).click();
+  await syncLV(page);
+  await page.getByRole("link", { name: "LiveView B" }).click();
+  await syncLV(page);
+  await expect(page).toHaveURL("/navigation/b");
+
+  await guardNavigation(page);
+  networkEvents = [];
+  webSocketEvents = [];
+  const historyLength = await page.evaluate(() => window.history.length);
+
+  // the browser already changed the URL, so LiveView goes back to the previous entry
+  await page.goBack();
+  await expect(page).toHaveURL("/navigation/b");
+  await syncLV(page);
+  await expect(page.getByText("This is page B")).toBeVisible();
+  // the popstate event caused by restoring the entry does not trigger another event
+  expect(await page.evaluate(() => window.beforeNavigateEvents)).toEqual([
+    {
+      href: expect.stringMatching(/\/navigation\/a\?param=.*/),
+      patch: false,
+      pop: true,
+      direction: "backward",
+    },
+  ]);
+  expect(await page.evaluate(() => window.history.length)).toEqual(
+    historyLength,
+  );
+  expect(networkEvents).toEqual([]);
+  expect(webSocketEvents).toEqual([]);
+
+  // going back works once it is not cancelled anymore
+  await page.evaluate(() => (window.cancelNavigation = false));
+  await page.goBack();
+  await syncLV(page);
+  await expect(page).toHaveURL(/\/navigation\/a\?param=.*/);
+  await expect(page.getByText("This is page A")).toBeVisible();
+
+  // cancelling forward navigation restores the entry as well
+  await page.evaluate(() => {
+    window.beforeNavigateEvents = [];
+    window.cancelNavigation = true;
+  });
+  await page.goForward();
+  await expect(page).toHaveURL(/\/navigation\/a\?param=.*/);
+  await syncLV(page);
+  await expect(page.getByText("This is page A")).toBeVisible();
+  expect(await page.evaluate(() => window.beforeNavigateEvents)).toEqual([
+    {
+      href: "http://localhost:4004/navigation/b",
+      patch: false,
+      pop: true,
+      direction: "forward",
+    },
+  ]);
+
+  // the forward entry is kept
+  await page.evaluate(() => (window.cancelNavigation = false));
+  await page.goForward();
+  await syncLV(page);
+  await expect(page).toHaveURL("/navigation/b");
+  await expect(page.getByText("This is page B")).toBeVisible();
+});
