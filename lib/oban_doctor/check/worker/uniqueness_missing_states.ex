@@ -3,23 +3,42 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   Checks for workers with unique configuration that don't include all recommended states.
 
   When using unique constraints, you should typically include all non-final states:
-  `:available`, `:scheduled`, `:executing`, and `:retryable`.
+  `:available`, `:scheduled`, `:executing`, and `:retryable` (the `:incomplete`
+  named state group).
 
   Missing states means duplicate jobs could be enqueued when existing jobs are
   in the missing state.
+
+  Named state groups (`:all`, `:incomplete`, `:scheduled`, `:successful`) are
+  expanded to their member states before comparison.
 
   ## Examples
 
   Bad - only checks available state:
       unique: [fields: [:args], states: [:available]]
 
+  Bad - the `:scheduled` group only covers the scheduled state:
+      unique: [fields: [:args], states: :scheduled]
+
   Good - includes all non-final states:
-      unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+      unique: [fields: [:args], states: :incomplete]
+
+  ## References
+
+    * [Oban.Worker unique jobs](https://hexdocs.pm/oban/Oban.Worker.html#module-unique-jobs)
+    * [Unique Jobs guide](https://hexdocs.pm/oban/unique_jobs.html)
   """
 
   use ObanDoctor.Check, category: :worker
 
   @recommended_states [:available, :scheduled, :executing, :retryable]
+
+  @state_groups %{
+    all: [:available, :scheduled, :executing, :retryable, :completed, :cancelled, :discarded],
+    incomplete: [:available, :scheduled, :executing, :retryable],
+    scheduled: [:scheduled],
+    successful: [:available, :scheduled, :executing, :retryable, :completed]
+  }
 
   @impl true
   def id, do: :uniqueness_missing_states
@@ -51,27 +70,31 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   defp missing_recommended_states?(%{unique: unique}) do
     states = Keyword.get(unique, :states, [])
 
-    # Don't flag if they're using :all group (that's caught by another check)
+    # :all is caught by StateGroupUsage
     if uses_all_group?(states) do
       false
     else
-      state_list = normalize_states(states)
-      missing = @recommended_states -- state_list
-      not Enum.empty?(missing)
+      not Enum.empty?(missing_states(states))
     end
   end
 
   defp uses_all_group?(:all), do: true
-  defp uses_all_group?([:all]), do: true
   defp uses_all_group?(states) when is_list(states), do: :all in states
   defp uses_all_group?(_), do: false
 
-  defp normalize_states(states) when is_list(states), do: states
+  defp missing_states(states), do: @recommended_states -- normalize_states(states)
+
+  defp normalize_states(states) when is_atom(states), do: normalize_states([states])
+
+  defp normalize_states(states) when is_list(states) do
+    Enum.flat_map(states, &Map.get(@state_groups, &1, [&1]))
+  end
+
   defp normalize_states(_), do: []
 
   defp build_issue(worker) do
     states = Keyword.get(worker.unique, :states, [])
-    missing = @recommended_states -- normalize_states(states)
+    missing = missing_states(states)
 
     Issue.new(
       check: __MODULE__,
