@@ -1,0 +1,61 @@
+<.header>
+  Jobs
+  <:subtitle>Browse Oban jobs by state, and retry, cancel or delete them.</:subtitle>
+</.header>
+
+<nav class="mt-8 flex flex-wrap gap-2" aria-label="Job states">
+  <.state_tab current={@state} count={@counts |> Map.values() |> Enum.sum()}>All</.state_tab>
+  <.state_tab :for={state <- Jobs.states()} state={state} current={@state} count={@counts[state]}>
+    <%= String.capitalize(state) %>
+  </.state_tab>
+</nav>
+
+<.table
+  id="jobs"
+  rows={@jobs}
+  row_id={&"job-#{&1.id}"}
+  row_click={&JS.navigate(~p"/jobs/#{&1.id}")}
+>
+  <:col :let={job} label="ID"><%= job.id %></:col>
+  <:col :let={job} label="Worker">
+    <span class="block font-medium text-zinc-900"><%= job.worker %></span>
+    <span class="block max-w-xs truncate font-mono text-xs text-zinc-500">
+      <%= args_preview(job.args) %>
+    </span>
+  </:col>
+  <:col :let={job} label="Queue"><%= job.queue %></:col>
+  <:col :let={job} label="State"><.state_badge state={job.state} /></:col>
+  <:col :let={job} label="Attempt"><%= job.attempt %>/<%= job.max_attempts %></:col>
+  <:col :let={job} label="Time">
+    <.relative_time at={state_timestamp(job)} now={@now} />
+  </:col>
+  <:action :let={job}>
+    <.job_actions job={job} />
+  </:action>
+</.table>
+
+<p :if={@jobs == []} id="jobs-empty" class="py-10 text-center text-sm text-zinc-500">
+  No jobs found.
+</p>
+
+<div
+  :if={@total_pages > 1}
+  id="jobs-pagination"
+  class="mt-6 flex items-center justify-between text-sm leading-6"
+>
+  <p class="text-zinc-600">
+    Page <%= @page %> of <%= @total_pages %> (<%= @total %> jobs)
+  </p>
+  <div class="flex gap-4 font-semibold text-zinc-900">
+    <.link :if={@page > 1} patch={jobs_path(@state, @page - 1)} class="hover:text-zinc-600">
+      &larr; Previous
+    </.link>
+    <.link
+      :if={@page < @total_pages}
+      patch={jobs_path(@state, @page + 1)}
+      class="hover:text-zinc-600"
+    >
+      Next &rarr;
+    </.link>
+  </div>
+</div>

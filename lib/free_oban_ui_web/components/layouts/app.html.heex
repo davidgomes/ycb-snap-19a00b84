@@ -7,6 +7,12 @@
       <p class="bg-brand/5 text-brand rounded-full px-2 font-medium leading-6">
         v<%= Application.spec(:phoenix, :vsn) %>
       </p>
+      <.link
+        navigate={~p"/jobs"}
+        class="font-semibold leading-6 text-zinc-900 hover:text-zinc-700"
+      >
+        Jobs
+      </.link>
     </div>
     <div class="flex items-center gap-4 font-semibold leading-6 text-zinc-900">
       <a href="https://twitter.com/elixirphoenix" class="hover:text-zinc-700">
@@ -25,7 +31,7 @@
   </div>
 </header>
 <main class="px-4 py-20 sm:px-6 lg:px-8">
-  <div class="mx-auto max-w-2xl">
+  <div class="mx-auto max-w-6xl">
     <.flash_group flash={@flash} />
     <%= @inner_content %>
   </div>
