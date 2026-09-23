@@ -17,13 +17,13 @@ This example show how to crawly data from
 
 ### Use in livebook
 
-Import notebook from URL: [`elixirjobs.livemd`](./notebooks/elixirjobs.livemd)
+Run in Livebook
 
 ### Use in script or mix project
 
 ```elixir
 Mix.install([
-  {:spider_man, "~> 0.5"},
+  {:spider_man, "~> 0.6"},
   {:floki, "~> 0.34"},
   {:nimble_csv, "~> 1.2"}
 ])
