@@ -12,6 +12,8 @@ It is the key name to fetch from the `assigns`. It will be used as `subject` for
 It can be defined in module config with `config :canary, current_user: :user`
 This option can be overridden with `:current_user` for each plug / mouted hook.
 
+The subject key must be present in the `assigns` (its value can be `nil`), otherwise the authorization raises `KeyError`.
+
 ### Action
 For Phoenix applications and Plug based pages, Canary determines the action automatically (from `conn.private.phoenix_action`).
 For non-Phoenix applications, or to override the action provided by Phoenix when using it with Plug, simply ensure that `conn.assigns.canary_action` contains an atom specifying the action.
@@ -142,12 +144,13 @@ Canary Plugs and Hooks uses the same configuration options.
 | `:current_user`   | Key name to fetch from the assigns. It will be used as `subject` for `Canada.Can` to evaluate permissions. Default set to `:current_user`. Applies only for `authorize_resource` or `load_and_authorize_resource`       | `:current_member` |
 | `:on` | Specifies the LiveView lifecycle stages to attach the hook. Default `:handle_params` **Available only in Canary.Hooks** | `[:handle_params, :handle_event]` |
 | `:as` | Specifies the resource_name key in assigns | `:team_post` |
-| `:id_name` | Specifies the name of the id in params, defaults to "id" | `:post_id` |
-| `:id_field` | Specifies the name of the ID field in the database for searching :id_name value, defaults to "id". | `:post_id` |
+| `:id_name` | Specifies the name of the id in params (atom or string), defaults to "id" | `:post_id` |
+| `:id_field` | Specifies the name of the ID field in the database for searching :id_name value (atom or string), defaults to "id". | `:post_id` |
 | `:required` | Specifies if the resource is required, when it's not found it will handle not found error, default to false | true |
 | `:persisted` | Specifies the resource should always be loaded from the database, defaults to false **Available only in Canary.Plugs** | true |
 | `:not_found_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_not_found}` |
 | `:unauthorized_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_unauthorized}` |
+| `:error_handler` | Module which implements `Canary.ErrorHandler` behaviour, it overrides the `:error_handler` from config. `:not_found_handler` and `:unauthorized_handler` take precedence over it | `YourApp.CustomErrorHandler` |
 
 ### Examples
 

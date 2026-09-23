@@ -5,6 +5,11 @@
     * added support for authorization LiveView
     * added `:error_handler` and ErrorHandler behaviour
     * aded  `:required` option
+    * `:error_handler` can be passed as an option to plugs and hooks
+    * `:id_name` and `:id_field` options accept both atoms and strings
+
+  * Breaking changes
+    * `Canary.Hooks` raise `KeyError` when the `:current_user` key is missing in the socket assigns, same as `Canary.Plugs`
 
   * Dependency changes
     * Elixir ~> 1.14 is now required
