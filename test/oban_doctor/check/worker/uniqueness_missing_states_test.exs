@@ -109,8 +109,8 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       assert issues == []
     end
 
-    test "returns no issues for named groups covering all recommended states" do
-      for group <- [:incomplete, :successful] do
+    test "does not flag named state groups" do
+      for group <- [:incomplete, :scheduled, :successful] do
         workers = [
           %{
             module: MyApp.Workers.NamedGroupWorker,
@@ -126,28 +126,6 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
 
         assert UniquenessMissingStates.run(context) == [], "expected no issues for #{group}"
       end
-    end
-
-    test "returns warning for :scheduled named group" do
-      workers = [
-        %{
-          module: MyApp.Workers.DebounceWorker,
-          file: "lib/my_app/workers/debounce_worker.ex",
-          line: 1,
-          queue: :default,
-          unique: [fields: [:args], states: :scheduled],
-          max_attempts: nil
-        }
-      ]
-
-      context = %{workers: workers}
-
-      issues = UniquenessMissingStates.run(context)
-
-      assert length(issues) == 1
-      [issue] = issues
-      assert issue.meta.configured_states == :scheduled
-      assert issue.meta.missing_states == [:available, :executing, :retryable]
     end
 
     test "detects workers missing only some states" do

@@ -8,10 +8,10 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   Missing states means duplicate jobs could be enqueued when existing jobs are
   in the missing state.
 
-  Named state groups are expanded to their states before checking. The
-  `:incomplete` and `:successful` groups include every recommended state, while
-  `:scheduled` only covers scheduled jobs (intended for debouncing). The `:all`
-  group is reported by `ObanDoctor.Check.Worker.StateGroupUsage` instead.
+  Named state groups are not flagged because they are deliberate Oban patterns:
+  `:incomplete` and `:successful` include every recommended state, and
+  `:scheduled` is meant for debouncing. The `:all` group is reported by
+  `ObanDoctor.Check.Worker.StateGroupUsage` instead.
 
   ## Examples
 
@@ -34,13 +34,7 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   use ObanDoctor.Check, category: :worker
 
   @recommended_states [:available, :scheduled, :executing, :retryable]
-
-  # Must match Oban.Job.unique_states/1 (Oban 2.20+)
-  @state_groups %{
-    incomplete: [:suspended, :available, :scheduled, :executing, :retryable],
-    scheduled: [:scheduled],
-    successful: [:suspended, :available, :scheduled, :executing, :retryable, :completed]
-  }
+  @named_groups [:all, :incomplete, :scheduled, :successful]
 
   @impl true
   def id, do: :uniqueness_missing_states
@@ -72,8 +66,8 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   defp missing_recommended_states?(%{unique: unique}) do
     states = Keyword.get(unique, :states, [])
 
-    # Don't flag if they're using :all group (that's caught by another check)
-    if uses_all_group?(states) do
+    # :all is caught by StateGroupUsage
+    if states in @named_groups or uses_all_group?(states) do
       false
     else
       state_list = normalize_states(states)
@@ -88,7 +82,6 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   defp uses_all_group?(_), do: false
 
   defp normalize_states(states) when is_list(states), do: states
-  defp normalize_states(group) when is_atom(group), do: Map.get(@state_groups, group, [])
   defp normalize_states(_), do: []
 
   defp build_issue(worker) do
