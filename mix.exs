@@ -12,6 +12,7 @@ defmodule EctoJob.Mixfile do
       elixir: "~> 1.7",
       elixirc_paths: elixirc_paths(Mix.env()),
       elixirc_options: [warnings_as_errors: true],
+      xref: [exclude: [Postgrex.Notifications]],
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       dialyzer: dialyzer(),
@@ -43,7 +44,8 @@ defmodule EctoJob.Mixfile do
 
   defp dialyzer do
     [
-      flags: ["-Werror_handling", "-Wno_unused", "-Wunmatched_returns", "-Wunderspecs"]
+      flags: ["-Werror_handling", "-Wno_unused", "-Wunmatched_returns", "-Wunderspecs"],
+      plt_add_apps: [:postgrex]
     ]
   end
 
