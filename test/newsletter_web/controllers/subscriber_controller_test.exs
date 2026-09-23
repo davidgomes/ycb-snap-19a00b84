@@ -12,7 +12,7 @@ defmodule NewsletterWeb.SubscriberControllerTest do
 
     assert_email_sent(
       subject: "Welcome to the DockYard Academy Newsletter",
-      to: {"Ada Lovelace", "ada@example.com"},
+      to: [{"Ada Lovelace", "ada@example.com"}],
       text_body: "Hello Ada Lovelace"
     )
   end
