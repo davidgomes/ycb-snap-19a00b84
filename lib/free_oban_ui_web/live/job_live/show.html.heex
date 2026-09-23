@@ -1,0 +1,57 @@
+<.header>
+  Job <%= @job.id %>
+  <:subtitle><%= @job.worker %></:subtitle>
+  <:actions>
+    <div class="flex gap-2">
+      <.button :if={Jobs.retryable?(@job)} id="retry-job" phx-click="retry">Retry</.button>
+      <.button
+        :if={Jobs.cancellable?(@job)}
+        id="cancel-job"
+        phx-click="cancel"
+        data-confirm="Are you sure you want to cancel this job?"
+      >
+        Cancel
+      </.button>
+    </div>
+  </:actions>
+</.header>
+
+<.list>
+  <:item title="State"><.state_badge state={@job.state} /></:item>
+  <:item title="Queue"><%= @job.queue %></:item>
+  <:item title="Attempt"><%= @job.attempt %> of <%= @job.max_attempts %></:item>
+  <:item title="Priority"><%= @job.priority %></:item>
+  <:item title="Tags"><%= join_or_dash(@job.tags) %></:item>
+  <:item title="Attempted by"><%= join_or_dash(@job.attempted_by) %></:item>
+  <:item title="Inserted at"><.timestamp at={@job.inserted_at} /></:item>
+  <:item title="Scheduled at"><.timestamp at={@job.scheduled_at} /></:item>
+  <:item title="Attempted at"><.timestamp at={@job.attempted_at} /></:item>
+  <:item title="Completed at"><.timestamp at={@job.completed_at} /></:item>
+  <:item title="Cancelled at"><.timestamp at={@job.cancelled_at} /></:item>
+  <:item title="Discarded at"><.timestamp at={@job.discarded_at} /></:item>
+</.list>
+
+<section id="job-args" class="mt-12">
+  <h2 class="text-sm font-semibold leading-6 text-zinc-800">Args</h2>
+  <pre class="mt-2 overflow-x-auto rounded-lg bg-zinc-50 p-4 font-mono text-xs leading-5 text-zinc-700"><%= format_json(@job.args) %></pre>
+</section>
+
+<section id="job-meta" class="mt-8">
+  <h2 class="text-sm font-semibold leading-6 text-zinc-800">Meta</h2>
+  <pre class="mt-2 overflow-x-auto rounded-lg bg-zinc-50 p-4 font-mono text-xs leading-5 text-zinc-700"><%= format_json(@job.meta) %></pre>
+</section>
+
+<section id="job-errors" class="mt-8">
+  <h2 class="text-sm font-semibold leading-6 text-zinc-800">
+    Errors <span class="font-normal text-zinc-500">(<%= length(@job.errors) %>)</span>
+  </h2>
+  <p :if={@job.errors == []} class="mt-2 text-sm text-zinc-500">No errors recorded.</p>
+  <div :for={error <- Enum.reverse(@job.errors)} class="mt-4">
+    <p class="text-sm leading-6 text-zinc-600">
+      Attempt <%= error["attempt"] %> &middot; <.timestamp at={error_time(error)} />
+    </p>
+    <pre class="mt-2 overflow-x-auto rounded-lg bg-rose-50 p-4 font-mono text-xs leading-5 text-rose-900"><%= error["error"] %></pre>
+  </div>
+</section>
+
+<.back navigate={~p"/jobs"}>Back to jobs</.back>
