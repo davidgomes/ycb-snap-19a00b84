@@ -39,6 +39,18 @@ defmodule Guardian.Token.JwtTest do
     end
   end
 
+  defmodule NoSecretImpl do
+    @moduledoc false
+
+    use Guardian,
+      otp_app: :guardian,
+      token_module: Guardian.Token.Jwt,
+      issuer: "MyApp"
+
+    def subject_for_token(%{id: id}, _claims), do: {:ok, "User:#{id}"}
+    def resource_from_claims(%{"sub" => "User:" <> sub}), do: {:ok, %{id: sub}}
+  end
+
   setup do
     claims = %{
       "jti" => Guardian.UUID.generate(),
@@ -165,6 +177,19 @@ defmodule Guardian.Token.JwtTest do
 
       assert jwt.fields == ctx.claims
     end
+
+    test "does not fall back to the secret_key when the secret is explicitly nil", ctx do
+      assert {:error, :secret_not_found} = Jwt.create_token(ctx.impl, ctx.claims, secret: nil)
+    end
+
+    test "does not fall back to the secret_key when an {m, f, a} secret resolves to nil", ctx do
+      secret = {ctx.impl, :the_secret_yo, [nil]}
+      assert {:error, :secret_not_found} = Jwt.create_token(ctx.impl, ctx.claims, secret: secret)
+    end
+
+    test "reports a missing secret when none is configured", ctx do
+      assert {:error, :secret_not_found} = Jwt.create_token(NoSecretImpl, ctx.claims)
+    end
   end
 
   describe "decode_token" do
@@ -196,6 +221,24 @@ defmodule Guardian.Token.JwtTest do
       secret = {ctx.impl, :the_secret_yo, [the_secret]}
       result = Jwt.decode_token(ctx.impl, ctx.jwt, secret: secret)
       assert {:ok, ctx.claims} == result
+    end
+
+    test "does not fall back to the secret_key when the secret is explicitly nil", ctx do
+      assert {:ok, _} = Jwt.decode_token(ctx.impl, ctx.jwt)
+      assert {:error, :secret_not_found} = Jwt.decode_token(ctx.impl, ctx.jwt, secret: nil)
+    end
+
+    test "does not fall back to the secret_key when an {m, f, a} secret resolves to nil", ctx do
+      secret = {ctx.impl, :the_secret_yo, [nil]}
+      assert {:error, :secret_not_found} = Jwt.decode_token(ctx.impl, ctx.jwt, secret: secret)
+    end
+
+    test "reports a missing secret rather than an invalid token when none is configured", ctx do
+      assert {:error, :secret_not_found} = Jwt.decode_token(NoSecretImpl, ctx.jwt)
+    end
+
+    test "reports a missing secret through decode_and_verify", ctx do
+      assert {:error, :secret_not_found} = Guardian.decode_and_verify(ctx.impl, ctx.jwt, %{}, secret: nil)
     end
   end
 
