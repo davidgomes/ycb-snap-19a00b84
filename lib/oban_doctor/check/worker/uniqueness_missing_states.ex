@@ -8,18 +8,41 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   Missing states means duplicate jobs could be enqueued when existing jobs are
   in the missing state.
 
+  Oban's named state groups are expanded before checking:
+
+    * `:incomplete` and `:successful` include all recommended states
+    * `:scheduled` only includes `:scheduled` jobs, so it is flagged
+    * `:all` is skipped here and reported by `ObanDoctor.Check.Worker.StateGroupUsage`
+
   ## Examples
 
   Bad - only checks available state:
       unique: [fields: [:args], states: [:available]]
 
+  Bad - the `:scheduled` group only checks scheduled jobs:
+      unique: [fields: [:args], states: :scheduled]
+
   Good - includes all non-final states:
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  Good - the `:incomplete` group covers all non-final states:
+      unique: [fields: [:args], states: :incomplete]
+
+  ## References
+
+    * [Oban Unique Jobs guide](https://hexdocs.pm/oban/unique_jobs.html)
+    * [`Oban.Job.unique_states/1`](https://hexdocs.pm/oban/Oban.Job.html#unique_states/1)
   """
 
   use ObanDoctor.Check, category: :worker
 
   @recommended_states [:available, :scheduled, :executing, :retryable]
+
+  @state_groups %{
+    incomplete: [:suspended, :available, :scheduled, :executing, :retryable],
+    scheduled: [:scheduled],
+    successful: [:suspended, :available, :scheduled, :executing, :retryable, :completed]
+  }
 
   @impl true
   def id, do: :uniqueness_missing_states
@@ -55,9 +78,7 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
     if uses_all_group?(states) do
       false
     else
-      state_list = normalize_states(states)
-      missing = @recommended_states -- state_list
-      not Enum.empty?(missing)
+      not Enum.empty?(missing_states(states))
     end
   end
 
@@ -66,12 +87,19 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   defp uses_all_group?(states) when is_list(states), do: :all in states
   defp uses_all_group?(_), do: false
 
-  defp normalize_states(states) when is_list(states), do: states
+  defp missing_states(states), do: @recommended_states -- normalize_states(states)
+
+  defp normalize_states(group) when is_map_key(@state_groups, group),
+    do: Map.fetch!(@state_groups, group)
+
+  defp normalize_states(states) when is_list(states),
+    do: Enum.flat_map(states, &Map.get(@state_groups, &1, [&1]))
+
   defp normalize_states(_), do: []
 
   defp build_issue(worker) do
     states = Keyword.get(worker.unique, :states, [])
-    missing = @recommended_states -- normalize_states(states)
+    missing = missing_states(states)
 
     Issue.new(
       check: __MODULE__,
