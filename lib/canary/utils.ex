@@ -107,6 +107,55 @@ defmodule Canary.Utils do
   end
 
   @doc """
+  Get the resource assigned under `resource_name` in `assigns`.
+
+  Returns the resource only when it is a struct of the `:model` given in `opts`, otherwise `nil`.
+  """
+  @spec get_loaded_resource(map(), atom(), Keyword.t()) :: Ecto.Schema.t() | nil
+  def get_loaded_resource(assigns, resource_name, opts) do
+    model = opts[:model]
+
+    case Map.get(assigns, resource_name) do
+      %{__struct__: ^model} = resource -> resource
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Get the resource to authorize against.
+
+  It is the resource loaded in `assigns` (see `get_loaded_resource/3`). When it is not loaded,
+  it is the `:model` module, or `nil` when the resource is `:required`.
+  """
+  @spec get_resource_or_model(map(), atom(), Keyword.t()) :: Ecto.Schema.t() | module() | nil
+  def get_resource_or_model(assigns, resource_name, opts) do
+    case get_loaded_resource(assigns, resource_name, opts) do
+      nil -> if required?(opts), do: nil, else: opts[:model]
+      resource -> resource
+    end
+  end
+
+  @doc """
+  Load the resource from the repo by the id taken from the connection or params (see `get_resource_id/2`).
+
+  Returns `nil` without querying the repo when there is no id.
+  """
+  @spec load_resource_from_repo(Plug.Conn.t() | map(), Keyword.t()) :: Ecto.Schema.t() | nil
+  def load_resource_from_repo(conn_or_params, opts) do
+    case get_resource_id(conn_or_params, opts) do
+      nil ->
+        nil
+
+      id ->
+        repo = Application.get_env(:canary, :repo)
+        field_name = Keyword.get(opts, :id_field, "id")
+
+        repo.get_by(opts[:model], %{String.to_atom(field_name) => id})
+        |> preload_if_needed(repo, opts)
+    end
+  end
+
+  @doc """
   Apply the error handler to the connection or socket
   """
   @spec apply_error_handler(Plug.Conn.t() , atom, Keyword.t()) :: Plug.Conn.t()

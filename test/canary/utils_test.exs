@@ -49,6 +49,67 @@ defmodule UtilsTest do
     assert required?([]) == false
   end
 
+  describe "get_loaded_resource/3" do
+    test "returns the assigned resource when it is a struct of the model" do
+      assert get_loaded_resource(%{post: %Post{id: 1}}, :post, model: Post) == %Post{id: 1}
+    end
+
+    test "returns nil when the resource is not assigned or is not a struct of the model" do
+      assert get_loaded_resource(%{}, :post, model: Post) == nil
+      assert get_loaded_resource(%{post: nil}, :post, model: Post) == nil
+      assert get_loaded_resource(%{post: %User{id: 1}}, :post, model: Post) == nil
+      assert get_loaded_resource(%{post: [%Post{id: 1}]}, :post, model: Post) == nil
+      assert get_loaded_resource(%{post: %{id: 1}}, :post, model: Post) == nil
+    end
+  end
+
+  describe "get_resource_or_model/3" do
+    test "returns the loaded resource" do
+      assert get_resource_or_model(%{post: %Post{id: 1}}, :post, model: Post) == %Post{id: 1}
+
+      assert get_resource_or_model(%{post: %Post{id: 1}}, :post, model: Post, required: true) ==
+               %Post{id: 1}
+    end
+
+    test "returns the model when the resource is not loaded" do
+      assert get_resource_or_model(%{}, :post, model: Post) == Post
+      assert get_resource_or_model(%{post: %User{}}, :post, model: Post) == Post
+    end
+
+    test "returns nil when the resource is required and not loaded" do
+      assert get_resource_or_model(%{}, :post, model: Post, required: true) == nil
+      assert get_resource_or_model(%{post: %User{}}, :post, model: Post, required: true) == nil
+    end
+  end
+
+  describe "load_resource_from_repo/2" do
+    setup do
+      Application.put_env(:canary, :repo, Repo)
+    end
+
+    test "loads the resource by the id from params or conn" do
+      assert load_resource_from_repo(%{"id" => "1"}, model: Post) == %Post{id: 1}
+
+      assert load_resource_from_repo(%Plug.Conn{params: %{"id" => "2"}}, model: Post) ==
+               %Post{id: 2, user_id: 2}
+
+      opts = [model: Post, id_name: "slug", id_field: "slug"]
+      assert load_resource_from_repo(%{"slug" => "slug1"}, opts) == %Post{id: 1, slug: "slug1"}
+
+      assert load_resource_from_repo(%{"id" => "3"}, model: Post) == nil
+    end
+
+    test "preloads associations" do
+      assert load_resource_from_repo(%{"id" => "2"}, model: Post, preload: :user) ==
+               %Post{id: 2, user_id: 2, user: %User{id: 2}}
+    end
+
+    test "returns nil without querying the repo when the id is missing" do
+      assert load_resource_from_repo(%{}, model: Post) == nil
+      assert load_resource_from_repo(%{"id" => "1"}, model: Post, id_name: "post_id") == nil
+    end
+  end
+
   describe "apply_error_handler/3" do
     defmodule CustomErrorHandler do
       @behaviour Canary.ErrorHandler

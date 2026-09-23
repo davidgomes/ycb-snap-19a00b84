@@ -135,6 +135,26 @@ defmodule Canary.PlugsTest do
     assert load_resource(conn, opts) == expected
   end
 
+  test "it does not query the repo when the id is missing" do
+    opts = [model: Post]
+
+    conn = conn(%Plug.Conn{private: %{phoenix_action: :show}}, :get, "/posts", %{})
+    expected = Plug.Conn.assign(conn, :post, nil)
+
+    assert load_resource(conn, opts) == expected
+
+    # when the resource is required
+    opts = [model: Post, required: true, not_found_handler: {Helpers, :not_found_handler}]
+    conn = conn(%Plug.Conn{private: %{phoenix_action: :new}}, :get, "/posts/new", %{})
+
+    expected =
+      conn
+      |> Plug.Conn.assign(:post, nil)
+      |> Helpers.not_found_handler()
+
+    assert load_resource(conn, opts) == expected
+  end
+
   test "it loads the resource correctly with opts[:persisted] specified on :index action" do
     opts = [model: User, id_name: "user_id", persisted: true]
 
@@ -283,7 +303,7 @@ defmodule Canary.PlugsTest do
       conn(
         %Plug.Conn{
           private: %{phoenix_action: :show},
-          assigns: %{current_user: %User{id: 1}}
+          assigns: %{current_user: %User{id: 1}, post: %Post{id: 1}}
         },
         :get,
         "/posts/1",
@@ -302,7 +322,7 @@ defmodule Canary.PlugsTest do
       conn(
         %Plug.Conn{
           private: %{},
-          assigns: %{current_user: %User{id: 1}, canary_action: :show}
+          assigns: %{current_user: %User{id: 1}, canary_action: :show, post: %Post{id: 1}}
         },
         :get,
         "/posts/1",
@@ -321,7 +341,7 @@ defmodule Canary.PlugsTest do
       conn(
         %Plug.Conn{
           private: %{phoenix_action: :show},
-          assigns: %{current_user: %User{id: 1}, canary_action: :unauthorized}
+          assigns: %{current_user: %User{id: 1}, canary_action: :unauthorized, post: %Post{id: 1}}
         },
         :get,
         "/posts/1",
@@ -339,7 +359,11 @@ defmodule Canary.PlugsTest do
       conn(
         %Plug.Conn{
           private: %{},
-          assigns: %{current_user: %User{id: 1}, canary_action: :show}
+          assigns: %{
+            current_user: %User{id: 1},
+            canary_action: :show,
+            post: %Post{id: 2, user_id: 2}
+          }
         },
         :get,
         "/posts/2",
@@ -370,7 +394,7 @@ defmodule Canary.PlugsTest do
     assert authorize_resource(conn, opts) == expected
 
     # when the resource of a different type already exists in conn.assigns,
-    # it authorizes for the desired resource
+    # it authorizes against the model
     params = %{"id" => "2"}
 
     conn =
@@ -385,6 +409,40 @@ defmodule Canary.PlugsTest do
       )
 
     expected = Plug.Conn.assign(conn, :authorized, false)
+
+    assert authorize_resource(conn, opts) == expected
+
+    # when the resource is not loaded, it authorizes against the model
+    # rather than loading the resource from the repo
+    params = %{"id" => "1"}
+
+    conn =
+      conn(
+        %Plug.Conn{
+          private: %{phoenix_action: :show},
+          assigns: %{current_user: %User{id: 1}}
+        },
+        :get,
+        "/posts/1",
+        params
+      )
+
+    expected = Plug.Conn.assign(conn, :authorized, false)
+
+    assert authorize_resource(conn, opts) == expected
+
+    conn =
+      conn(
+        %Plug.Conn{
+          private: %{phoenix_action: :other_action},
+          assigns: %{current_user: %User{id: 1}}
+        },
+        :get,
+        "/posts/1/other_action",
+        params
+      )
+
+    expected = Plug.Conn.assign(conn, :authorized, true)
 
     assert authorize_resource(conn, opts) == expected
 
@@ -403,6 +461,44 @@ defmodule Canary.PlugsTest do
       )
 
     expected = Plug.Conn.assign(conn, :authorized, false)
+
+    assert authorize_resource(conn, opts) == expected
+  end
+
+  test "it does not authorize the resource when it is required and not loaded" do
+    opts = [model: Post, required: true]
+
+    # when the resource is not loaded
+    params = %{"id" => "1"}
+
+    conn =
+      conn(
+        %Plug.Conn{
+          private: %{phoenix_action: :other_action},
+          assigns: %{current_user: %User{id: 1}}
+        },
+        :get,
+        "/posts/1/other_action",
+        params
+      )
+
+    expected = Plug.Conn.assign(conn, :authorized, false)
+
+    assert authorize_resource(conn, opts) == expected
+
+    # when the resource is loaded, it authorizes for that resource, even for non-id actions
+    conn =
+      conn(
+        %Plug.Conn{
+          private: %{phoenix_action: :new},
+          assigns: %{current_user: %User{id: 2}, post: %Post{id: 2, user_id: 2}}
+        },
+        :get,
+        "/posts/2/comments/new",
+        params
+      )
+
+    expected = Plug.Conn.assign(conn, :authorized, true)
 
     assert authorize_resource(conn, opts) == expected
   end
@@ -471,7 +567,7 @@ defmodule Canary.PlugsTest do
       conn(
         %Plug.Conn{
           private: %{phoenix_action: :show},
-          assigns: %{current_user: %User{id: 1}}
+          assigns: %{current_user: %User{id: 1}, post: %Post{id: 1, slug: "slug1"}}
         },
         :get,
         "/posts/slug1",
@@ -490,7 +586,11 @@ defmodule Canary.PlugsTest do
       conn(
         %Plug.Conn{
           private: %{},
-          assigns: %{current_user: %User{id: 1}, canary_action: :show}
+          assigns: %{
+            current_user: %User{id: 1},
+            canary_action: :show,
+            post: %Post{id: 1, slug: "slug1"}
+          }
         },
         :get,
         "/posts/slug1",
@@ -509,7 +609,11 @@ defmodule Canary.PlugsTest do
       conn(
         %Plug.Conn{
           private: %{phoenix_action: :show},
-          assigns: %{current_user: %User{id: 1}, canary_action: :unauthorized}
+          assigns: %{
+            current_user: %User{id: 1},
+            canary_action: :unauthorized,
+            post: %Post{id: 1, slug: "slug1"}
+          }
         },
         :get,
         "/posts/slug1",
@@ -527,7 +631,11 @@ defmodule Canary.PlugsTest do
       conn(
         %Plug.Conn{
           private: %{},
-          assigns: %{current_user: %User{id: 1}, canary_action: :show}
+          assigns: %{
+            current_user: %User{id: 1},
+            canary_action: :show,
+            post: %Post{id: 2, slug: "slug2", user_id: 2}
+          }
         },
         :get,
         "/posts/slug2",
@@ -558,7 +666,7 @@ defmodule Canary.PlugsTest do
     assert authorize_resource(conn, opts) == expected
 
     # when the resource of a different type already exists in conn.assigns,
-    # it authorizes for the desired resource
+    # it authorizes against the model
     params = %{"slug" => "slug2"}
 
     conn =
@@ -1003,7 +1111,7 @@ defmodule Canary.PlugsTest do
       conn(
         %Plug.Conn{
           private: %{phoenix_action: :show},
-          assigns: %{current_user: %User{id: 1}}
+          assigns: %{current_user: %User{id: 1}, post: %Post{id: 1}}
         },
         :get,
         "/posts/1",
@@ -1151,7 +1259,7 @@ defmodule Canary.PlugsTest do
       conn(
         %Plug.Conn{
           private: %{phoenix_action: :show},
-          assigns: %{current_user: %User{id: 1}}
+          assigns: %{current_user: %User{id: 1}, post: %Post{id: 1}}
         },
         :get,
         "/posts/1",
@@ -1317,7 +1425,7 @@ defmodule Canary.PlugsTest do
   end
 
   test "when not_found, it calls the specified action" do
-    opts = [model: Post, not_found_handler: {Helpers, :not_found_handler}]
+    opts = [model: Post, not_found_handler: {Helpers, :not_found_handler}, required: true]
 
     params = %{"id" => "3"}
 
@@ -1334,11 +1442,78 @@ defmodule Canary.PlugsTest do
     assert load_resource(conn, opts) == expected
   end
 
+  test "when not_found and the resource is not required, it does not call the specified action" do
+    opts = [model: Post, not_found_handler: {Helpers, :not_found_handler}]
+
+    params = %{"id" => "3"}
+    conn = conn(%Plug.Conn{private: %{phoenix_action: :show}}, :get, "/posts/3", params)
+    expected = Plug.Conn.assign(conn, :post, nil)
+
+    assert load_resource(conn, opts) == expected
+
+    # when loading and authorizing the resource
+    conn =
+      conn(
+        %Plug.Conn{assigns: %{current_user: %User{id: 1}}, private: %{phoenix_action: :show}},
+        :get,
+        "/posts/3",
+        params
+      )
+
+    expected =
+      conn
+      |> Plug.Conn.assign(:authorized, false)
+      |> Plug.Conn.assign(:post, nil)
+
+    assert load_and_authorize_resource(conn, opts) == expected
+  end
+
+  test "when the resource cannot be loaded and is not required, it authorizes against the model" do
+    opts = [model: Post, not_found_handler: {Helpers, :not_found_handler}]
+
+    params = %{"id" => "3"}
+
+    conn =
+      conn(
+        %Plug.Conn{
+          assigns: %{current_user: %User{id: 1}},
+          private: %{phoenix_action: :other_action}
+        },
+        :get,
+        "/posts/3/other_action",
+        params
+      )
+
+    expected =
+      conn
+      |> Plug.Conn.assign(:authorized, true)
+      |> Plug.Conn.assign(:post, nil)
+
+    assert load_and_authorize_resource(conn, opts) == expected
+
+    # when the resource is required
+    opts = [
+      model: Post,
+      not_found_handler: {Helpers, :not_found_handler},
+      unauthorized_handler: {Helpers, :non_halting_unauthorized_handler},
+      required: true
+    ]
+
+    expected =
+      conn
+      |> Plug.Conn.assign(:authorized, false)
+      |> Plug.Conn.assign(:post, nil)
+      |> Helpers.not_found_handler()
+
+    assert load_and_authorize_resource(conn, opts) == expected
+  end
+
   test "when unauthorized and resource not found, it calls the specified authorization handler first" do
     opts = [
       model: Post,
       not_found_handler: {Helpers, :not_found_handler},
-      unauthorized_handler: {Helpers, :unauthorized_handler}
+      unauthorized_handler: {Helpers, :unauthorized_handler},
+      required: true
     ]
 
     params = %{"id" => "3"}
@@ -1364,7 +1539,8 @@ defmodule Canary.PlugsTest do
     opts = [
       model: Post,
       not_found_handler: {Helpers, :not_found_handler},
-      unauthorized_handler: {Helpers, :non_halting_unauthorized_handler}
+      unauthorized_handler: {Helpers, :non_halting_unauthorized_handler},
+      required: true
     ]
 
     params = %{"id" => "3"}
@@ -1383,6 +1559,33 @@ defmodule Canary.PlugsTest do
       |> Plug.Conn.assign(:post, nil)
       |> Helpers.non_halting_unauthorized_handler()
       |> Helpers.not_found_handler()
+
+    assert load_and_authorize_resource(conn, opts) == expected
+  end
+
+  test "when the authorization handler halts the request, it does not call the not found handler" do
+    opts = [
+      model: Post,
+      not_found_handler: {Helpers, :not_found_handler},
+      unauthorized_handler: {Helpers, :halting_unauthorized_handler},
+      required: true
+    ]
+
+    params = %{"id" => "3"}
+
+    conn =
+      conn(
+        %Plug.Conn{assigns: %{current_user: %User{id: 2}}, private: %{phoenix_action: :show}},
+        :get,
+        "/posts/3",
+        params
+      )
+
+    expected =
+      conn
+      |> Plug.Conn.assign(:authorized, false)
+      |> Plug.Conn.assign(:post, nil)
+      |> Helpers.halting_unauthorized_handler()
 
     assert load_and_authorize_resource(conn, opts) == expected
   end
@@ -1414,7 +1617,7 @@ defmodule Canary.PlugsTest do
 
     test "when unauthorized and resource not found, it calls the configured authorization handler first" do
       Application.put_env(:canary, :unauthorized_handler, {Helpers, :unauthorized_handler})
-      opts = [model: Post]
+      opts = [model: Post, required: true]
 
       params = %{"id" => "3"}
 
@@ -1468,7 +1671,7 @@ defmodule Canary.PlugsTest do
 
     test "when not_found, it calls the configured action" do
       Application.put_env(:canary, :not_found_handler, {Helpers, :not_found_handler})
-      opts = [model: Post]
+      opts = [model: Post, required: true]
 
       params = %{"id" => "4"}
       conn = conn(%Plug.Conn{private: %{phoenix_action: :show}}, :get, "/posts/4", params)
@@ -1488,7 +1691,7 @@ defmodule Canary.PlugsTest do
     test "when not_found, it calls the opt-specified action rather than the configured action" do
       # should not be called
       Application.put_env(:canary, :not_found_handler, {Helpers, :does_not_exist})
-      opts = [model: Post, not_found_handler: {Helpers, :not_found_handler}]
+      opts = [model: Post, not_found_handler: {Helpers, :not_found_handler}, required: true]
 
       params = %{"id" => "4"}
       conn = conn(%Plug.Conn{private: %{phoenix_action: :show}}, :get, "/posts/4", params)
@@ -1541,7 +1744,7 @@ defmodule Canary.PlugsTest do
         conn(
           %Plug.Conn{
             private: %{phoenix_action: :show},
-            assigns: %{user: %User{id: 1}, authorized: true}
+            assigns: %{user: %User{id: 1}, authorized: true, post: %Post{id: 1}}
           },
           :get,
           "/posts/1",
@@ -1625,7 +1828,7 @@ defmodule Canary.PlugsTest do
     test "it authorizes the resource correctly when the :preload key is specified" do
       opts = [model: Post, preload: :user]
 
-      # when the action is "edit"
+      # when the action is "edit" and the resource is loaded from the repo
       params = %{"id" => "2"}
 
       conn =
@@ -1641,7 +1844,7 @@ defmodule Canary.PlugsTest do
 
       expected = Plug.Conn.assign(conn, :authorized, true)
 
-      assert authorize_resource(conn, opts) == expected
+      assert authorize_resource(conn, opts ++ [persisted: true]) == expected
 
       # when the action is "index"
       params = %{}

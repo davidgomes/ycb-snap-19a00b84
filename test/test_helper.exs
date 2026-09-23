@@ -37,6 +37,9 @@ defmodule Repo do
 
   def preload(resources, _), do: resources
 
+  # Ecto raises on nil comparison
+  def get_by(_, %{id: nil}), do: raise(ArgumentError, "nil given for :id")
+
   def get_by(User, %{id: "1"}), do: %User{}
   def get_by(User, _), do: nil
 
@@ -102,6 +105,10 @@ defmodule Helpers do
 
   def non_halting_unauthorized_handler(conn) do
     conn
+  end
+
+  def halting_unauthorized_handler(conn) do
+    Plug.Conn.halt(conn)
   end
 end
 
