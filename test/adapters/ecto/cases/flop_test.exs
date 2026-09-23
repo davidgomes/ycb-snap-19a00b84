@@ -1506,8 +1506,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                    Flop.validate_and_run(Fruit, flop, for: Fruit)
 
         _ ->
-          assert {:error, meta} =
-                   Flop.validate_and_run(Fruit, flop, for: Fruit)
+          assert {:error, meta} = Flop.validate_and_run(Fruit, flop, for: Fruit)
 
           assert meta.errors == [filters: [[value: [{"is invalid", []}]]]]
       end
@@ -1566,8 +1565,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                    Flop.validate_and_run(Fruit, flop, for: Fruit)
 
         _ ->
-          assert {:error, meta} =
-                   Flop.validate_and_run(Fruit, flop, for: Fruit)
+          assert {:error, meta} = Flop.validate_and_run(Fruit, flop, for: Fruit)
 
           assert meta.errors == [filters: [[value: [{"is invalid", []}]]]]
       end
@@ -1634,6 +1632,80 @@ defmodule Flop.Adapters.Ecto.FlopTest do
   end
 
   describe "cursor pagination" do
+    test "includes rows whose order value is nil" do
+      Enum.each([{nil, "a"}, {nil, "b"}, {1, "c"}, {2, "d"}, {2, "e"}], fn {age,
+                                                                            name} ->
+        Repo.insert!(%Pet{name: name, age: age, species: "cat"})
+      end)
+
+      directions = [
+        :asc,
+        :desc,
+        :asc_nulls_first,
+        :asc_nulls_last,
+        :desc_nulls_first,
+        :desc_nulls_last
+      ]
+
+      for direction <- directions do
+        order_by = [:age, :name]
+        order_directions = [direction, :asc]
+
+        pets =
+          Flop.all(
+            Pet,
+            %Flop{order_by: order_by, order_directions: order_directions},
+            for: Pet
+          )
+
+        assert length(pets) == 5
+
+        {:ok, {[first_pet], %Meta{end_cursor: cursor}}} =
+          Flop.validate_and_run(
+            Pet,
+            %Flop{
+              first: 1,
+              order_by: order_by,
+              order_directions: order_directions
+            },
+            for: Pet
+          )
+
+        assert first_pet == hd(pets)
+
+        {reversed, last_cursor} =
+          Enum.reduce(tl(pets), {[first_pet], cursor}, fn _, {acc, cursor} ->
+            {:ok, {[returned], %Meta{end_cursor: new_cursor}}} =
+              Flop.validate_and_run(
+                Pet,
+                %Flop{
+                  first: 1,
+                  after: cursor,
+                  order_by: order_by,
+                  order_directions: order_directions
+                },
+                for: Pet
+              )
+
+            {[returned | acc], new_cursor}
+          end)
+
+        assert Enum.reverse(reversed) == pets
+
+        assert {:ok, {[], %Meta{}}} =
+                 Flop.validate_and_run(
+                   Pet,
+                   %Flop{
+                     first: 1,
+                     after: last_cursor,
+                     order_by: order_by,
+                     order_directions: order_directions
+                   },
+                   for: Pet
+                 )
+      end
+    end
+
     property "querying cursor by cursor forward includes all items in order" do
       check all pets <- uniq_list_of_pets(length: 1..25),
                 cursor_fields <- cursor_fields(%Pet{}),

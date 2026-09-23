@@ -109,30 +109,24 @@ of replacing it. Replacing the order could drop the field that made it unique.
 
 ## Nullable fields
 
-Ordering by a nullable column loses the rows where it is `NULL`.
+Nullable columns are supported. With `order_by: [:age, :id]`, the rows whose
+age is `NULL` stay in the result.
 
-```elixir
-%{first: 2, order_by: [:age, :id]}
-```
+| page | `:asc` | `:desc` |
+|---|---|---|
+| 1 | Bo 1, Ada 3 | Cy, Dee |
+| 2 | Ada 5, Ada 7 | Ada 7, Ada 5 |
+| 3 | Cy, Dee | Ada 3, Bo 1 |
 
-| page | rows |
-|---|---|
-| 1 | Bo 1, Ada 3 |
-| 2 | Ada 5, Ada 7 |
-| 3 | — |
+The plain directions `:asc` and `:desc` leave the placement of null values to
+the database. PostgreSQL sorts nulls last ascending and first descending, while
+SQLite and MySQL do the opposite. `:asc_nulls_first`, `:asc_nulls_last`,
+`:desc_nulls_first` and `:desc_nulls_last` mean the same on every database.
 
-Cy and Dee never appear, and page 3 reports `has_next_page?: false`. PostgreSQL
-sorts them last, but the cursor comparison is `age > 7`, and no comparison with
-`NULL` is ever true. A second order field does not help, because the `NULL` is
-in the first one.
-
-Until Flop builds null-aware predicates, order by a column that has no `NULL`,
-or sort on a computed field that substitutes a value, as in the [computed fields
-recipe](computed_and_embedded_fields.md):
-
-```sql
-SELECT coalesce(age, -1) AS age_sortable
-```
+The cursor comparison has to match that sort. Flop reads the placement from the
+repo's Ecto adapter, so cursor pagination with `:asc` or `:desc` raises when no
+repo can be resolved. Pass `repo:` or use a direction that states where nulls
+go.
 
 ## Reading the cursor value
 

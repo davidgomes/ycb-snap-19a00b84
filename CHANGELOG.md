@@ -15,8 +15,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Support ordering and filtering by custom fields via a new `field_dynamic`
   option. Cursor pagination is not supported yet.
 
+### Changed
+
+- Raise when a cursor is applied with a plain `:asc` or `:desc` order direction
+  and no repo is configured. Flop reads the database's NULL placement from the
+  repo's Ecto adapter. This only affects queries built with `Flop.query/3`.
+
 ### Fixed
 
+- Support cursor pagination on nullable columns.
 - Build the `:=~`, `:ilike`, `:not_ilike`, `:ilike_and`, `:ilike_or`,
   `:starts_with` and `:ends_with` filters with `LIKE` on databases that have no
   `ILIKE`, such as SQLite and MySQL, instead of raising an `Ecto.QueryError`.
