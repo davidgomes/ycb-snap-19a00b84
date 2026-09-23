@@ -1068,23 +1068,16 @@ defmodule Ecto.Adapters.ClickHouse.Connection do
   defp wrap_in(value, wrapper), do: [wrapper, value, wrapper]
 
   defp escape_quoted(value, nil), do: value
-  defp escape_quoted(value, ?'), do: escape_string(IO.iodata_to_binary(value))
-
-  defp escape_quoted(value, quoter) when quoter in [?\", ?`] do
-    # Neutralize existing escape sequences before escaping the active delimiter.
+  defp escape_quoted(value, quoter) when quoter in [?', ?\", ?`] do
+    # Backslashes must be escaped before the delimiter is doubled.
     value
     |> IO.iodata_to_binary()
     |> :binary.replace("\\", "\\\\", [:global])
-    |> :binary.replace(<<quoter>>, "\\" <> <<quoter>>, [:global])
+    |> :binary.replace(<<quoter>>, <<quoter, quoter>>, [:global])
   end
 
   @doc false
-  # TODO faster?
-  def escape_string(value) when is_binary(value) do
-    value
-    |> :binary.replace("'", "''", [:global])
-    |> :binary.replace("\\", "\\\\", [:global])
-  end
+  def escape_string(value) when is_binary(value), do: escape_quoted(value, ?')
 
   defp json_path_key(value) when is_binary(value) do
     if Regex.match?(~r/^[A-Za-z_][A-Za-z0-9_]*$/, value) do
