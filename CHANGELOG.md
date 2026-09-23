@@ -3,6 +3,14 @@
 This is a major rewrite of the previously-existing [`sqlite_ecto`](https://github.com/jazzyb/sqlite_ecto) that adds support for Ecto 2.1+.
 
 
+## v2.2.0-dev
+
+_Not yet released_
+
+* Update to support Ecto 2.2. (#193)
+* **BREAKING CHANGE:** Drop support for Ecto 2.1 and Elixir 1.3.
+
+
 ## v2.0.3
 
 _28 August 2017_
