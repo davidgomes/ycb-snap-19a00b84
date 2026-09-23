@@ -536,6 +536,45 @@ textarea.oc-input {
   word-break: break-all;
 }
 
+/* History */
+.oc-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.oc-history-table th {
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--oc-gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--oc-gray-100);
+}
+
+.oc-history-table td {
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--oc-gray-100);
+  color: var(--oc-gray-900);
+}
+
+.oc-history-row {
+  cursor: pointer;
+}
+
+.oc-history-row:hover {
+  background-color: var(--oc-gray-50);
+}
+
+.oc-history-args {
+  max-width: 20rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Transitions */
 .oc-transition-show {
   transition: all 0.3s ease-out;
