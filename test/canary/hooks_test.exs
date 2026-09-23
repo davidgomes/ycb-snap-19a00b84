@@ -28,7 +28,12 @@ defmodule Canary.HooksTest do
   describe "handle_hook/2" do
     test "load_resource hook on handle_params loads resource when is available" do
       uri = "http://localhost/post"
-      metadata = %{hook: :load_resource, stage: :handle_params, opts: [model: Post]}
+      metadata = %{
+        hook: :load_resource,
+        stage: :handle_params,
+        opts: [model: Post, required: false]
+      }
+
       params = %{}
 
       assert {:cont, socket} =
@@ -132,6 +137,12 @@ defmodule Canary.HooksTest do
       socket =
         build_socket(:create)
         |> put_assigns(%{current_user: %User{id: 1}})
+
+      metadata = %{
+        hook: :authorize_resource,
+        stage: :handle_params,
+        opts: [model: Post, required: false]
+      }
 
       assert {:cont, socket} =
                Canary.Hooks.handle_hook(metadata, [params, uri, socket])
@@ -249,7 +260,11 @@ defmodule Canary.HooksTest do
 
     test "accepts :id_name to override the default id field" do
       uri = "http://localhost/post"
-      metadata = %{hook: :load_resource, stage: :handle_params, opts: [model: Post, id_name: "blog_post_id"]}
+      metadata = %{
+        hook: :load_resource,
+        stage: :handle_params,
+        opts: [model: Post, id_name: "blog_post_id", required: false]
+      }
       params = %{"blog_post_id" => "2"}
 
       assert {:cont, socket} =

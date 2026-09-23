@@ -90,6 +90,7 @@ defmodule Canary.Plugs do
   @spec load_resource(Plug.Conn.t(), Plug.opts()) :: Plug.Conn.t()
   def load_resource(conn, opts) do
     action = get_action(conn)
+    validate_opts(opts)
 
     if action_valid?(action, opts) do
       conn
@@ -103,6 +104,7 @@ defmodule Canary.Plugs do
   defp do_load_resource(conn, opts) do
     action = get_action(conn)
     is_persisted = persisted?(opts)
+    validate_opts(opts)
 
     loaded_resource =
       cond do
@@ -119,7 +121,7 @@ defmodule Canary.Plugs do
           fetch_resource(conn, opts)
       end
 
-    Plug.Conn.assign(conn, get_resource_name(conn, opts), loaded_resource)
+    Plug.Conn.assign(conn, get_resource_name(action, opts), loaded_resource)
   end
 
   @doc """
@@ -162,6 +164,7 @@ defmodule Canary.Plugs do
   @spec authorize_controller(Plug.Conn.t(), Plug.opts()) :: Plug.Conn.t()
   def authorize_controller(conn, opts) do
     action = get_action(conn)
+    validate_opts(opts)
 
     if action_valid?(action, opts) do
       do_authorize_controller(conn, opts) |> handle_unauthorized(opts)
@@ -275,12 +278,7 @@ defmodule Canary.Plugs do
     action = get_action(conn)
     is_persisted = persisted?(opts)
 
-    non_id_actions =
-      if opts[:non_id_actions] do
-        Enum.concat([:index, :new, :create], opts[:non_id_actions])
-      else
-        [:index, :new, :create]
-      end
+    non_id_actions = non_id_actions(opts)
 
     resource =
       cond do
@@ -370,8 +368,10 @@ defmodule Canary.Plugs do
   defp purge_resource_if_unauthorized(%{assigns: %{authorized: true}} = conn, _opts),
     do: conn
 
-  defp purge_resource_if_unauthorized(%{assigns: %{authorized: false}} = conn, opts),
-    do: Plug.Conn.assign(conn, get_resource_name(conn, opts), nil)
+  defp purge_resource_if_unauthorized(%{assigns: %{authorized: false}} = conn, opts) do
+    action = get_action(conn)
+    Plug.Conn.assign(conn, get_resource_name(action, opts), nil)
+  end
 
   defp fetch_resource(conn, opts) do
     repo = Application.get_env(:canary, :repo)
@@ -380,7 +380,9 @@ defmodule Canary.Plugs do
 
     get_map_args = %{String.to_atom(field_name) => get_resource_id(conn, opts)}
 
-    case Map.fetch(conn.assigns, get_resource_name(conn, opts)) do
+    action = get_action(conn)
+
+    case Map.fetch(conn.assigns, get_resource_name(action, opts)) do
       :error ->
         repo.get_by(opts[:model], get_map_args)
         |> preload_if_needed(repo, opts)
@@ -404,7 +406,8 @@ defmodule Canary.Plugs do
   defp fetch_all(conn, opts) do
     repo = Application.get_env(:canary, :repo)
 
-    resource_name = get_resource_name(conn, opts)
+    action = get_action(conn)
+    resource_name = get_resource_name(action, opts)
 
     # check if a resource is already loaded at the key
     case Map.fetch(conn.assigns, resource_name) do
@@ -427,33 +430,6 @@ defmodule Canary.Plugs do
     end
   end
 
-  defp persisted?(opts) do
-    !!Keyword.get(opts, :persisted, false) || !!Keyword.get(opts, :required, false)
-  end
-
-  defp get_resource_name(conn, opts) do
-    case opts[:as] do
-      nil ->
-        opts[:model]
-        |> Module.split()
-        |> List.last()
-        |> Macro.underscore()
-        |> pluralize_if_needed(conn, opts)
-        |> String.to_atom()
-
-      as ->
-        as
-    end
-  end
-
-  defp pluralize_if_needed(name, conn, opts) do
-    if get_action(conn) in [:index] and not persisted?(opts) do
-      name <> "s"
-    else
-      name
-    end
-  end
-
   defp handle_unauthorized(%{assigns: %{authorized: true}} = conn, _opts),
     do: conn
 
@@ -467,17 +443,7 @@ defmodule Canary.Plugs do
   defp handle_not_found(conn, opts) do
     action = get_action(conn)
 
-    non_id_actions =
-      if opts[:non_id_actions] do
-        Enum.concat([:index, :new, :create], opts[:non_id_actions])
-      else
-        [:index, :new, :create]
-      end
-
-    is_required = required?(opts)
-    resource_name = Map.get(conn.assigns, get_resource_name(conn, opts))
-
-    if is_nil(resource_name) and (is_required or action not in non_id_actions) do
+    if apply_handle_not_found?(action, conn.assigns, opts) do
       apply_error_handler(conn, :not_found_handler, opts)
     else
       conn
