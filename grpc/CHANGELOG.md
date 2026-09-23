@@ -4,6 +4,7 @@
 
 ### Enhancements
 
+  * Client load balancing state is stored in an ETS table and a backend is chosen on every `pick_channel/2` call. This removes `persistent_term` writes from the pick path.
   * The client and server implementations were separated into two distinct packages to improve modularity and maintainability.
   * A t() typespec was added to GRPC.Server.Adapters.ReportException to improve type documentation and tooling support.
   * IPv6 support was added to the gRPC gun adapter, enabling connections over IPv6 networks.
