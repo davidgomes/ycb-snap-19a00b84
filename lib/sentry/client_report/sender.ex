@@ -6,7 +6,17 @@ defmodule Sentry.ClientReport.Sender do
 
   use GenServer
 
-  alias Sentry.{Client, ClientReport, Config, Envelope, Transaction}
+  alias Sentry.{
+    Client,
+    ClientReport,
+    Config,
+    Envelope,
+    LogBatch,
+    LogEvent,
+    Metric,
+    MetricBatch,
+    Transaction
+  }
 
   @send_interval 30_000
 
@@ -65,8 +75,29 @@ defmodule Sentry.ClientReport.Sender do
     [{Envelope.get_data_category(transaction), 1}, {"span", span_count}]
   end
 
+  defp data_categories(%LogBatch{log_events: log_events} = batch) do
+    maps = Enum.map(log_events, &LogEvent.to_map/1)
+    [{Envelope.get_data_category(batch), length(maps)}, {"log_byte", encoded_size(maps)}]
+  end
+
+  defp data_categories(%MetricBatch{metrics: metrics} = batch) do
+    maps = Enum.map(metrics, &Metric.to_map/1)
+    [{Envelope.get_data_category(batch), length(maps)}, {"trace_metric_byte", encoded_size(maps)}]
+  end
+
   defp data_categories(item) do
     [{Envelope.get_data_category(item), 1}]
+  end
+
+  defp encoded_size(maps) do
+    json_library = Config.json_library()
+
+    Enum.reduce(maps, 0, fn map, acc ->
+      case Sentry.JSON.encode(map, json_library) do
+        {:ok, encoded} -> acc + byte_size(encoded)
+        {:error, _reason} -> acc
+      end
+    end)
   end
 
   ## Callbacks
