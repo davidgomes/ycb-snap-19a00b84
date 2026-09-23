@@ -474,7 +474,7 @@ defmodule EctoJob.JobQueue do
     repo.update_all(query, opts)
   end
 
-  # An InnoDB (MySQL) UPDATE locks every row it scans, which deadlocks with concurrent job
+  # An InnoDB (MySQL) UPDATE locks every row it scans, which can deadlock with concurrent job
   # updates and deletes. Jobs locked by another transaction are skipped until the next poll.
   defp do_update_jobs(_adapter, repo, schema, query, opts) do
     {:ok, result} =
