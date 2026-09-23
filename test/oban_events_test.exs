@@ -9,7 +9,20 @@ defmodule ObanEventsTest do
     use ObanEvents.Handler
 
     @impl true
-    def handle_event(_event, _data), do: :ok
+    def handle_event(_event, %Event{}), do: :ok
+  end
+
+  # Test handler that reports the event it received to the test process
+  # (inline Oban jobs run in the calling process)
+  defmodule ReportingHandler do
+    @moduledoc false
+    use ObanEvents.Handler
+
+    @impl true
+    def handle_event(event_name, %Event{} = event) do
+      send(self(), {:handled, event_name, event})
+      :ok
+    end
   end
 
   # Test event bus with handlers registered (uses defaults)
@@ -17,11 +30,12 @@ defmodule ObanEventsTest do
     @moduledoc false
     use ObanEvents
 
-    alias ObanEventsTest.TestHandler
+    alias ObanEventsTest.{ReportingHandler, TestHandler}
 
     @event_handlers %{
       investment_status_changed: [TestHandler],
       investment_created: [TestHandler],
+      investment_funded: [TestHandler, ReportingHandler],
       investment_cancelled: [],
       portfolio_company_added: [],
       portfolio_company_removed: [],
@@ -101,6 +115,67 @@ defmodule ObanEventsTest do
     end
   end
 
+  describe "emit/3 event metadata" do
+    test "shares one event_id across handler jobs and gives each job its own idempotency_key" do
+      assert {:ok, [job_a, job_b]} = TestEventBus.emit(:investment_funded, %{"amount" => 100})
+
+      assert uuidv7?(job_a.args["event_id"])
+      assert job_a.args["event_id"] == job_b.args["event_id"]
+
+      assert uuidv7?(job_a.args["idempotency_key"])
+      assert uuidv7?(job_b.args["idempotency_key"])
+      assert job_a.args["idempotency_key"] != job_b.args["idempotency_key"]
+    end
+
+    test "generates a new event_id for every emit" do
+      assert {:ok, [first]} = TestEventBus.emit(:investment_created, %{})
+      assert {:ok, [second]} = TestEventBus.emit(:investment_created, %{})
+
+      assert first.args["event_id"] != second.args["event_id"]
+    end
+
+    test "stores causation_id and correlation_id when given" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{},
+                 causation_id: "parent-event-id",
+                 correlation_id: "correlation-id"
+               )
+
+      assert job.args["causation_id"] == "parent-event-id"
+      assert job.args["correlation_id"] == "correlation-id"
+    end
+
+    test "leaves causation_id and correlation_id nil by default" do
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{})
+
+      assert job.args["causation_id"] == nil
+      assert job.args["correlation_id"] == nil
+    end
+
+    test "handlers receive the data and metadata as an Event struct" do
+      assert {:ok, jobs} =
+               TestEventBus.emit(:investment_funded, %{amount: 100},
+                 causation_id: "parent-event-id",
+                 correlation_id: "correlation-id"
+               )
+
+      job = Enum.find(jobs, &(&1.args["handler"] == Atom.to_string(ReportingHandler)))
+
+      assert_received {:handled, :investment_funded, %ObanEvents.Event{} = event}
+      assert event.data == %{"amount" => 100}
+      assert event.event_id == job.args["event_id"]
+      assert event.idempotency_key == job.args["idempotency_key"]
+      assert event.causation_id == "parent-event-id"
+      assert event.correlation_id == "correlation-id"
+    end
+
+    test "raises ArgumentError for unknown options" do
+      assert_raise ArgumentError, ~r/unknown keys \[:correlation\]/, fn ->
+        TestEventBus.emit(:investment_created, %{}, correlation: "correlation-id")
+      end
+    end
+  end
+
   describe "configuration" do
     test "uses default configuration when not specified" do
       assert {:ok, jobs} = TestEventBus.emit(:investment_created, %{"test" => "data"})
@@ -121,5 +196,9 @@ defmodule ObanEventsTest do
       assert job.max_attempts == 10
       assert job.priority == 0
     end
+  end
+
+  defp uuidv7?(value) do
+    match?({:ok, _}, Ecto.UUID.cast(value)) and String.at(value, 14) == "7"
   end
 end

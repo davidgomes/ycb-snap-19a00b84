@@ -4,38 +4,43 @@ defmodule ObanEvents.DispatchWorkerTest do
 
   import ExUnit.CaptureLog
 
-  alias ObanEvents.DispatchWorker
+  alias ObanEvents.{DispatchWorker, Event}
 
   # Mock handler for testing
   defmodule TestHandler do
     @moduledoc false
-    @behaviour ObanEvents.Handler
+    use ObanEvents.Handler
 
-    def handle_event(:test_event, %{"action" => "success"}) do
+    def handle_event(:test_event, %Event{data: %{"action" => "success"}}) do
       send(self(), {:handler_called, :test_event, %{"action" => "success"}})
       :ok
     end
 
-    def handle_event(:test_event, %{"action" => "error"}) do
+    def handle_event(:test_event, %Event{data: %{"action" => "error"}}) do
       send(self(), {:handler_called, :test_event, %{"action" => "error"}})
       {:error, :test_error}
     end
 
-    def handle_event(:test_event, %{"action" => "raise"}) do
+    def handle_event(:test_event, %Event{data: %{"action" => "raise"}}) do
       raise "Test exception"
     end
 
-    def handle_event(:test_event, %{"action" => "success_with_result"}) do
+    def handle_event(:test_event, %Event{data: %{"action" => "success_with_result"}}) do
       send(self(), {:handler_called, :test_event, %{"action" => "success_with_result"}})
       {:ok, %{processed: true, count: 42}}
     end
 
-    def handle_event(:test_event, %{"action" => "unexpected"}) do
+    def handle_event(:test_event, %Event{data: %{"action" => "unexpected"}}) do
       send(self(), {:handler_called, :test_event, %{"action" => "unexpected"}})
       :unexpected_return_value
     end
 
-    def handle_event(_event, _data), do: :ok
+    def handle_event(:test_event, %Event{data: %{"action" => "report"}} = event) do
+      send(self(), {:handler_called_with, event})
+      :ok
+    end
+
+    def handle_event(_event, %Event{}), do: :ok
   end
 
   describe "perform/1" do
@@ -43,7 +48,9 @@ defmodule ObanEvents.DispatchWorkerTest do
       job_args = %{
         "event" => "test_event",
         "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
-        "data" => %{"action" => "success"}
+        "data" => %{"action" => "success"},
+        "event_id" => UUIDv7.generate(),
+        "idempotency_key" => UUIDv7.generate()
       }
 
       assert :ok = perform_job(DispatchWorker, job_args)
@@ -51,11 +58,54 @@ defmodule ObanEvents.DispatchWorkerTest do
       assert_received {:handler_called, :test_event, %{"action" => "success"}}
     end
 
+    test "passes data and metadata to the handler as an Event struct" do
+      event_id = UUIDv7.generate()
+      idempotency_key = UUIDv7.generate()
+
+      job_args = %{
+        "event" => "test_event",
+        "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
+        "data" => %{"action" => "report"},
+        "event_id" => event_id,
+        "idempotency_key" => idempotency_key,
+        "causation_id" => "parent-event-id",
+        "correlation_id" => "correlation-id"
+      }
+
+      assert :ok = perform_job(DispatchWorker, job_args)
+
+      assert_received {:handler_called_with, event}
+
+      assert event == %Event{
+               data: %{"action" => "report"},
+               event_id: event_id,
+               idempotency_key: idempotency_key,
+               causation_id: "parent-event-id",
+               correlation_id: "correlation-id"
+             }
+    end
+
+    test "sets causation_id and correlation_id to nil when absent" do
+      job_args = %{
+        "event" => "test_event",
+        "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
+        "data" => %{"action" => "report"},
+        "event_id" => UUIDv7.generate(),
+        "idempotency_key" => UUIDv7.generate()
+      }
+
+      assert :ok = perform_job(DispatchWorker, job_args)
+
+      assert_received {:handler_called_with, %Event{causation_id: nil, correlation_id: nil}}
+    end
+
     test "returns error when handler returns error" do
       job_args = %{
         "event" => "test_event",
         "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
-        "data" => %{"action" => "error"}
+        "data" => %{"action" => "error"},
+        "event_id" => UUIDv7.generate(),
+        "idempotency_key" => UUIDv7.generate()
       }
 
       log =
@@ -71,7 +121,9 @@ defmodule ObanEvents.DispatchWorkerTest do
       job_args = %{
         "event" => "test_event",
         "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
-        "data" => %{"action" => "raise"}
+        "data" => %{"action" => "raise"},
+        "event_id" => UUIDv7.generate(),
+        "idempotency_key" => UUIDv7.generate()
       }
 
       assert_raise RuntimeError, "Test exception", fn ->
@@ -94,11 +146,29 @@ defmodule ObanEvents.DispatchWorkerTest do
       assert log =~ "DispatchWorker received invalid job arguments"
     end
 
+    test "returns error when event metadata is missing" do
+      job_args = %{
+        "event" => "test_event",
+        "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
+        "data" => %{"action" => "success"}
+      }
+
+      log =
+        capture_log(fn ->
+          assert {:error, _} = perform_job(DispatchWorker, job_args)
+        end)
+
+      assert log =~ "DispatchWorker received invalid job arguments"
+      refute_received {:handler_called, _, _}
+    end
+
     test "returns error for invalid handler module" do
       job_args = %{
         "event" => "test_event",
         "handler" => "NonExistent.Handler.Module",
-        "data" => %{}
+        "data" => %{},
+        "event_id" => UUIDv7.generate(),
+        "idempotency_key" => UUIDv7.generate()
       }
 
       assert_raise ArgumentError, fn ->
@@ -110,7 +180,9 @@ defmodule ObanEvents.DispatchWorkerTest do
       job_args = %{
         "event" => "test_event",
         "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
-        "data" => %{"action" => "success_with_result"}
+        "data" => %{"action" => "success_with_result"},
+        "event_id" => UUIDv7.generate(),
+        "idempotency_key" => UUIDv7.generate()
       }
 
       assert :ok = perform_job(DispatchWorker, job_args)
@@ -121,7 +193,9 @@ defmodule ObanEvents.DispatchWorkerTest do
       job_args = %{
         "event" => "test_event",
         "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
-        "data" => %{"action" => "unexpected"}
+        "data" => %{"action" => "unexpected"},
+        "event_id" => UUIDv7.generate(),
+        "idempotency_key" => UUIDv7.generate()
       }
 
       log =

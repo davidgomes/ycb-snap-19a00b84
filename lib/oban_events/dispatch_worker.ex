@@ -3,16 +3,21 @@ defmodule ObanEvents.DispatchWorker do
   Generic Oban worker that dispatches events to their handlers.
 
   This worker:
-  1. Receives an event name, handler module, and data from the job args
+  1. Receives an event name, handler module, data, and event metadata from the job args
   2. Converts strings back to atoms safely
-  3. Calls the handler's `handle_event/2` callback
-  4. Logs success/failure for observability
+  3. Builds an `ObanEvents.Event` struct from the data and metadata
+  4. Calls the handler's `handle_event/2` callback
+  5. Logs success/failure for observability
 
   ## Job Arguments
 
   - `event`: String representation of the event name
   - `handler`: String representation of the handler module
   - `data`: Map of event-specific data
+  - `event_id`: UUIDv7 identifying the emit (shared by all handlers of that emit)
+  - `idempotency_key`: UUIDv7 unique to this job (stable across retries)
+  - `causation_id`: Optional `event_id` of the event that caused this emit
+  - `correlation_id`: Optional ID grouping related events
 
   ## Configuration
 
@@ -30,18 +35,35 @@ defmodule ObanEvents.DispatchWorker do
 
   require Logger
 
+  alias ObanEvents.Event
+
   @impl Oban.Worker
   def perform(%Oban.Job{
-        args: %{"event" => event_name_string, "handler" => handler_module_string, "data" => data}
+        args:
+          %{
+            "event" => event_name_string,
+            "handler" => handler_module_string,
+            "data" => data,
+            "event_id" => event_id,
+            "idempotency_key" => idempotency_key
+          } = args
       }) do
     # Safely convert strings back to atoms
     # These atoms should already exist since they were created during emit
     event = String.to_existing_atom(event_name_string)
     handler = String.to_existing_atom(handler_module_string)
 
+    event_struct = %Event{
+      data: data,
+      event_id: event_id,
+      idempotency_key: idempotency_key,
+      causation_id: Map.get(args, "causation_id"),
+      correlation_id: Map.get(args, "correlation_id")
+    }
+
     Logger.info("Processing event: #{event} with handler: #{inspect(handler)}")
 
-    case handler.handle_event(event, data) do
+    case handler.handle_event(event, event_struct) do
       :ok ->
         Logger.info("Event processed successfully: #{event} by #{inspect(handler)}")
         :ok
@@ -77,6 +99,6 @@ defmodule ObanEvents.DispatchWorker do
       "DispatchWorker received invalid job arguments: job_id=#{job.id}, args=#{inspect(args)}"
     )
 
-    {:error, "Invalid job arguments: missing event, handler, or data"}
+    {:error, "Invalid job arguments: missing event, handler, data, event_id, or idempotency_key"}
   end
 end
