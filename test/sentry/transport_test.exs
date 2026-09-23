@@ -4,7 +4,16 @@ defmodule Sentry.TransportTest do
   import Sentry.TestHelpers
   import ExUnit.CaptureLog
 
-  alias Sentry.{ClientError, Envelope, Event, FinchClient, HackneyClient, Transport}
+  alias Sentry.{
+    ClientError,
+    Envelope,
+    Event,
+    FinchClient,
+    HackneyClient,
+    LogEvent,
+    Metric,
+    Transport
+  }
 
   describe "encode_and_post_envelope/2" do
     setup do
@@ -393,6 +402,108 @@ defmodule Sentry.TransportTest do
       # Other categories should not be rate-limited
       refute Transport.RateLimiter.rate_limited?("session")
     end
+
+    test "drops log events while log_byte is rate limited, reporting their count and size", %{
+      bypass: bypass
+    } do
+      log_events = [make_log_event("first"), make_log_event("second")]
+      Sentry.ClientReport.Sender.flush()
+
+      Transport.RateLimiter.update_rate_limits("60:log_byte:organization")
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(
+                 Envelope.from_log_events(log_events),
+                 FinchClient,
+                 _retries = []
+               )
+
+      assert flush_client_report_outcomes(bypass, "ratelimit_backoff") == %{
+               "log_item" => 2,
+               "log_byte" => serialized_size(log_events)
+             }
+    end
+
+    test "drops metrics while trace_metric_byte is rate limited, reporting their count and size",
+         %{bypass: bypass} do
+      metrics = [make_metric("first"), make_metric("second"), make_metric("third")]
+      Sentry.ClientReport.Sender.flush()
+
+      Transport.RateLimiter.update_rate_limits("60:trace_metric_byte:organization")
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(
+                 Envelope.from_metric_events(metrics),
+                 FinchClient,
+                 _retries = []
+               )
+
+      assert flush_client_report_outcomes(bypass, "ratelimit_backoff") == %{
+               "trace_metric" => 3,
+               "trace_metric_byte" => serialized_size(metrics)
+             }
+    end
+
+    test "reports the count and size of a log batch that Sentry rejects with 429", %{
+      bypass: bypass
+    } do
+      log_events = [make_log_event("first"), make_log_event("second"), make_log_event("third")]
+      Sentry.ClientReport.Sender.flush()
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "60:log_byte:organization")
+        |> Plug.Conn.resp(429, ~s<{}>)
+      end)
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(
+                 Envelope.from_log_events(log_events),
+                 FinchClient,
+                 _retries = []
+               )
+
+      assert Transport.RateLimiter.rate_limited?("log_item")
+
+      assert flush_client_report_outcomes(bypass, "ratelimit_backoff") == %{
+               "log_item" => 3,
+               "log_byte" => serialized_size(log_events)
+             }
+    end
+  end
+
+  defp make_log_event(body) do
+    %LogEvent{level: :info, body: body, timestamp: System.system_time(:nanosecond) / 1.0e9}
+  end
+
+  defp make_metric(name) do
+    %Metric{type: :counter, name: name, value: 1, timestamp: System.system_time(:nanosecond) / 1.0e9}
+  end
+
+  defp serialized_size(items) do
+    items |> Enum.map(&Envelope.serialized_size/1) |> Enum.sum()
+  end
+
+  # Flushes the global client report sender and returns the reported
+  # quantities for the given reason, keyed by data category.
+  defp flush_client_report_outcomes(bypass, reason) do
+    test_pid = self()
+    ref = make_ref()
+
+    Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      send(test_pid, {ref, body})
+      Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+    end)
+
+    :ok = Sentry.ClientReport.Sender.flush()
+
+    assert_receive {^ref, body}, 2000
+    assert [{%{"type" => "client_report"}, client_report}] = decode_envelope!(body)
+
+    for %{"reason" => ^reason} = outcome <- client_report["discarded_events"],
+        into: %{},
+        do: {outcome["category"], outcome["quantity"]}
   end
 
   defp error(fun) do

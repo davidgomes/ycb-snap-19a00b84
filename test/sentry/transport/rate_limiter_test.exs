@@ -132,6 +132,31 @@ defmodule Sentry.Transport.RateLimiterTest do
 
       assert RateLimiter.rate_limited?("error") == true
     end
+
+    test "returns true for log items when log_byte is rate-limited" do
+      RateLimiter.update_rate_limits("60:log_byte:organization")
+
+      assert RateLimiter.rate_limited?("log_byte") == true
+      assert RateLimiter.rate_limited?("log_item") == true
+      assert RateLimiter.rate_limited?("trace_metric") == false
+      assert RateLimiter.rate_limited?("error") == false
+    end
+
+    test "returns true for metrics when trace_metric_byte is rate-limited" do
+      RateLimiter.update_rate_limits("60:trace_metric_byte:organization")
+
+      assert RateLimiter.rate_limited?("trace_metric_byte") == true
+      assert RateLimiter.rate_limited?("trace_metric") == true
+      assert RateLimiter.rate_limited?("log_item") == false
+      assert RateLimiter.rate_limited?("error") == false
+    end
+
+    test "returns false for log items when the log_byte rate limit expired" do
+      now = System.system_time(:second)
+      :ets.insert(table_name(), {"log_byte", now - 10})
+
+      assert RateLimiter.rate_limited?("log_item") == false
+    end
   end
 
   defp table_name, do: Process.get(:rate_limiter_table_name)

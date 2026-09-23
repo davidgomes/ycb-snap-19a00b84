@@ -4,7 +4,7 @@ defmodule Sentry.ClientReportTest do
   import Sentry.TestHelpers
 
   alias Sentry.ClientReport.Sender
-  alias Sentry.Event
+  alias Sentry.{Envelope, Event, LogBatch, LogEvent, Metric, MetricBatch}
 
   setup do
     setup_bypass()
@@ -138,6 +138,64 @@ defmodule Sentry.ClientReportTest do
                {:before_send, "transaction"} => 1,
                {:before_send, "span"} => 1
              }
+    end
+
+    test "records a byte outcome alongside the count when logs or metrics are discarded" do
+      start_supervised!({Sender, name: :test_byte_report})
+
+      log_events =
+        for body <- ["first log", "second log"] do
+          %LogEvent{level: :info, body: body, timestamp: 1_588_601_261.535_386}
+        end
+
+      metric = %Metric{type: :counter, name: "test.counter", value: 1, timestamp: 1_588_601_261.5}
+
+      log_bytes = log_events |> Enum.map(&Envelope.serialized_size/1) |> Enum.sum()
+      metric_bytes = Envelope.serialized_size(metric)
+      assert log_bytes > 0 and metric_bytes > 0
+
+      assert :ok =
+               Sender.record_discarded_events(
+                 :ratelimit_backoff,
+                 [%LogBatch{log_events: log_events}],
+                 :test_byte_report
+               )
+
+      assert :ok =
+               Sender.record_discarded_events(
+                 :cache_overflow,
+                 log_events ++ [metric],
+                 :test_byte_report
+               )
+
+      assert :ok =
+               Sender.record_discarded_events(
+                 :queue_overflow,
+                 [%MetricBatch{metrics: [metric, metric]}],
+                 :test_byte_report
+               )
+
+      assert :sys.get_state(:test_byte_report) == %{
+               {:ratelimit_backoff, "log_item"} => 2,
+               {:ratelimit_backoff, "log_byte"} => log_bytes,
+               {:cache_overflow, "log_item"} => 2,
+               {:cache_overflow, "log_byte"} => log_bytes,
+               {:cache_overflow, "trace_metric"} => 1,
+               {:cache_overflow, "trace_metric_byte"} => metric_bytes,
+               {:queue_overflow, "trace_metric"} => 2,
+               {:queue_overflow, "trace_metric_byte"} => 2 * metric_bytes
+             }
+    end
+
+    test "does not record a byte outcome for discarded errors" do
+      start_supervised!({Sender, name: :test_no_byte_report})
+
+      event = %Event{event_id: Sentry.UUID.uuid4_hex(), timestamp: "2024-10-12T13:21:13"}
+
+      assert :ok =
+               Sender.record_discarded_events(:ratelimit_backoff, [event], :test_no_byte_report)
+
+      assert :sys.get_state(:test_no_byte_report) == %{{:ratelimit_backoff, "error"} => 1}
     end
   end
 end

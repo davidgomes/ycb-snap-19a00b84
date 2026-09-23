@@ -317,6 +317,45 @@ defmodule Sentry.LoggerHandler.LogsTest do
       assert is_nil(log.template)
       assert is_nil(log.parameters)
     end
+
+    test "reports the count and size of logs dropped while log_byte is rate-limited", %{
+      bypass: bypass
+    } do
+      Sentry.ClientReport.Sender.flush()
+
+      :ets.insert(
+        Process.get(:rate_limiter_table_name),
+        {"log_byte", System.system_time(:second) + 60}
+      )
+
+      initial_size = TelemetryProcessor.buffer_size(:log)
+
+      Logger.info("Rate-limited log message")
+
+      assert TelemetryProcessor.buffer_size(:log) == initial_size
+
+      test_pid = self()
+      ref = make_ref()
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        send(test_pid, {ref, body})
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      Sentry.ClientReport.Sender.flush()
+
+      assert_receive {^ref, body}, 2000
+      assert [{%{"type" => "client_report"}, client_report}] = decode_envelope!(body)
+
+      outcomes =
+        for %{"reason" => "ratelimit_backoff"} = outcome <- client_report["discarded_events"],
+            into: %{},
+            do: {outcome["category"], outcome["quantity"]}
+
+      assert %{"log_item" => 1, "log_byte" => log_bytes} = outcomes
+      assert log_bytes > byte_size("Rate-limited log message")
+    end
   end
 
   describe "capturing Logger messages as Sentry events (logs.capture_log_messages)" do

@@ -336,4 +336,59 @@ defmodule Sentry.EnvelopeTest do
       assert Envelope.get_data_category(metric_batch) == "trace_metric"
     end
   end
+
+  describe "serialized_size/1" do
+    test "matches the size of each log event within an encoded log batch" do
+      put_test_config(environment_name: "production", release: "1.0.0")
+
+      log_events = [
+        %LogEvent{level: :info, body: "first log", timestamp: 1_588_601_261.535_386},
+        %LogEvent{
+          level: :error,
+          body: "second log, with attributes",
+          timestamp: 1_588_601_261.544_196,
+          trace_id: "d3b07384d113edec49eaa6238ad5ff00",
+          attributes: %{"user.id" => 42, "request.path" => "/api/users"}
+        }
+      ]
+
+      envelope = Envelope.from_log_events(log_events)
+
+      assert byte_size(batch_payload!(envelope)) == batch_payload_size(log_events)
+    end
+
+    test "matches the size of each metric within an encoded metric batch" do
+      metrics =
+        Enum.map(
+          [
+            %Metric{type: :counter, name: "test.counter", value: 1, timestamp: 1_588_601_261.5},
+            %Metric{
+              type: :gauge,
+              name: "test.gauge",
+              value: 42.5,
+              timestamp: 1_588_601_261.6,
+              unit: "ms",
+              attributes: %{endpoint: "/api"}
+            }
+          ],
+          &Metric.attach_default_attributes/1
+        )
+
+      envelope = Envelope.from_metric_events(metrics)
+
+      assert byte_size(batch_payload!(envelope)) == batch_payload_size(metrics)
+    end
+  end
+
+  defp batch_payload!(envelope) do
+    assert {:ok, encoded} = Envelope.to_binary(envelope)
+    assert [_id_line, _header_line, payload_line] = String.split(encoded, "\n", trim: true)
+    payload_line
+  end
+
+  # Batches are encoded as `{"items":[item1,item2,...]}`.
+  defp batch_payload_size(items) do
+    items_size = items |> Enum.map(&Envelope.serialized_size/1) |> Enum.sum()
+    byte_size(~s({"items":[]})) + items_size + length(items) - 1
+  end
 end

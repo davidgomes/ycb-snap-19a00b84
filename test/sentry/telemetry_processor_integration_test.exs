@@ -5,7 +5,7 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
   alias Sentry.TelemetryProcessor
   alias Sentry.Telemetry.Buffer
-  alias Sentry.{LogEvent, Metric, Transaction}
+  alias Sentry.{Envelope, LogEvent, Metric, Transaction}
 
   setup _context do
     %{bypass: bypass, telemetry_processor: name, ref: ref} =
@@ -245,7 +245,12 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
   describe "buffer overflow client reports" do
     setup ctx do
-      Sentry.Test.setup_telemetry_processor(buffer_configs: %{log: %{capacity: 2, batch_size: 1}})
+      Sentry.Test.setup_telemetry_processor(
+        buffer_configs: %{
+          log: %{capacity: 2, batch_size: 1},
+          metric: %{capacity: 2, batch_size: 1}
+        }
+      )
 
       Sentry.ClientReport.Sender.flush()
       flush_ref_messages(ctx.ref)
@@ -257,26 +262,38 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
       :sys.suspend(scheduler)
 
-      TelemetryProcessor.add(ctx.processor, make_log_event("log-1"))
+      dropped_log_event = make_log_event("log-1")
+      TelemetryProcessor.add(ctx.processor, dropped_log_event)
       TelemetryProcessor.add(ctx.processor, make_log_event("log-2"))
       TelemetryProcessor.add(ctx.processor, make_log_event("log-3"))
 
       log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
       _ = Buffer.size(log_buffer)
 
-      Sentry.ClientReport.Sender.flush()
+      assert flush_client_report_outcomes(ctx.ref, "cache_overflow") == %{
+               "log_item" => 1,
+               "log_byte" => Envelope.serialized_size(dropped_log_event)
+             }
 
-      ref = ctx.ref
-      assert_receive {:bypass_envelope, ^ref, body}, 2000
+      :sys.resume(scheduler)
+    end
 
-      items = decode_envelope!(body)
-      assert [{%{"type" => "client_report"}, client_report}] = items
+    test "sends cache_overflow client report when metric buffer overflows", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      :sys.suspend(scheduler)
 
-      cache_overflow =
-        Enum.find(client_report["discarded_events"], &(&1["reason"] == "cache_overflow"))
+      dropped_metrics = [make_metric("metric-1", 1), make_metric("metric-2", 2)]
+      Enum.each(dropped_metrics, &TelemetryProcessor.add(ctx.processor, &1))
 
-      assert cache_overflow["category"] == "log_item"
-      assert cache_overflow["quantity"] == 1
+      for i <- 3..4, do: TelemetryProcessor.add(ctx.processor, make_metric("metric-#{i}", i))
+
+      metric_buffer = TelemetryProcessor.get_buffer(ctx.processor, :metric)
+      assert Buffer.size(metric_buffer) == 2
+
+      assert flush_client_report_outcomes(ctx.ref, "cache_overflow") == %{
+               "trace_metric" => 2,
+               "trace_metric_byte" => serialized_size(dropped_metrics)
+             }
 
       :sys.resume(scheduler)
     end
@@ -374,6 +391,8 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
           :ets.delete(rate_limiter_table, "monitor")
           :ets.delete(rate_limiter_table, "transaction")
           :ets.delete(rate_limiter_table, "trace_metric")
+          :ets.delete(rate_limiter_table, "log_byte")
+          :ets.delete(rate_limiter_table, "trace_metric_byte")
         catch
           :error, :badarg -> :ok
         end
@@ -484,6 +503,36 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
 
       assert Buffer.size(metric_buffer) == 0
     end
+
+    test "drops log events before they enter the buffer when log_byte is rate-limited", ctx do
+      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
+
+      :ets.insert(ctx.rate_limiter_table, {"log_byte", System.system_time(:second) + 60})
+
+      assert {:ok, {:rate_limited, "log_item"}} =
+               TelemetryProcessor.add(ctx.processor, make_log_event("pre-buffer-drop"))
+
+      assert Buffer.size(log_buffer) == 0
+    end
+
+    test "reports the count and size of metrics dropped while trace_metric_byte is rate-limited",
+         ctx do
+      put_test_config(enable_metrics: true)
+
+      metric_buffer = TelemetryProcessor.get_buffer(ctx.processor, :metric)
+
+      :ets.insert(ctx.rate_limiter_table, {"trace_metric_byte", System.system_time(:second) + 60})
+
+      Sentry.Metrics.count("pre-buffer-drop", 1)
+      Sentry.Metrics.gauge("pre-buffer-drop", 2)
+
+      assert Buffer.size(metric_buffer) == 0
+
+      assert %{"trace_metric" => 2, "trace_metric_byte" => bytes} =
+               flush_client_report_outcomes(ctx.ref, "ratelimit_backoff")
+
+      assert bytes > 0
+    end
   end
 
   describe "scheduler draining a rate-limited buffer" do
@@ -496,10 +545,12 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       # in its dictionary), so it reads the default rate limiter table rather
       # than this test's uniquely-named one.
       on_exit(fn ->
-        try do
-          :ets.delete(Sentry.Transport.RateLimiter, "transaction")
-        catch
-          :error, :badarg -> :ok
+        for category <- ~w(transaction log_byte trace_metric_byte) do
+          try do
+            :ets.delete(Sentry.Transport.RateLimiter, category)
+          catch
+            :error, :badarg -> :ok
+          end
         end
       end)
 
@@ -545,6 +596,58 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       assert outcomes["transaction"] == 1
       assert outcomes["span"] == 3
     end
+
+    test "records byte outcomes when buffered logs are dropped by a log_byte rate limit", ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      log_buffer = TelemetryProcessor.get_buffer(ctx.processor, :log)
+
+      :sys.suspend(scheduler)
+
+      log_events = [make_log_event("drained-1"), make_log_event("drained-2")]
+      Enum.each(log_events, &TelemetryProcessor.add(ctx.processor, &1))
+      assert Buffer.size(log_buffer) == 2
+
+      :ets.insert(Sentry.Transport.RateLimiter, {"log_byte", System.system_time(:second) + 60})
+
+      :sys.resume(scheduler)
+      GenServer.cast(scheduler, :signal)
+
+      poll_until(fn -> Buffer.size(log_buffer) == 0 end)
+      _ = :sys.get_state(scheduler)
+
+      assert flush_client_report_outcomes(ctx.ref, "ratelimit_backoff") == %{
+               "log_item" => 2,
+               "log_byte" => serialized_size(log_events)
+             }
+    end
+
+    test "records byte outcomes when buffered metrics are dropped by a trace_metric_byte rate limit",
+         ctx do
+      scheduler = TelemetryProcessor.get_scheduler(ctx.processor)
+      metric_buffer = TelemetryProcessor.get_buffer(ctx.processor, :metric)
+
+      :sys.suspend(scheduler)
+
+      metrics = [make_metric("drained-1", 1), make_metric("drained-2", 2)]
+      Enum.each(metrics, &TelemetryProcessor.add(ctx.processor, &1))
+      assert Buffer.size(metric_buffer) == 2
+
+      :ets.insert(
+        Sentry.Transport.RateLimiter,
+        {"trace_metric_byte", System.system_time(:second) + 60}
+      )
+
+      :sys.resume(scheduler)
+      GenServer.cast(scheduler, :signal)
+
+      poll_until(fn -> Buffer.size(metric_buffer) == 0 end)
+      _ = :sys.get_state(scheduler)
+
+      assert flush_client_report_outcomes(ctx.ref, "ratelimit_backoff") == %{
+               "trace_metric" => 2,
+               "trace_metric_byte" => serialized_size(metrics)
+             }
+    end
   end
 
   defp make_transaction do
@@ -567,6 +670,23 @@ defmodule Sentry.TelemetryProcessorIntegrationTest do
       timestamp: System.system_time(:nanosecond) / 1_000_000_000,
       attributes: %{}
     }
+  end
+
+  defp serialized_size(items) do
+    items |> Enum.map(&Envelope.serialized_size/1) |> Enum.sum()
+  end
+
+  # Flushes the global client report sender and returns the reported
+  # quantities for the given reason, keyed by data category.
+  defp flush_client_report_outcomes(ref, reason) do
+    Sentry.ClientReport.Sender.flush()
+
+    assert_receive {:bypass_envelope, ^ref, body}, 2000
+    assert [{%{"type" => "client_report"}, client_report}] = decode_envelope!(body)
+
+    for %{"reason" => ^reason} = outcome <- client_report["discarded_events"],
+        into: %{},
+        do: {outcome["category"], outcome["quantity"]}
   end
 
   defp flush_ref_messages(ref) do
