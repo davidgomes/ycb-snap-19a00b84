@@ -1,5 +1,6 @@
 defmodule ObanChore.IntegrationTest do
   use ExUnit.Case, async: false
+  import Ecto.Query, only: [where: 2]
 
   alias ObanChore.TestRepo
 
@@ -80,5 +81,40 @@ defmodule ObanChore.IntegrationTest do
     [active_job] = active_jobs
     assert active_job.id == job.id
     assert active_job.state == :scheduled
+  end
+
+  test "list_job_history/2 returns past jobs newest first", %{oban_name: oban_name} do
+    jobs =
+      for user_id <- 1..4 do
+        {:ok, job} = Oban.insert(oban_name, IntegrationTestChore.new(%{user_id: user_id}))
+        job
+      end
+
+    [active, completed, discarded, retryable] = Enum.map(jobs, & &1.id)
+
+    for {id, state} <- [
+          {completed, "completed"},
+          {discarded, "discarded"},
+          {retryable, "retryable"}
+        ] do
+      TestRepo.update_all(where(Oban.Job, id: ^id), set: [state: state])
+    end
+
+    history = ObanChore.list_job_history(IntegrationTestChore, oban_name: oban_name)
+
+    assert Enum.map(history, &{&1.id, &1.state}) == [
+             {retryable, :retryable},
+             {discarded, :discarded},
+             {completed, :completed}
+           ]
+
+    refute active in Enum.map(history, & &1.id)
+
+    assert [%{id: ^discarded}] =
+             ObanChore.list_job_history(IntegrationTestChore,
+               oban_name: oban_name,
+               limit: 1,
+               offset: 1
+             )
   end
 end

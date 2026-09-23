@@ -2,6 +2,7 @@ defmodule ObanChoreWeb.DashboardLiveTest do
   use ExUnit.Case, async: false
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
+  import Ecto.Query, only: [where: 2]
 
   @endpoint ObanChore.TestEndpoint
 
@@ -278,6 +279,144 @@ defmodule ObanChoreWeb.DashboardLiveTest do
     end
   end
 
+  describe "history" do
+    test "shows an empty state when the chore has no previous runs" do
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+
+      open_history(view, to_string(DashboardTestChore))
+
+      assert has_element?(view, ~s([data-role="history"] [data-role="history-empty"]))
+      refute has_element?(view, ~s(tr[data-role="history-row"]))
+    end
+
+    test "lists previous runs of the selected chore and opens them in a job tab" do
+      now = DateTime.utc_now()
+
+      completed =
+        insert_job(DashboardTestChore, %{username: "completed_user"},
+          state: "completed",
+          completed_at: now
+        )
+
+      discarded =
+        insert_job(DashboardTestChore, %{username: "discarded_user"},
+          state: "discarded",
+          discarded_at: now,
+          errors: [%{"attempt" => 1, "at" => DateTime.to_iso8601(now), "error" => "boom!"}]
+        )
+
+      active = insert_job(DashboardTestChore, %{username: "active_user"})
+
+      other_chore =
+        insert_job(DashboardUniqueChore, %{username: "other_user"},
+          state: "completed",
+          completed_at: now
+        )
+
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+      html = open_history(view, to_string(DashboardTestChore))
+
+      assert has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{completed.id}"]))
+      assert has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{discarded.id}"]))
+      refute has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{active.id}"]))
+      refute has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{other_chore.id}"]))
+      assert html =~ "discarded_user"
+
+      # Newest runs are listed first
+      assert history_row_ids(html) == [discarded.id, completed.id]
+
+      view
+      |> element(~s(tr[data-role="history-row"][data-job-id="#{discarded.id}"]))
+      |> render_click()
+
+      assert has_element?(view, ~s(button[data-role="job-tab"][data-job-id="#{discarded.id}"]))
+
+      assert has_element?(
+               view,
+               ~s(div[data-role="job-details"][data-job-id="#{discarded.id}"].oc-block)
+             )
+
+      assert has_element?(view, ~s([data-role="history"].oc-hidden))
+
+      assert view
+             |> element(~s(div[data-job-id="#{discarded.id}"] [data-role="job-errors"]))
+             |> render() =~ "boom!"
+
+      # Opening the same run again reuses its tab
+      view |> element(~s(button[data-role="history-tab"])) |> render_click()
+
+      view
+      |> element(~s(tr[data-role="history-row"][data-job-id="#{discarded.id}"]))
+      |> render_click()
+
+      assert view
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query(~s(button[data-role="job-tab"][data-job-id="#{discarded.id}"]))
+             |> Enum.count() == 1
+    end
+
+    test "reloads previous runs when the tab is reopened or refreshed" do
+      job = insert_job(DashboardTestChore, %{username: "john_doe"})
+
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+      open_history(view, to_string(DashboardTestChore))
+
+      assert has_element?(view, ~s([data-role="history-empty"]))
+
+      ObanChore.TestRepo.update_all(Oban.Job,
+        set: [state: "completed", completed_at: DateTime.utc_now()]
+      )
+
+      view |> element("button[phx-value-tab=new]") |> render_click()
+      view |> element(~s(button[data-role="history-tab"])) |> render_click()
+
+      assert has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{job.id}"]))
+
+      other_job =
+        insert_job(DashboardTestChore, %{username: "jane_doe"},
+          state: "cancelled",
+          cancelled_at: DateTime.utc_now()
+        )
+
+      refute has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{other_job.id}"]))
+
+      view |> element(~s(button[data-role="history-refresh"])) |> render_click()
+
+      assert has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{other_job.id}"]))
+    end
+
+    test "paginates previous runs" do
+      [oldest | _] =
+        jobs =
+        for i <- 1..21 do
+          insert_job(DashboardTestChore, %{username: "user_#{i}"},
+            state: "completed",
+            completed_at: DateTime.utc_now()
+          )
+        end
+
+      newest = List.last(jobs)
+
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+      html = open_history(view, to_string(DashboardTestChore))
+
+      assert length(history_row_ids(html)) == 20
+      assert has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{newest.id}"]))
+      refute has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{oldest.id}"]))
+      assert has_element?(view, ~s(button[data-role="history-prev-page"][disabled]))
+
+      html = view |> element(~s(button[data-role="history-next-page"])) |> render_click()
+
+      assert history_row_ids(html) == [oldest.id]
+      assert has_element?(view, ~s(button[data-role="history-next-page"][disabled]))
+
+      view |> element(~s(button[data-role="history-prev-page"])) |> render_click()
+
+      assert has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{newest.id}"]))
+    end
+  end
+
   describe "auth" do
     test "filters chores by module whitelist" do
       conn = build_conn()
@@ -310,5 +449,31 @@ defmodule ObanChoreWeb.DashboardLiveTest do
       assert render_click(view, "select_chore", %{"module" => to_string(DashboardUniqueChore)}) =~
                "No chore selected"
     end
+  end
+
+  defp insert_job(worker, args, attrs \\ []) do
+    {:ok, job} = Oban.insert(worker.new(args))
+
+    if attrs != [] do
+      ObanChore.TestRepo.update_all(where(Oban.Job, id: ^job.id), set: attrs)
+    end
+
+    job
+  end
+
+  defp open_history(view, chore_module) do
+    view
+    |> element("button[data-role=chore-select][data-chore-module=\"#{chore_module}\"]")
+    |> render_click()
+
+    view |> element(~s(button[data-role="history-tab"])) |> render_click()
+  end
+
+  defp history_row_ids(html) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(~s(tr[data-role="history-row"]))
+    |> LazyHTML.attribute("data-job-id")
+    |> Enum.map(&String.to_integer/1)
   end
 end
