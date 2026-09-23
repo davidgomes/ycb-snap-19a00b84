@@ -48,6 +48,26 @@
   longer opens its editor off-screen (mobile). The `PetalDataTable`
   hook closes them through the native popover API after an Apply, in
   both wiring modes.
+- **`<.data_table>` row selection (4.12 data table, milestone 3).**
+  `selectable` adds a checkbox column with a tri-state select-all
+  header scoped to the visible page (checked / indeterminate /
+  unchecked - the `PetalDataTable` hook mirrors the server's
+  `data-indeterminate` stamp onto the DOM property on every render).
+  While anything is selected the toolbar morphs into a selection bar:
+  "N selected" (off-page selections included), the new `:bulk_action`
+  slot (`:let` receives the selected ids) and a clear button; the
+  default controls are hidden, not removed, so an uncommitted search
+  term survives. `State` gains `selected` (string ids, never URL
+  state) with `put_selection/2`, `toggle_selected/2`, `toggle_page/2`,
+  `clear_selection/1`, `selected?/2` and `selected_ids/1`, and
+  `State.handle_op/3` learns `select`/`select_page`/`clear_selection`.
+  Selection always speaks events: `on_select` (default `on_change`,
+  required in link mode) with `row_id` picking each row's id (default
+  `:id`). Selected rows get a soft primary wash, and `pc-checkbox`
+  grows an `:indeterminate` style (`--pc-checkbox-dash` token).
+- **`table` `:col` accepts `header`** - rendered header content in
+  place of the label (how the data table puts its select-all checkbox
+  in the header).
 - **`data_table` never widens its container**: the root carries
   `min-w-0 max-w-full` so flex/grid parents can't size it to the
   table's min-content; footer children shrink and wrap. Wide tables

@@ -1439,7 +1439,8 @@ defmodule Dev.PlaygroundLive do
     do: {:noreply, update(socket, :combo, &%{&1 | chosen: value})}
 
   # the data table's event-mode op grammar: State.handle_op speaks all of
-  # it (sort/page/search/page_size/filter/clear_filters), so the whole
+  # it (sort/page/search/page_size/filter/clear_filters and the selection
+  # ops), so the whole
   # backend is one call plus a re-run through the free engine
   def handle_event("pg_table", params, socket) do
     alias PetalComponents.DataTable.State
@@ -7320,6 +7321,7 @@ defmodule Dev.PlaygroundLive do
           on_change="pg_table"
           striped
           searchable
+          selectable
           page_size_options={[5, 10, 20]}
         >
           <:col :let={row} field={:name} sortable>{row.name}</:col>
@@ -7354,7 +7356,7 @@ defmodule Dev.PlaygroundLive do
           ex <-
             examples_for(
               PetalComponents.Showcase.DataTable,
-              ~w(basic loading empty)a
+              ~w(basic loading selection empty)a
             )
         }
         class="mt-10"
