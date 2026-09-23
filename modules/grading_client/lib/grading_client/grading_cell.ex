@@ -7,12 +7,19 @@ defmodule GradingClient.GradedCell do
   def init(attrs, ctx) do
     source = attrs["source"] || ""
 
-    {:ok, assign(ctx, source: source), editor: [source: source, language: "elixir"]}
+    ctx =
+      assign(ctx,
+        source: source,
+        module_id: attrs["module_id"],
+        question_id: attrs["question_id"]
+      )
+
+    {:ok, ctx, editor: [source: source, language: "elixir"]}
   end
 
   @impl true
   def handle_connect(ctx) do
-    {:ok, %{}, ctx}
+    {:ok, %{module_id: ctx.assigns.module_id, question_id: ctx.assigns.question_id}, ctx}
   end
 
   @impl true
@@ -22,19 +29,36 @@ defmodule GradingClient.GradedCell do
 
   @impl true
   def to_attrs(ctx) do
-    %{"source" => ctx.assigns.source}
+    %{
+      "source" => ctx.assigns.source,
+      "module_id" => ctx.assigns.module_id,
+      "question_id" => ctx.assigns.question_id
+    }
   end
 
   @impl true
   def to_source(attrs) do
     try do
       source = Code.string_to_quoted!(attrs["source"])
+      module_id = Module.concat([attrs["module_id"]])
+      question_id = attrs["question_id"]
 
       ast =
         quote do
           result = unquote(source)
 
-          GradingServer.Answers.check(module_id, question_id, result)
+          case GradingClient.check_answer(result, unquote(module_id), unquote(question_id)) do
+            :correct ->
+              IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
+
+            {:incorrect, help_text} when is_binary(help_text) ->
+              IO.puts([IO.ANSI.red(), "Incorrect: ", IO.ANSI.reset(), help_text])
+
+            _ ->
+              IO.puts([IO.ANSI.red(), "Incorrect.", IO.ANSI.reset()])
+          end
+
+          result
         end
 
       Kino.SmartCell.quoted_to_string(ast)
@@ -50,9 +74,9 @@ defmodule GradingClient.GradedCell do
     export function init(ctx, payload) {
       ctx.importCSS("main.css");
 
-      root.innerHTML = `
+      ctx.root.innerHTML = `
         <div class="app">
-          Graded Cell
+          Graded Cell: ${payload.module_id} - Question ${payload.question_id}
         </div>
       `;
     }
