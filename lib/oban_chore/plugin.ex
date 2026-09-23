@@ -11,6 +11,8 @@ defmodule ObanChore.Plugin do
 
     * `:otp_app` - An atom or list of atoms representing the OTP application(s) to search for chores.
       If not provided, all loaded applications will be searched.
+    * `:chores` - An explicit list of chore modules (modules using `ObanChore.Worker`) to register.
+      When provided, automatic discovery is skipped and `:otp_app` is ignored.
     * `:pubsub_server` - (Required) The name of your application's Phoenix PubSub server.
 
   ## Examples
@@ -23,6 +25,16 @@ defmodule ObanChore.Plugin do
       {ObanChore.Plugin, otp_app: :my_app, pubsub_server: MyApp.PubSub}
     ]
   ```
+
+  Or register a fixed set of chores:
+
+  ```elixir
+  plugins: [
+    {ObanChore.Plugin,
+     chores: [MyApp.Chores.UserBackfill, MyApp.Chores.ReindexSearch],
+     pubsub_server: MyApp.PubSub}
+  ]
+  ```
   """
   @behaviour Oban.Plugin
 
@@ -32,8 +44,25 @@ defmodule ObanChore.Plugin do
   @impl Oban.Plugin
   def validate(opts) do
     with :ok <- validate_otp_app(opts),
+         :ok <- validate_chores(opts),
          :ok <- validate_pubsub_server(opts) do
       :ok
+    end
+  end
+
+  defp validate_chores(opts) do
+    case Keyword.get(opts, :chores) do
+      nil ->
+        :ok
+
+      modules when is_list(modules) ->
+        case Enum.reject(modules, &chore_module?/1) do
+          [] -> :ok
+          invalid -> {:error, "chores must use ObanChore.Worker, got: #{inspect(invalid)}"}
+        end
+
+      _ ->
+        {:error, "chores must be a list of modules"}
     end
   end
 
@@ -121,6 +150,10 @@ defmodule ObanChore.Plugin do
     oban_name = if state.opts[:conf], do: state.opts[:conf].name, else: Oban
     handler_id = {:oban_chore_counts, oban_name}
 
+    # The handler config captures the chore list, so a restarted plugin must replace
+    # any handler left behind by a previous instance rather than keep its stale chores.
+    :telemetry.detach(handler_id)
+
     :telemetry.attach_many(
       handler_id,
       [
@@ -200,8 +233,20 @@ defmodule ObanChore.Plugin do
   # Because Oban Job state have a finite set of values, we can safely convert them to atoms
   defp event_to_state(_event, job), do: String.to_existing_atom(job.state)
 
-  # TODO: Improve the discovery
+  defp chore_module?(module) do
+    is_atom(module) and Code.ensure_loaded?(module) and
+      function_exported?(module, :__chore_info__, 0)
+  end
+
   defp discover_chores(opts) do
+    case Keyword.fetch(opts, :chores) do
+      {:ok, modules} -> Enum.map(modules, & &1.__chore_info__())
+      :error -> discover_app_chores(opts)
+    end
+  end
+
+  # TODO: Improve the discovery
+  defp discover_app_chores(opts) do
     apps =
       case Keyword.get(opts, :otp_app) do
         nil ->
@@ -222,9 +267,7 @@ defmodule ObanChore.Plugin do
         _ -> []
       end
     end)
-    |> Enum.filter(fn module ->
-      Code.ensure_loaded?(module) and function_exported?(module, :__chore_info__, 0)
-    end)
+    |> Enum.filter(&chore_module?/1)
     |> Enum.map(fn module -> module.__chore_info__() end)
   end
 end
