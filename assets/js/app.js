@@ -8,7 +8,7 @@ let liveTransport = document .querySelector("meta[name='live-transport']") .getA
 const themeStorageKey = "error-tracker-theme";
 const systemDarkTheme = window.matchMedia("(prefers-color-scheme: dark)");
 
-// Storage access throws when the browser blocks it, which must not break the dashboard.
+// localStorage can throw (e.g. quota exceeded or access denied); the theme should still apply.
 function getStoredTheme() {
   try {
     return localStorage.getItem(themeStorageKey);

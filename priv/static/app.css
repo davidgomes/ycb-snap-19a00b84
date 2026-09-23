@@ -1705,4 +1705,13 @@ select {
     --tw-bg-opacity: 1;
     background-color: rgb(31 41 55 / var(--tw-bg-opacity));
   }
+
+  .md\:dark\:hover\:bg-transparent:hover:where(.dark, .dark *) {
+    background-color: transparent;
+  }
+
+  .md\:dark\:hover\:text-sky-500:hover:where(.dark, .dark *) {
+    --tw-text-opacity: 1;
+    color: rgb(14 165 233 / var(--tw-text-opacity));
+  }
 }
