@@ -42,6 +42,9 @@ defmodule Phoenix.LiveViewTest.UploadClient do
   end
 
   def init(opts) do
+    # Upload channels link to this client. A writer failure shuts one channel
+    # down with `{:shutdown, :closed}`; trap that so sibling channels stay up.
+    Process.flag(:trap_exit, true)
     cid = Keyword.fetch!(opts, :cid)
     socket = Keyword.get(opts, :socket)
     socket = socket && put_in(socket.transport_pid, self())
@@ -134,20 +137,23 @@ defmodule Phoenix.LiveViewTest.UploadClient do
       "ref" => ref
     } = client_entry
 
-    {:ok, _resp, entry_socket} =
-      Phoenix.ChannelTest.subscribe_and_join(state.socket, "lvu:123", %{"token" => token})
+    case Phoenix.ChannelTest.subscribe_and_join(state.socket, "lvu:123", %{"token" => token}) do
+      {:ok, _resp, entry_socket} ->
+        %{
+          name: name,
+          content: content,
+          size: byte_size(content),
+          type: type,
+          socket: entry_socket,
+          ref: ref,
+          token: token,
+          chunk_percent: 0
+        }
+        |> with_chunk_boundaries()
 
-    %{
-      name: name,
-      content: content,
-      size: byte_size(content),
-      type: type,
-      socket: entry_socket,
-      ref: ref,
-      token: token,
-      chunk_percent: 0
-    }
-    |> with_chunk_boundaries()
+      {:error, %{reason: reason}} ->
+        {:error, reason}
+    end
   end
 
   def with_chunk_boundaries(entry) do
@@ -252,18 +258,27 @@ defmodule Phoenix.LiveViewTest.UploadClient do
 
         update_entry_percent(state, entry, stats.new_percent)
 
-      %Phoenix.Socket.Reply{ref: ^ref, status: :error} ->
-        :ok =
-          ClientProxy.report_upload_progress(
-            proxy_pid,
-            from,
-            element,
-            entry.ref,
-            %{"error" => "failure"},
-            state.cid
-          )
+      %Phoenix.Socket.Reply{ref: ^ref, status: :error, payload: payload} ->
+        if writer_error?(payload) do
+          # The server retained the entry. Do not push a generic client entry
+          # error, which would clear or error it a second time. Render the
+          # current LiveView so callers observe {:writer_failure, reason}.
+          html = Phoenix.LiveViewTest.render(element)
+          GenServer.reply(from, {:ok, html})
+          state
+        else
+          :ok =
+            ClientProxy.report_upload_progress(
+              proxy_pid,
+              from,
+              element,
+              entry.ref,
+              %{"error" => "failure"},
+              state.cid
+            )
 
-        update_entry_percent(state, entry, stats.new_percent)
+          update_entry_percent(state, entry, stats.new_percent)
+        end
     after
       get_chunk_timeout(state) -> exit(:timeout)
     end
@@ -291,11 +306,36 @@ defmodule Phoenix.LiveViewTest.UploadClient do
     state.socket.assigns[:chunk_timeout] || 10_000
   end
 
+  defp writer_error?(%{reason: :writer_error}), do: true
+  defp writer_error?(%{"reason" => "writer_error"}), do: true
+  defp writer_error?(%{"reason" => :writer_error}), do: true
+  defp writer_error?(_payload), do: false
+
   def handle_info(:garbage_collect, state) do
     {:noreply, state}
   end
 
-  def handle_info({:socket_close, _pid, reason}, state) do
+  def handle_info({:EXIT, _pid, :normal}, state), do: {:noreply, state}
+  def handle_info({:EXIT, _pid, :shutdown}, state), do: {:noreply, state}
+  def handle_info({:EXIT, _pid, {:shutdown, _}}, state), do: {:noreply, state}
+
+  def handle_info({:EXIT, _pid, reason}, state) do
     {:stop, reason, state}
+  end
+
+  def handle_info({:socket_close, pid, reason}, state) do
+    new_entries =
+      Map.reject(state.entries, fn
+        {_name, %{socket: %{channel_pid: ^pid}}} -> true
+        _ -> false
+      end)
+
+    # One entry's upload channel shutting down (including a writer failure)
+    # must not tear down sibling entry channels that share this client.
+    if new_entries == %{} do
+      {:stop, reason, %{state | entries: new_entries}}
+    else
+      {:noreply, %{state | entries: new_entries}}
+    end
   end
 end
