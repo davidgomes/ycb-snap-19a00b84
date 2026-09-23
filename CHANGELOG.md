@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix key type inconsistency in backend implementations, keys are now typed as `Hammer.key()` (`term()`) instead of `String.t()`.
+
 ## 7.0.1 - 2025-03-04
 
 - Fix race condition in Atomic backends during creation of key.
