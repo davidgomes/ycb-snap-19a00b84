@@ -432,6 +432,20 @@ params = %{
 Flop.validate_and_run(Pet, params, for: Pet)
 ```
 
+### Filtering with field_dynamic
+
+```elixir
+custom_fields: [
+  human_age: [
+    field_dynamic: {CustomFields, :human_age, []},
+    ecto_type: :integer
+  ]
+]
+```
+
+Without a `filter` function, Flop applies the filter operator to the
+`field_dynamic` expression. If both are set, `filter` is used.
+
 ### Operators
 
 ```elixir
