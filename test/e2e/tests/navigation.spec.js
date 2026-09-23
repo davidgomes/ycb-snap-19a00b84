@@ -441,3 +441,165 @@ test("back and forward navigation types are tracked", async ({ page }) => {
     webSocketEvents.filter((e) => e.payload.indexOf("live_patch") !== -1),
   ).toHaveLength(3);
 });
+
+const collectBeforeNavigateEvents = (page) => {
+  const prefix = "before-navigate event ";
+  const events = [];
+  page.on("console", (msg) => {
+    if (msg.text().startsWith(prefix)) {
+      events.push(JSON.parse(msg.text().slice(prefix.length)));
+    }
+  });
+  return events;
+};
+
+test("live navigation can be cancelled", async ({ page }) => {
+  const beforeNavigateEvents = collectBeforeNavigateEvents(page);
+  await page.goto("/navigation/a");
+  await syncLV(page);
+  const length = await page.evaluate(() => window.history.length);
+  networkEvents = [];
+  webSocketEvents = [];
+
+  await page.evaluate(() => (window.cancelNavigation = true));
+  await page.getByRole("link", { name: "LiveView B" }).click();
+  await page.getByRole("link", { name: "Patch this LiveView" }).click();
+  await page.getByRole("button", { name: "JS navigate" }).click();
+  await page.getByRole("button", { name: "JS patch" }).click();
+
+  await expect
+    .poll(() => beforeNavigateEvents)
+    .toEqual([
+      {
+        href: "http://localhost:4004/navigation/b",
+        patch: false,
+        pop: false,
+        direction: "forward",
+      },
+      {
+        href: expect.stringMatching(/\/navigation\/a\?param=/),
+        patch: true,
+        pop: false,
+        direction: "forward",
+      },
+      {
+        href: "http://localhost:4004/navigation/b",
+        patch: false,
+        pop: false,
+        direction: "forward",
+      },
+      {
+        href: "/navigation/a?param=js",
+        patch: true,
+        pop: false,
+        direction: "forward",
+      },
+    ]);
+  await expect(page).toHaveURL("/navigation/a");
+  await expect(
+    page.getByRole("heading", { name: "This is page A" }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => window.history.length)).toEqual(length);
+
+  // nothing was sent for the cancelled navigations
+  await page.evaluate(() => (window.cancelNavigation = false));
+  await page.getByRole("link", { name: "Patch this LiveView" }).click();
+  await syncLV(page);
+  await expect(page).toHaveURL(/\/navigation\/a\?param=/);
+  expect(networkEvents).toEqual([]);
+  expect(webSocketEvents).toEqual([
+    expect.objectContaining({
+      type: "sent",
+      payload: expect.stringContaining("live_patch"),
+    }),
+    expect.objectContaining({
+      type: "received",
+      payload: expect.stringContaining("phx_reply"),
+    }),
+  ]);
+});
+
+test("back and forward navigation can be cancelled", async ({ page }) => {
+  const beforeNavigateEvents = collectBeforeNavigateEvents(page);
+  await page.goto("/navigation/a");
+  await syncLV(page);
+  await page.getByRole("link", { name: "LiveView B" }).click();
+  await syncLV(page);
+  await expect(page).toHaveURL("/navigation/b");
+  const length = await page.evaluate(() => window.history.length);
+  beforeNavigateEvents.length = 0;
+  networkEvents = [];
+  webSocketEvents = [];
+
+  // back
+  await page.evaluate(() => {
+    window.cancelNavigation = true;
+    history.back();
+  });
+  await expect
+    .poll(() => beforeNavigateEvents)
+    .toEqual([
+      {
+        href: "http://localhost:4004/navigation/a",
+        patch: false,
+        pop: true,
+        direction: "backward",
+      },
+    ]);
+  // the entry we came from is restored
+  await expect(page).toHaveURL("/navigation/b");
+  await expect(
+    page.getByRole("heading", { name: "This is page B" }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => window.history.length)).toEqual(length);
+
+  await page.evaluate(() => {
+    window.cancelNavigation = false;
+    history.back();
+  });
+  await expect(page).toHaveURL("/navigation/a");
+  await expect(
+    page.getByRole("heading", { name: "This is page A" }),
+  ).toBeVisible();
+  await syncLV(page);
+  // only the second back navigation left the LiveView
+  expect(
+    webSocketEvents.filter((e) => e.payload?.includes("phx_leave")),
+  ).toHaveLength(1);
+
+  // forward
+  beforeNavigateEvents.length = 0;
+  await page.evaluate(() => {
+    window.cancelNavigation = true;
+    history.forward();
+  });
+  await expect
+    .poll(() => beforeNavigateEvents)
+    .toEqual([
+      {
+        href: "http://localhost:4004/navigation/b",
+        patch: false,
+        pop: true,
+        direction: "forward",
+      },
+    ]);
+  await expect(page).toHaveURL("/navigation/a");
+  await expect(
+    page.getByRole("heading", { name: "This is page A" }),
+  ).toBeVisible();
+
+  await page.evaluate(() => {
+    window.cancelNavigation = false;
+    history.forward();
+  });
+  await expect(page).toHaveURL("/navigation/b");
+  await expect(
+    page.getByRole("heading", { name: "This is page B" }),
+  ).toBeVisible();
+  await syncLV(page);
+
+  // restoring the history entries did not dispatch additional events
+  expect(beforeNavigateEvents).toHaveLength(2);
+  expect(await page.evaluate(() => window.history.length)).toEqual(length);
+  expect(networkEvents).toEqual([]);
+});

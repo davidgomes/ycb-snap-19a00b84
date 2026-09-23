@@ -22,6 +22,13 @@ defmodule Phoenix.LiveViewTest.E2E.Navigation.Layout do
       window.addEventListener("phx:navigate", (e) => {
         console.log("navigate event", JSON.stringify(e.detail));
       });
+
+      window.addEventListener("phx:before-navigate", (e) => {
+        console.log("before-navigate event", JSON.stringify(e.detail));
+        if (window.cancelNavigation) {
+          e.preventDefault();
+        }
+      });
     </script>
 
     <style>
@@ -66,6 +73,8 @@ end
 defmodule Phoenix.LiveViewTest.E2E.Navigation.ALive do
   use Phoenix.LiveView
 
+  alias Phoenix.LiveView.JS
+
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     socket
@@ -93,6 +102,9 @@ defmodule Phoenix.LiveViewTest.E2E.Navigation.ALive do
     <.styled_link patch={"/navigation/a?param=#{@param_next}"}>Patch this LiveView</.styled_link>
     <.styled_link patch={"/navigation/a?param=#{@param_next}"} replace>Patch (Replace)</.styled_link>
     <.styled_link navigate="/navigation/b#items-item-42">Navigate to 42</.styled_link>
+
+    <button phx-click={JS.patch("/navigation/a?param=js")}>JS patch</button>
+    <button phx-click={JS.navigate("/navigation/b")}>JS navigate</button>
     """
   end
 

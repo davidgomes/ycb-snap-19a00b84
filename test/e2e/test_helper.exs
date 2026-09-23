@@ -157,6 +157,8 @@ defmodule Phoenix.LiveViewTest.E2E.Router do
       live "/form/dynamic-inputs", E2E.FormDynamicInputsLive
       live "/form/nested", E2E.NestedFormLive
       live "/form/stream", E2E.FormStreamLive
+      live "/form/unsaved", E2E.FormUnsavedLive
+      live "/form/unsaved/away", E2E.FormUnsavedLive, :away
       live "/js", E2E.JsLive
       live "/select", E2E.SelectLive
       live "/components", E2E.ComponentsLive
