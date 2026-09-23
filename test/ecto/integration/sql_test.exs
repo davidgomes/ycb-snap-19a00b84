@@ -59,18 +59,37 @@ defmodule Ecto.Integration.SQLTest do
 
   test "quoted strings and identifiers cannot break out into ClickHouse syntax" do
     string = ~S|value' FROM numbers(10) -- \ $tag$body$tag$ /* comment */|
-    result = TestRepo.query!(["SELECT ", Connection.quote_name(string, ?')])
+    result = TestRepo.query!(["SELECT ", Connection.quote_string(string)])
 
     assert result.rows == [[string]]
 
-    for {quoter, name} <- [
-          {?\", ~S|alias" FROM numbers(10) -- \ $tag$body$tag$ /* comment */|},
-          {?`, ~S|alias` FROM numbers(10) -- \ $tag$body$tag$ /* comment */|}
-        ] do
-      result = TestRepo.query!(["SELECT 1 AS ", Connection.quote_name(name, quoter)])
+    name = ~S|alias"` FROM numbers(10) -- \ $tag$body$tag$ /* comment */|
+    result = TestRepo.query!(["SELECT 1 AS ", Connection.quote_name(name)])
 
-      assert result.columns == [name]
-      assert result.rows == [[1]]
+    assert result.columns == [name]
+    assert result.rows == [[1]]
+  end
+
+  test "bound parameters and inline literals round-trip escaping edge cases" do
+    values = [
+      "",
+      "'",
+      "\\",
+      ~S|\'|,
+      "\\\\'",
+      "single ' double \" backtick ` backslash \\ middle",
+      "ends with \\",
+      "; SELECT 2; -- /* comment */ $tag$ heredoc $tag$",
+      "line one\nline two\r\n\t",
+      :binary.list_to_bin(Enum.to_list(0..127))
+    ]
+
+    for value <- values do
+      query =
+        from _ in "one",
+          select: {type(^value, :string), fragment("?", constant(^value))}
+
+      assert TestRepo.one(query, database: "system") == {value, value}
     end
   end
 

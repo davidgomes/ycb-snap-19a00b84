@@ -88,6 +88,7 @@ defmodule Ecto.Integration.JsonTest do
     TestRepo.insert_all(SemiStructured, [
       %{
         json: %{
+          "FROM" => "keyword",
           "from" => "insert_all",
           "nested" => %{"name" => "Test", "arr" => ["abc", "b=deb"]},
           "edge cases" => %{
@@ -102,7 +103,9 @@ defmodule Ecto.Integration.JsonTest do
             "comma,key" => "comma",
             "colon:key" => "colon",
             "slash/key" => "slash",
-            "bracket[key]" => "bracket"
+            "bracket[key]" => "bracket",
+            "trailing\\" => "trailing_backslash",
+            "all'\"`\\quotes" => "all_quotes"
           }
         },
         time: ~N[2023-10-01 13:00:00]
@@ -112,6 +115,7 @@ defmodule Ecto.Integration.JsonTest do
     assert TestRepo.all(
              from s in SemiStructured,
                select: %{
+                 keyword: json_extract_path(s.json, ["FROM"]),
                  from: json_extract_path(s.json, ["from"]),
                  name: json_extract_path(s.json, ["nested", "name"]),
                  edge_space: json_extract_path(s.json, ["edge cases", "space key"]),
@@ -126,10 +130,13 @@ defmodule Ecto.Integration.JsonTest do
                  edge_colon: json_extract_path(s.json, ["edge cases", "colon:key"]),
                  edge_slash: json_extract_path(s.json, ["edge cases", "slash/key"]),
                  edge_bracket: json_extract_path(s.json, ["edge cases", "bracket[key]"]),
+                 edge_trailing_backslash: json_extract_path(s.json, ["edge cases", "trailing\\"]),
+                 edge_all_quotes: json_extract_path(s.json, ["edge cases", "all'\"`\\quotes"]),
                  bracket_name: s.json["nested"]["name"]
                }
            ) == [
              %{
+               keyword: "keyword",
                from: "insert_all",
                name: "Test",
                edge_space: "space",
@@ -144,6 +151,8 @@ defmodule Ecto.Integration.JsonTest do
                edge_colon: "colon",
                edge_slash: "slash",
                edge_bracket: "bracket",
+               edge_trailing_backslash: "trailing_backslash",
+               edge_all_quotes: "all_quotes",
                bracket_name: "Test"
              }
            ]
