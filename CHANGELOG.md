@@ -115,6 +115,12 @@ by setting `phx-ignore-missing-id` or disable it globally with the `:missing_for
 
 See the module documentation or `Phoenix.LiveViewTest` for more information.
 
+## Unreleased
+
+### Bug fixes
+
+* Handle custom `Phoenix.LiveView.UploadWriter` failures in `init/1`, `write_chunk/2` and `close/2` like other entry errors: the entry is retained with a `{:writer_failure, reason}` error until cancelled, the `:progress` callback is invoked, and cancelling it releases the upload name for a new upload
+
 ## v1.2.9 (2026-08-10)
 
 ### Security fixes
