@@ -800,14 +800,14 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
 
   test "string escape" do
     query = "schema" |> where(foo: "'\\  ") |> select([], true)
-    assert all(query) == ~s[SELECT true FROM "schema" AS s0 WHERE (s0."foo" = '''\\\\  ')]
+    assert all(query) == ~S[SELECT true FROM "schema" AS s0 WHERE (s0."foo" = '\'\\  ')]
 
     query = "schema" |> where(foo: "'") |> select([], true)
-    assert all(query) == ~s[SELECT true FROM "schema" AS s0 WHERE (s0."foo" = '''')]
+    assert all(query) == ~S[SELECT true FROM "schema" AS s0 WHERE (s0."foo" = '\'')]
 
     value = "let's \\ escape"
     query = "schema" |> select([], fragment("?", constant(^value)))
-    assert all(query) == ~s[SELECT 'let''s \\\\ escape' FROM "schema" AS s0]
+    assert all(query) == ~S[SELECT 'let\'s \\ escape' FROM "schema" AS s0]
   end
 
   test "quoted identifier escape" do
@@ -817,25 +817,29 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
     assert Connection.quote_name(~s{has\\slash}) |> IO.iodata_to_binary() ==
              ~s{"has\\\\slash"}
 
-    assert Connection.quote_name(~s{has`tick}, ?`) |> IO.iodata_to_binary() ==
-             ~s{`has\\`tick`}
+    assert Connection.quote_name(~s{has`tick}) |> IO.iodata_to_binary() == ~s{"has`tick"}
+
+    assert Connection.quote_string(~s{has'quote}) |> IO.iodata_to_binary() ==
+             ~s{'has\\'quote'}
+
+    assert Connection.quote_string(~s{has\\slash}) |> IO.iodata_to_binary() ==
+             ~s{'has\\\\slash'}
 
     query = insert(nil, ~s{schema"quoted}, [~s{field"quoted}], [], :raise, [])
 
     assert query == ~s{INSERT INTO "schema\\"quoted"("field\\"quoted")}
   end
 
-  test "quoted identifier escape matches the byte-wise oracle for every byte pair" do
+  test "quoting matches the byte-wise oracle for every byte pair" do
     value = for left <- 0..255, right <- 0..255, into: <<>>, do: <<left, right>>
 
-    for quoter <- [?", ?`] do
+    for {quoter, fun} <- [{?", &Connection.quote_name/1}, {?', &Connection.quote_string/1}] do
       expected =
         for <<byte <- value>>, into: <<>> do
           if byte in [?\\, quoter], do: <<?\\, byte>>, else: <<byte>>
         end
 
-      assert Connection.quote_name(value, quoter) |> IO.iodata_to_binary() ==
-               <<quoter, expected::binary, quoter>>
+      assert fun.(value) |> IO.iodata_to_binary() == <<quoter, expected::binary, quoter>>
     end
   end
 
@@ -928,7 +932,7 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
     assert all(query) == ~s[SELECT s0."x" FROM "schema" AS s0 LIMIT 1]
 
     query = Schema |> select(fragment("?", constant(^"let's escape")))
-    assert all(query) == ~s[SELECT 'let''s escape' FROM "schema" AS s0]
+    assert all(query) == ~S[SELECT 'let\'s escape' FROM "schema" AS s0]
 
     query =
       Schema
@@ -1098,22 +1102,22 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
     assert all(query) == ~s{SELECT s0."meta"[0][1] FROM "schema" AS s0}
 
     query = Schema |> select([s], json_extract_path(s.meta, ["a", "b"]))
-    assert all(query) == ~s{SELECT s0."meta".a.b FROM "schema" AS s0}
+    assert all(query) == ~s{SELECT s0."meta"."a"."b" FROM "schema" AS s0}
 
     query = Schema |> select([s], json_extract_path(s.meta, ["'a"]))
-    assert all(query) == ~s{SELECT s0."meta".`'a` FROM "schema" AS s0}
+    assert all(query) == ~s{SELECT s0."meta"."'a" FROM "schema" AS s0}
 
     query = Schema |> select([s], json_extract_path(s.meta, ["\"a"]))
-    assert all(query) == ~s{SELECT s0."meta".`"a` FROM "schema" AS s0}
+    assert all(query) == ~S{SELECT s0."meta"."\"a" FROM "schema" AS s0}
 
     query = Schema |> select([s], json_extract_path(s.meta, ["a b", "a`b"]))
-    assert all(query) == ~s{SELECT s0."meta".`a b`.`a\\`b` FROM "schema" AS s0}
+    assert all(query) == ~s{SELECT s0."meta"."a b"."a`b" FROM "schema" AS s0}
 
     query = Schema |> select([s], json_extract_path(s.meta, ["a\\b"]))
-    assert all(query) == ~S|SELECT s0."meta".`a\\b` FROM "schema" AS s0|
+    assert all(query) == ~S|SELECT s0."meta"."a\\b" FROM "schema" AS s0|
 
     query = Schema |> select([s], s.meta["author"]["name"])
-    assert all(query) == ~s{SELECT s0."meta".author.name FROM "schema" AS s0}
+    assert all(query) == ~s{SELECT s0."meta"."author"."name" FROM "schema" AS s0}
   end
 
   test "nested expressions" do
@@ -2627,7 +2631,7 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
     create = {:create, table(:posts, comment: "owner's \\\\ table"), []}
 
     assert execute_ddl(create) == [
-             ~s{CREATE TABLE "posts" () ENGINE=TinyLog COMMENT 'owner''s \\\\\\\\ table'}
+             ~S{CREATE TABLE "posts" () ENGINE=TinyLog COMMENT 'owner\'s \\\\ table'}
            ]
   end
 
@@ -3088,7 +3092,7 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
        ]}
 
     assert execute_ddl(create) == [
-             ~s{CREATE TABLE "posts" ("user_id" UInt64 COMMENT 'user''s id') ENGINE=MergeTree}
+             ~S{CREATE TABLE "posts" ("user_id" UInt64 COMMENT 'user\'s id') ENGINE=MergeTree}
            ]
   end
 
