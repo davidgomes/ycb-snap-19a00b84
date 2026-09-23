@@ -374,6 +374,8 @@ defmodule Pet do
           field_dynamic: {CustomFields, :human_age, []},
           ecto_type: :integer
         ]
+        # Omit `filter` to filter with the same expression `field_dynamic`
+        # returns. Flop applies the operator to that dynamic.
       ]
     ]
   }
