@@ -8,6 +8,7 @@ defmodule ObanDoctor.Check do
   @type context :: %{
           workers: list(map()),
           oban_configs: list(map()),
+          has_oban_pro: boolean(),
           project_root: String.t()
         }
 
