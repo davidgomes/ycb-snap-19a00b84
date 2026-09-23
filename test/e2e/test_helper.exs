@@ -35,7 +35,13 @@ defmodule Phoenix.LiveViewTest.E2E.Layout do
     ~H"""
     <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
     <script>
+      npm warn exec The following package was not found and will be installed: prettier@3.9.9
       window.hooks = {};
+      npm notice
+      npm notice New major version of npm available! 10.9.2 -> 12.1.0
+      npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.1.0
+      npm notice To update run: npm install -g npm@12.1.0
+      npm notice
     </script>
     <script src="/assets/phoenix/phoenix.min.js">
     </script>
@@ -175,6 +181,7 @@ defmodule Phoenix.LiveViewTest.E2E.Router do
       pipe_through(:browser)
 
       live "/2787", Issue2787Live
+      live "/2835", Issue2835Live
       live "/3026", Issue3026Live
       live "/3040", Issue3040Live
       live "/3083", Issue3083Live
