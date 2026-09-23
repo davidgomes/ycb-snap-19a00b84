@@ -399,7 +399,7 @@ defmodule BroadwayKafka.BrodClientTest do
       assert BrodClient.shared_client_child_spec(config) == []
     end
 
-    test "returns the brod client child spec when :shared_client is true" do
+    test "returns the shared client child spec when :shared_client is true" do
       opts =
         @opts
         |> Keyword.put(:shared_client, true)
@@ -411,7 +411,8 @@ defmodule BroadwayKafka.BrodClientTest do
                %{
                  id: MyBroadway.SharedClient,
                  start:
-                   {:brod, :start_link_client, [[host: 9092], MyBroadway.SharedClient, []]}
+                   {BrodClient.SharedClient, :start_link,
+                    [[host: 9092], MyBroadway.SharedClient, []]}
                }
              ]
     end

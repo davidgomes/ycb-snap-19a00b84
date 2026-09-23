@@ -106,7 +106,7 @@ defmodule BroadwayKafka.BrodClient do
       %{
         id: config.shared_client_id,
         start:
-          {:brod, :start_link_client,
+          {__MODULE__.SharedClient, :start_link,
            [config.hosts, config.shared_client_id, config.client_config]}
       }
     ]
@@ -114,7 +114,7 @@ defmodule BroadwayKafka.BrodClient do
 
   def shared_client_child_spec(_config), do: []
 
-  # The shared client is started and supervised by the Broadway topology
+  # The shared client is started by BroadwayKafka.BrodClient.SharedClient
   defp maybe_start_client(_client_id, %{shared_client: true}), do: :ok
 
   defp maybe_start_client(client_id, config) do

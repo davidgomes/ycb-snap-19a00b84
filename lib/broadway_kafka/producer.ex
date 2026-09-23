@@ -50,7 +50,7 @@ defmodule BroadwayKafka.Producer do
       starting from the `:earliest` or the `:latest` offsets of the topic. Default is `:assigned`.
 
     * `:shared_client` - Optional. When `false`, each producer starts its own `:brod` client.
-      When `true`, a single `:brod` client is started under the Broadway supervision tree and
+      When `true`, a single `:brod` client is started along with the Broadway pipeline and
       shared by all producers, which reduces the number of connections to Kafka. Default is `false`.
 
     * `:group_config` - Optional. A list of options used to configure the group
