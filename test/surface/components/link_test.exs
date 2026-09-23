@@ -114,10 +114,13 @@ defmodule Surface.Components.LinkTest do
   end
 
   test "updates when opts change", %{conn: conn} do
+    # LiveView >= 1.1 renders boolean attributes as `disabled=""` instead of `disabled="disabled"`
+    disabled = ~r/disabled="(disabled)?"/
+
     {:ok, view, html} = live_isolated(conn, ViewWithLink)
-    refute html =~ ~s(disabled="disabled")
-    assert render_click(view, :toggle_disable) =~ ~s(disabled="disabled")
-    refute render_click(view, :toggle_disable) =~ ~s(disabled="disabled")
+    refute html =~ disabled
+    assert render_click(view, :toggle_disable) =~ disabled
+    refute render_click(view, :toggle_disable) =~ disabled
   end
 
   describe "is compatible with phoenix link/2" do

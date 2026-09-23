@@ -8,6 +8,8 @@ defmodule Surface.LVChangeTrackingTest do
 
   alias Phoenix.LiveView.{Socket, Diff}
 
+  @lv_1_1_or_later Version.match?(to_string(Application.spec(:phoenix_live_view, :vsn)), ">= 1.1.0")
+
   defp wrapper(assigns) do
     ~H[*** <%= render_slot(@inner_block, "ARG") %> ***]
   end
@@ -28,13 +30,13 @@ defmodule Surface.LVChangeTrackingTest do
       """
     end
 
-    {socket, full_render, components} = render(comp.(assigns))
+    {fingerprints, full_render, components} = render(comp.(assigns))
 
     assert has_dynamic_part?(full_render, "INNER WITH ARG")
 
     assigns = Map.put(assigns, :__changed__, %{some_assign: true})
 
-    {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+    {_, full_render, _} = render(comp.(assigns), fingerprints, components)
 
     assert has_dynamic_part?(full_render, "SOME_ASSIGN")
     refute has_dynamic_part?(full_render, "INNER WITH ARG")
@@ -52,13 +54,13 @@ defmodule Surface.LVChangeTrackingTest do
       """
     end
 
-    {socket, full_render, components} = render(comp.(assigns))
+    {fingerprints, full_render, components} = render(comp.(assigns))
 
     assert has_dynamic_part?(full_render, "INNER WITH ARG")
 
     assigns = Map.put(assigns, :__changed__, %{some_assign: true})
 
-    {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+    {_, full_render, _} = render(comp.(assigns), fingerprints, components)
 
     assert has_dynamic_part?(full_render, "SOME_ASSIGN")
     refute has_dynamic_part?(full_render, "INNER WITH ARG")
@@ -76,13 +78,13 @@ defmodule Surface.LVChangeTrackingTest do
       """
     end
 
-    {socket, full_render, components} = render(comp.(assigns))
+    {fingerprints, full_render, components} = render(comp.(assigns))
 
     assert has_dynamic_part?(full_render, "INNER WITH ARG")
 
     assigns = Map.put(assigns, :__changed__, %{some_assign: true})
 
-    {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+    {_, full_render, _} = render(comp.(assigns), fingerprints, components)
 
     # TODO: Why "INNER WITH ARG" is resent? It shouldn't!
     assert has_dynamic_part?(full_render, "INNER WITH ARG")
@@ -100,13 +102,13 @@ defmodule Surface.LVChangeTrackingTest do
       """
     end
 
-    {socket, full_render, components} = render(comp.(assigns))
+    {fingerprints, full_render, components} = render(comp.(assigns))
 
     assert has_dynamic_part?(full_render, "INNER WITH ARG")
 
     assigns = Map.put(assigns, :__changed__, %{some_assign: true})
 
-    {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+    {_, full_render, _} = render(comp.(assigns), fingerprints, components)
 
     # TODO: Why "INNER WITH ARG" is resent? It shouldn't!
     assert has_dynamic_part?(full_render, "INNER WITH ARG")
@@ -123,16 +125,24 @@ defmodule Surface.LVChangeTrackingTest do
       """
     end
 
-    {socket, full_render, components} = render(comp.(assigns))
+    {fingerprints, full_render, components} = render(comp.(assigns))
 
     assert has_dynamic_part?(full_render, "STATIC LABEL")
 
     assigns = Map.put(assigns, :__changed__, %{content: true})
 
-    {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+    {_, full_render, _} = render(comp.(assigns), fingerprints, components)
 
     assert has_dynamic_part?(full_render, "DYN CONTENT")
-    refute has_dynamic_part?(full_render, "STATIC LABEL")
+
+    # Since LiveView v1.1, change tracking is disabled for components whose assigns have a
+    # dynamic part depending on other assigns, i.e. `Map.merge(Surface.build_assigns(...), %{...})`,
+    # so the whole component is resent
+    if @lv_1_1_or_later do
+      assert has_dynamic_part?(full_render, "STATIC LABEL")
+    else
+      refute has_dynamic_part?(full_render, "STATIC LABEL")
+    end
   end
 
   test "phx-* attributes with string values are static so they're not resent after first rendering" do
@@ -146,13 +156,13 @@ defmodule Surface.LVChangeTrackingTest do
       """
     end
 
-    {socket, full_render, components} = render(comp.(assigns))
+    {fingerprints, full_render, components} = render(comp.(assigns))
 
-    assert full_render[:s] == ["<button phx-click=\"click\">", "</button>\n"]
+    assert static(full_render) == ["<button phx-click=\"click\">", "</button>\n"]
 
     assigns = Map.put(assigns, :__changed__, %{content: true})
 
-    {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+    {_, full_render, _} = render(comp.(assigns), fingerprints, components)
 
     assert full_render == %{0 => "DYN CONTENT"}
   end
@@ -169,25 +179,44 @@ defmodule Surface.LVChangeTrackingTest do
   #     """
   #   end
 
-  #   {socket, full_render, components} = render(comp.(assigns))
+  #   {fingerprints, full_render, components} = render(comp.(assigns))
 
-  #   assert full_render[:s] == ["<button phx-click=\"click\">", "</button>\n"]
+  #   assert static(full_render) == ["<button phx-click=\"click\">", "</button>\n"]
 
   #   assigns = Map.put(assigns, :__changed__, %{content: true})
 
-  #   {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+  #   {_, full_render, _} = render(comp.(assigns), fingerprints, components)
 
   #   assert full_render == %{0 => "DYN CONTENT"}
   # end
 
-  defp render(
-         rendered,
-         fingerprints \\ Diff.new_fingerprints(),
-         components \\ Diff.new_components()
-       ) do
-    socket = %Socket{endpoint: __MODULE__, fingerprints: fingerprints}
-    Diff.render(socket, rendered, components)
+  # Since LiveView v1.1, fingerprints are no longer stored in the socket
+  if @lv_1_1_or_later do
+    defp render(
+           rendered,
+           fingerprints \\ Diff.new_fingerprints(),
+           components \\ Diff.new_components()
+         ) do
+      {diff, fingerprints, components} =
+        Diff.render(%Socket{endpoint: __MODULE__}, rendered, fingerprints, components)
+
+      {fingerprints, diff, components}
+    end
+  else
+    defp render(
+           rendered,
+           fingerprints \\ Diff.new_fingerprints(),
+           components \\ Diff.new_components()
+         ) do
+      socket = %Socket{endpoint: __MODULE__, fingerprints: fingerprints}
+      {socket, diff, components} = Diff.render(socket, rendered, components)
+      {socket.fingerprints, diff, components}
+    end
   end
+
+  # Since LiveView v1.1, statics can be shared through a template (`:p`) and referenced by index
+  defp static(%{s: index, p: template}) when is_integer(index), do: Map.fetch!(template, index)
+  defp static(%{s: static}), do: static
 
   defp has_dynamic_part?([{_, value} | _rest], value) do
     true
