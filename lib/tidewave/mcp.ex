@@ -16,7 +16,7 @@ defmodule Tidewave.MCP do
     add_logger_backend()
     init_config()
 
-    MCP.Server.init_tools()
+    MCP.Handler.init_tools()
 
     children = [
       {Registry, name: Tidewave.BrowserSessions, keys: :unique},
@@ -42,8 +42,8 @@ defmodule Tidewave.MCP do
     if Application.get_env(:tidewave, :debug) do
       :ok
     else
-      Logger.put_module_level(MCP.Connection, :none)
-      Logger.put_module_level(MCP.Server, :none)
+      Logger.put_module_level(MCP.HTTP, :none)
+      Logger.put_module_level(MCP.Handler, :none)
     end
   end
 
