@@ -7,6 +7,8 @@ To start your Phoenix server:
 
 Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
 
+The Oban jobs UI lives at [`localhost:4000/jobs`](http://localhost:4000/jobs).
+
 Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
 
 ## Learn more

@@ -1,0 +1,47 @@
+<.header>
+  Jobs
+  <:subtitle>Jobs of the Oban instance, newest first.</:subtitle>
+</.header>
+
+<nav class="mt-6 flex flex-wrap gap-2" aria-label="Filter jobs by state">
+  <.state_filter current={@state} count={@total} />
+  <.state_filter
+    :for={state <- Jobs.states()}
+    state={state}
+    current={@state}
+    count={@counts[state]}
+  />
+</nav>
+
+<p :if={@jobs == []} id="jobs-empty" class="mt-11 text-sm leading-6 text-zinc-500">
+  No jobs found.
+</p>
+
+<.table
+  :if={@jobs != []}
+  id="jobs"
+  rows={@jobs}
+  row_id={&"job-#{&1.id}"}
+  row_click={&JS.navigate(~p"/jobs/#{&1.id}")}
+>
+  <:col :let={job} label="ID"><%= job.id %></:col>
+  <:col :let={job} label="State"><.state_badge state={job.state} /></:col>
+  <:col :let={job} label="Worker"><%= job.worker %></:col>
+  <:col :let={job} label="Queue"><%= job.queue %></:col>
+  <:col :let={job} label="Attempt"><%= job.attempt %>/<%= job.max_attempts %></:col>
+  <:col :let={job} label="Args">
+    <code class="block max-w-xs truncate text-xs" title={format_json(job.args)}>
+      <%= format_json(job.args) %>
+    </code>
+  </:col>
+  <:col :let={job} label="Inserted at">
+    <span class="whitespace-nowrap"><%= format_datetime(job.inserted_at) %></span>
+  </:col>
+</.table>
+
+<div :if={length(@jobs) < @matching} class="mt-6 flex items-center justify-between">
+  <p class="text-sm leading-6 text-zinc-500">
+    Showing <%= length(@jobs) %> of <%= @matching %> jobs
+  </p>
+  <.button id="load-more" phx-click="load_more">Load more</.button>
+</div>
