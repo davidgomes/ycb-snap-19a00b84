@@ -74,7 +74,8 @@ defmodule Oban.Web.Pages.Jobs.DetailTest do
 
     test "showing the deadline for jobs awaiting a signal", %{live: live} do
       wait_until = System.system_time(:millisecond) + :timer.hours(2)
-      job = insert_job!([ref: 1], state: "scheduled", worker: WorkerA, meta: %{wait_until: wait_until})
+      meta = %{wait_until: wait_until}
+      job = insert_job!([ref: 1], state: "scheduled", worker: WorkerA, meta: meta)
 
       open_state(live, "scheduled")
       open_details(live, job)
@@ -85,7 +86,8 @@ defmodule Oban.Web.Pages.Jobs.DetailTest do
     end
 
     test "showing jobs awaiting a signal without a deadline", %{live: live} do
-      job = insert_job!([ref: 1], state: "scheduled", worker: WorkerA, meta: %{wait_until: "infinity"})
+      meta = %{wait_until: "infinity"}
+      job = insert_job!([ref: 1], state: "scheduled", worker: WorkerA, meta: meta)
 
       open_state(live, "scheduled")
       open_details(live, job)
