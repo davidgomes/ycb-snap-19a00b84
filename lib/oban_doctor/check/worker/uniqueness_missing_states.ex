@@ -8,18 +8,40 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   Missing states means duplicate jobs could be enqueued when existing jobs are
   in the missing state.
 
+  Oban's named state groups are expanded before comparison. `:incomplete` and
+  `:successful` include every recommended state, while `:scheduled` only covers
+  scheduled jobs. The `:all` group is reported by
+  `ObanDoctor.Check.Worker.StateGroupUsage` instead.
+
   ## Examples
 
   Bad - only checks available state:
       unique: [fields: [:args], states: [:available]]
 
+  Bad - the `:scheduled` group only covers scheduled jobs:
+      unique: [fields: [:args], states: :scheduled]
+
   Good - includes all non-final states:
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  Good - the `:incomplete` group includes all non-final states:
+      unique: [fields: [:args], states: :incomplete]
+
+  ## References
+
+    * [Oban Unique Jobs guide](https://hexdocs.pm/oban/unique_jobs.html)
+    * [`Oban.Job.unique_states/1`](https://hexdocs.pm/oban/Oban.Job.html#unique_states/1)
   """
 
   use ObanDoctor.Check, category: :worker
 
   @recommended_states [:available, :scheduled, :executing, :retryable]
+
+  @state_groups %{
+    incomplete: [:available, :scheduled, :executing, :retryable],
+    scheduled: [:scheduled],
+    successful: [:available, :scheduled, :executing, :retryable, :completed]
+  }
 
   @impl true
   def id, do: :uniqueness_missing_states
@@ -67,6 +89,7 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   defp uses_all_group?(_), do: false
 
   defp normalize_states(states) when is_list(states), do: states
+  defp normalize_states(group) when is_atom(group), do: Map.get(@state_groups, group, [])
   defp normalize_states(_), do: []
 
   defp build_issue(worker) do
