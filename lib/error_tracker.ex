@@ -365,7 +365,7 @@ defmodule ErrorTracker do
         {error, occurrence}
       end)
 
-    # The upsert does not update nor return the `muted` field of existing errors
+    # The upsert neither updates nor returns the `muted` field of existing errors
     error = %Error{error | muted: muted}
     occurrence = %Occurrence{occurrence | error: error}
 
