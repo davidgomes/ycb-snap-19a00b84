@@ -473,11 +473,20 @@ defmodule Sentry.TransportTest do
   end
 
   defp make_log_event(body) do
-    %LogEvent{level: :info, body: body, timestamp: System.system_time(:nanosecond) / 1.0e9}
+    %LogEvent{
+      level: :info,
+      body: body,
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000
+    }
   end
 
   defp make_metric(name) do
-    %Metric{type: :counter, name: name, value: 1, timestamp: System.system_time(:nanosecond) / 1.0e9}
+    %Metric{
+      type: :counter,
+      name: name,
+      value: 1,
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000
+    }
   end
 
   defp serialized_size(items) do

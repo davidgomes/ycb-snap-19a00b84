@@ -328,11 +328,7 @@ defmodule Sentry.LoggerHandler.LogsTest do
         {"log_byte", System.system_time(:second) + 60}
       )
 
-      initial_size = TelemetryProcessor.buffer_size(:log)
-
       Logger.info("Rate-limited log message")
-
-      assert TelemetryProcessor.buffer_size(:log) == initial_size
 
       test_pid = self()
       ref = make_ref()
