@@ -41,6 +41,12 @@ defmodule SpiderMan do
   @type component :: :downloader | :spider | :item_processor
   @type ets_stats :: [size: pos_integer, memory: pos_integer] | nil
   @type prepare_for_start_stage :: :pre | :post
+  @type throughput_stats :: %{
+          total: non_neg_integer,
+          success: non_neg_integer,
+          fail: non_neg_integer,
+          tps: number
+        }
 
   @callback handle_response(Response.t(), context :: map) :: %{
               optional(:requests) => [Request.t()],
@@ -174,6 +180,30 @@ defmodule SpiderMan do
        |> :ets.info()
        |> Keyword.take([:size, :memory])}
     end)
+  end
+
+  @doc """
+  fetch spider's throughput statistics of each component, return `nil` if the spider isn't started
+
+      [
+        downloader: %{total: 10, success: 9, fail: 1, tps: 3.5},
+        spider: %{total: 9, success: 9, fail: 0, tps: 120.0},
+        item_processor: %{total: 90, success: 90, fail: 0, tps: 999.99}
+      ]
+  """
+  @spec throughput_stats(spider) :: [{component, throughput_stats}] | nil
+  def throughput_stats(spider) do
+    if Process.whereis(spider) do
+      spider |> Engine.get_state() |> Map.fetch!(:stats_tid) |> SpiderMan.Stats.get_stats()
+    end
+  end
+
+  @doc "format spider's throughput statistics as a one line string, return `nil` if the spider isn't started"
+  @spec format_throughput_stats(spider) :: String.t() | nil
+  def format_throughput_stats(spider) do
+    if Process.whereis(spider) do
+      spider |> Engine.get_state() |> Map.fetch!(:stats_tid) |> SpiderMan.Stats.format_stats()
+    end
   end
 
   @spec components :: [component]

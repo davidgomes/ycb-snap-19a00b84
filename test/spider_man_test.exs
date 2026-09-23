@@ -55,6 +55,19 @@ defmodule SpiderMan.SpiderManTest do
            ] = SpiderMan.stats(spider)
   end
 
+  test "throughput_stats", %{spider: spider} do
+    zero = %{total: 0, success: 0, fail: 0, tps: 0}
+
+    assert [downloader: ^zero, spider: ^zero, item_processor: ^zero] =
+             SpiderMan.throughput_stats(spider)
+
+    assert "Downloader:[0/0 0/s F:0] Spider:[0/0 0/s F:0] ItemProcessor:[0/0 0/s F:0]" =
+             SpiderMan.format_throughput_stats(spider)
+
+    assert nil == SpiderMan.throughput_stats(NotStartedSpider)
+    assert nil == SpiderMan.format_throughput_stats(NotStartedSpider)
+  end
+
   test "list_spiders", %{spider: spider} do
     spiders = SpiderMan.list_spiders()
     assert is_list(spiders)

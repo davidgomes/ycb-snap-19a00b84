@@ -30,30 +30,30 @@ defmodule SpiderMan.Stats do
     def print_spider_stats(tid), do: format_stats(tid)
   end
 
-  defp format_stats(tid) do
-    [downloader, item_processor, spider] = :ets.tab2list(tid) |> Enum.sort()
+  def get_stats(tid) do
+    Enum.map(SpiderMan.components(), fn component ->
+      [{^component, total, success, fail, duration}] = :ets.lookup(tid, component)
 
-    [downloader, spider, item_processor]
+      tps =
+        case System.convert_time_unit(duration, :native, :millisecond) do
+          0 -> 0
+          ms -> Float.floor(success / (ms / 1000), 2)
+        end
+
+      {component, %{total: total, success: success, fail: fail, tps: tps}}
+    end)
+  end
+
+  def format_stats(tid) do
+    tid
+    |> get_stats()
     |> Enum.map(&format_component_stats/1)
     |> Enum.join(" ")
   end
 
-  defp format_component_stats({component, total, success, fail, duration}) do
-    tps =
-      case System.convert_time_unit(duration, :native, :millisecond) do
-        0 ->
-          0
-
-        ms ->
-          tps = Float.floor(success / (ms / 1000), 2)
-
-          if tps > 999 do
-            "999+"
-          else
-            tps
-          end
-      end
-
+  defp format_component_stats({component, stats}) do
+    %{total: total, success: success, fail: fail, tps: tps} = stats
+    tps = if tps > 999, do: "999+", else: tps
     component = Atom.to_string(component) |> Macro.camelize()
     "#{component}:[#{success}/#{total} #{tps}/s F:#{fail}]"
   end

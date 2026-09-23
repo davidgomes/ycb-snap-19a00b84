@@ -602,11 +602,14 @@ defmodule SpiderMan.Engine do
     Logger.remove_backend({LoggerFileBackend, spider})
   end
 
-  defp setup_print_stats(%{print_stats: false} = state), do: Map.put(state, :stats_task_pid, nil)
-
-  defp setup_print_stats(%{stats_tid: tid, spider: spider, status: status} = state) do
+  defp setup_print_stats(%{stats_tid: tid, spider: spider} = state) do
     Stats.attach_spider_stats(spider, tid)
+    setup_stats_task(state)
+  end
 
+  defp setup_stats_task(%{print_stats: false} = state), do: Map.put(state, :stats_task_pid, nil)
+
+  defp setup_stats_task(%{stats_tid: tid, status: status} = state) do
     {:ok, stats_task_pid} =
       Stats.Task.start_link(%{status: status, tid: tid, refresh_interval: 1000})
 
