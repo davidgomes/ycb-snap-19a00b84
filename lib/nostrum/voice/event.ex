@@ -110,6 +110,18 @@ defmodule Nostrum.Voice.Event do
     state
   end
 
+  # DAVE E2EE is not supported, so we advertise protocol version 0 and only
+  # acknowledge transitions to keep the voice session from stalling.
+  defp handle_event(:dave_prepare_transition, payload, state) do
+    Logger.debug("VOICE DAVE PREPARE TRANSITION")
+    {state, Payload.dave_transition_ready_payload(payload["d"]["transition_id"])}
+  end
+
+  defp handle_event(:dave_execute_transition, _payload, state) do
+    Logger.debug("VOICE DAVE EXECUTE TRANSITION")
+    state
+  end
+
   defp handle_event(:codec_info, _payload, state), do: state
 
   defp handle_event(:speaking, payload, state) do

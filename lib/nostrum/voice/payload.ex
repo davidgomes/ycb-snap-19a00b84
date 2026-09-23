@@ -27,7 +27,8 @@ defmodule Nostrum.Voice.Payload do
       server_id: state.guild_id,
       user_id: Me.get().id,
       token: state.token,
-      session_id: state.session
+      session_id: state.session,
+      max_dave_protocol_version: 0
     }
     |> build_payload("IDENTIFY")
   end
@@ -52,6 +53,11 @@ defmodule Nostrum.Voice.Payload do
       }
     }
     |> build_payload("SELECT_PROTOCOL")
+  end
+
+  def dave_transition_ready_payload(transition_id) do
+    %{transition_id: transition_id}
+    |> build_payload("DAVE_TRANSITION_READY")
   end
 
   def speaking_payload(%VoiceState{} = voice) do
