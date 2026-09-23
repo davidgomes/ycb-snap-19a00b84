@@ -35,7 +35,7 @@ defmodule ErrorTracker.Web.Layouts do
 
   def navbar(assigns) do
     ~H"""
-    <nav class="border-b border-gray-200 bg-white dark:border-gray-900 dark:bg-gray-900">
+    <nav class="border-b border-gray-200 bg-white dark:border-b-0 dark:bg-gray-900">
       <div class="container flex flex-wrap items-center justify-between mx-auto p-4">
         <.link
           href={dashboard_path(@socket)}
@@ -126,6 +126,6 @@ defmodule ErrorTracker.Web.Layouts do
   end
 
   defp navbar_item_class do
-    "whitespace-nowrap flex-0 block py-2 px-3 rounded-lg text-gray-900 hover:bg-gray-100 md:hover:bg-transparent md:border-0 md:hover:text-sky-600 dark:text-white dark:hover:bg-gray-700 md:dark:hover:text-sky-500"
+    "whitespace-nowrap flex-0 block py-2 px-3 rounded-lg text-gray-900 hover:bg-gray-100 md:hover:bg-transparent md:border-0 md:hover:text-sky-600 dark:text-white dark:hover:bg-gray-700 md:dark:hover:bg-transparent md:dark:hover:text-sky-500"
   end
 end

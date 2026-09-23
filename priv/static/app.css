@@ -1518,6 +1518,10 @@ html.dark {
   display: none;
 }
 
+.dark\:border-b-0:where(.dark, .dark *) {
+  border-bottom-width: 0px;
+}
+
 .dark\:border-gray-400:where(.dark, .dark *) {
   --tw-border-opacity: 1;
   border-color: rgb(156 163 175 / var(--tw-border-opacity));
@@ -1708,6 +1712,10 @@ html.dark {
   .md\:dark\:bg-gray-800:where(.dark, .dark *) {
     --tw-bg-opacity: 1;
     background-color: rgb(31 41 55 / var(--tw-bg-opacity));
+  }
+
+  .md\:dark\:hover\:bg-transparent:hover:where(.dark, .dark *) {
+    background-color: transparent;
   }
 
   .md\:dark\:hover\:text-sky-500:hover:where(.dark, .dark *) {
