@@ -936,6 +936,124 @@ defmodule PaginatorTest do
            }
   end
 
+  describe "paginate a collection of payments with nullable amounts" do
+    setup do
+      customer = insert(:customer, %{name: "Dave"})
+
+      payments =
+        [nil, 3, nil, 1, 2, nil, 3, 1]
+        |> Enum.map(&insert(:payment, customer: customer, amount: &1))
+        |> List.to_tuple()
+
+      {:ok, customer: customer, nullable_payments: payments}
+    end
+
+    for amount_order <- [
+          :asc,
+          :asc_nulls_first,
+          :asc_nulls_last,
+          :desc,
+          :desc_nulls_first,
+          :desc_nulls_last
+        ],
+        id_order <- [:asc, :desc] do
+      @amount_order amount_order
+      @id_order id_order
+
+      test "paginates forward sorting by amount #{amount_order} and id #{id_order}", %{
+        customer: customer
+      } do
+        query = customer_payments_by_amount(customer, @amount_order, @id_order)
+        cursor_fields = [amount: @amount_order, id: @id_order]
+
+        expected_ids = query |> Repo.all() |> to_ids()
+
+        assert paginate_forward(query, cursor_fields, 3) == expected_ids
+      end
+
+      test "paginates backward sorting by amount #{amount_order} and id #{id_order}", %{
+        customer: customer
+      } do
+        query = customer_payments_by_amount(customer, @amount_order, @id_order)
+        cursor_fields = [amount: @amount_order, id: @id_order]
+
+        expected = Repo.all(query)
+        last = List.last(expected)
+
+        before = Paginator.cursor_for_record(last, cursor_fields)
+
+        assert paginate_backward(query, cursor_fields, 3, before) ++ [last.id] ==
+                 to_ids(expected)
+      end
+    end
+
+    test "sorts nulls first when using :asc_nulls_first", %{
+      customer: customer,
+      nullable_payments: {p1, p2, p3, p4, p5, p6, p7, p8}
+    } do
+      query = customer_payments_by_amount(customer, :asc_nulls_first, :asc)
+      cursor_fields = [amount: :asc_nulls_first, id: :asc]
+
+      page = Repo.paginate(query, cursor_fields: cursor_fields, limit: 4)
+      assert to_ids(page.entries) == to_ids([p1, p3, p6, p4])
+
+      page = Repo.paginate(query, cursor_fields: cursor_fields, limit: 4, after: page.metadata.after)
+      assert to_ids(page.entries) == to_ids([p8, p5, p2, p7])
+      assert page.metadata.after == nil
+    end
+
+    test "sorts nulls last when using :desc_nulls_last", %{
+      customer: customer,
+      nullable_payments: {p1, _p2, p3, p4, _p5, p6, _p7, p8}
+    } do
+      query = customer_payments_by_amount(customer, :desc_nulls_last, :asc)
+      cursor_fields = [amount: :desc_nulls_last, id: :asc]
+
+      page =
+        Repo.paginate(query,
+          cursor_fields: cursor_fields,
+          limit: 4,
+          before: Paginator.cursor_for_record(p6, cursor_fields)
+        )
+
+      assert to_ids(page.entries) == to_ids([p4, p8, p1, p3])
+      assert page.metadata.after == Paginator.cursor_for_record(p3, cursor_fields)
+      assert page.metadata.before == Paginator.cursor_for_record(p4, cursor_fields)
+
+      page = Repo.paginate(query, cursor_fields: cursor_fields, limit: 4, after: page.metadata.after)
+      assert to_ids(page.entries) == to_ids([p6])
+    end
+  end
+
+  defp paginate_forward(query, cursor_fields, limit, cursor \\ nil) do
+    page = Repo.paginate(query, cursor_fields: cursor_fields, limit: limit, after: cursor)
+    ids = to_ids(page.entries)
+
+    case page.metadata.after do
+      nil -> ids
+      next -> ids ++ paginate_forward(query, cursor_fields, limit, next)
+    end
+  end
+
+  defp paginate_backward(query, cursor_fields, limit, cursor) do
+    page = Repo.paginate(query, cursor_fields: cursor_fields, limit: limit, before: cursor)
+    ids = to_ids(page.entries)
+
+    case page.metadata.before do
+      nil -> ids
+      previous -> paginate_backward(query, cursor_fields, limit, previous) ++ ids
+    end
+  end
+
+  defp customer_payments_by_amount(customer, amount_direction, id_direction) do
+    from(
+      p in Payment,
+      where: p.customer_id == ^customer.id,
+      order_by: [{^amount_direction, p.amount}, {^id_direction, p.id}],
+      select: p
+    )
+  end
+
   defp to_ids(entries), do: Enum.map(entries, & &1.id)
 
   defp create_customers_and_payments(_context) do

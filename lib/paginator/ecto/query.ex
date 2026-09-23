@@ -18,23 +18,40 @@ defmodule Paginator.Ecto.Query do
     paginate(queryable, config)
   end
 
-  defp get_operator(:asc, :before), do: :lt
-  defp get_operator(:desc, :before), do: :gt
-  defp get_operator(:asc, :after), do: :gt
-  defp get_operator(:desc, :after), do: :lt
+  @sort_orders [
+    :asc,
+    :asc_nulls_first,
+    :asc_nulls_last,
+    :desc,
+    :desc_nulls_first,
+    :desc_nulls_last
+  ]
 
-  defp get_operator(direction, _),
-    do: raise("Invalid sorting value :#{direction}, please use either :asc or :desc")
+  # `:asc` and `:desc` follow the PostgreSQL defaults for NULL placement.
+  defp normalize_sort_order(:asc), do: :asc_nulls_last
+  defp normalize_sort_order(:desc), do: :desc_nulls_first
+  defp normalize_sort_order(order) when order in @sort_orders, do: order
 
-  defp get_operator_for_field(cursor_fields, key, direction) do
-    {_, order} =
-      cursor_fields
-      |> Enum.find(fn {field_key, _order} ->
-        field_key == key
-      end)
+  defp normalize_sort_order(order),
+    do:
+      raise(
+        "Invalid sorting value :#{order}, please use either :asc, :asc_nulls_first, " <>
+          ":asc_nulls_last, :desc, :desc_nulls_first or :desc_nulls_last"
+      )
 
-    get_operator(order, direction)
-  end
+  defp reverse_sort_order(:asc), do: :desc
+  defp reverse_sort_order(:desc), do: :asc
+  defp reverse_sort_order(:asc_nulls_first), do: :desc_nulls_last
+  defp reverse_sort_order(:asc_nulls_last), do: :desc_nulls_first
+  defp reverse_sort_order(:desc_nulls_first), do: :asc_nulls_last
+  defp reverse_sort_order(:desc_nulls_last), do: :asc_nulls_first
+
+  # Fetching records before a cursor is the same as fetching records after it
+  # with every sort order reversed.
+  defp cursor_sort_order(order, :after), do: normalize_sort_order(order)
+
+  defp cursor_sort_order(order, :before),
+    do: order |> normalize_sort_order() |> reverse_sort_order()
 
   # This clause is responsible for transforming legacy list cursors into map cursors
   defp filter_values(query, fields, values, cursor_direction) when is_list(values) do
@@ -48,45 +65,81 @@ defmodule Paginator.Ecto.Query do
   end
 
   defp filter_values(query, fields, values, cursor_direction) when is_map(values) do
-    sorts =
-      fields
-      |> Enum.map(fn {column, _order} -> {column, Map.get(values, column)} end)
-      |> Enum.reject(fn val -> match?({_column, nil}, val) end)
+    filters = build_filters(query, fields, values, cursor_direction)
 
-    dynamic_sorts =
-      sorts
-      |> Enum.with_index()
-      |> Enum.reduce(true, fn {{bound_column, value}, i}, dynamic_sorts ->
-        {position, column} = column_position(query, bound_column)
-
-        dynamic = true
-
-        dynamic =
-          case get_operator_for_field(fields, bound_column, cursor_direction) do
-            :lt ->
-              dynamic([{q, position}], field(q, ^column) < ^value and ^dynamic)
-
-            :gt ->
-              dynamic([{q, position}], field(q, ^column) > ^value and ^dynamic)
-          end
-
-        dynamic =
-          sorts
-          |> Enum.take(i)
-          |> Enum.reduce(dynamic, fn {prev_column, prev_value}, dynamic ->
-            {position, prev_column} = column_position(query, prev_column)
-            dynamic([{q, position}], field(q, ^prev_column) == ^prev_value and ^dynamic)
-          end)
-
-        if i == 0 do
-          dynamic([{q, position}], ^dynamic and ^dynamic_sorts)
-        else
-          dynamic([{q, position}], ^dynamic or ^dynamic_sorts)
-        end
-      end)
-
-    where(query, [{q, 0}], ^dynamic_sorts)
+    where(query, [{q, 0}], ^filters)
   end
+
+  defp build_filters(_query, [], _values, _cursor_direction), do: true
+
+  defp build_filters(query, [{bound_column, order} | rest], values, cursor_direction) do
+    {position, column} = column_position(query, bound_column)
+    value = Map.get(values, bound_column)
+
+    next_filters =
+      case rest do
+        [] -> nil
+        _ -> build_filters(query, rest, values, cursor_direction)
+      end
+
+    order
+    |> cursor_sort_order(cursor_direction)
+    |> build_filter(position, column, value, next_filters)
+  end
+
+  # Builds the filter matching records sorted strictly after the cursor value.
+  # `next_filters` holds the filters for the remaining cursor fields, used to
+  # break ties, and is `nil` for the last cursor field.
+  defp build_filter(:asc_nulls_last, position, column, nil, next_filters),
+    do: tie_filter(position, column, nil, next_filters)
+
+  defp build_filter(:asc_nulls_last, position, column, value, next_filters) do
+    dynamic([{q, position}], field(q, ^column) > ^value or is_nil(field(q, ^column)))
+    |> or_tie_filter(position, column, value, next_filters)
+  end
+
+  defp build_filter(:asc_nulls_first, position, column, nil, next_filters) do
+    dynamic([{q, position}], not is_nil(field(q, ^column)))
+    |> or_tie_filter(position, column, nil, next_filters)
+  end
+
+  defp build_filter(:asc_nulls_first, position, column, value, next_filters) do
+    dynamic([{q, position}], field(q, ^column) > ^value)
+    |> or_tie_filter(position, column, value, next_filters)
+  end
+
+  defp build_filter(:desc_nulls_first, position, column, nil, next_filters) do
+    dynamic([{q, position}], not is_nil(field(q, ^column)))
+    |> or_tie_filter(position, column, nil, next_filters)
+  end
+
+  defp build_filter(:desc_nulls_first, position, column, value, next_filters) do
+    dynamic([{q, position}], field(q, ^column) < ^value)
+    |> or_tie_filter(position, column, value, next_filters)
+  end
+
+  defp build_filter(:desc_nulls_last, position, column, nil, next_filters),
+    do: tie_filter(position, column, nil, next_filters)
+
+  defp build_filter(:desc_nulls_last, position, column, value, next_filters) do
+    dynamic([{q, position}], field(q, ^column) < ^value or is_nil(field(q, ^column)))
+    |> or_tie_filter(position, column, value, next_filters)
+  end
+
+  defp or_tie_filter(filter, _position, _column, _value, nil), do: filter
+
+  defp or_tie_filter(filter, position, column, value, next_filters) do
+    tie_filter = tie_filter(position, column, value, next_filters)
+    dynamic(^filter or ^tie_filter)
+  end
+
+  defp tie_filter(_position, _column, _value, nil), do: false
+
+  defp tie_filter(position, column, nil, next_filters),
+    do: dynamic([{q, position}], is_nil(field(q, ^column)) and ^next_filters)
+
+  defp tie_filter(position, column, value, next_filters),
+    do: dynamic([{q, position}], field(q, ^column) == ^value and ^next_filters)
 
   defp maybe_where(query, %Config{
          after: nil,
@@ -158,9 +211,8 @@ defmodule Paginator.Ecto.Query do
           %{
             order_by
             | expr:
-                Enum.map(expr, fn
-                  {:desc, ast} -> {:asc, ast}
-                  {:asc, ast} -> {:desc, ast}
+                Enum.map(expr, fn {direction, ast} ->
+                  {reverse_sort_order(direction), ast}
                 end)
           }
         end
