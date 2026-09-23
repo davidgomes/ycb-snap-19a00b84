@@ -701,6 +701,63 @@ defmodule Oban.Web.Jobs.DetailComponent do
             <pre class="font-mono text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-all">{format_recorded(@job, @resolver)}</pre>
           </div>
         </div>
+
+        <.signal_output job={@job} resolver={@resolver} />
+      </div>
+    </div>
+    """
+  end
+
+  # Signal Output
+
+  attr :job, :map, required: true
+  attr :resolver, :any, required: true
+
+  defp signal_output(assigns) do
+    assigns =
+      assign(assigns, status: signal_status(assigns.job), deadline: signal_deadline(assigns.job))
+
+    ~H"""
+    <div :if={@status} id="job-signal" class="mt-4">
+      <div class="relative bg-gray-50 dark:bg-gray-800 rounded-md p-4">
+        <div class="flex justify-between items-start mb-2">
+          <div class="flex items-center space-x-2">
+            <h4 class="font-medium text-xs uppercase text-gray-500 dark:text-gray-400">
+              {if @status == :received, do: "Received Signal", else: "Awaiting Signal"}
+            </h4>
+            <.pro_badge id="signal-pro-badge" tooltip="Awaitable signal from Oban.Pro.Worker" />
+          </div>
+          <button
+            :if={@status == :received}
+            type="button"
+            id="copy-signal"
+            class="w-9 h-9 -mr-2 -mt-2 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-white dark:hover:bg-gray-700 cursor-pointer"
+            data-title="Copy to clipboard"
+            phx-hook="Tippy"
+            phx-click={copy_to_clipboard(format_signal(@job, @resolver))}
+          >
+            <Icons.icon name="icon-clipboard" class="w-4 h-4" />
+          </button>
+        </div>
+
+        <%= if @status == :received do %>
+          <pre class="font-mono text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-all">{format_signal(@job, @resolver)}</pre>
+        <% else %>
+          <div
+            id="signal-deadline"
+            class="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400"
+          >
+            <Icons.icon name="icon-clock" class="w-5 h-5 text-gray-400 dark:text-gray-500" />
+            <%= if @deadline do %>
+              <span>Deadline {deadline_in_words(@deadline)}</span>
+              <span class="text-gray-400 dark:text-gray-500 tabular-nums">
+                ({DateTime.truncate(@deadline, :second)})
+              </span>
+            <% else %>
+              <span>No deadline, waiting indefinitely</span>
+            <% end %>
+          </div>
+        <% end %>
       </div>
     </div>
     """
@@ -805,12 +862,8 @@ defmodule Oban.Web.Jobs.DetailComponent do
   end
 
   defp format_meta(%{meta: meta} = job, resolver) do
-    job =
-      if meta["recorded"] do
-        %{job | meta: Map.delete(meta, "return")}
-      else
-        job
-      end
+    meta = if meta["recorded"], do: Map.delete(meta, "return"), else: meta
+    job = %{job | meta: Map.delete(meta, "signal")}
 
     Resolver.call_with_fallback(resolver, :format_job_meta, [job])
   end
@@ -826,6 +879,38 @@ defmodule Oban.Web.Jobs.DetailComponent do
       _ ->
         "Recording Not Enabled"
     end
+  end
+
+  defp format_signal(%{meta: %{"signal" => signal}} = job, resolver) do
+    Resolver.call_with_fallback(resolver, :format_signal, [signal, job])
+  end
+
+  defp signal_status(%{meta: %{"signal" => _}}), do: :received
+
+  defp signal_status(%{meta: %{"signal_deadline" => _}, state: state})
+       when state not in ~w(completed cancelled discarded),
+       do: :awaiting
+
+  defp signal_status(_job), do: nil
+
+  # The deadline is persisted when a job first parks, and it's "infinity" without a `:wait_for`.
+  defp signal_deadline(%{meta: %{"signal_deadline" => unix}}) when is_integer(unix) do
+    DateTime.from_unix!(unix)
+  end
+
+  defp signal_deadline(%{meta: %{"signal_deadline" => iso8601}}) when is_binary(iso8601) do
+    case DateTime.from_iso8601(iso8601) do
+      {:ok, datetime, _offset} -> datetime
+      {:error, _reason} -> nil
+    end
+  end
+
+  defp signal_deadline(_job), do: nil
+
+  defp deadline_in_words(deadline) do
+    deadline
+    |> DateTime.diff(DateTime.utc_now())
+    |> Timing.to_words()
   end
 
   defp error_entry(assigns) do

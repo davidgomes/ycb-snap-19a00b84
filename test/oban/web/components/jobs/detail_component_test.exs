@@ -10,6 +10,9 @@ defmodule Oban.Web.Jobs.DetailComponentTest do
 
     @impl Oban.Web.Resolver
     def format_job_args(_job), do: "ARGS REDACTED"
+
+    @impl Oban.Web.Resolver
+    def format_signal(_signal, _job), do: "SIGNAL REDACTED"
   end
 
   setup do
@@ -63,6 +66,106 @@ defmodule Oban.Web.Jobs.DetailComponentTest do
     html = render_component(Component, assigns(job, resolver: CustomResolver), router: Router)
 
     assert html =~ "ARGS REDACTED"
+  end
+
+  describe "awaitable signals" do
+    test "omitting the signal section for jobs without signals" do
+      job = %Oban.Job{id: 1, worker: "MyApp.Worker", args: %{}}
+
+      html = render_component(Component, assigns(job), router: Router)
+
+      refute has_fragment?(html, "#job-signal")
+    end
+
+    test "displaying the deadline while a job is awaiting a signal" do
+      deadline =
+        DateTime.utc_now()
+        |> DateTime.add(2 * 60 * 60 + 30, :second)
+        |> DateTime.to_iso8601()
+
+      job = %Oban.Job{
+        id: 1,
+        worker: "MyApp.Worker",
+        args: %{},
+        state: "scheduled",
+        meta: %{"signal_deadline" => deadline}
+      }
+
+      html = render_component(Component, assigns(job), router: Router)
+
+      assert has_fragment?(html, "#job-signal")
+      assert html =~ "Awaiting Signal"
+      assert html =~ "Deadline in 2h"
+      refute has_fragment?(html, "#copy-signal")
+    end
+
+    test "displaying an indefinite wait without a deadline" do
+      job = %Oban.Job{
+        id: 1,
+        worker: "MyApp.Worker",
+        args: %{},
+        state: "scheduled",
+        meta: %{"signal_deadline" => "infinity"}
+      }
+
+      html = render_component(Component, assigns(job), router: Router)
+
+      assert html =~ "Awaiting Signal"
+      assert html =~ "No deadline, waiting indefinitely"
+    end
+
+    test "omitting the awaiting signal section for finished jobs" do
+      job = %Oban.Job{
+        id: 1,
+        worker: "MyApp.Worker",
+        args: %{},
+        state: "cancelled",
+        meta: %{"signal_deadline" => "infinity"}
+      }
+
+      html = render_component(Component, assigns(job), router: Router)
+
+      refute has_fragment?(html, "#job-signal")
+    end
+
+    test "decoding and displaying a received signal payload" do
+      signal = encode_signal(%{decision: "approved"})
+
+      job = %Oban.Job{
+        id: 1,
+        worker: "MyApp.Worker",
+        args: %{},
+        state: "available",
+        meta: %{"signal" => signal, "signal_deadline" => "infinity"}
+      }
+
+      html = render_component(Component, assigns(job), router: Router)
+
+      assert html =~ "Received Signal"
+      assert has_fragment?(html, "#job-signal pre", ~s|%{decision: "approved"}|)
+      assert has_fragment?(html, "#copy-signal")
+      refute has_fragment?(html, "#signal-deadline")
+      refute html =~ signal
+    end
+
+    test "customizing signal formatting with a resolver" do
+      job = %Oban.Job{
+        id: 1,
+        worker: "MyApp.Worker",
+        args: %{},
+        meta: %{"signal" => encode_signal(%{decision: "approved"})}
+      }
+
+      html = render_component(Component, assigns(job, resolver: CustomResolver), router: Router)
+
+      assert has_fragment?(html, "#job-signal pre", "SIGNAL REDACTED")
+    end
+  end
+
+  defp encode_signal(payload) do
+    payload
+    |> :erlang.term_to_binary()
+    |> Base.encode64(padding: false)
   end
 
   defp assigns(job, opts \\ []) do
