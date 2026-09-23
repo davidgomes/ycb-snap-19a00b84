@@ -374,4 +374,44 @@ defmodule PetalComponents.DataTableTest do
       """)
     end
   end
+
+  test "selectable: tri-state header and a toolbar that morphs into the selection bar" do
+    assigns = base(%{state: %State{total: 74, selected: ["Amy"]}})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        searchable
+        selectable
+        row_id={& &1.name}
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:bulk_action :let={ids}><button>Delete {length(ids)}</button></:bulk_action>
+      </.data_table>
+      """)
+
+    assert html =~ ~s(aria-checked="mixed")
+    assert html =~ ~s(aria-checked="true")
+    assert html =~ ~s(aria-checked="false")
+    assert html =~ "1 selected"
+    assert html =~ "Delete 1"
+    assert html =~ "clear_selection"
+    refute html =~ ~s(name="op" value="search")
+  end
+
+  test "selectable without any event raises" do
+    assigns = base()
+
+    assert_raise ArgumentError, fn ->
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} path="/orders" selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+    end
+  end
 end

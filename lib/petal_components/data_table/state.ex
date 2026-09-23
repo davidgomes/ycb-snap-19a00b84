@@ -35,7 +35,13 @@ defmodule PetalComponents.DataTable.State do
   """
 
   @enforce_keys []
-  defstruct order_by: [], filters: [], search: nil, page: 1, page_size: 10, total: nil
+  defstruct order_by: [],
+            filters: [],
+            search: nil,
+            page: 1,
+            page_size: 10,
+            total: nil,
+            selected: []
 
   @type order :: {atom(), :asc | :desc}
   @type filter :: %{field: atom(), op: atom(), value: term()}
@@ -45,7 +51,8 @@ defmodule PetalComponents.DataTable.State do
           search: String.t() | nil,
           page: pos_integer(),
           page_size: pos_integer(),
-          total: non_neg_integer() | nil
+          total: non_neg_integer() | nil,
+          selected: [String.t()]
         }
 
   @ops ~w(contains eq starts_with neq gt lt between in before on after)a
@@ -91,7 +98,8 @@ defmodule PetalComponents.DataTable.State do
   Encodes the state as a flat params map suitable for `push_patch`
   query strings. Defaults (page 1, empty sorts/filters, the default
   page size) are omitted so URLs stay clean; `total` never round-trips -
-  it is a result, not a request.
+  it is a result, not a request - and neither does `selected`, which is
+  session state rather than a shareable view.
 
   Pass the same `:page_size` default given to `from_params/2` so the
   two stay symmetric (an omitted size decodes back to that default).
@@ -146,6 +154,45 @@ defmodule PetalComponents.DataTable.State do
     %{state | page_size: parse_pos_int(size, state.page_size), page: 1}
   end
 
+  @doc "Toggles one row id in the selection. Ids are compared as strings."
+  def toggle_selected(%__MODULE__{} = state, id) do
+    id = to_string(id)
+
+    if id in state.selected,
+      do: %{state | selected: List.delete(state.selected, id)},
+      else: %{state | selected: state.selected ++ [id]}
+  end
+
+  @doc """
+  The tri-state header's grammar: when every id in `ids` (the visible
+  page) is selected, deselects them all; otherwise selects the missing
+  ones. Selections on other pages are kept.
+  """
+  def toggle_page_selection(%__MODULE__{} = state, ids) when is_list(ids) do
+    ids = Enum.map(ids, &to_string/1)
+
+    if ids != [] and Enum.all?(ids, &(&1 in state.selected)),
+      do: %{state | selected: state.selected -- ids},
+      else: %{state | selected: Enum.uniq(state.selected ++ ids)}
+  end
+
+  @doc "Empties the selection."
+  def clear_selection(%__MODULE__{} = state), do: %{state | selected: []}
+
+  @doc """
+  `:all`, `:some` or `:none` - how much of `ids` (the visible page) is
+  selected; drives the header checkbox's checked/mixed/unchecked state.
+  """
+  def page_selection(%__MODULE__{selected: selected}, ids) do
+    count = Enum.count(ids, &(to_string(&1) in selected))
+
+    cond do
+      count == 0 -> :none
+      count == length(ids) -> :all
+      true -> :some
+    end
+  end
+
   @doc """
   Applies one event-mode op payload - the entire `data_table` event
   grammar in one call, so an event-mode handler is a one-liner:
@@ -157,8 +204,9 @@ defmodule PetalComponents.DataTable.State do
       end
 
   Ops: `sort` (field), `page` (page), `search` (term), `page_size`
-  (page_size), `filter` (field, filter_op, value/value2/values), and
-  `clear_filters`. Unknown ops and non-whitelisted fields leave the
+  (page_size), `filter` (field, filter_op, value/value2/values),
+  `clear_filters`, and the selection ops `select` (id), `select_page`
+  (ids) and `clear_selection`. Unknown ops and non-whitelisted fields leave the
   state unchanged; like `from_params/2`, no atoms are ever created
   from input.
 
@@ -195,6 +243,15 @@ defmodule PetalComponents.DataTable.State do
 
       %{"op" => "clear_filters"} ->
         clear_filters(state)
+
+      %{"op" => "select", "id" => id} when is_binary(id) or is_integer(id) ->
+        toggle_selected(state, id)
+
+      %{"op" => "select_page", "ids" => ids} when is_list(ids) ->
+        toggle_page_selection(state, Enum.filter(ids, &(is_binary(&1) or is_integer(&1))))
+
+      %{"op" => "clear_selection"} ->
+        clear_selection(state)
 
       _other ->
         state

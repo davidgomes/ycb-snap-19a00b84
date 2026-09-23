@@ -2616,6 +2616,26 @@
   .pc-data-table__actions {
     @apply flex items-center justify-end gap-1;
   }
+  .pc-data-table__toolbar--selection {
+    @apply rounded-md bg-primary-50 px-3 py-1.5 dark:bg-primary-900/30;
+  }
+  .pc-data-table__selection-count {
+    @apply text-sm font-medium text-primary-700 dark:text-primary-300;
+  }
+  .pc-data-table__select-th,
+  .pc-data-table__select-td {
+    @apply w-px;
+  }
+  .pc-data-table__checkbox {
+    @apply flex h-4 w-4 items-center justify-center rounded border border-gray-300 bg-white text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800;
+  }
+  .pc-data-table__checkbox[aria-checked="true"],
+  .pc-data-table__checkbox[aria-checked="mixed"] {
+    @apply border-primary-600 bg-primary-600;
+  }
+  .pc-data-table__checkbox-icon {
+    @apply h-3 w-3;
+  }
   .pc-data-table__actions-th {
     @apply w-px;
   }

@@ -305,6 +305,42 @@ defmodule PetalComponents.DataTable.StateTest do
     end
   end
 
+  describe "selection" do
+    test "toggle_selected adds and removes string ids" do
+      state = State.toggle_selected(%State{}, 1)
+      assert state.selected == ["1"]
+      assert State.toggle_selected(state, "1").selected == []
+    end
+
+    test "toggle_page_selection selects missing, then deselects a full page" do
+      state = %State{selected: ["9", "1"]}
+      state = State.toggle_page_selection(state, [1, 2])
+      assert state.selected == ["9", "1", "2"]
+      assert State.toggle_page_selection(state, ["1", "2"]).selected == ["9"]
+    end
+
+    test "page_selection reports the tri-state" do
+      state = %State{selected: ["1"]}
+      assert State.page_selection(state, ["1"]) == :all
+      assert State.page_selection(state, ["1", "2"]) == :some
+      assert State.page_selection(state, ["2"]) == :none
+      assert State.page_selection(state, []) == :none
+    end
+
+    test "handle_op speaks the selection grammar" do
+      opts = [fields: [:name]]
+      state = State.handle_op(%State{}, %{"op" => "select", "id" => "a"}, opts)
+      assert state.selected == ["a"]
+      state = State.handle_op(state, %{"op" => "select_page", "ids" => ["a", "b"]}, opts)
+      assert state.selected == ["a", "b"]
+      assert State.handle_op(state, %{"op" => "clear_selection"}, opts).selected == []
+    end
+
+    test "selection never reaches the URL" do
+      assert State.to_params(%State{selected: ["1"]}) == %{}
+    end
+  end
+
   defp stringify(map) when is_map(map) do
     Map.new(map, fn {k, v} -> {to_string(k), stringify(v)} end)
   end
