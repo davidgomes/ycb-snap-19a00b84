@@ -25,7 +25,7 @@ defmodule Hexpm.Repository.Policy.RepositoryPolicy do
   def changeset(repository_policy, attrs) do
     repository_policy
     |> cast(attrs, [:repository, :cooldown, :advisory_min_severity, :retirement_reasons])
-    |> cast_embed(:overrides)
+    |> cast_embed(:overrides, drop_param: :overrides_drop)
     |> validate_required([:repository])
     |> validate_number(:advisory_min_severity,
       greater_than_or_equal_to: 0,
