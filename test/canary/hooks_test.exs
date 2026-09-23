@@ -28,7 +28,7 @@ defmodule Canary.HooksTest do
   describe "handle_hook/2" do
     test "load_resource hook on handle_params loads resource when is available" do
       uri = "http://localhost/post"
-      metadata = %{hook: :load_resource, stage: :handle_params, opts: [model: Post]}
+      metadata = %{hook: :load_resource, stage: :handle_params, opts: [model: Post, required: false]}
       params = %{}
 
       assert {:cont, socket} =
@@ -84,6 +84,24 @@ defmodule Canary.HooksTest do
       assert socket.assigns.post == nil
     end
 
+    test "load_resource hook halts the socket by default when resource is not available" do
+      uri = "http://localhost/post"
+      params = %{"id" => "13"}
+      metadata = %{hook: :load_resource, stage: :handle_params, opts: [model: Post]}
+
+      assert {:halt, socket} =
+               Canary.Hooks.handle_hook(metadata, [params, uri, build_socket()])
+
+      assert socket.assigns.post == nil
+
+      metadata = %{hook: :load_resource, stage: :handle_params, opts: [model: Post, required: false]}
+
+      assert {:cont, socket} =
+               Canary.Hooks.handle_hook(metadata, [params, uri, build_socket()])
+
+      assert socket.assigns.post == nil
+    end
+
     test "load_resource hook on handle_event" do
       metadata = %{
         hook: :load_resource,
@@ -128,6 +146,21 @@ defmodule Canary.HooksTest do
                Canary.Hooks.handle_hook(metadata, [params, uri, socket])
 
       assert socket.assigns.authorized == false
+
+      socket =
+        build_socket(:create)
+        |> put_assigns(%{current_user: %User{id: 1}})
+
+      assert {:halt, socket} =
+               Canary.Hooks.handle_hook(metadata, [params, uri, socket])
+
+      assert socket.assigns.authorized == false
+
+      metadata = %{
+        hook: :authorize_resource,
+        stage: :handle_params,
+        opts: [model: Post, required: false]
+      }
 
       socket =
         build_socket(:create)
@@ -249,7 +282,11 @@ defmodule Canary.HooksTest do
 
     test "accepts :id_name to override the default id field" do
       uri = "http://localhost/post"
-      metadata = %{hook: :load_resource, stage: :handle_params, opts: [model: Post, id_name: "blog_post_id"]}
+      metadata = %{
+        hook: :load_resource,
+        stage: :handle_params,
+        opts: [model: Post, id_name: "blog_post_id", required: false]
+      }
       params = %{"blog_post_id" => "2"}
 
       assert {:cont, socket} =

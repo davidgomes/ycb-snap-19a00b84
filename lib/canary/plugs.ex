@@ -27,6 +27,12 @@ defmodule Canary.Plugs do
   Module should implement the `Canary.ErrorHandler` behaviour.
 
   Canary will pass the `conn` to the handler function.
+
+  The plugs accept the same options as the `Canary.Hooks`, with the exception of `:required`,
+  which defaults to `false` for plugs to keep backward compatibility.
+
+  > The `:persisted` and `:non_id_actions` options are deprecated and will be removed in Canary 2.1.0.
+  > Please follow the [upgrade guide](upgrade.md) for more details.
   """
 
   @doc """
@@ -67,8 +73,9 @@ defmodule Canary.Plugs do
   * `:preload` - Specifies association(s) to preload
   * `:id_name` - Specifies the name of the id in `conn.params`, defaults to "id"
   * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
-  * `:persisted` - Specifies the resource should always be loaded from the database, defaults to false
-  * `:required` - Same as `:persisted` but with not found handler - even for :index, :new or :create action
+  * `:required` - Specifies the resource should always be loaded from the database and calls the not found handler
+    when it's not found - even for :index, :new or :create action, defaults to false
+  * `:persisted` - (deprecated, use `:required`) Specifies the resource should always be loaded from the database, defaults to false
   * `:not_found_handler` - Specify a handler function to be called if the resource is not found
 
 
@@ -82,13 +89,14 @@ defmodule Canary.Plugs do
 
   plug :load_resource, model: User, except: [:destroy]
 
-  plug :load_resource, model: Post, id_name: "post_id", only: [:new, :create], persisted: true
+  plug :load_resource, model: Post, id_name: "post_id", only: [:new, :create], required: true
 
-  plug :load_resource, model: Post, id_name: "slug", id_field: "slug", only: [:show], persisted: true
+  plug :load_resource, model: Post, id_name: "slug", id_field: "slug", only: [:show], required: true
   ```
   """
   @spec load_resource(Plug.Conn.t(), Plug.opts()) :: Plug.Conn.t()
   def load_resource(conn, opts) do
+    warn_deprecated_opts(opts)
     action = get_action(conn)
 
     if action_valid?(action, opts) do
@@ -148,6 +156,7 @@ defmodule Canary.Plugs do
 
   * `:only` - Specifies which actions to authorize
   * `:except` - Specifies which actions for which to skip authorization
+  * `:current_user` - Specifies the key in the conn assigns to get the current user
   * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
 
   Examples:
@@ -172,12 +181,7 @@ defmodule Canary.Plugs do
 
   defp do_authorize_controller(conn, opts) do
     controller = conn.assigns[:canary_controller] || conn.private[:phoenix_controller]
-
-    current_user_name =
-      opts[:current_user] ||
-        Application.get_env(:canary, :current_user, :current_user)
-
-    current_user = Map.fetch!(conn.assigns, current_user_name)
+    current_user = Map.fetch!(conn.assigns, get_current_user_name(opts))
     action = get_action(conn)
 
     Plug.Conn.assign(conn, :authorized, can?(current_user, action, controller))
@@ -222,12 +226,17 @@ defmodule Canary.Plugs do
     if you are dealing with a nested resource, such as, "/post/post_id/comments"
 
 
-    You can specify additional actions for which Canary will authorize based on the model name, by passing the `non_id_actions` opt to the plug.
+    To authorize additional actions based on the model name, use a separate `:authorize_resource` plug
+    with `required: false` for those actions, and exclude them from the other plugs with `:except`.
 
     For example,
     ```elixir
-    plug :authorize_resource, model: Post, non_id_actions: [:find_by_name]
+    plug :authorize_resource, model: Post, only: [:find_by_name], required: false
+    plug :load_and_authorize_resource, model: Post, except: [:find_by_name]
     ```
+
+    > The `:non_id_actions` option (e.g. `non_id_actions: [:find_by_name]`) is deprecated
+    > and will be removed in Canary 2.1.0.
 
   Required opts:
 
@@ -240,7 +249,11 @@ defmodule Canary.Plugs do
   * `:preload` - Specifies association(s) to preload
   * `:id_name` - Specifies the name of the id in `conn.params`, defaults to "id"
   * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
-  * `:persisted` - Specifies the resource should always be loaded from the database, defaults to false
+  * `:current_user` - Specifies the key in the conn assigns to get the current user
+  * `:required` - Specifies the resource should always be loaded from the database, defaults to false.
+    When explicitly set to `false` and the resource is not found, the model module name is used for the authorization check.
+  * `:persisted` - (deprecated, use `:required`) Specifies the resource should always be loaded from the database, defaults to false
+  * `:non_id_actions` - (deprecated) Specifies additional actions authorized based on the model name
   * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
 
   Examples:
@@ -251,13 +264,14 @@ defmodule Canary.Plugs do
 
   plug :authorize_resource, model: User, only: [:index, :show], preload: :posts
 
-  plug :load_resource, model: Post, id_name: "post_id", only: [:index], persisted: true, preload: :comments
+  plug :authorize_resource, model: Post, id_name: "post_id", only: [:index], required: true, preload: :comments
 
-  plug :load_resource, model: Post, id_name: "slug", id_field: "slug", only: [:show], persisted: true
+  plug :authorize_resource, model: Post, id_name: "slug", id_field: "slug", only: [:show], required: true
   ```
   """
   @spec authorize_resource(Plug.Conn.t(), Plug.opts()) :: Plug.Conn.t()
   def authorize_resource(conn, opts) do
+    warn_deprecated_opts(opts)
     action = get_action(conn)
 
     if action_valid?(action, opts) do
@@ -268,10 +282,7 @@ defmodule Canary.Plugs do
   end
 
   defp do_authorize_resource(conn, opts) do
-    current_user_name =
-      opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
-
-    current_user = Map.fetch!(conn.assigns, current_user_name)
+    current_user = Map.fetch!(conn.assigns, get_current_user_name(opts))
     action = get_action(conn)
     is_persisted = persisted?(opts)
 
@@ -289,6 +300,9 @@ defmodule Canary.Plugs do
 
         action in non_id_actions ->
           opts[:model]
+
+        Keyword.get(opts, :required) == false ->
+          fetch_resource(conn, opts) || opts[:model]
 
         true ->
           fetch_resource(conn, opts)
@@ -322,6 +336,11 @@ defmodule Canary.Plugs do
   * `:preload` - Specifies association(s) to preload
   * `:id_name` - Specifies the name of the id in `conn.params`, defaults to "id"
   * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
+  * `:current_user` - Specifies the key in the conn assigns to get the current user
+  * `:required` - Specifies the resource should always be loaded from the database and calls the not found handler
+    when it's not found, defaults to false
+  * `:persisted` - (deprecated, use `:required`) Specifies the resource should always be loaded from the database, defaults to false
+  * `:non_id_actions` - (deprecated) Specifies additional actions authorized based on the model name
   * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
   * `:not_found_handler` - Specify a handler function to be called if the resource is not found
 
@@ -338,10 +357,11 @@ defmodule Canary.Plugs do
 
   plug :load_and_authorize_resource, model: User, except: [:destroy]
 
-  plug :load_and_authorize_resource, model: Post, id_name: "slug", id_field: "slug", only: [:show], persisted: true
+  plug :load_and_authorize_resource, model: Post, id_name: "slug", id_field: "slug", only: [:show], required: true
   ```
   """
   def load_and_authorize_resource(conn, opts) do
+    warn_deprecated_opts(opts)
     action = get_action(conn)
 
     if action_valid?(action, opts) do
@@ -374,30 +394,15 @@ defmodule Canary.Plugs do
     do: Plug.Conn.assign(conn, get_resource_name(conn, opts), nil)
 
   defp fetch_resource(conn, opts) do
-    repo = Application.get_env(:canary, :repo)
-
-    field_name = Keyword.get(opts, :id_field, "id")
-
-    get_map_args = %{String.to_atom(field_name) => get_resource_id(conn, opts)}
+    model = opts[:model]
 
     case Map.fetch(conn.assigns, get_resource_name(conn, opts)) do
-      :error ->
-        repo.get_by(opts[:model], get_map_args)
-        |> preload_if_needed(repo, opts)
+      {:ok, %{__struct__: ^model} = resource} ->
+        # A resource of the type passed as opts[:model] is already loaded; do not clobber it
+        resource
 
-      {:ok, nil} ->
-        repo.get_by(opts[:model], get_map_args)
-        |> preload_if_needed(repo, opts)
-
-      {:ok, resource} ->
-        if resource.__struct__ == opts[:model] do
-          # A resource of the type passed as opts[:model] is already loaded; do not clobber it
-          resource
-        else
-          opts[:model]
-          |> repo.get_by(get_map_args)
-          |> preload_if_needed(repo, opts)
-        end
+      _ ->
+        repo_get_resource(conn, opts)
     end
   end
 
@@ -428,30 +433,22 @@ defmodule Canary.Plugs do
   end
 
   defp persisted?(opts) do
-    !!Keyword.get(opts, :persisted, false) || !!Keyword.get(opts, :required, false)
+    !!Keyword.get(opts, :persisted, false) || resource_required?(opts)
   end
 
   defp get_resource_name(conn, opts) do
-    case opts[:as] do
-      nil ->
-        opts[:model]
-        |> Module.split()
-        |> List.last()
-        |> Macro.underscore()
-        |> pluralize_if_needed(conn, opts)
-        |> String.to_atom()
+    name = get_resource_name(opts)
 
-      as ->
-        as
-    end
-  end
-
-  defp pluralize_if_needed(name, conn, opts) do
-    if get_action(conn) in [:index] and not persisted?(opts) do
-      name <> "s"
+    if is_nil(opts[:as]) and get_action(conn) in [:index] and not persisted?(opts) do
+      String.to_atom("#{name}s")
     else
       name
     end
+  end
+
+  # Unlike Canary.Hooks, the plugs keep the 1.x default of `required: false`.
+  defp resource_required?(opts) do
+    !!Keyword.get(opts, :required, false)
   end
 
   defp handle_unauthorized(%{assigns: %{authorized: true}} = conn, _opts),
@@ -474,7 +471,7 @@ defmodule Canary.Plugs do
         [:index, :new, :create]
       end
 
-    is_required = required?(opts)
+    is_required = resource_required?(opts)
     resource_name = Map.get(conn.assigns, get_resource_name(conn, opts))
 
     if is_nil(resource_name) and (is_required or action not in non_id_actions) do

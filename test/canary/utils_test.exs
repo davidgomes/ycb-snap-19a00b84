@@ -46,7 +46,28 @@ defmodule UtilsTest do
   test "required?/1 returns true if the resource is required" do
     assert required?(required: true) == true
     assert required?(required: false) == false
-    assert required?([]) == false
+    assert required?([]) == true
+  end
+
+  test "get_resource_name/1 returns the resource name" do
+    assert get_resource_name(model: Post) == :post
+    assert get_resource_name(model: Some.Project.BlogPost) == :blog_post
+    assert get_resource_name(model: Post, as: :my_post) == :my_post
+  end
+
+  test "get_current_user_name/1 returns the current user key" do
+    assert get_current_user_name([]) == :current_user
+    assert get_current_user_name(current_user: :my_user) == :my_user
+  end
+
+  test "repo_get_resource/2 loads the resource from the repo" do
+    Application.put_env(:canary, :repo, Repo)
+
+    assert repo_get_resource(%{"id" => "1"}, model: Post) == %Post{id: 1}
+    assert repo_get_resource(%Plug.Conn{params: %{"post_id" => "1"}}, model: Post, id_name: "post_id") == %Post{id: 1}
+    assert repo_get_resource(%{"id" => "slug1"}, model: Post, id_field: "slug") == %Post{id: 1, slug: "slug1"}
+    assert repo_get_resource(%{"id" => "1"}, model: Post, preload: :user) == Repo.preload(%Post{id: 1}, :user)
+    assert repo_get_resource(%{"id" => "13"}, model: Post) == nil
   end
 
   describe "apply_error_handler/3" do
@@ -105,5 +126,39 @@ defmodule UtilsTest do
         ])
       assert conn.assigns[:ok_custom_handler] == true
     end
+  end
+end
+
+defmodule UtilsDeprecationTest do
+  import Canary.Utils
+
+  use ExUnit.Case, async: false
+
+  test "warn_deprecated_opts/1 warns once about each deprecated option" do
+    :persistent_term.erase({Canary.Utils, :deprecated, :persisted})
+    :persistent_term.erase({Canary.Utils, :deprecated, :non_id_actions})
+
+    assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+             warn_deprecated_opts(model: Post, persisted: true)
+           end) =~ "The :persisted option is deprecated"
+
+    assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+             warn_deprecated_opts(model: Post, persisted: true)
+           end) == ""
+
+    assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+             Canary.Plugs.authorize_resource(
+               %Plug.Conn{
+                 assigns: %{current_user: %User{id: 1}},
+                 private: %{phoenix_action: :other_action}
+               },
+               model: Post,
+               non_id_actions: [:other_action]
+             )
+           end) =~ "The :non_id_actions option is deprecated"
+
+    assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+             warn_deprecated_opts(model: Post, required: true)
+           end) == ""
   end
 end

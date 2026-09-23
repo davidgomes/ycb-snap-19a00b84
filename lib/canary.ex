@@ -34,7 +34,6 @@ defmodule Canary do
       on: [:handle_params, :handle_event],
       current_user: :current_user,
       model: Post,
-      required: true,
       only: [:show, :edit, :update]
 
   end

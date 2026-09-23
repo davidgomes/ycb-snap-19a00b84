@@ -11,12 +11,14 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     > Note that the `event_name` is a string - but in Canary it's converted to an atom for consistency.
 
-    The main difference beteween `Canary.Hooks` and `Canary.Plugs` is that
-    in `Canary.Hooks` there is no `:non_id_actions` option. It won't load all resources
-    like it's done with plugs, but you can still use `:authorize_resource`.
+    `Canary.Hooks` accept the same options as `Canary.Plugs`, except the deprecated `:persisted`
+    and `:non_id_actions` options. Hooks won't load all resources for the `:index` action like it's done with plugs.
+    For the non-id actions use a separate `:authorize_resource` hook with `required: false`.
 
+    The `:required` option defaults to `true`, so when the resource is not found the socket is halted
+    with the `:not_found_handler`, and when it's not assigned the `:unauthorized_handler` is called.
 
-    For the authorization actions, when the `:required` is not set (by default it's false) it might be nil.
+    For the authorization actions, when the `:required` is set to `false` the resource might be nil.
     Then the `Canada.Can` implementation should be the module name of the model rather than a struct.
 
     ## Example
@@ -26,13 +28,13 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       mount_canary :load_and_authorize_resource,
         on: [:handle_params, :handle_event],
         model: Post,
-        required: true,
         only: [:show, :edit, :update]
 
       mount_canary :authorize_resource,
         on: [:handle_event],
         model: Post,
-        only: [:my_event]
+        only: [:my_event],
+        required: false
 
       # ...
 
@@ -157,8 +159,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       ```
       mount_canary :load_and_authorize_resource,
         model: Post,
-        required: true,
-        only: [:edit: :update]
+        only: [:edit, :update]
       ```
     """
     defmacro mount_canary(type, opts) do
@@ -226,7 +227,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     * `:as` - Specifies the `resource_name` to get from assigns
     * `:current_user` - Specifies the key in the socket assigns to get the current user
-    * `:required` - Specifies if the resource is required, when it's not assigned in socket it will halt the socket
+    * `:required` - Specifies if the resource is required, when it's not assigned in socket it will halt the socket, defaults to true.
+      When set to `false` and the resource is not assigned, the model module name is used for the authorization check.
     * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
 
     Example:
@@ -235,8 +237,13 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     mount_canary :authorize_resource,
       model: Post,
-      only: [:show, :edit, :update]
+      only: [:show, :edit, :update],
       current_user: :current_user
+
+    mount_canary :authorize_resource,
+      model: Post,
+      only: [:new, :create],
+      required: false
 
     mount_canary :authorize_resource,
       model: Post,
@@ -278,7 +285,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     * `:preload` - Specifies association(s) to preload
     * `:id_name` - Specifies the name of the id in `params`, defaults to "id"
     * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
-    * `:required` - Specifies if the resource is required, when it's not found it will halt the socket
+    * `:required` - Specifies if the resource is required, when it's not found it will halt the socket, defaults to true
     * `:not_found_handler` - Specify a handler function to be called if the resource is not found
 
     Example:
@@ -288,15 +295,15 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     mount_canary :load_resource,
       model: Post,
       only: [:show, :edit, :update],
-      preload: [:comments]
+      preload: [:comments],
+      required: false
 
     mount_canary :load_resource,
-      on: [:handle_params, :handle_event]
+      on: [:handle_params, :handle_event],
       model: Post,
       as: :custom_name,
       except: [:new, :create],
       preload: [:comments],
-      required: true,
       not_found_handler: {ErrorHandler, :not_found_handler}
 
     ```
@@ -333,7 +340,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     * `:preload` - Specifies association(s) to preload
     * `:id_name` - Specifies the name of the id in `params`, defaults to "id"
     * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
-    * `:required` - Specifies if the resource is required, when it's not found it will halt the socket
+    * `:required` - Specifies if the resource is required, when it's not found it will halt the socket, defaults to true
     * `:not_found_handler` - Specify a handler function to be called if the resource is not found
     * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
 
@@ -343,9 +350,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     mount_canary :load_and_authorize_resource,
       model: Comments,
-      id_name: :post_id,
-      id_field: :post_id,
-      required: true,
+      id_name: "post_id",
+      id_field: "post_id",
       only: [:comments]
 
     mount_canary :load_and_authorize_resource,
@@ -353,8 +359,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       as: :custom_name,
       except: [:new, :create],
       preload: [:comments],
-      required: true,
-      error_handler: CustomErrorHandler
+      not_found_handler: {ErrorHandler, :not_found_handler},
+      unauthorized_handler: {ErrorHandler, :unauthorized_handler}
     ```
 
     """
@@ -432,22 +438,9 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       end
     end
 
-    # Load the resource from the repo
-    defp repo_get_resource(params, opts) do
-      repo = Application.get_env(:canary, :repo)
-      field_name = Keyword.get(opts, :id_field, "id")
-      get_map_args = %{String.to_atom(field_name) => get_resource_id(params, opts)}
-
-      repo.get_by(opts[:model], get_map_args)
-      |> preload_if_needed(repo, opts)
-    end
-
     # Perform the authorization check
     defp check_authorization(%Socket{} = socket, action, opts) do
-      current_user_name =
-        opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
-
-      current_user = Map.fetch(socket.assigns, current_user_name)
+      current_user = Map.fetch(socket.assigns, get_current_user_name(opts))
       resource = fetch_resoruce_or_model(socket, opts)
 
       case {current_user, resource} do
@@ -495,20 +488,6 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         apply_error_handler(socket, :not_found_handler, opts)
       else
         {:cont, socket}
-      end
-    end
-
-    defp get_resource_name(opts) do
-      case opts[:as] do
-        nil ->
-          opts[:model]
-          |> Module.split()
-          |> List.last()
-          |> Macro.underscore()
-          |> String.to_atom()
-
-        as ->
-          as
       end
     end
 

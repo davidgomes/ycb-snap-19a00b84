@@ -98,12 +98,95 @@ defmodule Canary.Utils do
     end
   end
 
-  @doc """
-  Check if a key is present in a keyword list
+  @doc ~S"""
+  Check if the resource is required. The `:required` option defaults to `true`.
+
+      iex> Canary.Utils.required?(required: false)
+      false
+
+      iex> Canary.Utils.required?([])
+      true
   """
   @spec required?(Keyword.t()) :: boolean
   def required?(opts) do
-    !!Keyword.get(opts, :required, false)
+    !!Keyword.get(opts, :required, true)
+  end
+
+  @doc ~S"""
+  Get the name of the resource used as a key in assigns.
+  It's either the `:as` option or the underscored, most specific part of the `:model` module name.
+
+      iex> Canary.Utils.get_resource_name(model: Some.Project.BlogPost)
+      :blog_post
+
+      iex> Canary.Utils.get_resource_name(model: Post, as: :my_post)
+      :my_post
+  """
+  @spec get_resource_name(Keyword.t()) :: atom
+  def get_resource_name(opts) do
+    case opts[:as] do
+      nil ->
+        opts[:model]
+        |> Module.split()
+        |> List.last()
+        |> Macro.underscore()
+        |> String.to_atom()
+
+      as ->
+        as
+    end
+  end
+
+  @doc ~S"""
+  Get the key of the current user in assigns.
+  It's either the `:current_user` option, the `:current_user` application env or `:current_user`.
+
+      iex> Canary.Utils.get_current_user_name(current_user: :my_user)
+      :my_user
+  """
+  @spec get_current_user_name(Keyword.t()) :: atom
+  def get_current_user_name(opts) do
+    opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
+  end
+
+  @doc """
+  Load the resource from the repo configured with `config :canary, repo: Project.Repo`.
+
+  The resource is searched by the `:id_field` (defaults to `"id"`) with the value
+  of `:id_name` param (defaults to `"id"`), and preloaded with `:preload` associations.
+  """
+  @spec repo_get_resource(Plug.Conn.t() | map(), Keyword.t()) :: Ecto.Schema.t() | nil
+  def repo_get_resource(conn_or_params, opts) do
+    repo = Application.get_env(:canary, :repo)
+    field_name = Keyword.get(opts, :id_field, "id")
+    get_map_args = %{String.to_atom(field_name) => get_resource_id(conn_or_params, opts)}
+
+    repo.get_by(opts[:model], get_map_args)
+    |> preload_if_needed(repo, opts)
+  end
+
+  @deprecated_opts [
+    persisted: "Use the :required option instead.",
+    non_id_actions:
+      "Use a separate :authorize_resource call with the :only option for non-id actions, and the :except option to exclude them."
+  ]
+
+  @doc """
+  Emit a warning (once per option) when deprecated options are used.
+
+  The `:persisted` and `:non_id_actions` options are deprecated and will be removed in Canary 2.1.0.
+  """
+  @spec warn_deprecated_opts(Keyword.t()) :: :ok
+  def warn_deprecated_opts(opts) do
+    Enum.each(@deprecated_opts, fn {key, hint} ->
+      if Keyword.has_key?(opts, key) and not :persistent_term.get({__MODULE__, :deprecated, key}, false) do
+        :persistent_term.put({__MODULE__, :deprecated, key}, true)
+
+        IO.warn(
+          "The #{inspect(key)} option is deprecated and will be removed in Canary 2.1.0. #{hint}"
+        )
+      end
+    end)
   end
 
   @doc """
