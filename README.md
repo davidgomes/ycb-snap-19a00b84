@@ -87,6 +87,11 @@ config :my_app, Oban,
   queues: [default: 10]
 ```
 
+To skip discovery and register specific chores only, pass them with the `:chores` option:
+
+```elixir
+{ObanChore.Plugin, pubsub_server: MyApp.PubSub, chores: [MyApp.Chores.UserBackfill]}
+```
 
 ### 4. Define a Chore
 
