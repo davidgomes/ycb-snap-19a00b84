@@ -173,12 +173,22 @@ defmodule Flop.Adapter.Ecto.DialectTest do
     end
 
     test "applies the same functions to a custom field with field_dynamic" do
-      filters = [contains: "pear", not_contains: "pear", empty: true]
+      where_clause = &where_clause(&1, :pet_tags, &2, &3, CustomFieldPet)
 
-      for repo <- [PostgresRepo, MyXQLRepo], {op, value} <- filters do
-        assert where_clause(repo, :pet_tags, op, value, CustomFieldPet) ==
-                 where_clause(repo, :tags, op, value)
-      end
+      assert where_clause.(PostgresRepo, :contains, "pear") ==
+               ~S|^"pear" in c0.tags|
+
+      assert where_clause.(PostgresRepo, :empty, true) ==
+               ~S|is_nil(c0.tags) or c0.tags == type(^[], {:array, :string})|
+
+      assert where_clause.(MyXQLRepo, :contains, "pear") ==
+               ~S|fragment("JSON_CONTAINS(?, ?)", c0.tags, ^["pear"])|
+
+      assert where_clause.(MyXQLRepo, :not_contains, "pear") ==
+               ~S|not fragment("JSON_CONTAINS(?, ?)", c0.tags, ^["pear"])|
+
+      assert where_clause.(MyXQLRepo, :empty, true) ==
+               ~S|is_nil(c0.tags) or fragment("JSON_LENGTH(?) = 0", c0.tags)|
     end
 
     test "dumps the value with the element type of the field" do
