@@ -129,34 +129,11 @@ defmodule Phx.New.Generator do
             @new_project_rules_files["assets.md"],
           # generic usage rules
           "<!-- usage-rules-start -->",
-          [
-            "<!-- phoenix:elixir-start -->\n",
-            @rules_files["elixir.md"],
-            "\n<!-- phoenix:elixir-end -->"
-          ],
-          [
-            "<!-- phoenix:phoenix-start -->\n",
-            @rules_files["phoenix.md"],
-            "\n<!-- phoenix:phoenix-end -->"
-          ],
-          project.binding[:ecto] &&
-            [
-              "<!-- phoenix:ecto-start -->\n",
-              @rules_files["ecto.md"],
-              "\n<!-- phoenix:ecto-end -->"
-            ],
-          project.binding[:html] &&
-            [
-              "<!-- phoenix:html-start -->\n",
-              @rules_files["html.md"],
-              "\n<!-- phoenix:html-end -->"
-            ],
-          project.binding[:live] &&
-            [
-              "<!-- phoenix:liveview-start -->\n",
-              @rules_files["liveview.md"],
-              "\n<!-- phoenix:liveview-end -->"
-            ],
+          @rules_files["elixir.md"],
+          @rules_files["phoenix.md"],
+          project.binding[:ecto] && @rules_files["ecto.md"],
+          project.binding[:html] && @rules_files["html.md"],
+          project.binding[:live] && @rules_files["liveview.md"],
           "<!-- usage-rules-end -->\n"
         ]
         |> Enum.reject(fn part -> part == nil or part == false end)
