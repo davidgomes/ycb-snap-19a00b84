@@ -6,7 +6,8 @@
 Mix.install([
   {:spider_man, "~> 0.5"},
   {:floki, "~> 0.34"},
-  {:nimble_csv, "~> 1.2"}
+  {:nimble_csv, "~> 1.2"},
+  {:kino, "~> 0.11"}
 ])
 ```
 
@@ -140,8 +141,32 @@ callbacks = [init: init, handle_response: handle_response]
 {:ok, settings} = SpiderMan.CommonSpider.check_callbacks_and_merge_settings(callbacks, settings)
 ```
 
+show the throughput infos of spider on livebook
+
+```elixir
+frame = Kino.Frame.new()
+
+print_stats = fn stats ->
+  rows =
+    Enum.map_join(stats, "\n", fn stat ->
+      "| #{stat.component} | #{stat.success}/#{stat.total} | #{stat.fail} | #{stat.tps}/s |"
+    end)
+
+  markdown = """
+  | Component | Success/Total | Fail | Throughput |
+  | --------- | ------------- | ---- | ---------- |
+  #{rows}
+  """
+
+  Kino.Frame.render(frame, Kino.Markdown.new(markdown))
+end
+
+settings = Keyword.put(settings, :print_stats, print_stats)
+```
+
 run ther spider
 
 ```elixir
+Kino.render(frame)
 SpiderMan.run_until_zero(spider, settings, 5_000)
 ```
