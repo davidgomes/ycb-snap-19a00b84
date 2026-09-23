@@ -139,6 +139,18 @@ defmodule BroadwayKafka.BrodClientTest do
       assert {:ok, %{begin_offset: :reset}} = BrodClient.init(opts)
     end
 
+    test ":shared_client is a boolean with default value false" do
+      assert {:ok, %{shared_client: false}} = BrodClient.init(@opts)
+
+      opts = Keyword.put(@opts, :shared_client, :an_atom)
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :shared_client to be a boolean, got: :an_atom"}
+
+      opts = Keyword.put(@opts, :shared_client, true)
+      assert {:ok, %{shared_client: true}} = BrodClient.init(opts)
+    end
+
     test ":offset_commit_interval_seconds is an optional non-negative integer" do
       opts = put_in(@opts, [:group_config, :offset_commit_interval_seconds], :an_atom)
 

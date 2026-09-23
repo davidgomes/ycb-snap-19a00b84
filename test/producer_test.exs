@@ -103,8 +103,8 @@ defmodule BroadwayKafka.ProducerTest do
     end
 
     @impl true
-    def disconnect(_client_id) do
-      :ok
+    def disconnect(client_id) do
+      Agent.stop(client_id)
     end
 
     @impl true
@@ -115,6 +115,11 @@ defmodule BroadwayKafka.ProducerTest do
     @impl true
     def update_topics(_client_id, _topics) do
       :ok
+    end
+
+    @impl true
+    def shared_client_child_spec(client_id, _config) do
+      %{id: client_id, start: {Agent, :start_link, [fn -> true end, [name: client_id]]}}
     end
   end
 
@@ -199,6 +204,77 @@ defmodule BroadwayKafka.ProducerTest do
     assert message ==
              "cannot set option :partition_by for batchers :default. " <>
                "The option will be set automatically by BroadwayKafka.Producer"
+  end
+
+  test "raise on invalid client options" do
+    Process.flag(:trap_exit, true)
+
+    producer_opts = [
+      hosts: [localhost: 9092],
+      group_id: "group",
+      topics: ["topic"],
+      shared_client: :yes
+    ]
+
+    {:error, {%ArgumentError{message: message}, _}} =
+      Broadway.start_link(Forwarder,
+        name: new_unique_name(),
+        producer: [module: {BroadwayKafka.Producer, producer_opts}],
+        processors: [default: []]
+      )
+
+    assert message ==
+             "invalid options given to BroadwayKafka.BrodClient.init/1, " <>
+               "expected :shared_client to be a boolean, got: :yes"
+  end
+
+  test "each producer uses its own client by default" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, producers_concurrency: 2)
+
+    client_id_0 = Module.concat(get_producer(pid, 0), Client)
+    client_id_1 = Module.concat(get_producer(pid, 1), Client)
+
+    assert_receive {:setup, ^client_id_0}
+    assert_receive {:setup, ^client_id_1}
+
+    stop_broadway(pid)
+  end
+
+  test "producers use a single client started with the pipeline when :shared_client is true" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, producers_concurrency: 2, shared_client: true)
+
+    {_, name} = Process.info(pid, :registered_name)
+    client_id = Module.concat(name, SharedClient)
+
+    assert_receive {:setup, ^client_id}
+    assert_receive {:setup, ^client_id}
+
+    children = Supervisor.which_children(:"#{name}.Broadway.Supervisor")
+    assert {^client_id, client_pid, :worker, _} = List.keyfind(children, client_id, 0)
+    assert Process.whereis(client_id) == client_pid
+
+    stop_broadway(pid)
+  end
+
+  test "shared client is not stopped when a producer terminates" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, producers_concurrency: 2, shared_client: true)
+
+    assert_receive {:setup, client_id}
+    assert_receive {:setup, ^client_id}
+
+    client_pid = Process.whereis(client_id)
+    other_producer_pid = Process.whereis(get_producer(pid, 1))
+
+    :ok = GenStage.stop(get_producer(pid, 0))
+    assert_receive {:setup, ^client_id}
+
+    assert Process.whereis(client_id) == client_pid
+    assert Process.whereis(get_producer(pid, 1)) == other_producer_pid
+
+    stop_broadway(pid)
   end
 
   test "append kafka metadata to message" do
@@ -605,6 +681,7 @@ defmodule BroadwayKafka.ProducerTest do
     processors_concurrency = Keyword.get(opts, :processors_concurrency, 1)
     batchers_concurrency = Keyword.get(opts, :batchers_concurrency)
     ack_raises_on_offset = Keyword.get(opts, :ack_raises_on_offset, nil)
+    shared_client = Keyword.get(opts, :shared_client, false)
 
     batchers =
       if batchers_concurrency do
@@ -630,7 +707,8 @@ defmodule BroadwayKafka.ProducerTest do
                max_bytes: 10,
                offset_commit_on_ack: false,
                begin_offset: :assigned,
-               ack_raises_on_offset: ack_raises_on_offset
+               ack_raises_on_offset: ack_raises_on_offset,
+               shared_client: shared_client
              ]},
           concurrency: producers_concurrency
         ],

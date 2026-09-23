@@ -47,6 +47,8 @@ defmodule BroadwayKafka.BrodClient do
 
   @default_begin_offset :assigned
 
+  @default_shared_client false
+
   @impl true
   def init(opts) do
     with {:ok, hosts} <- validate(opts, :hosts, required: true),
@@ -62,6 +64,8 @@ defmodule BroadwayKafka.BrodClient do
            validate(opts, :offset_reset_policy, default: @default_offset_reset_policy),
          {:ok, begin_offset} <-
            validate(opts, :begin_offset, default: @default_begin_offset),
+         {:ok, shared_client} <-
+           validate(opts, :shared_client, default: @default_shared_client),
          {:ok, group_config} <- validate_group_config(opts),
          {:ok, fetch_config} <- validate_fetch_config(opts),
          {:ok, client_config} <- validate_client_config(opts) do
@@ -77,14 +81,15 @@ defmodule BroadwayKafka.BrodClient do
          begin_offset: begin_offset,
          group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
          fetch_config: Map.new(fetch_config || []),
-         client_config: client_config
+         client_config: client_config,
+         shared_client: shared_client
        }}
     end
   end
 
   @impl true
   def setup(stage_pid, client_id, callback_module, config) do
-    with :ok <- :brod.start_client(config.hosts, client_id, config.client_config),
+    with :ok <- maybe_start_client(client_id, config),
          {:ok, group_coordinator} <-
            start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
       Process.monitor(client_id)
@@ -161,6 +166,20 @@ defmodule BroadwayKafka.BrodClient do
   @impl true
   def update_topics(group_coordinator, topics) do
     :brod_group_coordinator.update_topics(group_coordinator, topics)
+  end
+
+  @impl true
+  def shared_client_child_spec(client_id, config) do
+    Supervisor.child_spec(
+      {__MODULE__.SharedClient, {config.hosts, client_id, config.client_config}},
+      id: client_id
+    )
+  end
+
+  defp maybe_start_client(_client_id, %{shared_client: true}), do: :ok
+
+  defp maybe_start_client(client_id, config) do
+    :brod.start_client(config.hosts, client_id, config.client_config)
   end
 
   defp start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
@@ -285,6 +304,9 @@ defmodule BroadwayKafka.BrodClient do
     end
   end
 
+  defp validate_option(:shared_client, value) when not is_boolean(value),
+    do: validation_error(:shared_client, "a boolean", value)
+
   defp validate_option(:query_api_versions, value) when not is_boolean(value),
     do: validation_error(:query_api_versions, "a boolean", value)
 
@@ -387,4 +409,33 @@ defmodule BroadwayKafka.BrodClient do
   end
 
   defp parse_hosts(hosts), do: hosts
+
+  defmodule SharedClient do
+    @moduledoc false
+
+    # Ties the lifecycle of a :brod client to the Broadway pipeline while
+    # keeping the client under :brod's supervisor, which delays restarts
+    # when Kafka is unreachable instead of crashing the pipeline.
+
+    use GenServer
+
+    def start_link({hosts, client_id, client_config}) do
+      GenServer.start_link(__MODULE__, {hosts, client_id, client_config})
+    end
+
+    @impl true
+    def init({hosts, client_id, client_config}) do
+      Process.flag(:trap_exit, true)
+
+      case :brod.start_client(hosts, client_id, client_config) do
+        :ok -> {:ok, client_id}
+        {:error, reason} -> {:stop, reason}
+      end
+    end
+
+    @impl true
+    def terminate(_reason, client_id) do
+      :brod.stop_client(client_id)
+    end
+  end
 end
