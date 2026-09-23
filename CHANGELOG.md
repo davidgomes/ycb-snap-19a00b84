@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Codespell GitHub Action
 - CHANGELOG.md
+- Self-evaluating quiz questions for the OWASP module
 
 ### Changed
 
