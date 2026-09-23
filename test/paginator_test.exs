@@ -716,6 +716,107 @@ defmodule PaginatorTest do
     end
   end
 
+  describe "paginate a collection of payments, sorting by an expression" do
+    test "paginates forward on an expression cursor field", %{
+      payments: {_p1, _p2, _p3, p4, p5, p6, p7, p8, _p9, _p10, _p11, _p12}
+    } do
+      opts = [
+        cursor_fields: [{{:amount_x2, &amount_x2_expression/0}, :asc}, id: :asc],
+        fetch_cursor_value_fun: &fetch_amount_x2/2,
+        limit: 2
+      ]
+
+      page = payments_by_amount_x2(:asc) |> Repo.paginate(opts)
+      assert to_ids(page.entries) == to_ids([p4, p6])
+
+      assert page.metadata.after ==
+               encode_cursor(%{amount_x2: p6.amount * 2, id: p6.id})
+
+      page = payments_by_amount_x2(:asc) |> Repo.paginate(opts ++ [after: page.metadata.after])
+      assert to_ids(page.entries) == to_ids([p5, p7])
+
+      page = payments_by_amount_x2(:asc) |> Repo.paginate(opts ++ [after: page.metadata.after])
+      assert to_ids(page.entries) == to_ids([p8])
+      assert page.metadata.after == nil
+    end
+
+    test "paginates backward on an expression cursor field", %{
+      payments: {_p1, _p2, _p3, p4, p5, p6, p7, p8, _p9, _p10, _p11, _p12}
+    } do
+      opts = [
+        cursor_fields: [{{:amount_x2, &amount_x2_expression/0}, :desc}, id: :desc],
+        fetch_cursor_value_fun: &fetch_amount_x2/2,
+        limit: 2
+      ]
+
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_amount_x2(:desc)
+        |> Repo.paginate(opts ++ [before: encode_cursor(%{amount_x2: p4.amount * 2, id: p4.id})])
+
+      assert to_ids(entries) == to_ids([p5, p6])
+
+      assert metadata == %Metadata{
+               before: encode_cursor(%{amount_x2: p5.amount * 2, id: p5.id}),
+               after: encode_cursor(%{amount_x2: p6.amount * 2, id: p6.id}),
+               limit: 2
+             }
+
+      %Page{entries: entries} =
+        payments_by_amount_x2(:desc) |> Repo.paginate(opts ++ [before: metadata.before])
+
+      assert to_ids(entries) == to_ids([p8, p7])
+    end
+
+    test "accepts an expression cursor field without a sort direction", %{
+      payments: {_p1, _p2, _p3, p4, p5, p6, _p7, _p8, _p9, _p10, _p11, _p12}
+    } do
+      %Page{entries: entries} =
+        payments_by_amount_x2(:asc)
+        |> Repo.paginate(
+          cursor_fields: [{:amount_x2, &amount_x2_expression/0}, :id],
+          fetch_cursor_value_fun: &fetch_amount_x2/2,
+          after: encode_cursor(%{amount_x2: p4.amount * 2, id: p4.id}),
+          limit: 2
+        )
+
+      assert to_ids(entries) == to_ids([p6, p5])
+    end
+
+    test "matches the order of a non-paginated query across all pages" do
+      customer = insert(:customer)
+
+      for amount <- [3, 1, 2, 3, 1, 2, 3] do
+        insert(:payment, customer: customer, amount: amount)
+      end
+
+      query =
+        from(
+          p in Payment,
+          where: p.customer_id == ^customer.id,
+          order_by: [desc: fragment("? * 2", p.amount), asc: p.id],
+          select: p
+        )
+
+      opts = [
+        cursor_fields: [{{:amount_x2, &amount_x2_expression/0}, :desc}, id: :asc],
+        fetch_cursor_value_fun: &fetch_amount_x2/2,
+        limit: 2
+      ]
+
+      assert paginate_as_list(query, opts) == query |> Repo.all() |> to_ids()
+    end
+
+    test "generates cursors for records" do
+      payment = %Payment{id: 1, amount: 21}
+
+      assert Paginator.cursor_for_record(
+               payment,
+               [{{:amount_x2, &amount_x2_expression/0}, :asc}, id: :asc],
+               &fetch_amount_x2/2
+             ) == encode_cursor(%{amount_x2: 42, id: 1})
+    end
+  end
+
   test "applies a default limit if none is provided", %{
     payments: {p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12}
   } do
@@ -1105,6 +1206,22 @@ defmodule PaginatorTest do
       ]
     )
   end
+
+  defp payments_by_amount_x2(direction) do
+    from(
+      p in Payment,
+      where: p.amount < 10,
+      order_by: [{^direction, fragment("? * 2", p.amount)}, {^direction, p.id}],
+      select: p
+    )
+  end
+
+  defp amount_x2_expression do
+    dynamic([p], fragment("? * 2", p.amount))
+  end
+
+  defp fetch_amount_x2(payment, :amount_x2), do: payment.amount * 2
+  defp fetch_amount_x2(payment, field), do: Paginator.default_fetch_cursor_value(payment, field)
 
   defp customer_payments_by_charged_at_and_amount(customer, direction \\ :asc) do
     from(

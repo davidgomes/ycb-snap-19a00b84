@@ -309,6 +309,12 @@ defmodule Paginator do
        }) do
     cursor_fields
     |> Enum.map(fn
+      {{cursor_field, handler}, _order} when is_atom(cursor_field) and is_function(handler, 0) ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
+      {cursor_field, handler} when is_atom(cursor_field) and is_function(handler, 0) ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
       {cursor_field, _order} ->
         {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
 
