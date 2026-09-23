@@ -99,6 +99,21 @@ if Code.ensure_loaded?(:gun) do
       {:ok, channel}
     end
 
+    @doc """
+    Transfers ownership of the underlying Gun connection to `new_owner`.
+
+    Gun shuts a connection down when its owner exits, so connections opened on
+    behalf of a long-lived process must be handed over to it. Must be called
+    from the current owner.
+    """
+    @spec set_owner(GRPC.Channel.t(), pid()) :: :ok
+    def set_owner(%{adapter_payload: %{conn_pid: gun_pid}}, new_owner)
+        when is_pid(gun_pid) and is_pid(new_owner) do
+      :gun.set_owner(gun_pid, new_owner)
+    end
+
+    def set_owner(_channel, _new_owner), do: :ok
+
     defp open({:local, socket_path}, _port, open_opts),
       do: :gun.open_unix(socket_path, open_opts)
 
