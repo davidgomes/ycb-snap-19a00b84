@@ -2160,6 +2160,115 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       end
     end
 
+    @null_order_directions [
+      :asc,
+      :desc,
+      :asc_nulls_first,
+      :asc_nulls_last,
+      :desc_nulls_first,
+      :desc_nulls_last
+    ]
+
+    test "cursor pagination includes rows with null order values" do
+      owner = insert(:owner, name: "Ann")
+      nameless_owner = insert(:owner, name: nil)
+
+      [
+        %{name: "a", age: 1, owner_id: owner.id},
+        %{name: "b", age: nil, owner_id: owner.id},
+        %{name: "c", age: 2, owner_id: nil},
+        %{name: "d", age: nil, owner_id: nil},
+        %{name: "e", age: 2, owner_id: nameless_owner.id},
+        %{name: "f", age: 3, owner_id: nameless_owner.id},
+        %{name: "g", age: nil, owner_id: nameless_owner.id}
+      ]
+      |> Enum.each(fn attrs ->
+        Repo.insert!(struct!(Pet, Map.put(attrs, :species, "cat")))
+      end)
+
+      query = pets_with_owners_query()
+
+      for direction <- @null_order_directions do
+        assert_cursor_matches_order(query, [:age, :name], [direction, :asc])
+
+        assert_cursor_matches_order(
+          query,
+          [:owner_name, :name],
+          [direction, :asc]
+        )
+      end
+
+      assert_cursor_matches_order(
+        query,
+        [:age, :owner_name, :name],
+        [:asc_nulls_last, :desc_nulls_first, :asc]
+      )
+
+      assert_cursor_matches_order(
+        query,
+        [:age, :owner_name, :name],
+        [:desc_nulls_last, :asc_nulls_first, :desc]
+      )
+    end
+
+    defp assert_cursor_matches_order(query, order_by, directions) do
+      flop = %Flop{order_by: order_by, order_directions: directions}
+      expected = Flop.all(query, flop, for: Pet)
+
+      assert page_cursor(query, flop, :forward) == expected
+      assert page_cursor(query, flop, :backward) == expected
+    end
+
+    defp page_cursor(query, flop, :forward) do
+      page_cursor(query, flop, :forward, nil, [])
+    end
+
+    defp page_cursor(query, flop, :backward) do
+      page_cursor(query, flop, :backward, nil, [])
+    end
+
+    defp page_cursor(_query, _flop, _direction, _cursor, acc)
+         when length(acc) > 20 do
+      flunk("cursor pagination did not reach the end of the result")
+    end
+
+    defp page_cursor(query, flop, direction, cursor, acc) do
+      params =
+        case direction do
+          :forward ->
+            %{flop | first: 2, after: cursor, last: nil, before: nil}
+
+          :backward ->
+            %{flop | last: 2, before: cursor, first: nil, after: nil}
+        end
+
+      {:ok, {pets, meta}} = Flop.validate_and_run(query, params, for: Pet)
+
+      acc =
+        case direction do
+          :forward -> acc ++ pets
+          :backward -> pets ++ acc
+        end
+
+      next_cursor =
+        case direction do
+          :forward -> meta.end_cursor
+          :backward -> meta.start_cursor
+        end
+
+      has_more? =
+        case direction do
+          :forward -> meta.has_next_page?
+          :backward -> meta.has_previous_page?
+        end
+
+      if has_more? do
+        page_cursor(query, flop, direction, next_cursor, acc)
+      else
+        acc
+      end
+    end
+
     test "raises if alias field is used" do
       q =
         Owner
