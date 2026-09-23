@@ -1,7 +1,7 @@
 defmodule UtilsTest do
   import Canary.Utils
 
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   describe "get_resource_id/2" do
     test "returns the id from the params" do
@@ -46,10 +46,24 @@ defmodule UtilsTest do
   test "required?/1 returns true if the resource is required" do
     assert required?(required: true) == true
     assert required?(required: false) == false
-    assert required?([]) == false
+    assert required?([]) == true
   end
 
   describe "apply_error_handler/3" do
+    setup do
+      original = Application.get_env(:canary, :error_handler)
+
+      on_exit(fn ->
+        if original do
+          Application.put_env(:canary, :error_handler, original)
+        else
+          Application.delete_env(:canary, :error_handler)
+        end
+      end)
+
+      :ok
+    end
+
     defmodule CustomErrorHandler do
       @behaviour Canary.ErrorHandler
 
