@@ -1317,7 +1317,7 @@ defmodule Canary.PlugsTest do
   end
 
   test "when not_found, it calls the specified action" do
-    opts = [model: Post, not_found_handler: {Helpers, :not_found_handler}]
+    opts = [model: Post, not_found_handler: {Helpers, :not_found_handler}, required: true]
 
     params = %{"id" => "3"}
 
@@ -1332,6 +1332,57 @@ defmodule Canary.PlugsTest do
     expected = Helpers.not_found_handler(conn)
 
     assert load_resource(conn, opts) == expected
+  end
+
+  test "when not_found and opts[:required] is not specified, it does not call the not found handler" do
+    opts = [model: Post, not_found_handler: {Helpers, :not_found_handler}]
+
+    params = %{"id" => "3"}
+    conn = conn(%Plug.Conn{private: %{phoenix_action: :show}}, :get, "/posts/3", params)
+    expected = Plug.Conn.assign(conn, :post, nil)
+
+    assert load_resource(conn, opts) == expected
+
+    opts = [unauthorized_handler: {Helpers, :non_halting_unauthorized_handler}] ++ opts
+
+    conn =
+      conn(
+        %Plug.Conn{assigns: %{current_user: %User{id: 1}}, private: %{phoenix_action: :show}},
+        :get,
+        "/posts/3",
+        params
+      )
+
+    expected =
+      conn
+      |> Plug.Conn.assign(:authorized, false)
+      |> Plug.Conn.assign(:post, nil)
+
+    assert load_and_authorize_resource(conn, opts) == expected
+  end
+
+  test "it keeps an already assigned resource of the same model for non-id actions" do
+    opts = [model: Post]
+
+    conn =
+      conn(
+        %Plug.Conn{private: %{phoenix_action: :new}, assigns: %{post: %Post{id: 2}}},
+        :get,
+        "/posts/new",
+        %{"id" => "1"}
+      )
+
+    assert load_resource(conn, opts) == conn
+
+    conn =
+      conn(
+        %Plug.Conn{private: %{phoenix_action: :new}, assigns: %{post: %User{id: 2}}},
+        :get,
+        "/posts/new",
+        %{"id" => "1"}
+      )
+
+    assert load_resource(conn, opts) == Plug.Conn.assign(conn, :post, nil)
   end
 
   test "when unauthorized and resource not found, it calls the specified authorization handler first" do
@@ -1363,6 +1414,7 @@ defmodule Canary.PlugsTest do
   test "when the authorization handler does not halt the request, it calls the not found handler if specified" do
     opts = [
       model: Post,
+      required: true,
       not_found_handler: {Helpers, :not_found_handler},
       unauthorized_handler: {Helpers, :non_halting_unauthorized_handler}
     ]
@@ -1468,7 +1520,7 @@ defmodule Canary.PlugsTest do
 
     test "when not_found, it calls the configured action" do
       Application.put_env(:canary, :not_found_handler, {Helpers, :not_found_handler})
-      opts = [model: Post]
+      opts = [model: Post, required: true]
 
       params = %{"id" => "4"}
       conn = conn(%Plug.Conn{private: %{phoenix_action: :show}}, :get, "/posts/4", params)
@@ -1488,7 +1540,7 @@ defmodule Canary.PlugsTest do
     test "when not_found, it calls the opt-specified action rather than the configured action" do
       # should not be called
       Application.put_env(:canary, :not_found_handler, {Helpers, :does_not_exist})
-      opts = [model: Post, not_found_handler: {Helpers, :not_found_handler}]
+      opts = [model: Post, not_found_handler: {Helpers, :not_found_handler}, required: true]
 
       params = %{"id" => "4"}
       conn = conn(%Plug.Conn{private: %{phoenix_action: :show}}, :get, "/posts/4", params)

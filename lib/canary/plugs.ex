@@ -102,21 +102,20 @@ defmodule Canary.Plugs do
 
   defp do_load_resource(conn, opts) do
     action = get_action(conn)
-    is_persisted = persisted?(opts)
 
     loaded_resource =
       cond do
-        is_persisted ->
-          fetch_resource(conn, opts)
+        persisted?(opts) ->
+          fetch_resource(conn, conn.params, opts)
 
         action == :index ->
           fetch_all(conn, opts)
 
-        action in [:new, :create] ->
-          nil
+        action in non_id_actions(opts) ->
+          get_assigned_resource(conn, opts)
 
         true ->
-          fetch_resource(conn, opts)
+          fetch_resource(conn, conn.params, opts)
       end
 
     Plug.Conn.assign(conn, get_resource_name(conn, opts), loaded_resource)
@@ -172,12 +171,7 @@ defmodule Canary.Plugs do
 
   defp do_authorize_controller(conn, opts) do
     controller = conn.assigns[:canary_controller] || conn.private[:phoenix_controller]
-
-    current_user_name =
-      opts[:current_user] ||
-        Application.get_env(:canary, :current_user, :current_user)
-
-    current_user = Map.fetch!(conn.assigns, current_user_name)
+    current_user = get_current_user(conn, opts)
     action = get_action(conn)
 
     Plug.Conn.assign(conn, :authorized, can?(current_user, action, controller))
@@ -268,33 +262,9 @@ defmodule Canary.Plugs do
   end
 
   defp do_authorize_resource(conn, opts) do
-    current_user_name =
-      opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
-
-    current_user = Map.fetch!(conn.assigns, current_user_name)
     action = get_action(conn)
-    is_persisted = persisted?(opts)
 
-    non_id_actions =
-      if opts[:non_id_actions] do
-        Enum.concat([:index, :new, :create], opts[:non_id_actions])
-      else
-        [:index, :new, :create]
-      end
-
-    resource =
-      cond do
-        is_persisted ->
-          fetch_resource(conn, opts)
-
-        action in non_id_actions ->
-          opts[:model]
-
-        true ->
-          fetch_resource(conn, opts)
-      end
-
-    Plug.Conn.assign(conn, :authorized, can?(current_user, action, resource))
+    Plug.Conn.assign(conn, :authorized, authorized?(conn, action, conn.params, opts))
   end
 
   @doc """
@@ -373,34 +343,6 @@ defmodule Canary.Plugs do
   defp purge_resource_if_unauthorized(%{assigns: %{authorized: false}} = conn, opts),
     do: Plug.Conn.assign(conn, get_resource_name(conn, opts), nil)
 
-  defp fetch_resource(conn, opts) do
-    repo = Application.get_env(:canary, :repo)
-
-    field_name = Keyword.get(opts, :id_field, "id")
-
-    get_map_args = %{String.to_atom(field_name) => get_resource_id(conn, opts)}
-
-    case Map.fetch(conn.assigns, get_resource_name(conn, opts)) do
-      :error ->
-        repo.get_by(opts[:model], get_map_args)
-        |> preload_if_needed(repo, opts)
-
-      {:ok, nil} ->
-        repo.get_by(opts[:model], get_map_args)
-        |> preload_if_needed(repo, opts)
-
-      {:ok, resource} ->
-        if resource.__struct__ == opts[:model] do
-          # A resource of the type passed as opts[:model] is already loaded; do not clobber it
-          resource
-        else
-          opts[:model]
-          |> repo.get_by(get_map_args)
-          |> preload_if_needed(repo, opts)
-        end
-    end
-  end
-
   defp fetch_all(conn, opts) do
     repo = Application.get_env(:canary, :repo)
 
@@ -427,30 +369,11 @@ defmodule Canary.Plugs do
     end
   end
 
-  defp persisted?(opts) do
-    !!Keyword.get(opts, :persisted, false) || !!Keyword.get(opts, :required, false)
-  end
-
   defp get_resource_name(conn, opts) do
-    case opts[:as] do
-      nil ->
-        opts[:model]
-        |> Module.split()
-        |> List.last()
-        |> Macro.underscore()
-        |> pluralize_if_needed(conn, opts)
-        |> String.to_atom()
-
-      as ->
-        as
-    end
-  end
-
-  defp pluralize_if_needed(name, conn, opts) do
-    if get_action(conn) in [:index] and not persisted?(opts) do
-      name <> "s"
+    if is_nil(opts[:as]) and get_action(conn) == :index and not persisted?(opts) do
+      String.to_atom("#{get_resource_name(opts)}s")
     else
-      name
+      get_resource_name(opts)
     end
   end
 
@@ -465,19 +388,9 @@ defmodule Canary.Plugs do
   end
 
   defp handle_not_found(conn, opts) do
-    action = get_action(conn)
+    resource = Map.get(conn.assigns, get_resource_name(conn, opts))
 
-    non_id_actions =
-      if opts[:non_id_actions] do
-        Enum.concat([:index, :new, :create], opts[:non_id_actions])
-      else
-        [:index, :new, :create]
-      end
-
-    is_required = required?(opts)
-    resource_name = Map.get(conn.assigns, get_resource_name(conn, opts))
-
-    if is_nil(resource_name) and (is_required or action not in non_id_actions) do
+    if is_nil(resource) and required?(opts) do
       apply_error_handler(conn, :not_found_handler, opts)
     else
       conn
