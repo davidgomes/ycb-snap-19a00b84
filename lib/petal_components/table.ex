@@ -55,6 +55,10 @@ defmodule PetalComponents.Table do
 
   slot :col do
     attr :label, :string
+
+    attr :header, :any,
+      doc: "rendered header content used in place of the label - e.g. a select-all checkbox"
+
     attr :class, :any
     attr :row_class, :any
     attr :sortable, :boolean, doc: "render the header as a sort button"
@@ -109,7 +113,7 @@ defmodule PetalComponents.Table do
                   <.sort_icon state={sort_state(col, @sort_by, @sort_dir)} />
                 </button>
               <% else %>
-                {col[:label]}
+                {col[:header] || col[:label]}
               <% end %>
             </.th>
           </.tr>

@@ -70,6 +70,22 @@ defmodule PetalComponents.TableTest do
         assert html =~ "link_to_#{post.id}"
       end)
     end
+
+    test "header renders markup in place of the label", assigns do
+      assigns = Map.put(assigns, :header, ~H|<input type="checkbox" class="hdr-box" />|)
+
+      html =
+        rendered_to_string(~H"""
+        <.table id="posts" rows={@posts}>
+          <:col :let={post} header={@header} label="Ignored">{post.id}</:col>
+          <:col :let={post} label="Name">{post.name}</:col>
+        </.table>
+        """)
+
+      assert html =~ ~s(<input type="checkbox" class="hdr-box">)
+      refute html =~ "Ignored"
+      assert html =~ "Name"
+    end
   end
 
   test "Basic table" do
