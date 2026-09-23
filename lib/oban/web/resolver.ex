@@ -42,6 +42,13 @@ defmodule Oban.Web.Resolver do
     end
 
     @impl true
+    def format_signal(signal, _job) do
+      signal
+      |> Oban.Web.Resolver.decode_recorded()
+      |> inspect(charlists: :as_lists, pretty: true)
+    end
+
+    @impl true
     def jobs_query_limit(_state), do: 100_000
 
     @impl true
@@ -235,6 +242,36 @@ defmodule Oban.Web.Resolver do
   @callback format_recorded(recorded :: term(), job :: Job.t()) :: iodata()
 
   @doc """
+  Customize the formatting of signal payloads wherever they are displayed.
+
+  This callback mirrors `c:format_recorded/2`, but it's used for payloads delivered to a job with
+  `Oban.Pro.Worker.signal/2,3`. Signal payloads are encoded the same way as recorded output, so
+  you **must decode the signal binary** prior to inspecting it.
+
+  ## Examples
+
+  Disable pretty printing and change the output width to 98 characters:
+
+      def format_signal(signal, _job) do
+        signal
+        |> Oban.Web.Resolver.decode_recorded()
+        |> inspect(pretty: false, width: 98)
+      end
+
+  Redact the `:token` field from signals sent to the `ApprovalJob` worker:
+
+      def format_signal(signal, %Oban.Job{worker: "MyApp.ApprovalJob"}) do
+        signal
+        |> Oban.Web.Resolver.decode_recorded()
+        |> Map.replace(:token, "REDACTED")
+        |> inspect(pretty: true)
+      end
+
+      def format_signal(signal, job), do: Oban.Web.Resolver.format_signal(signal, job)
+  """
+  @callback format_signal(signal :: term(), job :: Job.t()) :: iodata()
+
+  @doc """
   Extract the current user from a `Plug.Conn` when the dashboard mounts.
 
   The extracted user is passed to all of the other callback functions, allowing you to customize the
@@ -411,6 +448,7 @@ defmodule Oban.Web.Resolver do
   @optional_callbacks format_job_args: 1,
                       format_job_meta: 1,
                       format_recorded: 2,
+                      format_signal: 2,
                       bulk_action_limit: 1,
                       hint_query_limit: 1,
                       jobs_query_limit: 1,
@@ -478,6 +516,13 @@ defmodule Oban.Web.Resolver do
   @doc false
   def format_recorded(recorded, _job) do
     recorded
+    |> decode_recorded()
+    |> inspect(@inspect_opts)
+  end
+
+  @doc false
+  def format_signal(signal, _job) do
+    signal
     |> decode_recorded()
     |> inspect(@inspect_opts)
   end
