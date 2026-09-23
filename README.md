@@ -273,6 +273,11 @@ instead of
 def can?(%User{}, :index, %Post{}), do: true
 ```
 
+> ### Info {: .info}
+>
+> The `:non_id_actions` is deprecated as of 2.0.0-dev
+> Please use a separate `:authorize_resource` plug with `required: false` instead, check the [Upgrade guide](docs/upgrade.md#update-your-non-id-actions) for more details.
+
 You can specify additional actions for which Canary will authorize based on the model name, by passing the `non_id_actions` opt to the plug.
 
 For example,
