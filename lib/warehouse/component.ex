@@ -53,7 +53,7 @@ defmodule Warehouse.Component do
   This is used on application startup.
   """
   @spec warmup_components() :: :ok
-  def warmup_components() do
+  def warmup_components do
     for component <- Repo.all(Schemas.Component) do
       {:ok, _} = DynamicSupervisor.start_child(@supervisor, {ComponentServer, [component: component]})
     end

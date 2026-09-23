@@ -55,7 +55,7 @@ defmodule Warehouse.Sku do
   This is used on application startup.
   """
   @spec warmup_skus() :: :ok
-  def warmup_skus() do
+  def warmup_skus do
     for sku <- Repo.all(Schemas.Sku) do
       DynamicSupervisor.start_child(@supervisor, {SkuServer, sku})
     end
