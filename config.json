@@ -876,6 +876,22 @@
         "difficulty": 2
       },
       {
+        "slug": "line-up",
+        "name": "Line Up",
+        "uuid": "35fddc6d-080c-40d0-8582-5ac67f40eb40",
+        "practices": [
+          "strings"
+        ],
+        "prerequisites": [
+          "strings",
+          "integers",
+          "multiple-clause-functions",
+          "guards",
+          "case"
+        ],
+        "difficulty": 2
+      },
+      {
         "slug": "nth-prime",
         "name": "Nth Prime",
         "uuid": "6d0c0785-3514-44fc-9b5a-0758989d1c6a",
