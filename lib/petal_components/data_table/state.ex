@@ -26,6 +26,15 @@ defmodule PetalComponents.DataTable.State do
   `:after`. Engines may support a subset; unknown ops are an engine
   concern, not a state concern.
 
+  ## Selection
+
+  `selected` is the `MapSet` of row ids a `selectable` table has picked,
+  keyed by the table's `row_id` (integers or strings). Like `total` it
+  is UI state, not a request: it never round-trips through the URL, and
+  it survives sorts, pages and filters until cleared - so it can hold
+  rows the current page doesn't show. The ids come from the client:
+  treat them as a pick list, never as authorization.
+
   ## Security
 
   `from_params/2` never creates atoms from user input: `:fields` is a
@@ -35,22 +44,32 @@ defmodule PetalComponents.DataTable.State do
   """
 
   @enforce_keys []
-  defstruct order_by: [], filters: [], search: nil, page: 1, page_size: 10, total: nil
+  defstruct order_by: [],
+            filters: [],
+            search: nil,
+            page: 1,
+            page_size: 10,
+            total: nil,
+            selected: MapSet.new()
 
   @type order :: {atom(), :asc | :desc}
   @type filter :: %{field: atom(), op: atom(), value: term()}
+  @type row_id :: integer() | String.t()
   @type t :: %__MODULE__{
           order_by: [order()],
           filters: [filter()],
           search: String.t() | nil,
           page: pos_integer(),
           page_size: pos_integer(),
-          total: non_neg_integer() | nil
+          total: non_neg_integer() | nil,
+          selected: MapSet.t(row_id())
         }
 
   @ops ~w(contains eq starts_with neq gt lt between in before on after)a
   @op_strings Map.new(@ops, &{Atom.to_string(&1), &1})
   @dir_strings %{"asc" => :asc, "desc" => :desc}
+
+  defguardp is_row_id(id) when is_integer(id) or is_binary(id)
 
   @doc """
   Builds a `State` from URL/event params.
@@ -91,7 +110,7 @@ defmodule PetalComponents.DataTable.State do
   Encodes the state as a flat params map suitable for `push_patch`
   query strings. Defaults (page 1, empty sorts/filters, the default
   page size) are omitted so URLs stay clean; `total` never round-trips -
-  it is a result, not a request.
+  it is a result, not a request - and neither does `selected`.
 
   Pass the same `:page_size` default given to `from_params/2` so the
   two stay symmetric (an omitted size decodes back to that default).
@@ -157,10 +176,11 @@ defmodule PetalComponents.DataTable.State do
       end
 
   Ops: `sort` (field), `page` (page), `search` (term), `page_size`
-  (page_size), `filter` (field, filter_op, value/value2/values), and
-  `clear_filters`. Unknown ops and non-whitelisted fields leave the
-  state unchanged; like `from_params/2`, no atoms are ever created
-  from input.
+  (page_size), `filter` (field, filter_op, value/value2/values),
+  `clear_filters`, and the selection ops `select` (id), `select_page`
+  (ids) and `clear_selection`. Unknown ops, non-whitelisted fields and
+  ids that aren't integers or strings leave the state unchanged; like
+  `from_params/2`, no atoms are ever created from input.
 
   A `filter` op's value normalizes by editor shape: a `values` list
   posts as-is (the select editor's `:in`), `between` pairs
@@ -195,6 +215,15 @@ defmodule PetalComponents.DataTable.State do
 
       %{"op" => "clear_filters"} ->
         clear_filters(state)
+
+      %{"op" => "select", "id" => id} when is_row_id(id) ->
+        toggle_selection(state, id)
+
+      %{"op" => "select_page", "ids" => ids} when is_list(ids) ->
+        toggle_page_selection(state, Enum.filter(ids, &is_row_id/1))
+
+      %{"op" => "clear_selection"} ->
+        clear_selection(state)
 
       _other ->
         state
@@ -235,6 +264,38 @@ defmodule PetalComponents.DataTable.State do
 
   @doc "Removes every filter, resetting to page 1."
   def clear_filters(%__MODULE__{} = state), do: %{state | filters: [], page: 1}
+
+  @doc "Selects the row `id`, or deselects it when already selected."
+  def toggle_selection(%__MODULE__{} = state, id) do
+    selected = MapSet.new(state.selected)
+
+    selected =
+      if MapSet.member?(selected, id),
+        do: MapSet.delete(selected, id),
+        else: MapSet.put(selected, id)
+
+    %{state | selected: selected}
+  end
+
+  @doc """
+  The select-all checkbox's grammar for one page of row `ids`: selects
+  them all, unless every one is already selected - then deselects them.
+  Selections outside `ids` (other pages) are kept either way.
+  """
+  def toggle_page_selection(%__MODULE__{} = state, ids) when is_list(ids) do
+    selected = MapSet.new(state.selected)
+    page = MapSet.new(ids)
+
+    selected =
+      if MapSet.subset?(page, selected),
+        do: MapSet.difference(selected, page),
+        else: MapSet.union(selected, page)
+
+    %{state | selected: selected}
+  end
+
+  @doc "Empties the selection."
+  def clear_selection(%__MODULE__{} = state), do: %{state | selected: MapSet.new()}
 
   @doc "Total pages when `total` is known, else nil (cursor/unknown mode)."
   def total_pages(%__MODULE__{total: nil}), do: nil

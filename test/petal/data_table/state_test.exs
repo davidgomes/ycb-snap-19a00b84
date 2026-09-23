@@ -240,6 +240,80 @@ defmodule PetalComponents.DataTable.StateTest do
 
       assert bogus == text
     end
+
+    test "selection ops toggle rows, toggle the page, and clear" do
+      state = %State{page: 2}
+
+      one = State.handle_op(state, %{"op" => "select", "id" => 7}, @opts)
+      assert one.selected == MapSet.new([7])
+      assert State.handle_op(one, %{"op" => "select", "id" => 7}, @opts).selected == MapSet.new()
+
+      page = State.handle_op(one, %{"op" => "select_page", "ids" => [7, 8, 9]}, @opts)
+      assert page.selected == MapSet.new([7, 8, 9])
+      # selection never moves the page
+      assert page.page == 2
+
+      assert State.handle_op(page, %{"op" => "clear_selection"}, @opts).selected == MapSet.new()
+    end
+
+    test "selection ops accept only integer or string ids" do
+      state = %State{selected: MapSet.new(["a"])}
+
+      assert State.handle_op(state, %{"op" => "select", "id" => %{"x" => 1}}, @opts) == state
+      assert State.handle_op(state, %{"op" => "select_page", "ids" => "a,b"}, @opts) == state
+
+      picked =
+        State.handle_op(state, %{"op" => "select_page", "ids" => ["b", nil, [1], 3]}, @opts)
+
+      assert picked.selected == MapSet.new(["a", "b", 3])
+    end
+
+    test "the selection survives the rest of the grammar" do
+      state = %State{selected: MapSet.new([1, 2])}
+
+      for op <- [
+            %{"op" => "sort", "field" => "name"},
+            %{"op" => "page", "page" => "3"},
+            %{"op" => "search", "term" => "amy"},
+            %{"op" => "page_size", "page_size" => "50"},
+            %{"op" => "filter", "field" => "name", "filter_op" => "eq", "value" => "x"},
+            %{"op" => "clear_filters"}
+          ] do
+        assert State.handle_op(state, op, @opts).selected == state.selected
+      end
+    end
+  end
+
+  describe "selection" do
+    test "toggle_selection/2 adds, then removes, one id" do
+      state = State.toggle_selection(%State{}, 3)
+      assert state.selected == MapSet.new([3])
+      assert State.toggle_selection(state, 3).selected == MapSet.new()
+    end
+
+    test "toggle_page_selection/2 selects the page unless all of it is already selected" do
+      state = %State{selected: MapSet.new([1, 99])}
+
+      # partly selected page: select the rest, keep the off-page pick
+      all = State.toggle_page_selection(state, [1, 2, 3])
+      assert all.selected == MapSet.new([1, 2, 3, 99])
+
+      # fully selected page: deselect just this page
+      assert State.toggle_page_selection(all, [1, 2, 3]).selected == MapSet.new([99])
+
+      assert State.toggle_page_selection(state, []).selected == state.selected
+    end
+
+    test "helpers accept a hand-built list selection" do
+      assert State.toggle_selection(%State{selected: [1, 2]}, 2).selected == MapSet.new([1])
+      assert State.clear_selection(%State{selected: [1]}).selected == MapSet.new()
+    end
+
+    test "selection is UI state: it never round-trips through params" do
+      state = %State{selected: MapSet.new([1, 2])}
+      assert State.to_params(state) == %{}
+      assert State.from_params(%{"selected" => ["1"]}, fields: @fields).selected == MapSet.new()
+    end
   end
 
   describe "toggle_sort/2" do
