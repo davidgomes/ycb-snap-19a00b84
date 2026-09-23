@@ -59,19 +59,51 @@ defmodule Ecto.Integration.SQLTest do
 
   test "quoted strings and identifiers cannot break out into ClickHouse syntax" do
     string = ~S|value' FROM numbers(10) -- \ $tag$body$tag$ /* comment */|
-    result = TestRepo.query!(["SELECT ", Connection.quote_name(string, ?')])
+    result = TestRepo.query!(["SELECT ", Connection.quote_string(string)])
 
     assert result.rows == [[string]]
 
-    for {quoter, name} <- [
-          {?\", ~S|alias" FROM numbers(10) -- \ $tag$body$tag$ /* comment */|},
-          {?`, ~S|alias` FROM numbers(10) -- \ $tag$body$tag$ /* comment */|}
-        ] do
-      result = TestRepo.query!(["SELECT 1 AS ", Connection.quote_name(name, quoter)])
+    name = ~S|alias" FROM numbers(10) -- \ $tag$body$tag$ /* comment */|
+    result = TestRepo.query!(["SELECT 1 AS ", Connection.quote_name(name)])
 
-      assert result.columns == [name]
-      assert result.rows == [[1]]
+    assert result.columns == [name]
+    assert result.rows == [[1]]
+  end
+
+  test "quoted strings round trip as bound and inline params" do
+    for string <- ["'", "\\", ~S|\'|, ~S|it's a \"quoted\" \n value|, "`\"'\\"] do
+      query = from(f in fragment("system.one"), select: fragment("?", ^string))
+
+      assert TestRepo.all(query) == [string]
+      assert TestRepo.query!(TestRepo.to_inline_sql(:all, query)).rows == [[string]]
     end
+  end
+
+  test "quoted table, column, and alias names round trip" do
+    table = ~S|quoted "table" \ name|
+    column = String.to_atom(~S|quoted "column" ' \ name|)
+
+    TestRepo.query!([
+      "CREATE TABLE ",
+      Connection.quote_name(table),
+      " (",
+      Connection.quote_name(column),
+      " String) ENGINE Memory"
+    ])
+
+    on_exit(fn -> TestRepo.query!(["DROP TABLE ", Connection.quote_name(table)]) end)
+
+    TestRepo.insert_all(table, [[{column, "it's"}]], types: [{column, :string}])
+
+    query =
+      from(t in table,
+        select: %{
+          value: field(t, ^column),
+          alias: selected_as(field(t, ^column), :"quoted \"alias\" ' \\")
+        }
+      )
+
+    assert TestRepo.all(query) == [%{value: "it's", alias: "it's"}]
   end
 
   test "disconnect_all/2" do
