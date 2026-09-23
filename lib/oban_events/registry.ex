@@ -128,6 +128,15 @@ defmodule ObanEvents.Registry do
           "@events must contain module names (atoms) or tuples like {Module, opts}, found invalid handlers: #{inspect(invalid_handlers)}"
     end
 
+    invalid_handler_opts = invalid_handler_options(events)
+
+    unless Enum.empty?(invalid_handler_opts) do
+      raise CompileError,
+        file: env.file,
+        line: env.line,
+        description: Enum.join(invalid_handler_opts, "\n")
+    end
+
     quote do
       @doc false
       def __events__, do: @events
@@ -195,6 +204,49 @@ defmodule ObanEvents.Registry do
       def registered?(event_name) when is_atom(event_name) do
         Map.has_key?(@events, event_name)
       end
+    end
+  end
+
+  defp invalid_handler_options(events) do
+    Enum.flat_map(events, fn {event, handlers} ->
+      Enum.flat_map(handlers, fn
+        {module, opts} when is_atom(module) and is_list(opts) ->
+          handler_option_errors(event, module, opts)
+
+        _ ->
+          []
+      end)
+    end)
+  end
+
+  defp handler_option_errors(event, module, opts) do
+    cond do
+      not Keyword.keyword?(opts) ->
+        [
+          "@events options for #{inspect(module)} on #{inspect(event)} must be a keyword list, got: #{inspect(opts)}"
+        ]
+
+      true ->
+        unknown = opts |> Keyword.keys() |> Enum.uniq() |> Enum.reject(&(&1 == :oban))
+        oban_opts = Keyword.get(opts, :oban, [])
+
+        cond do
+          unknown != [] ->
+            [
+              "Invalid options for handler #{inspect(module)} on event #{inspect(event)}. " <>
+                "Handler tuples only accept Oban job options under :oban, found: #{inspect(unknown)}. " <>
+                "Example: {#{inspect(module)}, oban: [priority: 0, max_attempts: 10, schedule_in: 30]}"
+            ]
+
+          not (is_list(oban_opts) and Keyword.keyword?(oban_opts)) ->
+            [
+              "Invalid :oban options for handler #{inspect(module)} on event #{inspect(event)}. " <>
+                "Expected a keyword list of Oban.Job options, got: #{inspect(oban_opts)}"
+            ]
+
+          true ->
+            []
+        end
     end
   end
 end

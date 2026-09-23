@@ -211,6 +211,28 @@ defmodule ObanEvents.RegistryTest do
       end
     end
 
+    test "raises when handler options include keys other than :oban" do
+      assert_raise CompileError, ~r/only accept Oban job options under :oban/, fn ->
+        Code.compile_string("""
+        defmodule TestIfOption do
+          use ObanEvents
+          @events %{user_created: [{SomeHandler, if: {SomeMod, :enabled?, []}}]}
+        end
+        """)
+      end
+    end
+
+    test "raises when :oban options are not a keyword list" do
+      assert_raise CompileError, ~r/Invalid :oban options/, fn ->
+        Code.compile_string("""
+        defmodule TestBadObanOpts do
+          use ObanEvents
+          @events %{user_created: [{SomeHandler, oban: :priority}]}
+        end
+        """)
+      end
+    end
+
     test "compiles successfully with valid @events" do
       assert Code.compile_string("""
              defmodule TestValidHandlers do

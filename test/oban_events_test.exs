@@ -55,25 +55,22 @@ defmodule ObanEventsTest do
     }
   end
 
-  # Helper module for :if conditions
-  defmodule ConditionHelpers do
-    def check_enabled(event), do: event.data["enabled"] == true
-    def check_premium(event), do: event.data["plan"] == "premium"
-    def always_false(_event), do: false
-  end
-
-  # Test module with :if conditions
-  defmodule ConditionalHandlers do
+  # Test module that forwards Oban options beyond the historical whitelist.
+  # Inline testing executes scheduled jobs immediately, so schedule_in is checked
+  # by a successful insert rather than the returned scheduled_at.
+  defmodule ExtraObanOptsEventBus do
     @moduledoc false
-    use ObanEvents
-
-    alias ObanEventsTest.ConditionHelpers
+    use ObanEvents,
+      oban: {Oban, meta: %{source: "events"}, schedule_in: 30}
 
     @events %{
-      conditional_event: [
-        {TestHandler, if: {ConditionHelpers, :check_enabled, []}},
-        {TestHandler, if: {ConditionHelpers, :check_premium, []}},
-        {TestHandler, if: {ConditionHelpers, :always_false, []}},
+      extra_opts_event: [
+        {TestHandler,
+         oban: [
+           schedule_in: 5,
+           meta: %{source: "handler"},
+           unique: [period: 60, fields: [:worker]]
+         ]},
         TestHandler
       ]
     }
@@ -189,39 +186,22 @@ defmodule ObanEventsTest do
       assert job3.tags == []
     end
 
-    test ":if conditions filter handlers based on event data" do
-      # enabled=true, plan=premium -> should schedule first 2 handlers + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => true,
-                 "plan" => "premium"
-               })
-
-      assert length(jobs) == 3
-
-      # enabled=true, plan=free -> should schedule first handler + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{"enabled" => true, "plan" => "free"})
+    test "forwards Oban job options beyond queue, attempts, priority, and tags" do
+      assert {:ok, jobs} = ExtraObanOptsEventBus.emit(:extra_opts_event, %{"test" => "data"})
 
       assert length(jobs) == 2
+      [overridden, defaults] = jobs
 
-      # enabled=false, plan=premium -> should schedule second handler + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => false,
-                 "plan" => "premium"
-               })
+      assert overridden.state == "completed"
+      assert overridden.meta["source"] == "handler"
 
-      assert length(jobs) == 2
-
-      # enabled=false, plan=free -> should only schedule default handler
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => false,
-                 "plan" => "free"
-               })
-
-      assert length(jobs) == 1
+      assert defaults.state == "completed"
+      assert defaults.meta["source"] == "events"
+      # Unspecified keys still come from the module defaults
+      assert defaults.queue == "oban_events"
+      assert defaults.max_attempts == 3
+      assert defaults.priority == 2
+      assert defaults.tags == []
     end
   end
 end
