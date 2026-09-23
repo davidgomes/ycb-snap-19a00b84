@@ -14,6 +14,7 @@ defmodule Nostrum.Voice.Crypto do
   alias Nostrum.Voice.Crypto.Aes
   alias Nostrum.Voice.Crypto.Chacha
   alias Nostrum.Voice.Crypto.Salsa
+  alias Nostrum.Voice.Opus
 
   require Logger
 
@@ -56,6 +57,7 @@ defmodule Nostrum.Voice.Crypto do
   @doc false
   def encrypt(%VoiceState{encryption_mode: mode} = voice, data) do
     header = Audio.rtp_header(voice)
+    data = dave_encrypt(voice.dave_session, data)
     apply(__MODULE__, :"encrypt_#{mode}", [voice, data, header])
   end
 
@@ -63,6 +65,33 @@ defmodule Nostrum.Voice.Crypto do
   def decrypt(%{secret_key: key, encryption_mode: mode}, data) do
     apply(__MODULE__, :"decrypt_#{mode}", [key, data])
   end
+
+  # DAVE end-to-end encryption is applied to the opus frame itself, inside of the
+  # transport encryption. Silence frames are always sent and received unencrypted.
+
+  @doc false
+  @spec dave_encrypt(Dave.session() | nil, binary()) :: binary()
+  def dave_encrypt(session, frame) do
+    with true <- frame != Opus.silence() and dave_ready?(session),
+         encrypted when is_binary(encrypted) <- Dave.encrypt(session, :audio, :opus, frame) do
+      encrypted
+    else
+      _ -> frame
+    end
+  end
+
+  @doc false
+  @spec dave_decrypt(Dave.session() | nil, Nostrum.Struct.User.id() | nil, binary()) :: binary()
+  def dave_decrypt(session, user_id, frame) do
+    with true <- is_integer(user_id) and frame != Opus.silence() and dave_ready?(session),
+         decrypted when is_binary(decrypted) <- Dave.decrypt(session, user_id, :audio, frame) do
+      decrypted
+    else
+      _ -> frame
+    end
+  end
+
+  defp dave_ready?(session), do: is_reference(session) and Dave.ready?(session)
 
   @doc false
   def encrypt_xsalsa20_poly1305(%VoiceState{secret_key: key}, data, header) do

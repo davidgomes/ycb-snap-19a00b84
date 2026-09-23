@@ -155,6 +155,9 @@ config root key. Most of them may be overridden per-bot.
   channel. Defaults to `true`.
 - `voice_encryption_mode` - Defaults to `:aes256_gcm`. More information about this
   option can be found [here](./voice-2.html#encryption-modes).
+- `voice_dave` - Whether to use Discord's end-to-end encryption protocol (DAVE)
+  for voice. Defaults to `true`. More information about this option can be
+  found [here](./voice-2.html#end-to-end-encryption-dave).
 
 
 ### Development & debugging

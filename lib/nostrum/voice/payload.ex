@@ -5,12 +5,13 @@ defmodule Nostrum.Voice.Payload do
   alias Nostrum.Constants
   alias Nostrum.Struct.VoiceState
   alias Nostrum.Struct.VoiceWSState
+  alias Nostrum.Util
 
   require Logger
 
-  # All functions in this module that end with a call to `build_payload/1`
-  # with an all-caps string return JSON payloads which are response messages
-  # to incoming voice websocket messages.
+  # All functions in this module that end with a call to `build_payload/2`
+  # or `build_binary_payload/2` with an all-caps string return websocket frames
+  # which are response messages to incoming voice websocket messages.
   # Other functions which return a map with keys `:t` and `:d` are for
   # generating voice-related events to be consumed by a Consumer process.
 
@@ -27,7 +28,8 @@ defmodule Nostrum.Voice.Payload do
       server_id: state.guild_id,
       user_id: Me.get().id,
       token: state.token,
-      session_id: state.session
+      session_id: state.session,
+      max_dave_protocol_version: max_dave_protocol_version(state.bot_options)
     }
     |> build_payload("IDENTIFY")
   end
@@ -63,6 +65,26 @@ defmodule Nostrum.Voice.Payload do
     |> build_payload("SPEAKING")
   end
 
+  def dave_transition_ready_payload(transition_id) do
+    %{transition_id: transition_id}
+    |> build_payload("DAVE_TRANSITION_READY")
+  end
+
+  def dave_invalid_commit_welcome_payload(transition_id) do
+    %{transition_id: transition_id}
+    |> build_payload("DAVE_MLS_INVALID_COMMIT_WELCOME")
+  end
+
+  def dave_key_package_payload(key_package) do
+    key_package
+    |> build_binary_payload("DAVE_MLS_KEY_PACKAGE")
+  end
+
+  def dave_commit_welcome_payload(commit, welcome) do
+    [commit, welcome || <<>>]
+    |> build_binary_payload("DAVE_MLS_COMMIT_WELCOME")
+  end
+
   def speaking_update_payload(%VoiceState{} = voice, timed_out \\ false) do
     %{
       t: :VOICE_SPEAKING_UPDATE,
@@ -93,10 +115,22 @@ defmodule Nostrum.Voice.Payload do
     }
   end
 
+  def max_dave_protocol_version(bot_options) do
+    if Util.get_config(bot_options, :voice_dave, true),
+      do: Dave.max_protocol_version(),
+      else: 0
+  end
+
   def build_payload(data, opcode_name) do
     opcode = Constants.voice_opcode_from_name(opcode_name)
 
-    %{op: opcode, d: data}
-    |> Jason.encode_to_iodata!()
+    {:text, Jason.encode_to_iodata!(%{op: opcode, d: data})}
+  end
+
+  # Client-sent binary messages are a single opcode byte followed by the payload
+  def build_binary_payload(data, opcode_name) do
+    opcode = Constants.voice_opcode_from_name(opcode_name)
+
+    {:binary, [opcode, data]}
   end
 end

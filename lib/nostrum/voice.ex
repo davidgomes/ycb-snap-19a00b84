@@ -51,6 +51,7 @@ defmodule Nostrum.Voice do
   alias Nostrum.Struct.VoiceWSState
   alias Nostrum.Util
   alias Nostrum.Voice.Audio
+  alias Nostrum.Voice.Crypto
   alias Nostrum.Voice.Opus
   alias Nostrum.Voice.Ports
   alias Nostrum.Voice.Session
@@ -684,6 +685,8 @@ defmodule Nostrum.Voice do
 
   If `raw_rtp` is set to `true`, a list of raw RTP packets is returned instead.
   To extract an opus packet from an RTP packet, see `extract_opus_packet/1`.
+  Note that raw RTP packets are not decrypted with DAVE end-to-end encryption,
+  so the opus packets within them will still be encrypted if DAVE is in use.
 
   This function will block until the specified number of packets is received.
   """
@@ -699,10 +702,13 @@ defmodule Nostrum.Voice do
       if raw_rtp do
         Enum.map(packets, fn {header, payload} -> header <> payload end)
       else
+        ssrc_map = if voice.dave_session, do: get_ssrc_map(guild_id), else: %{}
+
         # credo:disable-for-next-line Credo.Check.Refactor.Nesting
         Enum.map(packets, fn {header, payload} ->
           <<_::16, seq::integer-16, time::integer-32, ssrc::integer-32>> = header
           opus = Opus.strip_rtp_ext(payload)
+          opus = Crypto.dave_decrypt(voice.dave_session, ssrc_map[ssrc], opus)
           {{seq, time, ssrc}, opus}
         end)
       end

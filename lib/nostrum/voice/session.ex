@@ -79,7 +79,11 @@ defmodule Nostrum.Voice.Session do
       stream: stream,
       last_heartbeat_ack: DateTime.utc_now(),
       heartbeat_ack: true,
-      bot_options: bot_options
+      bot_options: bot_options,
+      dave_protocol_version: 0,
+      dave_pending_transitions: %{},
+      dave_downgraded: false,
+      connected_users: MapSet.new()
     }
 
     Logger.debug(fn -> "Voice Websocket connection up on worker #{inspect(worker)}" end)
@@ -104,19 +108,16 @@ defmodule Nostrum.Voice.Session do
   end
 
   def handle_info({:gun_ws, _worker, stream, {:text, frame}}, state) do
-    from_handle =
-      frame
-      |> Jason.decode!()
-      |> Event.handle(state)
+    frame
+    |> Jason.decode!()
+    |> Event.handle(state)
+    |> handle_event_result(stream)
+  end
 
-    case from_handle do
-      {new_state, reply} ->
-        :ok = :gun.ws_send(state.conn, stream, {:text, reply})
-        {:noreply, new_state}
-
-      new_state ->
-        {:noreply, new_state}
-    end
+  def handle_info({:gun_ws, _worker, stream, {:binary, frame}}, state) do
+    frame
+    |> Event.handle(state)
+    |> handle_event_result(stream)
   end
 
   def handle_info({:gun_ws, _conn, _stream, :close}, state) do
@@ -161,7 +162,14 @@ defmodule Nostrum.Voice.Session do
       <<header::bytes-size(12), _::binary>> = data ->
         payload = Crypto.decrypt(state, data)
         <<_::16, seq::integer-16, time::integer-32, ssrc::integer-32>> = header
-        opus = Opus.strip_rtp_ext(payload)
+
+        opus =
+          Crypto.dave_decrypt(
+            state.dave_session,
+            state.ssrc_map[ssrc],
+            Opus.strip_rtp_ext(payload)
+          )
+
         incoming_packet = Payload.voice_incoming_packet({{seq, time, ssrc}, opus})
         Dispatch.handle(incoming_packet, state)
     end
@@ -173,6 +181,15 @@ defmodule Nostrum.Voice.Session do
 
       {:noreply, state}
   end
+
+  defp handle_event_result({new_state, []}, _stream), do: {:noreply, new_state}
+
+  defp handle_event_result({new_state, reply}, stream) do
+    :ok = :gun.ws_send(new_state.conn, stream, reply)
+    {:noreply, new_state}
+  end
+
+  defp handle_event_result(new_state, _stream), do: {:noreply, new_state}
 
   def handle_cast(:heartbeat, %{heartbeat_ack: false, heartbeat_ref: timer_ref} = state) do
     Logger.warning("heartbeat_ack not received in time, disconnecting")
@@ -188,7 +205,7 @@ defmodule Nostrum.Voice.Session do
         :heartbeat
       ])
 
-    :ok = :gun.ws_send(state.conn, state.stream, {:text, Payload.heartbeat_payload(state)})
+    :ok = :gun.ws_send(state.conn, state.stream, Payload.heartbeat_payload(state))
 
     {:noreply,
      %{state | heartbeat_ref: ref, heartbeat_ack: false, last_heartbeat_send: DateTime.utc_now()}}
@@ -210,7 +227,7 @@ defmodule Nostrum.Voice.Session do
 
     Dispatch.handle(speaking_update, state)
 
-    :ok = :gun.ws_send(state.conn, state.stream, {:text, payload})
+    :ok = :gun.ws_send(state.conn, state.stream, payload)
     {:noreply, state}
   end
 

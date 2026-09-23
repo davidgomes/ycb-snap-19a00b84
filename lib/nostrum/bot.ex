@@ -145,6 +145,7 @@ defmodule Nostrum.Bot do
   - `:audio_frames_per_burst`
   - `:voice_auto_connect`
   - `:voice_encryption_mode`
+  - `:voice_dave`
   - `:log_full_events`
   - `:log_dispatch_events`
   - `:force_http1`
@@ -167,6 +168,7 @@ defmodule Nostrum.Bot do
           optional(:audio_frames_per_burst) => pos_integer(),
           optional(:voice_auto_connect) => boolean(),
           optional(:voice_encryption_mode) => Nostrum.Voice.Crypto.cipher(),
+          optional(:voice_dave) => boolean(),
           optional(:log_full_events) => boolean(),
           optional(:log_dispatch_events) => boolean(),
           optional(:force_http1) => boolean()

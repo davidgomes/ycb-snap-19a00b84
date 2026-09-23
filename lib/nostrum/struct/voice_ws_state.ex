@@ -23,7 +23,12 @@ defmodule Nostrum.Struct.VoiceWSState do
     :heartbeat_ack,
     :heartbeat_interval,
     :heartbeat_ref,
-    :bot_options
+    :bot_options,
+    :dave_session,
+    :dave_protocol_version,
+    :dave_pending_transitions,
+    :dave_downgraded,
+    :connected_users
   ]
 
   @typedoc "The guild id that this voice websocket state applies to"
@@ -97,6 +102,26 @@ defmodule Nostrum.Struct.VoiceWSState do
   @typedoc "Time ref for the heartbeat"
   @type heartbeat_ref :: :timer.tref() | nil
 
+  @typedoc "DAVE (end-to-end encryption) session, `nil` until negotiated"
+  @typedoc since: "0.11.0"
+  @type dave_session :: Dave.session() | nil
+
+  @typedoc "Negotiated DAVE protocol version, `0` if end-to-end encryption is not in use"
+  @typedoc since: "0.11.0"
+  @type dave_protocol_version :: non_neg_integer()
+
+  @typedoc "Pending DAVE transitions mapping transition id to protocol version"
+  @typedoc since: "0.11.0"
+  @type dave_pending_transitions :: %{non_neg_integer() => non_neg_integer()}
+
+  @typedoc "Whether the DAVE session was downgraded to unencrypted media"
+  @typedoc since: "0.11.0"
+  @type dave_downgraded :: boolean()
+
+  @typedoc "User ids of other clients connected to the voice channel"
+  @typedoc since: "0.11.0"
+  @type connected_users :: MapSet.t(Nostrum.Struct.User.id())
+
   @type t :: %__MODULE__{
           guild_id: guild_id,
           channel_id: channel_id,
@@ -117,6 +142,11 @@ defmodule Nostrum.Struct.VoiceWSState do
           heartbeat_ack: heartbeat_ack,
           heartbeat_interval: heartbeat_interval,
           heartbeat_ref: heartbeat_ref,
-          bot_options: Nostrum.Bot.bot_options()
+          bot_options: Nostrum.Bot.bot_options(),
+          dave_session: dave_session,
+          dave_protocol_version: dave_protocol_version,
+          dave_pending_transitions: dave_pending_transitions,
+          dave_downgraded: dave_downgraded,
+          connected_users: connected_users
         }
 end
