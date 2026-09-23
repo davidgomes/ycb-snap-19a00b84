@@ -9,6 +9,7 @@ module.exports = {
     '../lib/error_tracker/web.ex',
     '../lib/error_tracker/web/**/*.*ex'
   ],
+  darkMode: 'media',
   theme: {
     extend: {},
   },
