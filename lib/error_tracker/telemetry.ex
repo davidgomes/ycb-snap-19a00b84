@@ -24,7 +24,7 @@ defmodule ErrorTracker.Telemetry do
   There is only one event emitted for occurrences:
 
   * `[:error_tracker, :occurrence, :new]`: is emitted when a new occurrence is
-  stored.
+  stored. It is not emitted for occurrences of muted errors.
 
   ### Measures and metadata
 
@@ -61,7 +61,11 @@ defmodule ErrorTracker.Telemetry do
   end
 
   @doc false
-  def new_occurrence(occurrence) do
+  def new_occurrence(occurrence, muted) do
+    if muted, do: :noop, else: do_new_occurrence(occurrence)
+  end
+
+  defp do_new_occurrence(occurrence) do
     measurements = %{system_time: System.system_time()}
     metadata = %{occurrence: occurrence}
     :telemetry.execute([:error_tracker, :occurrence, :new], measurements, metadata)
