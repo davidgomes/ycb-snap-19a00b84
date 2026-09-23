@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Enhancements
+
+  * Load balancing now picks a channel on every RPC instead of refreshing a cached pick every 15 seconds. `GRPC.Client.LoadBalancing` strategies own their state in ETS (plus an `:atomics` cursor for round robin), and `pick/1` returns a `GRPC.Channel` directly. The behaviour gains `update/2` and `shutdown/1` callbacks, and `init/1` now receives connected channels via `:channels`.
+  * DNS re-resolution updates the load balancer in place instead of writing to `:persistent_term`, which avoids a global GC pass every time the backend set changes. Each connection now writes to `:persistent_term` only once, when it starts.
+
 ## v1.0.0 (2026-06-15)
 
 ### Enhancements

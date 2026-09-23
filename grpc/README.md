@@ -153,6 +153,8 @@ iex> {:ok, channel} = GRPC.Stub.connect("unix:/tmp/my.sock")
 ```
 
 >__NOTE__: When using `DNS` or `xDS` targets, the connection layer periodically refreshes endpoints.
+
+>__NOTE__: The load-balancing policy picks a backend on every RPC. Compared to reading a single cached channel, this adds a few hundred nanoseconds per call (a `:persistent_term` read, an ETS lookup and, for `:round_robin`, an `:atomics` increment). In exchange, requests are spread across all healthy backends, and backend changes no longer trigger `:persistent_term` writes, which force a global GC pass.
 ---
 
 ## Compression and Metadata
