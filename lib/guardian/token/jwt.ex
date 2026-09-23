@@ -34,7 +34,9 @@ defmodule Guardian.Token.Jwt do
 
   These options are available to encoding and decoding:
 
-  * `secret` The secret key to use for signing
+  * `secret` The secret key to use for signing. When given, it replaces the
+    configured `secret_key`, so a `secret` that resolves to `nil` fails with
+    `{:error, :secret_not_found}` instead of falling back to `secret_key`
   * `headers` The Jose headers that should be used
   * `allowed_algos` - A list of allowable algos
   * `token_type` - Override the default token type. The default is "access"
@@ -209,19 +211,18 @@ defmodule Guardian.Token.Jwt do
     @moduledoc false
     use Guardian.Token.Jwt.SecretFetcher
 
-    def fetch_signing_secret(mod, opts) do
-      secret = Keyword.get(opts, :secret)
-      secret = Config.resolve_value(secret) || apply(mod, :config, [:secret_key])
+    def fetch_signing_secret(mod, opts), do: fetch_secret(mod, opts)
 
-      case secret do
-        nil -> {:error, :secret_not_found}
-        val -> {:ok, val}
-      end
-    end
+    def fetch_verifying_secret(mod, _token_headers, opts), do: fetch_secret(mod, opts)
 
-    def fetch_verifying_secret(mod, _token_headers, opts) do
-      secret = Keyword.get(opts, :secret)
-      secret = Config.resolve_value(secret) || mod.config(:secret_key)
+    # A given `:secret` that resolves to `nil` must not fall back to `secret_key`,
+    # or a failed per-request lookup would sign or verify with the application wide secret.
+    defp fetch_secret(mod, opts) do
+      secret =
+        case Keyword.fetch(opts, :secret) do
+          {:ok, secret} -> Config.resolve_value(secret)
+          :error -> mod.config(:secret_key)
+        end
 
       case secret do
         nil -> {:error, :secret_not_found}
@@ -253,6 +254,7 @@ defmodule Guardian.Token.Jwt do
 
   The signing secret will be found first from the options.
   If not specified the secret key from the configuration will be used.
+  A `secret` option that resolves to `nil` fails with `{:error, :secret_not_found}`.
 
   Configuration:
 
@@ -314,9 +316,13 @@ defmodule Guardian.Token.Jwt do
   @doc """
   Decodes the token and validates the signature.
 
+  Returns `{:error, :secret_not_found}` when no verifying secret could be found,
+  and `{:error, :invalid_token}` when the token cannot be verified.
+
   Options:
 
-  * `secret` - Override the configured secret. `Guardian.Config.config_value` is valid
+  * `secret` - Override the configured secret. `Guardian.Config.config_value` is valid.
+    A `secret` that resolves to `nil` does not fall back to the configured secret.
   * `allowed_algos` - A list of allowable algos
   """
   def decode_token(mod, token, options \\ []) do
@@ -332,6 +338,7 @@ defmodule Guardian.Token.Jwt do
         {false, _, _} -> {:error, :invalid_token}
       end
     else
+      {:error, :secret_not_found} = error -> error
       _ -> {:error, :invalid_token}
     end
   end
