@@ -18,6 +18,7 @@ defmodule Warehouse.Factory do
     %Location{
       area: :assembly,
       disabled: false,
+      name: sequence(:location_name, &"location#{&1}"),
       removed: false
     }
   end

@@ -6,6 +6,7 @@ defmodule Warehouse.Schemas.Location do
   @type t :: %__MODULE__{
           area: atom(),
           disabled: boolean(),
+          name: String.t(),
           removed: boolean(),
           parts: [Part.t()]
         }
@@ -13,6 +14,7 @@ defmodule Warehouse.Schemas.Location do
   schema "inventory_locations" do
     field :area, AreaEnum, default: :receiving
     field :disabled, :boolean, default: false
+    field :name, :string
     field :removed, :boolean, default: false
 
     has_many :parts, Part
