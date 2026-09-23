@@ -31,6 +31,17 @@ defmodule PetalComponents.DropdownTest do
       assert_has_class(html, "pc-dropdown__menu-items-wrapper")
     end
 
+    test "panel carries the flip hook", %{assigns: assigns} do
+      html =
+        rendered_to_string(~H"""
+        <.dropdown label="Dropdown" options_container_id="dd-flip">
+          <.dropdown_menu_item label="Option" />
+        </.dropdown>
+        """)
+
+      assert html =~ ~r/id="dd-flip"[^>]*phx-hook="PetalDropdown"/
+    end
+
     test "renders dropdown with custom CSS classes", %{assigns: assigns} do
       html =
         rendered_to_string(~H"""

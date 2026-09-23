@@ -1435,6 +1435,71 @@ export const PetalInputOTP = {
   },
 };
 
+// Dropdown panel flip. The panel opens and closes through LiveView.JS
+// (JS.toggle / JS.hide write its inline display), so the hook watches that
+// style write rather than owning the toggle. Open downward by default;
+// flip above when the viewport has no room below AND more room above.
+// With a transition, JS.toggle sets display inside a rAF, and the observer
+// runs as a microtask right after it - before the first visible paint.
+export const PetalDropdown = {
+  mounted() {
+    this.open = false;
+    this.onReposition = () => this.position();
+    this.observer = new MutationObserver(() => this.sync());
+    this.observer.observe(this.el, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+    this.sync();
+  },
+
+  // a patch drops data-flip (the server never renders it)
+  updated() {
+    this.sync();
+    if (this.open) this.position();
+  },
+
+  destroyed() {
+    this.observer.disconnect();
+    this.unlisten();
+  },
+
+  sync() {
+    const open = this.el.style.display !== "none";
+    if (open === this.open) return;
+    this.open = open;
+    if (open) {
+      window.addEventListener("scroll", this.onReposition, true);
+      window.addEventListener("resize", this.onReposition);
+      this.position();
+    } else {
+      this.unlisten();
+      this.el.removeAttribute("data-flip");
+    }
+  },
+
+  unlisten() {
+    window.removeEventListener("scroll", this.onReposition, true);
+    window.removeEventListener("resize", this.onReposition);
+  },
+
+  // Measured with the flip cleared so the natural (downward) layout
+  // decides. offsetHeight, not the rect: the open transition scales the
+  // panel, and a scaled rect under-reports its height.
+  position() {
+    this.el.removeAttribute("data-flip");
+    const trigger = this.el.parentElement.getBoundingClientRect();
+    const panelH = this.el.offsetHeight;
+    if (!panelH || (!trigger.top && !trigger.bottom)) return; // unrendered
+    const gap = 8; // the panel's mt-2 / mb-2
+    const below = window.innerHeight - trigger.bottom;
+    const above = trigger.top;
+    if (panelH + gap > below && above > below) {
+      this.el.setAttribute("data-flip", "");
+    }
+  },
+};
+
 // Positions a top-layer popover (<div popover>) next to its trigger.
 // The browser handles open/close and light-dismiss via the popover attribute;
 // this hook only computes fixed coordinates, flipping to the opposite side
@@ -5466,6 +5531,7 @@ export default {
   PetalWordRotate,
   PetalTypingEffect,
   PetalInputOTP,
+  PetalDropdown,
   PetalPopover,
   PetalCommand,
   PetalCommandTrigger,
