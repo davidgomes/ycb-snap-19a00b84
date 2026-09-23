@@ -1,0 +1,36 @@
+defmodule Mix.Tasks.Phx.Gen.Layout.Slime do
+  use Mix.Task
+
+  @shortdoc "Generates a default Phoenix 1.3 layout file in Slime"
+
+  @moduledoc """
+  Generates a Phoenix layout file in Slime.
+
+      mix phx.gen.layout.slime
+
+  """
+  def run(_args) do
+    if Mix.Project.umbrella? do
+      Mix.raise "mix phx.gen.layout.slime can only be run inside an application directory"
+    end
+
+    web_prefix = Mix.Phoenix.web_path(Mix.Phoenix.context_app())
+    binding = [application_module: Mix.Phoenix.base()]
+
+    extension = PhoenixSlime.ConfiguredExtension.file_extension
+    layout_path = Path.join([web_prefix, "templates", "layout", "app.html.#{extension}"])
+    Mix.Phoenix.copy_from slime_paths(), "priv/templates/phoenix.gen.layout.slime", binding, [
+      {:eex, "app.html.eex",       layout_path}
+    ]
+
+    instructions = """
+
+    A new #{layout_path} file was generated.
+    """
+    Mix.shell.info instructions
+  end
+
+  defp slime_paths do
+    [".", :phoenix_slime]
+  end
+end
