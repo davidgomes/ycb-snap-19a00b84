@@ -7,13 +7,24 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsage do
   completes or is discarded, you can never enqueue another job with the same
   unique key.
 
+  Other named state groups (`:incomplete`, `:scheduled`, `:successful`) don't
+  include `:cancelled` or `:discarded` and aren't flagged by this check.
+
   ## Examples
 
   Bad - prevents re-enqueueing forever:
       unique: [fields: [:args], states: :all]
 
   Good - allows re-enqueueing after completion:
+      unique: [fields: [:args], states: :incomplete]
+
+  Good - the same states listed explicitly:
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  ## References
+
+    * [Oban.Job.unique_states/1](https://hexdocs.pm/oban/Oban.Job.html#unique_states/1)
+    * [Unique Jobs guide](https://hexdocs.pm/oban/unique_jobs.html)
   """
 
   use ObanDoctor.Check, category: :worker
