@@ -49,7 +49,7 @@ defmodule ObanNotifiersPhoenix.MixProject do
 
   defp deps do
     [
-      {:oban, "~> 2.16"},
+      {:oban, "~> 2.17"},
       {:phoenix_pubsub, "~> 2.0"},
       {:ex_doc, "~> 0.30", only: :dev, runtime: false}
     ]
