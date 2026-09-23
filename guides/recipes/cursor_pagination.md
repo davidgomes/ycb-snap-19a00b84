@@ -109,7 +109,9 @@ of replacing it. Replacing the order could drop the field that made it unique.
 
 ## Nullable fields
 
-Ordering by a nullable column loses the rows where it is `NULL`.
+Order fields may contain `NULL`. No comparison with `NULL` is ever true, so Flop
+adds `IS NULL` checks to the cursor conditions on the side where the rows with
+`NULL` are sorted.
 
 ```elixir
 %{first: 2, order_by: [:age, :id]}
@@ -119,20 +121,17 @@ Ordering by a nullable column loses the rows where it is `NULL`.
 |---|---|
 | 1 | Bo 1, Ada 3 |
 | 2 | Ada 5, Ada 7 |
-| 3 | — |
+| 3 | Cy, Dee |
 
-Cy and Dee never appear, and page 3 reports `has_next_page?: false`. PostgreSQL
-sorts them last, but the cursor comparison is `age > 7`, and no comparison with
-`NULL` is ever true. A second order field does not help, because the `NULL` is
-in the first one.
+PostgreSQL sorts `NULL` last in ascending order, so page 3 asks for the rows
+with `age > 7 OR age IS NULL`. A cursor that holds a `NULL` itself, such as the
+one pointing at Cy, asks for the rows with `age IS NULL` and a greater `id`.
 
-Until Flop builds null-aware predicates, order by a column that has no `NULL`,
-or sort on a computed field that substitutes a value, as in the [computed fields
-recipe](computed_and_embedded_fields.md):
-
-```sql
-SELECT coalesce(age, -1) AS age_sortable
-```
+The `:asc` and `:desc` directions put the `NULL` values where the database puts
+them by default: last in ascending order on PostgreSQL, first on MySQL and
+SQLite. Use `:asc_nulls_first`, `:asc_nulls_last`, `:desc_nulls_first` or
+`:desc_nulls_last` to choose the position yourself. The conditions only use an
+index well if the index sorts `NULL` in the same position.
 
 ## Reading the cursor value
 

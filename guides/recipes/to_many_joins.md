@@ -157,10 +157,11 @@ with 4, Bravo with 1 and Charlie with 1, and the total count is 3. `min` and
 
 Ordering by a to-many join field also breaks the cursors. Flop reads the cursor
 value by following `path` through the returned struct, and a `has_many` step is
-a list instead of a row, so the value is `nil`. Flop skips `nil` cursor fields
-and compares the remaining order fields, which skips rows. Ordering by
-`[:toy_name, :name]` with `first: 2`, the first page holds two of Alpha's four
-rows, and the next page starts after the name "Alpha".
+a list instead of a row, so the value is `nil`. Flop treats a `nil` cursor
+value as `NULL`, so the next page starts after a row without a toy, which skips
+rows. Ordering by `[:toy_name, :name]` with `first: 2`, the first page holds two
+of Alpha's four rows, and the next page starts after a `NULL` toy name and the
+name "Alpha".
 
 The aggregate above works with cursors, since it is one value per parent and
 part of the select clause.
