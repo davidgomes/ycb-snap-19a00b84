@@ -223,8 +223,10 @@ end
 **Default Oban options:**
 - `queue`: `:oban_events`
 - `max_attempts`: `3`
-- `priority`: `2` (0-3, lower is higher priority)
+- `priority`: `2` (0-9, lower is higher priority)
 - `tags`: `[]`
+
+Any other [`Oban.Job.new/2`](https://hexdocs.pm/oban/Oban.Job.html#new/2) option (e.g. `meta`) can also be set globally and applies to every handler job.
 
 ### Per-handler configuration
 
@@ -247,11 +249,13 @@ Override global options for specific handlers using tuple syntax:
 
 **Supported per-handler options:**
 
-Oban job options (under `:oban` key):
+Any [`Oban.Job.new/2`](https://hexdocs.pm/oban/Oban.Job.html#new/2) option can be passed under the `:oban` key. It is merged over the global options key by key, so e.g. a per-handler `tags` list replaces the global one. Common options:
 - `queue` - Override queue (atom)
 - `max_attempts` - Override retry count (integer)
-- `priority` - Override priority (0-3, lower is higher)
+- `priority` - Override priority (0-9, lower is higher)
 - `tags` - Override tags (list of strings)
+- `schedule_in` - Delay execution (seconds or `{n, :unit}` tuple)
+- `meta` - Additional job metadata (map)
 
 ## API
 

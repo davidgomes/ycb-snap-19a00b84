@@ -55,6 +55,21 @@ defmodule ObanEventsTest do
     }
   end
 
+  # Test module with Oban options beyond the defaults, set globally and per-handler
+  defmodule ExtraOptionsEventBus do
+    @moduledoc false
+    use ObanEvents,
+      oban: {Oban, tags: ["global"], meta: %{"source" => "global"}}
+
+    @events %{
+      extra_options_event: [
+        {TestHandler, oban: [meta: %{"source" => "handler"}]},
+        {TestHandler, oban: [tags: ["handler"]]},
+        TestHandler
+      ]
+    }
+  end
+
   describe "emit/2" do
     test "creates Oban jobs for registered event handlers" do
       event_data = %{
@@ -163,6 +178,26 @@ defmodule ObanEventsTest do
       assert job3.priority == 2
       assert job3.max_attempts == 3
       assert job3.tags == []
+    end
+
+    test "passes any Oban.Job option through, merging per-handler over global" do
+      assert {:ok, [job1, job2, job3]} =
+               ExtraOptionsEventBus.emit(:extra_options_event, %{"test" => "data"})
+
+      # Per-handler meta overrides global meta, global tags still apply
+      assert job1.meta == %{"source" => "handler"}
+      assert job1.tags == ["global"]
+
+      # Per-handler tags override global tags, global meta still applies
+      assert job2.meta == %{"source" => "global"}
+      assert job2.tags == ["handler"]
+
+      # Global options are merged over the defaults
+      assert job3.meta == %{"source" => "global"}
+      assert job3.tags == ["global"]
+      assert job3.queue == "oban_events"
+      assert job3.max_attempts == 3
+      assert job3.priority == 2
     end
   end
 end

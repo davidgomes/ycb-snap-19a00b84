@@ -21,9 +21,9 @@ defmodule ObanEvents.DispatchWorker do
 
   ## Configuration
 
-  Queue, max_attempts, and priority are configured per events module
-  when using `ObanEvents`. Jobs are created with these settings via
-  `new/2` options.
+  Job options (queue, max_attempts, priority, or any other `Oban.Job.new/2`
+  option) are configured per events module and per handler when using
+  `ObanEvents`. Jobs are created with these settings via `new/2` options.
 
   ## Observability
 
