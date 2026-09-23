@@ -157,6 +157,95 @@ defmodule HexpmWeb.Dashboard.OrganizationController.PolicyTest do
       assert Policies.get(org, "polone")
       refute Policies.get(org, "renamed")
     end
+
+    test "removes every override from a repository tab", %{user: user, organization: org} do
+      policy = policy_with_overrides(org, user)
+
+      conn = build_conn() |> test_login(user)
+
+      params = %{
+        "policy" => %{
+          "visibility" => "public",
+          "repositories" => repository_params(policy, "hexpm", %{"overrides_drop" => [""]})
+        }
+      }
+
+      conn = post(conn, "/dashboard/orgs/#{org.name}/policies/#{policy.name}", params)
+
+      assert redirected_to(conn) =~ "/dashboard/orgs/#{org.name}/policies/polone"
+
+      updated = Policies.get(org, "polone")
+      assert Enum.find(updated.repositories, &(&1.repository == "hexpm")).overrides == []
+
+      assert [%{package: "internal"}] =
+               Enum.find(updated.repositories, &(&1.repository == org.name)).overrides
+    end
+
+    test "removes a single override from a repository tab", %{user: user, organization: org} do
+      policy = policy_with_overrides(org, user)
+      hexpm = Enum.find(policy.repositories, &(&1.repository == "hexpm"))
+      [_badlib, phoenix] = hexpm.overrides
+
+      conn = build_conn() |> test_login(user)
+
+      overrides = %{
+        "1" => %{
+          "id" => phoenix.id,
+          "action" => "allow",
+          "package" => "phoenix",
+          "requirement" => ""
+        }
+      }
+
+      params = %{
+        "policy" => %{
+          "visibility" => "public",
+          "repositories" =>
+            repository_params(policy, "hexpm", %{
+              "overrides" => overrides,
+              "overrides_drop" => [""]
+            })
+        }
+      }
+
+      conn = post(conn, "/dashboard/orgs/#{org.name}/policies/#{policy.name}", params)
+
+      assert redirected_to(conn) =~ "/dashboard/orgs/#{org.name}/policies/polone"
+
+      updated = Policies.get(org, "polone")
+
+      assert [%{id: id, package: "phoenix"}] =
+               Enum.find(updated.repositories, &(&1.repository == "hexpm")).overrides
+
+      assert id == phoenix.id
+    end
+  end
+
+  defp policy_with_overrides(org, user) do
+    {:ok, %{policy: policy}} =
+      Policies.create(
+        org,
+        %{
+          "name" => "polone",
+          "visibility" => "public",
+          "repositories" => [
+            %{
+              "repository" => "hexpm",
+              "overrides" => [
+                %{"action" => "deny", "package" => "badlib"},
+                %{"action" => "allow", "package" => "phoenix"}
+              ]
+            },
+            %{
+              "repository" => org.name,
+              "overrides" => [%{"action" => "allow", "package" => "internal"}]
+            }
+          ]
+        },
+        audit: audit_data(user)
+      )
+
+    policy
   end
 
   # Builds the nested repositories params the edit form submits: every existing
@@ -257,6 +346,10 @@ defmodule HexpmWeb.Dashboard.OrganizationController.PolicyTest do
       assert [_ | _] = Floki.find(document, ~s(input[data-override-requirement]))
       assert [_ | _] = Floki.find(document, ~s([data-override-suggestions="package"]))
       assert [_ | _] = Floki.find(document, ~s([data-override-suggestions="version"]))
+
+      hidden_names = Floki.attribute(document, ~s(input[type="hidden"]), "name")
+      assert "policy[repositories][0][overrides_drop][]" in hidden_names
+      assert "policy[repositories][1][overrides_drop][]" in hidden_names
 
       assert [card | _] = Floki.find(document, ~s([phx-hook="OverrideList"]))
       assert [package_url] = Floki.attribute(card, "data-package-suggestions-url")

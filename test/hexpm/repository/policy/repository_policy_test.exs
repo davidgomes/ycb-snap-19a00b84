@@ -1,7 +1,7 @@
 defmodule Hexpm.Repository.Policy.RepositoryPolicyTest do
   use Hexpm.DataCase, async: true
 
-  alias Hexpm.Repository.Policy.RepositoryPolicy
+  alias Hexpm.Repository.Policy.{Override, RepositoryPolicy}
 
   defp changeset(attrs) do
     RepositoryPolicy.changeset(%RepositoryPolicy{}, attrs)
@@ -69,5 +69,48 @@ defmodule Hexpm.Repository.Policy.RepositoryPolicyTest do
 
     assert cs1.valid?
     assert cs2.valid?
+  end
+
+  describe "removing overrides" do
+    setup do
+      tab = %RepositoryPolicy{
+        repository: "hexpm",
+        overrides: [
+          %Override{id: Ecto.UUID.generate(), action: :deny, package: "badlib"},
+          %Override{id: Ecto.UUID.generate(), action: :allow, package: "phoenix"}
+        ]
+      }
+
+      %{tab: tab}
+    end
+
+    test "a drop param without overrides clears every override", %{tab: tab} do
+      cs = RepositoryPolicy.changeset(tab, %{"overrides_drop" => [""]})
+
+      assert cs.valid?
+      assert Ecto.Changeset.apply_changes(cs).overrides == []
+    end
+
+    test "keeps only the submitted overrides", %{tab: tab} do
+      [_badlib, phoenix] = tab.overrides
+
+      cs =
+        RepositoryPolicy.changeset(tab, %{
+          "overrides" => %{
+            "1" => %{"id" => phoenix.id, "action" => "allow", "package" => "phoenix"}
+          },
+          "overrides_drop" => [""]
+        })
+
+      assert cs.valid?
+      assert [%Override{package: "phoenix"}] = Ecto.Changeset.apply_changes(cs).overrides
+    end
+
+    test "leaves overrides untouched when neither param is submitted", %{tab: tab} do
+      cs = RepositoryPolicy.changeset(tab, %{"cooldown" => "7d"})
+
+      assert cs.valid?
+      assert length(Ecto.Changeset.apply_changes(cs).overrides) == 2
+    end
   end
 end

@@ -662,6 +662,7 @@ defmodule HexpmWeb.Dashboard.Policy.Components.PolicyEdit do
       assigns
       |> assign(:overrides, Form.input_value(assigns.form, :overrides) || [])
       |> assign(:override_name, Form.input_name(assigns.form, :overrides))
+      |> assign(:override_drop_name, Form.input_name(assigns.form, :overrides_drop) <> "[]")
       |> assign(:override_id, Form.input_id(assigns.form, :overrides))
 
     assigns =
@@ -712,6 +713,9 @@ defmodule HexpmWeb.Dashboard.Policy.Components.PolicyEdit do
             with no version lets every release through with no cooldown, advisory, or retirement checks. Add a version requirement to limit it. Each package can be listed once.
           </span>
         </div>
+
+        <%!-- Always submitted so removing every row still clears the overrides. --%>
+        <input type="hidden" name={@override_drop_name} />
 
         <div data-override-rows class="space-y-2">
           <%= inputs_for @form, :overrides, fn of -> %>
