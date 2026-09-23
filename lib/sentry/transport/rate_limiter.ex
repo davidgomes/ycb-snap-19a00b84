@@ -25,6 +25,13 @@ defmodule Sentry.Transport.RateLimiter do
 
   @default_sweep_interval_ms 60_000
 
+  # Logs and metrics are also rate limited by their size, through a separate
+  # "byte" data category. A limit on the byte category stops the items as well.
+  @byte_categories %{
+    "log_item" => "log_byte",
+    "trace_metric" => "trace_metric_byte"
+  }
+
   defstruct [:table_name]
 
   ## Public API
@@ -71,8 +78,9 @@ defmodule Sentry.Transport.RateLimiter do
   @doc """
   Checks if the given category is currently rate-limited.
 
-  Returns `true` if the category is rate-limited (either specifically or via
-  a global rate limit), `false` otherwise.
+  Returns `true` if the category is rate-limited (either specifically, via
+  a global rate limit, or via the byte category associated with it, such as
+  `log_byte` for `log_item`), `false` otherwise.
 
   ## Examples
 
@@ -83,11 +91,17 @@ defmodule Sentry.Transport.RateLimiter do
       iex> RateLimiter.rate_limited?("error")
       true
 
+      iex> :ets.insert(RateLimiter, {"log_byte", System.system_time(:second) + 60})
+      iex> RateLimiter.rate_limited?("log_item")
+      true
+
   """
   @spec rate_limited?(String.t()) :: boolean()
   def rate_limited?(category) when is_binary(category) do
     now = System.system_time(:second)
-    rate_limited?(category, now) or rate_limited?(:global, now)
+
+    rate_limited?(category, now) or rate_limited?(:global, now) or
+      byte_category_rate_limited?(category, now)
   end
 
   @doc """
@@ -141,6 +155,13 @@ defmodule Sentry.Transport.RateLimiter do
     case :ets.lookup(name(), category) do
       [{^category, expiry}] when expiry > now -> true
       _other -> false
+    end
+  end
+
+  defp byte_category_rate_limited?(category, now) do
+    case Map.fetch(@byte_categories, category) do
+      {:ok, byte_category} -> rate_limited?(byte_category, now)
+      :error -> false
     end
   end
 

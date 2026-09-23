@@ -534,9 +534,10 @@ defmodule Sentry.Telemetry.Scheduler do
       items == [] ->
         :ok
 
-      # Transactions carry spans, so pass the actual structs through the
-      # list-based recorder to also record the discarded "span" outcomes.
-      category == :transaction ->
+      # Transactions carry spans, and logs and metrics are also reported by
+      # size, so pass the actual structs through the list-based recorder to
+      # also record the discarded "span" and "*_byte" outcomes.
+      category in [:transaction, :log, :metric] ->
         ClientReport.Sender.record_discarded_events(:ratelimit_backoff, items)
 
       true ->

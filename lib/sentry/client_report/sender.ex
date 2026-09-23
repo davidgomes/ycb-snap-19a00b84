@@ -6,7 +6,17 @@ defmodule Sentry.ClientReport.Sender do
 
   use GenServer
 
-  alias Sentry.{Client, ClientReport, Config, Envelope, Transaction}
+  alias Sentry.{
+    Client,
+    ClientReport,
+    Config,
+    Envelope,
+    LogBatch,
+    LogEvent,
+    Metric,
+    MetricBatch,
+    Transaction
+  }
 
   @send_interval 30_000
 
@@ -39,6 +49,10 @@ defmodule Sentry.ClientReport.Sender do
                | Sentry.CheckIn.t()
                | ClientReport.t()
                | Sentry.Event.t()
+               | LogBatch.t()
+               | LogEvent.t()
+               | Metric.t()
+               | MetricBatch.t()
                | Sentry.Transaction.t()
   def record_discarded_events(reason, event_items, genserver)
       when is_list(event_items) do
@@ -46,7 +60,7 @@ defmodule Sentry.ClientReport.Sender do
     # https://develop.sentry.dev/sdk/client-reports/
     if Enum.member?(@client_report_reasons, reason) do
       Enum.each(event_items, fn item ->
-        for {category, quantity} <- data_categories(item) do
+        for {category, quantity} <- data_categories(item), quantity > 0 do
           GenServer.cast(genserver, {:record_discarded_events, reason, category, quantity})
         end
       end)
@@ -65,8 +79,38 @@ defmodule Sentry.ClientReport.Sender do
     [{Envelope.get_data_category(transaction), 1}, {"span", span_count}]
   end
 
+  # A dropped log or metric must also record its size in bytes, under a separate
+  # "byte" category, alongside the count of dropped items.
+  # https://develop.sentry.dev/sdk/telemetry/client-reports/#log-byte-outcomes
+  # https://develop.sentry.dev/sdk/telemetry/client-reports/#metric-byte-outcomes
+  defp data_categories(%LogBatch{log_events: log_events} = log_batch) do
+    [
+      {Envelope.get_data_category(log_batch), length(log_events)},
+      {"log_byte", serialized_size(log_events)}
+    ]
+  end
+
+  defp data_categories(%MetricBatch{metrics: metrics} = metric_batch) do
+    [
+      {Envelope.get_data_category(metric_batch), length(metrics)},
+      {"trace_metric_byte", serialized_size(metrics)}
+    ]
+  end
+
+  defp data_categories(%LogEvent{} = log_event) do
+    data_categories(%LogBatch{log_events: [log_event]})
+  end
+
+  defp data_categories(%Metric{} = metric) do
+    data_categories(%MetricBatch{metrics: [metric]})
+  end
+
   defp data_categories(item) do
     [{Envelope.get_data_category(item), 1}]
+  end
+
+  defp serialized_size(items) do
+    Enum.reduce(items, 0, &(Envelope.serialized_size(&1) + &2))
   end
 
   ## Callbacks
