@@ -117,6 +117,11 @@ defmodule PetalComponents.DataTableTest do
     refute html =~ ~s(popover="auto")
     assert html =~ "&quot;attr&quot;:&quot;phx-click-away&quot;"
     assert html =~ "&quot;closest&quot;:&quot;.pc-popover&quot;"
+    # Escape closes through the same command (a window binding - the
+    # wrapper is never the key target)
+    assert html =~
+             ~s(phx-window-keydown="[[&quot;exec&quot;,{&quot;attr&quot;:&quot;phx-click-away&quot;}]]")
+
     refute html =~ "data-nav-template"
     refute html =~ "data-filters="
   end
@@ -343,6 +348,9 @@ defmodule PetalComponents.DataTableTest do
     refute html =~ "amy@x.com"
     assert html =~ ~s(phx-value-op="toggle_column")
     assert html =~ ~s(phx-value-field="email")
+    # an in-page menu: no top-layer popover, Escape closes it
+    refute html =~ ~s(popover="auto")
+    assert html =~ "phx-window-keydown"
     # the last visible column's checkbox is disabled - a table needs one
     assert Regex.match?(~r/<input[^>]*checked[^>]*disabled[^>]*phx-value-field="name"/, html) or
              Regex.match?(~r/<input[^>]*disabled[^>]*phx-value-field="name"/, html)

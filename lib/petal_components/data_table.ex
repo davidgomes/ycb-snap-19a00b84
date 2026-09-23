@@ -334,6 +334,7 @@ defmodule PetalComponents.DataTable do
             id={"#{@id}-columns"}
             placement="bottom-end"
             class="pc-data-table__columns"
+            phx-window-keydown={close_on_escape()}
             trigger_class="pc-button pc-button--sm pc-button--gray-outline"
           >
             <:trigger>
@@ -735,6 +736,7 @@ defmodule PetalComponents.DataTable do
         id={@pop_id}
         placement="bottom-start"
         class="pc-data-table__filter-popover"
+        phx-window-keydown={close_on_escape()}
         trigger_class={[
           "pc-button pc-button--sm",
           (@filter && "pc-button--primary-soft pc-data-table__filter-trigger--active") ||
@@ -905,6 +907,13 @@ defmodule PetalComponents.DataTable do
 
     JS.exec(push, "phx-click-away", to: {:closest, ".pc-popover"})
   end
+
+  # the popover's own Escape binding is a phx-keydown on its wrapper,
+  # which LiveView only fires when the wrapper itself is the key target -
+  # never, since focus sits on the trigger or an editor field. The
+  # window binding runs the same close (the wrapper's phx-key="Escape"
+  # filters it); hiding an already-hidden panel is a no-op.
+  defp close_on_escape, do: JS.exec("phx-click-away")
 
   defp normalize_options(options) do
     Enum.map(options, fn

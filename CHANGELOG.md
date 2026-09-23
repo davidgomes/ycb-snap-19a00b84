@@ -15,7 +15,8 @@
   screen edge can't open its editor off-screen. Apply closes the
   editor through the popover's own close command in both wiring modes
   (patch-safe: LiveView's sticky display state flips with it), so
-  event-mode filters no longer mount the `PetalDataTable` hook.
+  event-mode filters no longer mount the `PetalDataTable` hook, and
+  Escape closes the menus through the same command.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to
