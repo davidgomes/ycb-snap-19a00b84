@@ -3,7 +3,6 @@ defmodule Tidewave.MCP.Server do
 
   require Logger
 
-  import Plug.Conn
   alias Tidewave.MCP.Tools
 
   @protocol_version "2025-03-26"
@@ -241,7 +240,7 @@ defmodule Tidewave.MCP.Server do
   end
 
   # Built-in message routing
-  defp handle_message(
+  defp route_message(
          %{"method" => "notifications/initialized"},
          _assigns,
          _include_browser_tools?
@@ -250,7 +249,7 @@ defmodule Tidewave.MCP.Server do
     {:ok, nil}
   end
 
-  defp handle_message(
+  defp route_message(
          %{"method" => "notifications/" <> _ = method},
          _assigns,
          _include_browser_tools?
@@ -259,7 +258,7 @@ defmodule Tidewave.MCP.Server do
     {:ok, nil}
   end
 
-  defp handle_message(
+  defp route_message(
          %{"method" => method, "id" => id} = message,
          assigns,
          include_browser_tools?
@@ -315,7 +314,7 @@ defmodule Tidewave.MCP.Server do
     end
   end
 
-  ## HTTP transport functions
+  ## JSON-RPC message handling
 
   defp validate_jsonrpc_message(%{"jsonrpc" => "2.0"} = message) do
     cond do
@@ -341,57 +340,35 @@ defmodule Tidewave.MCP.Server do
 
   defp validate_jsonrpc_message(_), do: {:error, :invalid_jsonrpc}
 
-  defp send_json(conn, data) do
-    conn
-    |> put_resp_content_type("application/json")
-    |> send_resp(conn.status || 200, Jason.encode!(data))
-  end
+  # Handles a decoded JSON-RPC message, returning either
+  #
+  #   * `{:ok, nil}` if there is nothing to reply (e.g. notifications)
+  #   * `{:ok, response}` with a JSON-RPC result response
+  #   * `{:error, response}` with a JSON-RPC error response
+  #   * `{:error, :invalid_jsonrpc}` if the message is not valid JSON-RPC
+  #
+  @doc false
+  def handle_message(message, assigns, include_browser_tools?) do
+    Logger.debug("Received message: #{inspect(message, pretty: true)}")
 
-  defp send_jsonrpc_error(conn, id, code, message, data \\ nil) do
-    error = %{
-      code: code,
-      message: message
-    }
-
-    error = if data, do: Map.put(error, :data, data), else: error
-
-    response = %{
-      jsonrpc: "2.0",
-      id: id,
-      error: error
-    }
-
-    conn
-    |> put_resp_content_type("application/json")
-    |> send_resp(200, Jason.encode!(response))
-  end
-
-  def handle_http_message(conn) do
-    Logger.info("Received #{conn.method} message")
-    params = conn.body_params
-    conn = fetch_query_params(conn)
-    include_browser_tools? = conn.query_params["include_browser_tools"] != "false"
-    Logger.debug("Raw params: #{inspect(params, pretty: true)}")
-
-    case validate_jsonrpc_message(params) do
+    case validate_jsonrpc_message(message) do
       {:ok, message} ->
-        case handle_message(message, conn.private.tidewave_config, include_browser_tools?) do
+        case route_message(message, assigns, include_browser_tools?) do
           {:ok, nil} ->
-            # Notifications that don't return a response
-            conn |> put_status(202) |> send_json(%{status: "ok"})
+            {:ok, nil}
 
           {:ok, response} ->
-            Logger.debug("Sending HTTP response: #{inspect(response, pretty: true)}")
-            conn |> put_status(200) |> send_json(response)
+            Logger.debug("Sending response: #{inspect(response, pretty: true)}")
+            {:ok, response}
 
           {:error, error_response} ->
             Logger.warning("Error handling message: #{inspect(error_response)}")
-            conn |> put_status(400) |> send_json(error_response)
+            {:error, error_response}
         end
 
       {:error, :invalid_jsonrpc} ->
         Logger.warning("Invalid JSON-RPC message format")
-        send_jsonrpc_error(conn, nil, -32600, "Could not parse message")
+        {:error, :invalid_jsonrpc}
     end
   end
 end
