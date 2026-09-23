@@ -1,22 +1,48 @@
 defmodule GRPC.Client.LoadBalancing.RoundRobin do
   @behaviour GRPC.Client.LoadBalancing
 
+  @channels_key :channels
+
   @impl true
   def init(opts) do
-    addresses = Keyword.get(opts, :addresses, [])
+    case Keyword.get(opts, :channels, []) do
+      [] ->
+        {:error, :no_addresses}
 
-    if addresses == [] do
-      {:error, :no_addresses}
-    else
-      {:ok, %{addresses: addresses, index: 0, n: length(addresses)}}
+      channels ->
+        tid = :ets.new(:grpc_lb_round_robin, [:set, :public, read_concurrency: true])
+        counter = :atomics.new(1, signed: false)
+        :ets.insert(tid, {@channels_key, List.to_tuple(channels)})
+        {:ok, %{tid: tid, counter: counter}}
     end
   end
 
   @impl true
-  def pick(%{addresses: addresses, index: idx, n: n} = state) do
-    %{address: host, port: port} = Enum.fetch!(addresses, idx)
+  def pick(%{tid: tid, counter: counter} = state) do
+    case :ets.lookup(tid, @channels_key) do
+      [{@channels_key, channels}] when tuple_size(channels) > 0 ->
+        idx = :atomics.add_get(counter, 1, 1)
+        {:ok, elem(channels, Integer.mod(idx - 1, tuple_size(channels))), state}
 
-    new_state = %{state | index: rem(idx + 1, n)}
-    {:ok, {host, port}, new_state}
+      _ ->
+        {:error, :no_addresses}
+    end
+  rescue
+    ArgumentError -> {:error, :no_addresses}
+  end
+
+  @impl true
+  def update(%{tid: tid, counter: counter} = state, channels) do
+    :ets.insert(tid, {@channels_key, List.to_tuple(channels)})
+    :atomics.put(counter, 1, 0)
+    {:ok, state}
+  end
+
+  @impl true
+  def terminate(%{tid: tid}) do
+    :ets.delete(tid)
+    :ok
+  rescue
+    ArgumentError -> :ok
   end
 end
