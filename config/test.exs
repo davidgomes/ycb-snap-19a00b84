@@ -35,3 +35,7 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+# Manual mode keeps retry/cancel on the real engine so the jobs UI can be tested.
+# Inline mode short-circuits those operations.
+config :free_oban_ui, Oban, testing: :manual
