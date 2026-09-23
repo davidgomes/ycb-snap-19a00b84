@@ -102,7 +102,9 @@ defmodule Ecto.Integration.JsonTest do
             "comma,key" => "comma",
             "colon:key" => "colon",
             "slash/key" => "slash",
-            "bracket[key]" => "bracket"
+            "bracket[key]" => "bracket",
+            "FROM" => "from keyword",
+            "select" => "select keyword"
           }
         },
         time: ~N[2023-10-01 13:00:00]
@@ -126,6 +128,8 @@ defmodule Ecto.Integration.JsonTest do
                  edge_colon: json_extract_path(s.json, ["edge cases", "colon:key"]),
                  edge_slash: json_extract_path(s.json, ["edge cases", "slash/key"]),
                  edge_bracket: json_extract_path(s.json, ["edge cases", "bracket[key]"]),
+                 edge_from_keyword: json_extract_path(s.json, ["edge cases", "FROM"]),
+                 edge_select_keyword: s.json["edge cases"]["select"],
                  bracket_name: s.json["nested"]["name"]
                }
            ) == [
@@ -144,6 +148,8 @@ defmodule Ecto.Integration.JsonTest do
                edge_colon: "colon",
                edge_slash: "slash",
                edge_bracket: "bracket",
+               edge_from_keyword: "from keyword",
+               edge_select_keyword: "select keyword",
                bracket_name: "Test"
              }
            ]

@@ -74,6 +74,35 @@ defmodule Ecto.Adapters.ClickHouse.MigrationTest do
     end
   end
 
+  defmodule QuotedCommentsAndDefaults do
+    use Ecto.Migration
+
+    def change do
+      create table(:quoted,
+               primary_key: false,
+               engine: "MergeTree",
+               options: [order_by: "tuple()"],
+               comment: ~S|table's \ "comment"|
+             ) do
+        add :id, :UInt8
+
+        add :created, :string,
+          default: ~S|created's \ "default"|,
+          comment: ~S|created's \ "comment"|
+
+        add :modified, :string
+      end
+
+      alter table(:quoted) do
+        add :added, :string, default: ~S|added's \ "default"|, comment: ~S|added's \ "comment"|
+
+        modify :modified, :string,
+          default: ~S|modified's \ "default"|,
+          comment: ~S|modified's \ "comment"|
+      end
+    end
+  end
+
   test "events (table+index)" do
     database = "ecto_ch_migration_test_events"
     opts = [database: database]
@@ -203,5 +232,54 @@ defmodule Ecto.Adapters.ClickHouse.MigrationTest do
              Ch.query!(conn, "INSERT INTO products (name) VALUES ('book')")
 
     assert [[1]] == Ch.query!(conn, "SELECT price FROM products").rows
+  end
+
+  test "comments and string defaults with quotes and backslashes" do
+    database = "ecto_ch_migration_test_quoting"
+    opts = [database: database]
+
+    assert :ok = ClickHouse.storage_up(opts)
+    on_exit(fn -> ClickHouse.storage_down(opts) end)
+
+    Application.put_env(:migration_test, MigrationRepo,
+      database: database,
+      show_sensitive_data_on_connection_error: true
+    )
+
+    on_exit(fn -> Application.delete_env(:migration_test, MigrationRepo) end)
+
+    start_supervised!(MigrationRepo)
+
+    assert [1] ==
+             Ecto.Migrator.run(MigrationRepo, [{1, QuotedCommentsAndDefaults}], :up,
+               all: true,
+               log: false
+             )
+
+    conn = start_supervised!({Ch, opts})
+    params = %{"database" => database, "table" => "quoted"}
+
+    assert Ch.query!(
+             conn,
+             "SELECT comment FROM system.tables WHERE database = {database:String} AND name = {table:String}",
+             params
+           ).rows == [[~S|table's \ "comment"|]]
+
+    assert Ch.query!(
+             conn,
+             "SELECT name, comment FROM system.columns WHERE database = {database:String} AND table = {table:String} ORDER BY position",
+             params
+           ).rows == [
+             ["id", ""],
+             ["created", ~S|created's \ "comment"|],
+             ["modified", ~S|modified's \ "comment"|],
+             ["added", ~S|added's \ "comment"|]
+           ]
+
+    assert %{num_rows: 1} = Ch.query!(conn, "INSERT INTO quoted (id) VALUES (1)")
+
+    assert Ch.query!(conn, "SELECT created, modified, added FROM quoted").rows == [
+             [~S|created's \ "default"|, ~S|modified's \ "default"|, ~S|added's \ "default"|]
+           ]
   end
 end
