@@ -127,6 +127,37 @@ defmodule ObanChore do
     |> Enum.map(fn job -> %{job | state: String.to_existing_atom(job.state)} end)
   end
 
+  @doc """
+  Lists the past (retryable, completed, discarded, cancelled) jobs for a given worker module,
+  most recent first.
+
+  Only jobs still present in the `oban_jobs` table are returned, so how far back the history
+  goes depends on your `Oban.Plugins.Pruner` configuration.
+
+  Returns a list of `%Oban.Job{}` structs with the state converted to an atom.
+
+  ## Options
+
+    * `:limit` - The maximum number of jobs to return. Defaults to `20`.
+    * `:offset` - The number of jobs to skip, for pagination. Defaults to `0`.
+    * `:oban_name` - The name of the Oban instance to query. Defaults to `Oban`.
+  """
+  def list_job_history(worker_module, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 20)
+    offset = Keyword.get(opts, :offset, 0)
+    config = Oban.config(Keyword.get(opts, :oban_name, Oban))
+    repo = config.repo
+
+    Oban.Job
+    |> where([j], j.state in ~w(retryable completed discarded cancelled))
+    |> where([j], j.worker == ^normalize_worker(worker_module))
+    |> order_by([j], desc: j.id)
+    |> limit(^limit)
+    |> offset(^offset)
+    |> repo.all()
+    |> Enum.map(fn job -> %{job | state: String.to_existing_atom(job.state)} end)
+  end
+
   @doc false
   def pubsub_server do
     Application.fetch_env!(:oban_chore, :pubsub_server)
