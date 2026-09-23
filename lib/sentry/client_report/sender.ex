@@ -100,8 +100,8 @@ defmodule Sentry.ClientReport.Sender do
   end
 
   defp count_and_byte_outcomes(count_category, byte_category, items) do
-    byte_size = items |> Enum.map(&Envelope.item_byte_size/1) |> Enum.sum()
-    [{count_category, length(items)}, {byte_category, byte_size}]
+    bytes = items |> Enum.map(&Envelope.item_byte_size/1) |> Enum.sum()
+    [{count_category, length(items)}, {byte_category, bytes}]
   end
 
   ## Callbacks
