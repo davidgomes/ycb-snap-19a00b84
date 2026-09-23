@@ -21,7 +21,7 @@ defmodule ErrorTracker.Web.CoreComponents do
     <.link
       class={[
         "phx-submit-loading:opacity-75 py-[11.5px]",
-        "text-sm font-semibold text-sky-500 hover:text-white/80",
+        "text-sm font-semibold text-sky-600 hover:text-sky-800 dark:text-sky-500 dark:hover:text-white/80",
         @class
       ]}
       {@rest}
@@ -63,14 +63,29 @@ defmodule ErrorTracker.Web.CoreComponents do
   def badge(assigns) do
     color_class =
       case assigns.color do
-        :blue -> "bg-blue-900 text-blue-300"
-        :gray -> "bg-gray-700 text-gray-300"
-        :red -> "bg-red-400/10 text-red-300 ring-red-400/20"
-        :green -> "bg-emerald-400/10 text-emerald-300 ring-emerald-400/20"
-        :yellow -> "bg-yellow-900 text-yellow-300"
-        :indigo -> "bg-indigo-900 text-indigo-300"
-        :purple -> "bg-purple-900 text-purple-300"
-        :pink -> "bg-pink-900 text-pink-300"
+        :blue ->
+          "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300"
+
+        :gray ->
+          "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+
+        :red ->
+          "bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-400/10 dark:text-red-300 dark:ring-red-400/20"
+
+        :green ->
+          "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-400/10 dark:text-emerald-300 dark:ring-emerald-400/20"
+
+        :yellow ->
+          "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300"
+
+        :indigo ->
+          "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300"
+
+        :purple ->
+          "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
+
+        :pink ->
+          "bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300"
       end
 
     assigns = Map.put(assigns, :color_class, color_class)
@@ -95,14 +110,14 @@ defmodule ErrorTracker.Web.CoreComponents do
     <div class="mt-10 w-full flex">
       <button
         :if={@page > 1}
-        class="flex items-center justify-center px-4 h-10 text-base font-medium text-gray-400  bg-gray-900 border border-gray-400 rounded-lg hover:bg-gray-800 hover:text-white"
+        class="flex items-center justify-center px-4 h-10 text-base font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:bg-gray-900 dark:border-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
         phx-click={@event_previous}
       >
         Previous page
       </button>
       <button
         :if={@page < @total_pages}
-        class="flex items-center justify-center px-4 h-10 text-base font-medium text-gray-400 bg-gray-900 border border-gray-400 rounded-lg hover:bg-gray-800 hover:text-white"
+        class="flex items-center justify-center px-4 h-10 text-base font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:bg-gray-900 dark:border-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
         phx-click={@event_next}
       >
         Next page
@@ -122,7 +137,10 @@ defmodule ErrorTracker.Web.CoreComponents do
     <div>
       <h2
         :if={assigns[:title]}
-        class={["text-sm font-semibold mb-2 uppercase text-gray-400", @title_class]}
+        class={[
+          "text-sm font-semibold mb-2 uppercase text-gray-500 dark:text-gray-400",
+          @title_class
+        ]}
       >
         {@title}
       </h2>
@@ -131,7 +149,7 @@ defmodule ErrorTracker.Web.CoreComponents do
     """
   end
 
-  attr :name, :string, values: ~w[bell bell-slash arrow-left arrow-right]
+  attr :name, :string, values: ~w[bell bell-slash arrow-left arrow-right sun moon]
 
   def icon(%{name: "bell"} = assigns) do
     ~H"""
@@ -198,6 +216,32 @@ defmodule ErrorTracker.Web.CoreComponents do
         d="M2 8a.75.75 0 0 1 .75-.75h8.69L8.22 4.03a.75.75 0 0 1 1.06-1.06l4.5 4.5a.75.75 0 0 1 0 1.06l-4.5 4.5a.75.75 0 0 1-1.06-1.06l3.22-3.22H2.75A.75.75 0 0 1 2 8Z"
         clip-rule="evenodd"
       />
+    </svg>
+    """
+  end
+
+  def icon(%{name: "sun"} = assigns) do
+    ~H"""
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      class="!h-4 !w-4 inline-block"
+    >
+      <path d="M8 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 8 1ZM10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0ZM12.95 4.11a.75.75 0 1 0-1.06-1.06l-1.062 1.06a.75.75 0 0 0 1.061 1.062l1.06-1.061ZM15 8a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 15 8ZM11.89 12.95a.75.75 0 0 0 1.06-1.06l-1.06-1.062a.75.75 0 0 0-1.062 1.061l1.061 1.06ZM8 12a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 8 12ZM5.172 11.89a.75.75 0 0 0-1.061-1.062L3.05 11.89a.75.75 0 1 0 1.06 1.06l1.06-1.06ZM4 8a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1 0-1.5h1.5A.75.75 0 0 1 4 8ZM4.11 5.172A.75.75 0 0 0 5.173 4.11L4.11 3.05a.75.75 0 1 0-1.06 1.06l1.06 1.06Z" />
+    </svg>
+    """
+  end
+
+  def icon(%{name: "moon"} = assigns) do
+    ~H"""
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      class="!h-4 !w-4 inline-block"
+    >
+      <path d="M14.438 10.148c.19-.425-.321-.787-.748-.601A5.5 5.5 0 0 1 6.453 2.31c.186-.427-.176-.938-.6-.748a6.501 6.501 0 1 0 8.585 8.586Z" />
     </svg>
     """
   end
