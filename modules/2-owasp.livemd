@@ -26,9 +26,9 @@ The [Open Web Application Security Project (OWASP)](https://owasp.org/) is a non
 
 They are an open community dedicated to enabling organizations to conceive, develop, acquire, operate, and maintain applications that can be trusted. All of their projects, tools, documents, forums, and chapters are free and open to anyone interested in improving application security.
 
-Having been in the Application Security space since 2001, they are somewhat of the defacto standard when it comes to best practices. It is _highly_ encouraged to give their site a visit and look around at available materials!
+Having been in the Application Security space since 2001, they are somewhat of the de facto standard when it comes to best practices. It is _highly_ encouraged to give their site a visit and look around at available materials!
 
-## Tables of Contents
+## Table of Contents
 
 * [Glossary](#glossary)
 * [OWASP Top 10](#owasp-top-10)
@@ -101,7 +101,7 @@ Notable CWEs included are CWE-259: Use of Hard-coded Password, CWE-327: Broken o
 
 **Which of the following functions is performing password comparisons in the most secure way?**
 
-_Please uncomment the function call that you believe is correct._
+_Run the cell below to define the two options, then uncomment the function call that you believe is correct in the graded cell that follows and run it to check your answer._
 
 ```elixir
 defmodule PasswordCompare do
@@ -119,11 +119,23 @@ defmodule PasswordCompare do
     end
   end
 end
+```
 
-# DO NOT CHANGE CODE ABOVE THIS LINE =========================
+<!-- livebook:{"attrs":"eyJtb2R1bGVfaWQiOiJPV0FTUCIsInF1ZXN0aW9uX2lkIjoxLCJzb3VyY2UiOiIjIFVuY29tbWVudCB0aGUgZnVuY3Rpb24gY2FsbCB0aGF0IHlvdSBiZWxpZXZlIGlzIGNvcnJlY3Q6XG5cbiMgUGFzc3dvcmRDb21wYXJlLm9wdGlvbl9vbmUoXCJ1c2Vyc19wYXNzd29yZFwiLCBtZDVfaGFzaClcbiMgUGFzc3dvcmRDb21wYXJlLm9wdGlvbl90d28oXCJ1c2Vyc19wYXNzd29yZFwiLCBiY3J5cHRfc2FsdGVkX2hhc2gpIn0=","chunks":null,"kind":"Elixir.GradingClient.GradedCell","livebook_object":"smart_cell"} -->
 
-# PasswordCompare.option_one("users_password", md5_hash)
-# PasswordCompare.option_two("users_password", bcrypt_salted_hash)
+```elixir
+result = nil
+
+case GradingClient.check_answer(result, OWASP, 1) do
+  :correct ->
+    IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
+
+  {:incorrect, help_text} when is_binary(help_text) ->
+    IO.puts([IO.ANSI.red(), "Incorrect: ", IO.ANSI.reset(), help_text])
+
+  _ ->
+    IO.puts([IO.ANSI.red(), "Incorrect.", IO.ANSI.reset()])
+end
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -246,17 +258,25 @@ Notable CWE included is CWE-1104: Use of Unmaintained Third-Party Components
 
 **Which of the outdated components currently installed is vulnerable?**
 
-_Please change the atom below to the name of the vulnerable package installed in this Livebook AND update the afflicted package._
+_Please change the atom in the graded cell below to the name of the vulnerable package installed in this Livebook and run it to check your answer. Once you've found it, update the afflicted package to its latest version in the setup cell at the top._
 
-_HINT: Installed dependencies can be found at the very top, it was the very first cell you ran._
+_HINT: Installed dependencies can be found at the very top, it was the very first cell you ran. You can check the version of any installed package with `Application.spec(:package_name, :vsn)`._
+
+<!-- livebook:{"attrs":"eyJtb2R1bGVfaWQiOiJPV0FTUCIsInF1ZXN0aW9uX2lkIjoyLCJzb3VyY2UiOiIjIENIQU5HRSBNRVxudnVsbmVyYWJsZV9kZXBlbmRlbmN5ID0gOnZ1bG5lcmFibGVfZGVwZW5kZW5jeSJ9","chunks":null,"kind":"Elixir.GradingClient.GradedCell","livebook_object":"smart_cell"} -->
 
 ```elixir
-# CHANGE ME
-vulnerable_dependency = :vulnerable_dependency
+result = vulnerable_dependency = :vulnerable_dependency
 
-# DO NOT CHANGE CODE BELOW THIS LINE ============================
-Application.spec(vulnerable_dependency)[:vsn] |> List.to_string() |> IO.puts()
-IO.puts(vulnerable_dependency)
+case GradingClient.check_answer(result, OWASP, 2) do
+  :correct ->
+    IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
+
+  {:incorrect, help_text} when is_binary(help_text) ->
+    IO.puts([IO.ANSI.red(), "Incorrect: ", IO.ANSI.reset(), help_text])
+
+  _ ->
+    IO.puts([IO.ANSI.red(), "Incorrect.", IO.ANSI.reset()])
+end
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -325,7 +345,7 @@ Notable CWEs include CWE-829: Inclusion of Functionality from Untrusted Control 
 
 This category is to help detect, escalate, and respond to active breaches. Without logging and monitoring, breaches cannot be detected. You are also vulnerable to information leakage by making logging and alerting events visible to a user or an attacker.
 
-Notable CWES include CWE-778 Insufficient Logging to include CWE-117 Improper Output Neutralization for Logs, CWE-223 Omission of Security-relevant Information, and CWE-532 Insertion of Sensitive Information into Log File.
+Notable CWEs include CWE-778 Insufficient Logging, CWE-117 Improper Output Neutralization for Logs, CWE-223 Omission of Security-relevant Information, and CWE-532 Insertion of Sensitive Information into Log File.
 
 ### Prevention
 
