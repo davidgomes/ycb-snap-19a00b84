@@ -4,10 +4,15 @@
   * Enhancements
     * added support for authorization LiveView
     * added `:error_handler` and ErrorHandler behaviour
-    * aded  `:required` option
+    * added `:required` option, default true
+    * plugs and LiveView hooks share resource naming, `:required`, and not-found handling
 
   * Dependency changes
     * Elixir ~> 1.14 is now required
+
+  * Deprecations
+    * The `:non_id_actions` option is deprecated and will be removed in Canary 2.1.0. Use a separate `:authorize_resource` plug for non-id actions and `:except` to skip them on load.
+    * The `:persisted` option is deprecated and will be removed in Canary 2.1.0. Use `:required` instead.
 
 
 ## v1.2.0

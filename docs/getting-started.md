@@ -144,7 +144,7 @@ Canary Plugs and Hooks uses the same configuration options.
 | `:as` | Specifies the resource_name key in assigns | `:team_post` |
 | `:id_name` | Specifies the name of the id in params, defaults to "id" | `:post_id` |
 | `:id_field` | Specifies the name of the ID field in the database for searching :id_name value, defaults to "id". | `:post_id` |
-| `:required` | Specifies if the resource is required, when it's not found it will handle not found error, default to false | true |
+| `:required` | Specifies if the resource is required, when it's not found it will handle not found error, default to true | true |
 | `:persisted` | Specifies the resource should always be loaded from the database, defaults to false **Available only in Canary.Plugs** | true |
 | `:not_found_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_not_found}` |
 | `:unauthorized_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_unauthorized}` |
@@ -242,7 +242,7 @@ It combines two other functions - `load_resource` and `authorize_resource`.
 
 ## Non-id actions
 
-For the non-id actions where there is no resource to be loaded please use `:authorize_resource` and limit other functions `:load_resource` or `:load_and_authorize_resource` to skip those actions. By default `:required` option is set to false, so when resouce cannot be get from repo the model module name will be used as resource for the call to `Canada.can?`.
+For the non-id actions where there is no resource to be loaded please use `:authorize_resource` and limit other functions `:load_resource` or `:load_and_authorize_resource` to skip those actions. By default `:required` is true. Set `:required` to false when the resource cannot be loaded from the repo and the model module name should be passed to `Canada.can?`.
 
 ```elixir
 plug :authorize_resource,
