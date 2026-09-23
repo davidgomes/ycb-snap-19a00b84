@@ -388,7 +388,7 @@ defmodule Flop.SchemaTest do
              )
   end
 
-  test "raises error if custom field is added to sortable list" do
+  test "raises error if a sortable custom field has no field_dynamic" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Parsley do
@@ -407,6 +407,34 @@ defmodule Flop.SchemaTest do
         end
       end
 
-    assert error.message =~ "cannot sort by custom field"
+    assert error.message =~ "field_dynamic"
+    assert error.message =~ "inserted_at"
+  end
+
+  test "allows a custom field in the sortable list when field_dynamic is set" do
+    defmodule Sage do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [
+            filter: {__MODULE__, :some_function, []},
+            field_dynamic: {__MODULE__, :inserted_at_dynamic, []},
+            ecto_type: :utc_datetime
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    sage = struct(Sage)
+    assert Schema.sortable(sage) == [:inserted_at]
+
+    info = Schema.field_info(sage, :inserted_at)
+
+    assert info.extra.type == :custom
+    assert info.extra.field_dynamic == {Sage, :inserted_at_dynamic, []}
+    assert info.extra.path == [:inserted_at]
   end
 end

@@ -21,6 +21,41 @@ defmodule Flop.Adapters.Ecto.FlopTest do
   alias MyApp.Owner
   alias MyApp.Pet
 
+  defmodule AgeOrderedPet do
+    @moduledoc false
+    use Ecto.Schema
+    import Ecto.Query
+
+    @derive {
+      Flop.Schema,
+      filterable: [],
+      sortable: [:human_age, :id],
+      adapter_opts: [
+        custom_fields: [
+          human_age: [
+            filter: {__MODULE__, :filter, []},
+            field_dynamic: {__MODULE__, :human_age, [factor: 7]},
+            ecto_type: :integer
+          ]
+        ]
+      ]
+    }
+
+    @primary_key {:id, :id, autogenerate: true}
+    schema "pets" do
+      field :age, :integer
+      field :human_age, :integer, virtual: true
+    end
+
+    def filter(query, _filter, _opts), do: query
+
+    def human_age(opts) do
+      send(self(), {:order_opts, opts})
+      factor = Keyword.fetch!(opts, :factor)
+      dynamic([p], fragment("? * ?", p.age, ^factor))
+    end
+  end
+
   @pet_count_range 1..200
 
   defmodule TestProvider do
@@ -168,6 +203,42 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                %Flop{order_by: [:pet_count], order_directions: [:desc]},
                for: Owner
              ) == Enum.reverse(expected)
+    end
+
+    test "orders by custom fields" do
+      pets = insert_list(20, :pet)
+
+      expected = Enum.sort_by(pets, &{&1.age * 7, &1.id})
+
+      assert Flop.all(
+               AgeOrderedPet,
+               %Flop{order_by: [:human_age, :id]},
+               for: AgeOrderedPet
+             )
+             |> Enum.map(& &1.id) == Enum.map(expected, & &1.id)
+
+      assert Flop.all(
+               AgeOrderedPet,
+               %Flop{
+                 order_by: [:human_age, :id],
+                 order_directions: [:desc, :desc]
+               },
+               for: AgeOrderedPet
+             )
+             |> Enum.map(& &1.id) == expected |> Enum.reverse() |> Enum.map(& &1.id)
+    end
+
+    test "passes extra options to a custom field order function" do
+      insert(:pet, age: 2)
+
+      Flop.all(AgeOrderedPet, %Flop{order_by: [:human_age]},
+        for: AgeOrderedPet,
+        extra_opts: [timezone: "Europe/Berlin"]
+      )
+
+      assert_received {:order_opts, opts}
+      assert opts[:factor] == 7
+      assert opts[:timezone] == "Europe/Berlin"
     end
 
     test "warns if query passed to Flop already included ordering" do
@@ -1416,6 +1487,30 @@ defmodule Flop.Adapters.Ecto.FlopTest do
   end
 
   describe "cursor pagination" do
+    test "paginates by a custom field" do
+      insert(:pet, age: 1)
+      insert(:pet, age: 3)
+      insert(:pet, age: 2)
+
+      query =
+        from p in AgeOrderedPet,
+          select_merge: %{human_age: fragment("? * ?", p.age, 7)}
+
+      assert {:ok, {[%{human_age: 7}], %{end_cursor: cursor, has_next_page?: true}}} =
+               Flop.validate_and_run(
+                 query,
+                 %{first: 1, order_by: [:human_age, :id]},
+                 for: AgeOrderedPet
+               )
+
+      assert {:ok, {[%{human_age: 14}, %{human_age: 21}], %{has_next_page?: false}}} =
+               Flop.validate_and_run(
+                 query,
+                 %{first: 2, after: cursor, order_by: [:human_age, :id]},
+                 for: AgeOrderedPet
+               )
+    end
+
     property "querying cursor by cursor forward includes all items in order" do
       check all pets <- uniq_list_of_pets(length: 1..25),
                 cursor_fields <- cursor_fields(%Pet{}),

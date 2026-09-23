@@ -109,9 +109,11 @@ defmodule Flop.NimbleSchemas do
               type: {:tuple, [:atom, :atom, :keyword_list]},
               required: true
             ],
+            field_dynamic: [type: {:tuple, [:atom, :atom, :keyword_list]}],
             ecto_type: [type: :any],
             bindings: [type: {:list, :atom}],
-            operators: [type: {:list, :atom}]
+            operators: [type: {:list, :atom}],
+            path: [type: {:list, :atom}]
           ]
         ]
       ]

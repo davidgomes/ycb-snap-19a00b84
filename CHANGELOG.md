@@ -12,6 +12,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Support SQLite.
 - Support MySQL.
+- Support ordering and cursor pagination by custom fields. Configure
+  `field_dynamic` with a function that returns an Ecto dynamic expression.
+  Listing that field in `sortable` requires the option.
 
 ### Fixed
 

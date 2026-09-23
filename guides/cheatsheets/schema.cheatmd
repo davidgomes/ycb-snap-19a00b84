@@ -366,11 +366,12 @@ defmodule Pet do
   @derive {
     Flop.Schema,
     filterable: [:name, :human_age],
-    sortable: [:name],
+    sortable: [:name, :human_age],
     adapter_opts: [
       custom_fields: [
         human_age: [
           filter: {CustomFilters, :human_age, []},
+          field_dynamic: {CustomFilters, :human_age_field, []},
           ecto_type: :integer
         ]
       ]
@@ -383,6 +384,25 @@ defmodule Pet do
   end
 end
 ```
+
+### Ordering
+
+`field_dynamic` returns the value to sort by. It receives the options keyword
+list. Flop applies the order direction.
+
+```elixir
+def human_age_field(_opts) do
+  dynamic([p], fragment("? * 7", p.age))
+end
+```
+
+```elixir
+params = %{order_by: [:human_age], order_directions: [:desc]}
+Flop.validate_and_run(Pet, params, for: Pet)
+```
+
+For cursor pagination, select that same expression and set `:path` if the value
+is not stored under the field name.
 
 ### Custom filter function
 
