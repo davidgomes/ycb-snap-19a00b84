@@ -72,6 +72,7 @@ defmodule Paginator do
     * `:cursor_fields` - The fields with sorting direction used to determine the
     cursor. In most cases, this should be the same fields as the ones used for sorting in the query.
     When you use named bindings in your query they can also be provided.
+    Expressions can be provided as `{name, fn -> dynamic(...) end}`.
     * `:fetch_cursor_value_fun` function of arity 2 to lookup cursor values on returned records.
     Defaults to `Paginator.default_fetch_cursor_value/2`
     * `:include_total_count` - Set this to true to return the total number of
@@ -165,6 +166,37 @@ defmodule Paginator do
         end,
         limit: 50
       )
+
+  ## Example with sorting on an expression
+
+      query =
+        from(
+          p in Post,
+          select: p,
+          order_by: [
+            {:desc, fragment("char_length(?)", p.title)},
+            {:asc, p.id}
+          ]
+        )
+
+      Repo.paginate(query,
+        cursor_fields: [
+          {{:title_length, fn -> dynamic([p], fragment("char_length(?)", p.title)) end}, :desc},
+          id: :asc
+        ],
+        fetch_cursor_value_fun: fn
+          post, :title_length ->
+            String.length(post.title)
+
+          post, field ->
+            Paginator.default_fetch_cursor_value(post, field)
+        end,
+        limit: 50
+      )
+
+  The function must return a dynamic matching the expression used in `order_by`.
+  The name is used as the cursor key, so `:fetch_cursor_value_fun` must compute
+  the value of the expression for each returned record.
 
   """
   @callback paginate(queryable :: Ecto.Query.t(), opts :: Keyword.t(), repo_opts :: Keyword.t()) ::
@@ -309,6 +341,9 @@ defmodule Paginator do
        }) do
     cursor_fields
     |> Enum.map(fn
+      {{cursor_field, handler}, _order} when is_function(handler, 0) ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
       {cursor_field, _order} ->
         {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
 

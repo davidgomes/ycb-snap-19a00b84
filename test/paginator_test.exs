@@ -1013,6 +1013,79 @@ defmodule PaginatorTest do
     end
   end
 
+  for order <- @available_sorting_order do
+    test "paginates correctly on an expression containing nulls - order by amount % 7 #{order}, id asc" do
+      customer = insert(:customer)
+
+      for k <- 1..30 do
+        amount = if rem(k, 4) == 0, do: nil, else: k
+        insert(:payment, customer: customer, amount: amount)
+      end
+
+      opts = [
+        cursor_fields: [
+          {{:amount_mod, fn -> dynamic([p], fragment("? % 7", p.amount)) end}, unquote(order)},
+          id: :asc
+        ],
+        fetch_cursor_value_fun: fn
+          %Payment{amount: nil}, :amount_mod -> nil
+          %Payment{amount: amount}, :amount_mod -> rem(amount, 7)
+          payment, field -> Paginator.default_fetch_cursor_value(payment, field)
+        end,
+        limit: 1
+      ]
+
+      query =
+        from(
+          p in Payment,
+          where: p.customer_id == ^customer.id,
+          order_by: [{^unquote(order), fragment("? % 7", p.amount)}, {:asc, p.id}],
+          select: p
+        )
+
+      expected =
+        query
+        |> Repo.all()
+        |> to_ids()
+
+      assert paginate_as_list(query, opts) == expected
+      assert paginate_before_as_list(query, opts) == init([nil | expected])
+    end
+  end
+
+  test "paginates on an expression cursor field without a sort direction", %{
+    payments: {_p1, _p2, _p3, p4, p5, _p6, p7, p8, _p9, _p10, _p11, _p12}
+  } do
+    query =
+      from(
+        p in Payment,
+        where: p.amount < 10,
+        order_by: [asc: p.amount * -1, asc: p.id],
+        select: p
+      )
+
+    opts = [
+      cursor_fields: [{:negative_amount, fn -> dynamic([p], p.amount * -1) end}, :id],
+      fetch_cursor_value_fun: fn
+        payment, :negative_amount -> -payment.amount
+        payment, field -> Paginator.default_fetch_cursor_value(payment, field)
+      end,
+      limit: 2
+    ]
+
+    page = Repo.paginate(query, opts)
+    assert to_ids(page.entries) == to_ids([p8, p7])
+    assert page.metadata.after == encode_cursor(%{negative_amount: -p7.amount, id: p7.id})
+
+    page = Repo.paginate(query, Keyword.put(opts, :after, page.metadata.after))
+    assert to_ids(page.entries) == to_ids([p5, p4])
+    assert page.metadata.before == encode_cursor(%{negative_amount: -p5.amount, id: p5.id})
+
+    page = Repo.paginate(query, Keyword.put(opts, :before, page.metadata.before))
+    assert to_ids(page.entries) == to_ids([p8, p7])
+    assert page.metadata.before == nil
+  end
+
   defp to_ids(entries), do: Enum.map(entries, & &1.id)
 
   defp create_customers_and_payments(_context) do

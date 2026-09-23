@@ -96,11 +96,18 @@ defmodule Paginator.Config do
         when is_atom(schema) and is_atom(field) and value in @order_directions ->
           {schema, field}
 
+        {{field, handler}, value}
+        when is_atom(field) and is_function(handler, 0) and value in @order_directions ->
+          field
+
         field when is_atom(field) ->
           field
 
         {schema, field} when is_atom(schema) and is_atom(field) ->
           {schema, field}
+
+        {field, handler} when is_atom(field) and is_function(handler, 0) ->
+          field
       end)
       |> Enum.sort()
 
