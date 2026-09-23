@@ -3710,6 +3710,73 @@ function sameValueMultiset(a, b) {
   return true;
 }
 
+// Dropdown menu panel. LiveView.JS owns open/close; this hook only picks
+// the side. The panel opens downward, and flips above the trigger when the
+// viewport has no room below AND more room above. JS.toggle opens by
+// writing inline display, so a style observer decides before first paint.
+// While open it re-decides on scroll/resize, and after a patch, which
+// strips the client-set data-flip.
+export const PetalDropdown = {
+  mounted() {
+    this.open = false;
+    this.frame = null;
+    this.reposition = () => {
+      if (this.frame) return;
+      this.frame = requestAnimationFrame(() => {
+        this.frame = null;
+        this.position();
+      });
+    };
+    this.observer = new MutationObserver(() => this.sync());
+    this.observer.observe(this.el, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+    this.sync();
+  },
+
+  updated() {
+    const wasOpen = this.open;
+    this.sync();
+    if (wasOpen && this.open) this.position();
+  },
+
+  destroyed() {
+    this.observer.disconnect();
+    this.listen("removeEventListener");
+    cancelAnimationFrame(this.frame);
+  },
+
+  sync() {
+    const open = this.el.style.display !== "none";
+    if (open === this.open) return;
+    this.open = open;
+    if (open) {
+      this.position();
+      this.listen("addEventListener");
+    } else {
+      this.listen("removeEventListener");
+    }
+  },
+
+  listen(method) {
+    window[method]("scroll", this.reposition, true);
+    window[method]("resize", this.reposition);
+  },
+
+  position() {
+    const anchor = this.el.previousElementSibling || this.el.parentElement;
+    if (!anchor) return;
+    const panelH = this.el.offsetHeight;
+    const t = anchor.getBoundingClientRect();
+    if (!panelH || (!t.top && !t.bottom)) return; // jsdom / unrendered
+    const gap = 8; // mt-2 / mb-2
+    const below = window.innerHeight - t.bottom - gap;
+    const above = t.top - gap;
+    this.el.toggleAttribute("data-flip", panelH > below && above > below);
+  },
+};
+
 // Slot content the panel must let the pointer focus - everything else in
 // there is chrome whose press has to keep focus in the search input.
 // [tabindex] covers hand-rolled widgets; the option rows have none.
@@ -5472,6 +5539,7 @@ export default {
   PetalAurora,
   PetalNavMenu,
   PetalCommandDialog,
+  PetalDropdown,
   PetalComboBox,
   PetalDataTable,
 };

@@ -205,7 +205,8 @@ defmodule PetalComponents.Dropdown do
 
   defp js_attributes("options_container", _options_container_id, _on_close) do
     %{
-      style: "display: none;"
+      style: "display: none;",
+      "phx-hook": "PetalDropdown"
     }
   end
 

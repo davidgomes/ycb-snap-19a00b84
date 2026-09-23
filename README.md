@@ -83,7 +83,7 @@ def html do
 end
 ```
 
-Register the bundled JS hooks in `assets/js/app.js` (needed for the password/copyable/clearable inputs and the chat components — the rest of the library is CSS + LiveView.JS only):
+Register the bundled JS hooks in `assets/js/app.js` (needed for the password/copyable/clearable inputs, the chat components, and dropdowns flipping upward near the bottom of the viewport — the rest of the library is CSS + LiveView.JS only):
 
 ```js
 import PetalComponents from "../../deps/petal_components/assets/js/petal_components"

@@ -3,6 +3,17 @@
 
 #### Fixed
 
+- **`dropdown` menus flip upward when the viewport leaves no room below.**
+  A dropdown near the bottom of the screen used to open its panel
+  off-screen. The new `PetalDropdown` hook (attached to the panel
+  automatically) checks the space around the trigger each time the menu
+  opens, and while it stays open on scroll and resize, and opens it above
+  the trigger when there is not enough room below and more room above.
+  Open and close are still pure LiveView.JS; without the hook registered
+  the menu simply always opens downward, as before. This covers
+  `user_dropdown_menu`, `color_scheme_switch` and `language_select`,
+  which build on `dropdown`.
+
 - **`command_dialog` now locks background scroll while the palette is
   open.** A native modal `<dialog>` hands you the top layer, the focus
   trap and Escape, but it does not stop the page underneath from

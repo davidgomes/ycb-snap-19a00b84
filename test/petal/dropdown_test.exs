@@ -127,6 +127,19 @@ defmodule PetalComponents.DropdownTest do
       assert_has_class(html, "pc-dropdown__menu-items-wrapper-placement--right")
     end
 
+    test "menu panel carries the PetalDropdown hook that flips it upward",
+         %{assigns: assigns} do
+      html =
+        rendered_to_string(~H"""
+        <.dropdown label="Dropdown" options_container_id="flip-menu">
+          <.dropdown_menu_item label="Option" />
+        </.dropdown>
+        """)
+
+      assert html =~ ~r/<div[^>]*phx-hook="PetalDropdown"[^>]*id="flip-menu"/s or
+               html =~ ~r/<div[^>]*id="flip-menu"[^>]*phx-hook="PetalDropdown"/s
+    end
+
     test "renders all placement options" do
       ~w(left right)
       |> Enum.each(fn placement ->
