@@ -1,15 +1,16 @@
 defmodule EctoShorts.QueryBuilder do
   @moduledoc "Behaviour for query building from filter tuples"
 
-  @type filter_tuple :: {filter_type :: atom, value :: any}
-  @type accumulator_query :: Ecto.Query.t
+  @type query :: Ecto.Queryable.t()
+  @type filter :: atom()
+  @type value :: any()
 
-  @doc "Adds to accumulator query with filter_type and value"
-  @callback create_schema_filter(filter_tuple, accumulator_query) :: Ecto.Query.t
+  @doc "Adds to query with filter and value"
+  @callback create_schema_filter(query, filter, value) :: Ecto.Query.t()
 
-  @spec create_schema_filter(module, filter_tuple, accumulator_query) :: Ecto.Query.t
-  def create_schema_filter(builder, filter_tuple, query) do
-    builder.create_schema_filter(filter_tuple, query)
+  @spec create_schema_filter(module, query, filter, value) :: Ecto.Query.t()
+  def create_schema_filter(builder, query, filter, value) do
+    builder.create_schema_filter(query, filter, value)
   end
 
   @spec query_schema(Ecto.Queryable.t) :: Ecto.Queryable.t()

@@ -1,5 +1,8 @@
 ## Changelog
 
+#### V2.5.0
+- refactor query builder api *breaking change*: `create_schema_filter/2` callback `({filter, value}, query)` is now `create_schema_filter/3` `(query, filter, value)`
+
 #### V2.4.0
 - add recursive relational filtering
 - add `%{field: %{!=: [1, 2, 3]}}` to allow `NOT IN ANY` queries
