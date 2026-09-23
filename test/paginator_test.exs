@@ -1013,6 +1013,78 @@ defmodule PaginatorTest do
     end
   end
 
+  describe "paginate a collection of customers, sorting by an expression" do
+    setup :create_customers_with_ranked_names
+
+    test "paginates correctly when sorting ascending" do
+      query = customers_by_name_rank("Dave", :asc)
+      opts = [cursor_fields: [name_rank_field("Dave"), :id], limit: 1]
+
+      expected = query |> Repo.all() |> to_ids()
+      assert length(expected) == 7
+
+      assert paginate_as_list(query, opts) == expected
+      assert paginate_before_as_list(query, opts) == init([nil | expected])
+    end
+
+    test "paginates correctly when sorting descending" do
+      query = customers_by_name_rank("Dave", :desc)
+      opts = [cursor_fields: [{name_rank_field("Dave"), :desc}, id: :desc], limit: 1]
+
+      expected = query |> Repo.all() |> to_ids()
+      assert length(expected) == 7
+
+      assert paginate_as_list(query, opts) == expected
+      assert paginate_before_as_list(query, opts) == init([nil | expected])
+    end
+
+    test "stores the expression value in the cursor under its name" do
+      query = customers_by_name_rank("Dave", :desc)
+      opts = [cursor_fields: [{name_rank_field("Dave"), :desc}, id: :desc], limit: 3]
+
+      [c1, c2, c3, c4, c5, c6 | _] = Repo.all(query)
+
+      %Page{entries: entries, metadata: metadata} = Repo.paginate(query, opts)
+
+      assert to_ids(entries) == to_ids([c1, c2, c3])
+
+      assert metadata == %Metadata{
+               after: encode_cursor(%{rank_value: c3.rank_value, id: c3.id}),
+               before: nil,
+               limit: 3
+             }
+
+      %Page{entries: entries, metadata: metadata} =
+        Repo.paginate(query, opts ++ [after: metadata.after])
+
+      assert to_ids(entries) == to_ids([c4, c5, c6])
+
+      assert metadata == %Metadata{
+               after: encode_cursor(%{rank_value: c6.rank_value, id: c6.id}),
+               before: encode_cursor(%{rank_value: c4.rank_value, id: c4.id}),
+               limit: 3
+             }
+    end
+
+    test "paginates with a legacy cursor" do
+      query = customers_by_name_rank("Dave", :asc)
+      opts = [cursor_fields: [name_rank_field("Dave"), :id], limit: 3]
+
+      [_c1, _c2, c3, c4, c5, c6 | _] = Repo.all(query)
+
+      page = Repo.paginate(query, opts ++ [after: encode_legacy_cursor([c3.rank_value, c3.id])])
+
+      assert to_ids(page.entries) == to_ids([c4, c5, c6])
+    end
+
+    test "per-record cursor generation" do
+      [customer | _] = Repo.all(customers_by_name_rank("Dave", :asc))
+
+      assert Paginator.cursor_for_record(customer, [{name_rank_field("Dave"), :asc}, id: :asc]) ==
+               encode_cursor(%{rank_value: customer.rank_value, id: customer.id})
+    end
+  end
+
   defp to_ids(entries), do: Enum.map(entries, & &1.id)
 
   defp create_customers_and_payments(_context) do
@@ -1043,6 +1115,23 @@ defmodule PaginatorTest do
      customers: {c1, c2, c3},
      addresses: {a1, a2, a3},
      payments: {p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12}}
+  end
+
+  # Names are chosen so that ranks against "Dave" contain both distinct and equal values
+  defp create_customers_with_ranked_names(_context) do
+    for name <- [
+          "Dave",
+          "Dave Dave",
+          "Dave Smith",
+          "Dave Dave Dave",
+          "Dave Jones Dave",
+          "Smith Dave",
+          "Dave Dave Brown"
+        ] do
+      insert(:customer, name: name)
+    end
+
+    :ok
   end
 
   defp payments_by_status(status, direction \\ :asc) do
@@ -1112,6 +1201,44 @@ defmodule PaginatorTest do
       where: p.customer_id == ^customer.id,
       order_by: [{^direction, p.charged_at}, {^direction, p.amount}, {^direction, p.id}]
     )
+  end
+
+  defp customers_by_name_rank(term, direction) do
+    from(
+      c in Customer,
+      where: fragment("to_tsvector('simple', ?) @@ plainto_tsquery('simple', ?)", c.name, ^term),
+      select_merge: %{
+        rank_value:
+          fragment(
+            "ts_rank(to_tsvector('simple', ?), plainto_tsquery('simple', ?))",
+            c.name,
+            ^term
+          )
+      },
+      order_by: [
+        {^direction,
+         fragment(
+           "ts_rank(to_tsvector('simple', ?), plainto_tsquery('simple', ?))",
+           c.name,
+           ^term
+         )},
+        {^direction, c.id}
+      ]
+    )
+  end
+
+  defp name_rank_field(term) do
+    {:rank_value,
+     fn ->
+       dynamic(
+         [c],
+         fragment(
+           "ts_rank(to_tsvector('simple', ?), plainto_tsquery('simple', ?))",
+           c.name,
+           ^term
+         )
+       )
+     end}
   end
 
   defp encode_cursor(value) do

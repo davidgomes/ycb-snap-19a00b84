@@ -50,6 +50,20 @@ defmodule Paginator.ConfigTest do
 
       assert config.cursor_fields == [{{:payments, :id}, :asc}]
     end
+
+    test "applies {name, expression} tuples with direction" do
+      expression = fn -> nil end
+      config = Config.new(cursor_fields: [{{:rank, expression}, :desc}], sort_direction: :asc)
+
+      assert config.cursor_fields == [{{:rank, expression}, :desc}]
+    end
+
+    test "applies {name, expression} tuples without direction" do
+      expression = fn -> nil end
+      config = Config.new(cursor_fields: [{:rank, expression}], sort_direction: :desc)
+
+      assert config.cursor_fields == [{{:rank, expression}, :desc}]
+    end
   end
 
   describe "Config.new/2 applies min/max limit" do
@@ -165,6 +179,30 @@ defmodule Paginator.ConfigTest do
         )
 
       Config.validate!(config)
+    end
+
+    test "ok when after cursor matches cursor_fields with expression" do
+      config =
+        Config.new(
+          cursor_fields: [{:rank, fn -> nil end}, :id],
+          after: Cursor.encode(%{rank: 0.5, id: 1})
+        )
+
+      Config.validate!(config)
+    end
+
+    test "raises ArgumentError when after cursor does not match cursor_fields with expression" do
+      config =
+        Config.new(
+          cursor_fields: [{:rank, fn -> nil end}, :id],
+          after: Cursor.encode(%{score: 0.5, id: 1})
+        )
+
+      assert_raise Config.ArgumentError,
+                   "expected `:after` cursor to match `:cursor_fields`",
+                   fn ->
+                     Config.validate!(config)
+                   end
     end
 
     test "raises ArgumentError when before cursor does not match the cursor_fields" do
