@@ -1424,6 +1424,7 @@ export default class LiveSocket {
     window.addEventListener(
       "popstate",
       (event) => {
+        const previousLocation = this.currentLocation;
         if (!this.registerNewLocation(window.location)) {
           return;
         }
@@ -1433,6 +1434,21 @@ export default class LiveSocket {
         // Compare positions to determine direction
         const isForward = position > this.currentHistoryPosition;
         const navType = isForward ? type : backType || type;
+        const detail = {
+          href,
+          patch: navType === "patch",
+          pop: true,
+          direction: isForward ? "forward" : "backward",
+        };
+
+        if (!DOM.dispatchEvent(window, "phx:before-navigate", { detail })) {
+          // The browser already moved to the new history entry, so we step
+          // back to the one we came from. The popstate event caused by this
+          // is ignored, as its location matches the current location again.
+          this.currentLocation = previousLocation;
+          history.go(isForward ? -1 : 1);
+          return;
+        }
 
         // Update current position
         this.currentHistoryPosition = position || 0;
@@ -1441,14 +1457,7 @@ export default class LiveSocket {
           this.currentHistoryPosition.toString(),
         );
 
-        DOM.dispatchEvent(window, "phx:navigate", {
-          detail: {
-            href,
-            patch: navType === "patch",
-            pop: true,
-            direction: isForward ? "forward" : "backward",
-          },
-        });
+        DOM.dispatchEvent(window, "phx:navigate", { detail });
         this.requestDOMUpdate(() => {
           const callback = () => {
             this.maybeScroll(scroll);
@@ -1498,6 +1507,18 @@ export default class LiveSocket {
         e.preventDefault();
         e.stopImmediatePropagation(); // do not bubble click to regular phx-click bindings
         if (this.pendingLink === href) {
+          return;
+        }
+        if (
+          !DOM.dispatchEvent(window, "phx:before-navigate", {
+            detail: {
+              href,
+              patch: type === "patch",
+              pop: false,
+              direction: "forward",
+            },
+          })
+        ) {
           return;
         }
 
