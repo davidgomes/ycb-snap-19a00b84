@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+* Fixed compilation warnings with Elixir 1.18.
+
 ## [2.3.2] (2023-08-04)
 
 ### Changed
