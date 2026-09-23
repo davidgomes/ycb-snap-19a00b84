@@ -779,6 +779,19 @@ defmodule Surface.DirectivesTest do
              """
     end
 
+    test "viewport events" do
+      html =
+        render_surface do
+          ~F"""
+          <ul :on-viewport-top="prev" :on-viewport-bottom="next"></ul>
+          """
+        end
+
+      assert html =~ """
+             <ul phx-viewport-top="prev" phx-viewport-bottom="next"></ul>
+             """
+    end
+
     test "as event name + target option" do
       html =
         render_surface do
