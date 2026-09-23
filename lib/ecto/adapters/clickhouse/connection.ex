@@ -771,7 +771,7 @@ defmodule Ecto.Adapters.ClickHouse.Connection do
   end
 
   defp expr({:constant, _, [literal]}, _sources, _params, _query) when is_binary(literal) do
-    [?', escape_string(literal), ?']
+    quote_string(literal)
   end
 
   defp expr({:constant, _, [literal]}, _sources, _params, _query) when is_number(literal) do
@@ -887,7 +887,7 @@ defmodule Ecto.Adapters.ClickHouse.Connection do
   defp expr(false, _sources, _params, _query), do: "0"
 
   defp expr(literal, _sources, _params, _query) when is_binary(literal) do
-    [?', escape_string(literal), ?']
+    quote_string(literal)
   end
 
   defp expr(literal, _sources, _params, _query) when is_integer(literal) do
@@ -1068,7 +1068,6 @@ defmodule Ecto.Adapters.ClickHouse.Connection do
   defp wrap_in(value, wrapper), do: [wrapper, value, wrapper]
 
   defp escape_quoted(value, nil), do: value
-  defp escape_quoted(value, ?'), do: escape_string(IO.iodata_to_binary(value))
 
   defp escape_quoted(value, quoter) when quoter in [?\", ?`] do
     # Neutralize existing escape sequences before escaping the active delimiter.
@@ -1077,6 +1076,9 @@ defmodule Ecto.Adapters.ClickHouse.Connection do
     |> :binary.replace("\\", "\\\\", [:global])
     |> :binary.replace(<<quoter>>, "\\" <> <<quoter>>, [:global])
   end
+
+  @doc false
+  def quote_string(value) when is_binary(value), do: [?', escape_string(value), ?']
 
   @doc false
   # TODO faster?
@@ -1156,7 +1158,7 @@ defmodule Ecto.Adapters.ClickHouse.Connection do
   defp inline_param(nil), do: "NULL"
   defp inline_param(true), do: "true"
   defp inline_param(false), do: "false"
-  defp inline_param(s) when is_binary(s), do: [?', escape_string(s), ?']
+  defp inline_param(s) when is_binary(s), do: quote_string(s)
 
   @max_uint128 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
   @max_uint64 0xFFFFFFFFFFFFFFFF
