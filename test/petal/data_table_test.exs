@@ -374,4 +374,65 @@ defmodule PetalComponents.DataTableTest do
       """)
     end
   end
+  describe "row selection" do
+    @sel_rows [%{id: 1, name: "Amy"}, %{id: 2, name: "Bea"}]
+
+    test "tri-state header: none, some (indeterminate), all" do
+      for {selected, checked?, mixed?} <- [{[], false, false}, {["1"], false, true}, {["1", "2"], true, false}] do
+        assigns = %{rows: @sel_rows, state: %State{selected: selected}}
+
+        html =
+          rendered_to_string(~H"""
+          <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+            <:col :let={row} field={:name}>{row.name}</:col>
+          </.data_table>
+          """)
+
+        [header] = Regex.run(~r/<input[^>]*data-pc-dt-select-all[^>]*>/, html)
+        assert header =~ ~s(data-indeterminate="#{mixed?}")
+        assert (header =~ " checked") == checked?
+      end
+    end
+
+    test "toolbar morphs into the bulk bar while rows are selected" do
+      assigns = %{rows: @sel_rows, state: %State{selected: ["2"]}}
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable searchable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+          <:bulk_action :let={ids}><button>Delete {length(ids)}</button></:bulk_action>
+        </.data_table>
+        """)
+
+      assert html =~ "pc-data-table__toolbar--selection"
+      assert html =~ "1 selected"
+      assert html =~ "Delete 1"
+      refute html =~ "pc-data-table__search-input"
+    end
+
+    test "selectable requires event mode" do
+      assigns = %{rows: @sel_rows, state: %State{}}
+
+      assert_raise ArgumentError, fn ->
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path="/x" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+      end
+    end
+
+    test "State selection ops" do
+      s = State.handle_op(%State{}, %{"op" => "select", "id" => "1"}, fields: [])
+      assert s.selected == ["1"]
+      s = State.handle_op(s, %{"op" => "select_page", "ids" => ["1", "2"]}, fields: [])
+      assert s.selected == ["1", "2"]
+      s = State.handle_op(s, %{"op" => "select_page", "ids" => ["1", "2"]}, fields: [])
+      assert s.selected == []
+      s = State.toggle_selected(s, 3) |> State.toggle_selected("3")
+      assert s.selected == []
+      assert State.handle_op(%State{selected: ["1"]}, %{"op" => "clear_selection"}, fields: []).selected == []
+    end
+  end
 end

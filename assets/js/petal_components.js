@@ -4659,6 +4659,19 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+    this.syncIndeterminate();
+  },
+
+  updated() {
+    this.syncIndeterminate();
+  },
+
+  // `indeterminate` is a DOM property with no HTML attribute, so the
+  // header checkbox's mixed state has to be set from JS after each patch
+  syncIndeterminate() {
+    this.el.querySelectorAll("[data-pc-dt-select-all]").forEach((box) => {
+      box.indeterminate = box.dataset.indeterminate === "true";
+    });
   },
 
   destroyed() {

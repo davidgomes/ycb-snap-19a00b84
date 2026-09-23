@@ -59,6 +59,7 @@ defmodule PetalComponents.Table do
     attr :row_class, :any
     attr :sortable, :boolean, doc: "render the header as a sort button"
     attr :sort_key, :string, doc: "the key sent with on_sort (defaults to the downcased label)"
+    attr :header, :any, doc: "rendered header content, replacing label (e.g. a checkbox)"
   end
 
   slot :empty_state,
@@ -98,7 +99,10 @@ defmodule PetalComponents.Table do
               class={[col[:class], @sticky_header && "pc-table__th--sticky"]}
               aria-sort={col[:sortable] && aria_sort(sort_state(col, @sort_by, @sort_dir))}
             >
-              <%= if col[:sortable] do %>
+              <%= if col[:header] do %>
+                {col[:header]}
+              <% else %>
+                <%= if col[:sortable] do %>
                 <button
                   type="button"
                   class="pc-table__sort"
@@ -110,6 +114,7 @@ defmodule PetalComponents.Table do
                 </button>
               <% else %>
                 {col[:label]}
+                <% end %>
               <% end %>
             </.th>
           </.tr>
