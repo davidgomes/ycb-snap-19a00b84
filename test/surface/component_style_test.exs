@@ -469,11 +469,9 @@ defmodule Surface.ComponentStyleTest do
 
     attr = scope_attr(ViewWithLiveComponentWithUpdate, :render)
 
-    # We need to use `attr="attr"` instead of just `attr` here because it seems live_isolated/2
-    # renders attributes differently. Maybe because it relies on `<.dynamic_tag/>`?
-    assert html =~ """
-           <a data-phx-component=\"1\" #{attr}="#{attr}" href="#" class="a">link</a>\
-           """
+    # We need to use `attr="attr"` (or `attr=""` on LV >= 1.1) instead of just `attr` here because
+    # it seems live_isolated/2 renders attributes differently. Maybe because it relies on `<.dynamic_tag/>`?
+    assert html =~ ~r/<a data-phx-component="1" #{attr}="(#{attr})?" href="#" class="a">link<\/a>/
   end
 
   test "inject scope attribute in any element that matches any selector group. No matter if it doesn't match the whole selector" do
