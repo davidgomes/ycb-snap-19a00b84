@@ -18,6 +18,11 @@ defmodule ObanDoctor.Check.Worker.NoMaxAttempts do
 
   Explicit reasonable limit:
       use Oban.Worker, queue: :default, max_attempts: 3
+
+  ## References
+
+    * [Oban Error Handling guide: Limiting Retries](https://hexdocs.pm/oban/error_handling.html#limiting-retries)
+    * [`Oban.Worker` options](https://hexdocs.pm/oban/Oban.Worker.html#module-defining-workers)
   """
 
   use ObanDoctor.Check, category: :worker

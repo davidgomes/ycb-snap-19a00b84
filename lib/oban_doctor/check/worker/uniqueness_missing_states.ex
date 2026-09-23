@@ -23,6 +23,12 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
 
   Good - named group covering all non-final states:
       unique: [fields: [:args], states: :incomplete]
+
+  ## References
+
+    * [Oban Unique Jobs guide](https://hexdocs.pm/oban/unique_jobs.html)
+    * [`Oban.Job.unique_states/1`](https://hexdocs.pm/oban/Oban.Job.html#unique_states/1)
+    * [Oban Job Lifecycle guide](https://hexdocs.pm/oban/job_lifecycle.html)
   """
 
   use ObanDoctor.Check, category: :worker

@@ -19,6 +19,11 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsage do
 
   Good - explicit list of non-final states:
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  ## References
+
+    * [Oban Unique Jobs guide](https://hexdocs.pm/oban/unique_jobs.html)
+    * [`Oban.Job.unique_states/1`](https://hexdocs.pm/oban/Oban.Job.html#unique_states/1)
   """
 
   use ObanDoctor.Check, category: :worker

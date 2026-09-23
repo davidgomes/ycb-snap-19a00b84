@@ -15,6 +15,10 @@ defmodule ObanDoctor.Check.Worker.UniqueWithoutKeys do
 
   Better - explicit about which args matter:
       unique: [fields: [:args], keys: [:user_id, :action]]
+
+  ## References
+
+    * [Oban Unique Jobs guide: Specifying Fields and Keys](https://hexdocs.pm/oban/unique_jobs.html#specifying-fields-and-keys)
   """
 
   use ObanDoctor.Check, category: :worker
