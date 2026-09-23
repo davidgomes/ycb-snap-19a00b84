@@ -1,0 +1,75 @@
+<div class="layout">
+  <aside class="sidebar">
+    <h2>Queues</h2>
+    <nav class="card nav-list">
+      <a class="<%= active_class(is_nil(@queue)) %>" href="<%= h(jobs_path(@base, state: @state)) %>">
+        <span>All queues</span>
+        <span class="count"><%= h(total(@queues)) %></span>
+      </a>
+      <%= for {queue, count} <- @queues do %>
+        <a class="<%= active_class(queue == @queue) %>" href="<%= h(jobs_path(@base, state: @state, queue: queue)) %>">
+          <span><%= h(queue) %></span>
+          <span class="count"><%= h(count) %></span>
+        </a>
+      <% end %>
+    </nav>
+  </aside>
+
+  <section class="content">
+    <nav class="card tabs">
+      <a class="<%= active_class(is_nil(@state)) %>" href="<%= h(jobs_path(@base, queue: @queue)) %>">
+        All <span class="count"><%= h(total(@state_counts)) %></span>
+      </a>
+      <%= for state <- @states do %>
+        <a class="<%= active_class(state == @state) %>" href="<%= h(jobs_path(@base, state: state, queue: @queue)) %>">
+          <%= h(state) %> <span class="count"><%= h(Map.get(@state_counts, state, 0)) %></span>
+        </a>
+      <% end %>
+    </nav>
+
+    <div class="card">
+      <%= if @jobs == [] do %>
+        <p class="empty">No jobs found.</p>
+      <% else %>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Worker</th>
+              <th>Queue</th>
+              <th>State</th>
+              <th>Attempt</th>
+              <th>Args</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            <%= for job <- @jobs do %>
+              <tr>
+                <td><a class="id" href="<%= h(job_path(@base, job.id)) %>"><%= h(job.id) %></a></td>
+                <td><a class="worker" href="<%= h(job_path(@base, job.id)) %>"><%= h(job.worker) %></a></td>
+                <td><%= h(job.queue) %></td>
+                <td><span class="badge state-<%= h(job.state) %>"><%= h(job.state) %></span></td>
+                <td class="nowrap"><%= h(job.attempt) %> / <%= h(job.max_attempts) %></td>
+                <td class="args"><code><%= h(preview(job.args)) %></code></td>
+                <td class="nowrap" title="<%= h(timestamp(state_time(job))) %>"><%= h(relative_time(state_time(job), @now)) %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      <% end %>
+    </div>
+
+    <%= if @page > 1 or @next_page? do %>
+      <nav class="pagination">
+        <%= if @page > 1 do %>
+          <a href="<%= h(jobs_path(@base, state: @state, queue: @queue, page: @page - 1)) %>">&larr; Previous</a>
+        <% end %>
+        <span>Page <%= h(@page) %></span>
+        <%= if @next_page? do %>
+          <a href="<%= h(jobs_path(@base, state: @state, queue: @queue, page: @page + 1)) %>">Next &rarr;</a>
+        <% end %>
+      </nav>
+    <% end %>
+  </section>
+</div>

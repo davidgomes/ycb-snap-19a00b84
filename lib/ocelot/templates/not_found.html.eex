@@ -1,0 +1,4 @@
+<div class="card empty">
+  <p><%= h(@message) %></p>
+  <a class="button" href="<%= h(jobs_path(@base)) %>">Back to jobs</a>
+</div>

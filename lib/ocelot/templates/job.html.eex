@@ -1,0 +1,63 @@
+<a class="back" href="<%= h(jobs_path(@base)) %>">&larr; All jobs</a>
+
+<div class="detail-header">
+  <h1><%= h(@job.worker) %></h1>
+  <span class="badge state-<%= h(@job.state) %>"><%= h(@job.state) %></span>
+</div>
+
+<div class="section">
+  <h2 class="section-title">Details</h2>
+  <dl class="card facts">
+    <div><dt>ID</dt><dd><%= h(@job.id) %></dd></div>
+    <div><dt>Queue</dt><dd><a href="<%= h(jobs_path(@base, queue: @job.queue)) %>"><%= h(@job.queue) %></a></dd></div>
+    <div><dt>Attempt</dt><dd><%= h(@job.attempt) %> of <%= h(@job.max_attempts) %></dd></div>
+    <div><dt>Priority</dt><dd><%= h(@job.priority) %></dd></div>
+    <div><dt>Tags</dt><dd><%= h(list(@job.tags)) %></dd></div>
+    <div><dt>Attempted by</dt><dd><%= h(list(@job.attempted_by)) %></dd></div>
+  </dl>
+</div>
+
+<div class="section">
+  <h2 class="section-title">Timeline</h2>
+  <dl class="card facts">
+    <%= for {label, datetime} <- [
+          {"Inserted", @job.inserted_at},
+          {"Scheduled", @job.scheduled_at},
+          {"Attempted", @job.attempted_at},
+          {"Completed", @job.completed_at},
+          {"Cancelled", @job.cancelled_at},
+          {"Discarded", @job.discarded_at}
+        ] do %>
+      <div>
+        <dt><%= h(label) %></dt>
+        <dd title="<%= h(relative_time(datetime, @now)) %>"><%= h(timestamp(datetime)) %></dd>
+      </div>
+    <% end %>
+  </dl>
+</div>
+
+<div class="section">
+  <h2 class="section-title">Args</h2>
+  <div class="card"><pre><%= h(json(@job.args)) %></pre></div>
+</div>
+
+<div class="section">
+  <h2 class="section-title">Meta</h2>
+  <div class="card"><pre><%= h(json(@job.meta)) %></pre></div>
+</div>
+
+<div class="section">
+  <h2 class="section-title">Errors (<%= h(length(@job.errors)) %>)</h2>
+  <div class="card">
+    <%= if @job.errors == [] do %>
+      <p class="empty">No errors recorded.</p>
+    <% else %>
+      <%= for error <- Enum.reverse(@job.errors) do %>
+        <div class="error">
+          <div class="error-meta">Attempt <%= h(error["attempt"]) %> · <%= h(timestamp(error["at"])) %></div>
+          <pre><%= h(error["error"]) %></pre>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+</div>
