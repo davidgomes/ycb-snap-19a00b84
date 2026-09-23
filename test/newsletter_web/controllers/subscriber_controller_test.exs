@@ -2,6 +2,10 @@ defmodule NewsletterWeb.SubscriberControllerTest do
   use NewsletterWeb.ConnCase
 
   import Newsletter.SubscribersFixtures
+  import Swoosh.TestAssertions
+
+  alias Newsletter.Emails
+  alias Newsletter.Subscribers
 
   @create_attrs %{email: "some email", name: "some name"}
   @update_attrs %{email: "some updated email", name: "some updated name"}
@@ -32,9 +36,29 @@ defmodule NewsletterWeb.SubscriberControllerTest do
       assert html_response(conn, 200) =~ "Show Subscriber"
     end
 
+    test "sends a welcome email to the new subscriber", %{conn: conn} do
+      conn = post(conn, Routes.subscriber_path(conn, :create), subscriber: @create_attrs)
+
+      assert %{id: id} = redirected_params(conn)
+      assert_email_sent(Emails.welcome(Subscribers.get_subscriber!(id)))
+    end
+
     test "renders errors when data is invalid", %{conn: conn} do
       conn = post(conn, Routes.subscriber_path(conn, :create), subscriber: @invalid_attrs)
       assert html_response(conn, 200) =~ "New Subscriber"
+      assert_no_email_sent()
+    end
+
+    test "does not send a welcome email when the email is already subscribed", %{conn: conn} do
+      subscriber = subscriber_fixture()
+
+      conn =
+        post(conn, Routes.subscriber_path(conn, :create),
+          subscriber: %{name: "some name", email: subscriber.email}
+        )
+
+      assert html_response(conn, 200) =~ "has already been taken"
+      assert_no_email_sent()
     end
   end
 
