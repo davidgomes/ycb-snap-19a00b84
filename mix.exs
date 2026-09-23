@@ -88,7 +88,8 @@ defmodule ObanDoctor.MixProject do
         "Config Checks": [
           ObanDoctor.Check.Config.InsertTriggerEnabled,
           ObanDoctor.Check.Config.MissingPruner,
-          ObanDoctor.Check.Config.NoReindexer
+          ObanDoctor.Check.Config.NoReindexer,
+          ObanDoctor.Check.Config.SmartEngineNotConfigured
         ],
         Plugins: [
           ObanDoctor.Plugins.IndexHealth,
