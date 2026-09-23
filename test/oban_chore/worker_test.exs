@@ -1,127 +1,124 @@
 defmodule ObanChore.WorkerTest do
   use ExUnit.Case, async: true
-  import Ecto.Changeset
 
-  defmodule MyTestChore do
+  defmodule BasicChore do
     use ObanChore.Worker,
-      name: "My Test Chore",
-      queue: :default,
+      name: "Basic Chore",
+      description: "Does basic things",
       fields: [
         user_id: [type: :integer, required: true],
-        age: [type: :integer]
-      ]
+        note: [type: :textarea],
+        mode: [type: :select, options: ["a", "b"]],
+        dry_run: [type: :checkbox, default: true]
+      ],
+      queue: :default,
+      unique: [period: 60]
 
-    @impl ObanChore.Worker
+    @impl Oban.Worker
+    def perform(_), do: :ok
+  end
+
+  defmodule UnnamedChore do
+    use ObanChore.Worker, fields: [arg: [type: :string]]
+
+    @impl Oban.Worker
+    def perform(_), do: :ok
+  end
+
+  defmodule CustomChore do
+    use ObanChore.Worker, fields: [count: [type: :integer, required: true]]
+
+    @impl Oban.Worker
+    def perform(_), do: :ok
+
+    @impl true
     def custom_changeset(changeset) do
-      validate_number(changeset, :age, greater_than: 18)
+      validate_number(changeset, :count, greater_than: 0)
+    end
+  end
+
+  describe "__chore_info__/0" do
+    test "returns chore metadata" do
+      info = BasicChore.__chore_info__()
+
+      assert info.module == BasicChore
+      assert info.name == "Basic Chore"
+      assert info.description == "Does basic things"
+      assert info.unique == true
+      assert Keyword.keys(info.fields) == [:user_id, :note, :mode, :dry_run]
     end
 
-    @impl Oban.Worker
-    def perform(%Oban.Job{}), do: :ok
+    test "defaults name to the module name and unique to false" do
+      info = UnnamedChore.__chore_info__()
+
+      assert info.name == inspect(UnnamedChore)
+      assert info.description == nil
+      assert info.unique == false
+    end
   end
 
-  defmodule ComprehensiveWorker do
-    use ObanChore.Worker,
-      name: "All Types Chore",
-      fields: [
-        # Native types
-        my_string: [type: :string],
-        my_int: [type: :integer],
-        my_bool: [type: :boolean],
-        # Mapped types
-        my_text: [type: :textarea],
-        my_select: [type: :select, options: ["Option 1", "Option 2"]],
-        my_checkbox: [type: :checkbox]
-      ]
-
-    @impl Oban.Worker
-    def perform(_), do: :ok
+  test "passes Oban options through to Oban.Worker" do
+    assert BasicChore.__opts__()[:queue] == :default
   end
 
-  defmodule DescriptiveWorker do
-    use ObanChore.Worker,
-      name: "Descriptive Chore",
-      description: "This chore has a helpful description.",
-      fields: []
+  describe "changeset/1" do
+    test "casts UI types to their underlying Ecto types" do
+      changeset =
+        BasicChore.changeset(%{
+          "user_id" => "5",
+          "note" => "hi",
+          "mode" => "a",
+          "dry_run" => "true"
+        })
 
-    @impl Oban.Worker
-    def perform(_), do: :ok
+      assert changeset.valid?
+      assert changeset.changes == %{user_id: 5, note: "hi", mode: "a", dry_run: true}
+    end
+
+    test "validates required fields" do
+      changeset = BasicChore.changeset(%{})
+
+      refute changeset.valid?
+      assert {_, [validation: :required]} = changeset.errors[:user_id]
+    end
+
+    test "does not add a required error on top of a cast error" do
+      changeset = BasicChore.changeset(%{"user_id" => "abc"})
+
+      refute changeset.valid?
+      assert [{:user_id, {_, opts}}] = changeset.errors
+      assert opts[:validation] == :cast
+    end
+
+    test "applies custom_changeset/1" do
+      refute CustomChore.changeset(%{"count" => "0"}).valid?
+      assert CustomChore.changeset(%{"count" => "3"}).valid?
+    end
   end
 
-  test "captures description in __chore_info__" do
-    info = DescriptiveWorker.__chore_info__()
-    assert info.description == "This chore has a helpful description."
-
-    # Verify fallback for workers without description
-    info = MyTestChore.__chore_info__()
-    assert info.description == nil
-  end
-
-  test "correctly maps UI types to Ecto types and casts them" do
-    params = %{
-      "my_string" => "hello",
-      "my_int" => "42",
-      "my_bool" => "true",
-      "my_text" => "some long text",
-      "my_select" => "option1",
-      "my_checkbox" => "true"
-    }
-
-    changeset = ComprehensiveWorker.changeset(params)
-    assert changeset.valid?
-
-    # Verify values and their types
-    assert changeset.changes.my_string == "hello"
-    assert changeset.changes.my_int == 42
-    assert changeset.changes.my_bool == true
-    assert changeset.changes.my_text == "some long text"
-    assert changeset.changes.my_select == "option1"
-    assert changeset.changes.my_checkbox == true
-  end
-
-  test "injects changeset/1 and custom_changeset/1" do
-    # Valid data
-    changeset = MyTestChore.changeset(%{"user_id" => "1", "age" => "25"})
-    assert changeset.valid?
-    assert changeset.changes.user_id == 1
-    assert changeset.changes.age == 25
-
-    # Missing required field
-    changeset = MyTestChore.changeset(%{"age" => "25"})
-    refute changeset.valid?
-    assert "can't be blank" in errors_on(changeset).user_id
-
-    # Custom validation failure
-    changeset = MyTestChore.changeset(%{"user_id" => "1", "age" => "15"})
-    refute changeset.valid?
-    assert "must be greater than 18" in errors_on(changeset).age
-  end
-
-  test "raises on missing field type" do
-    assert_raise ArgumentError, ~r/missing :type for field :bad_field/, fn ->
-      defmodule MissingTypeChore do
-        use ObanChore.Worker,
-          name: "Missing Type",
-          fields: [bad_field: []]
+  describe "compile-time validation" do
+    test "raises when a field has no type" do
+      assert_raise ArgumentError, ~r/missing :type for field :arg/, fn ->
+        Code.compile_quoted(
+          quote do
+            defmodule MissingTypeChore do
+              use ObanChore.Worker, fields: [arg: [label: "Arg"]]
+            end
+          end
+        )
       end
     end
-  end
 
-  test "raises on invalid field type" do
-    assert_raise ArgumentError, ~r/invalid type :invalid_type/, fn ->
-      defmodule InvalidChore do
-        use ObanChore.Worker,
-          name: "Invalid",
-          fields: [bad_field: [type: :invalid_type]]
+    test "raises when a field has an unsupported type" do
+      assert_raise ArgumentError, ~r/invalid type :map for field :arg/, fn ->
+        Code.compile_quoted(
+          quote do
+            defmodule InvalidTypeChore do
+              use ObanChore.Worker, fields: [arg: [type: :map]]
+            end
+          end
+        )
       end
     end
-  end
-
-  defp errors_on(changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Enum.reduce(opts, msg, fn {key, value}, acc ->
-        String.replace(acc, "%{#{key}}", to_string(value))
-      end)
-    end)
   end
 end
