@@ -31,7 +31,49 @@ defmodule ObanDoctor.ObanDiscoveryTest do
       assert Oban.Plugins.Pruner in config.plugins
       assert Oban.Plugins.Reindexer in config.plugins
       assert config.insert_trigger == false
+      assert config.engine == nil
       assert config.file == Path.join(tmp_dir, "config/config.exs")
+    end
+
+    test "discovers the configured engine module" do
+      tmp_dir = create_temp_project()
+
+      config_content = """
+      import Config
+
+      config :my_app, Oban,
+        engine: Oban.Pro.Engines.Smart,
+        queues: [default: 10]
+      """
+
+      write_config(tmp_dir, "config/config.exs", config_content)
+
+      [config] = ObanDiscovery.discover_oban_configs(tmp_dir)
+
+      assert config.engine == Oban.Pro.Engines.Smart
+    end
+
+    test "later engine value overrides earlier" do
+      tmp_dir = create_temp_project()
+
+      write_config(tmp_dir, "config/config.exs", """
+      import Config
+
+      config :my_app, Oban,
+        engine: Oban.Engines.Basic,
+        queues: [default: 10]
+      """)
+
+      write_config(tmp_dir, "config/runtime.exs", """
+      import Config
+
+      config :my_app, Oban,
+        engine: Oban.Pro.Engines.Smart
+      """)
+
+      [config] = ObanDiscovery.discover_oban_configs(tmp_dir)
+
+      assert config.engine == Oban.Pro.Engines.Smart
     end
 
     test "discovers named Oban instance" do
