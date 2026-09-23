@@ -409,4 +409,45 @@ defmodule Flop.SchemaTest do
 
     assert error.message =~ "cannot sort by custom field"
   end
+
+  test "allows sortable custom fields with field_dynamic" do
+    defmodule Basil do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [
+            field_dynamic: {__MODULE__, :some_function, []},
+            ecto_type: :utc_datetime
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    assert Flop.Schema.sortable(struct(Basil)) == [:inserted_at]
+  end
+
+  test "raises error if custom field without filter is filterable" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Chive do
+          @derive {
+            Flop.Schema,
+            filterable: [:inserted_at],
+            sortable: [],
+            custom_fields: [
+              inserted_at: [
+                field_dynamic: {__MODULE__, :some_function, []},
+                ecto_type: :utc_datetime
+              ]
+            ]
+          }
+          defstruct [:id, :inserted_at]
+        end
+      end
+
+    assert error.message =~ "cannot filter by custom field"
+  end
 end
