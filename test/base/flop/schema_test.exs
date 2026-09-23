@@ -388,6 +388,43 @@ defmodule Flop.SchemaTest do
              )
   end
 
+  test "allows a custom field with field_dynamic to be sortable" do
+    assert :human_age in Schema.sortable(%MyApp.CustomPet{})
+
+    assert %Flop.FieldInfo{
+             ecto_type: :integer,
+             extra: %{
+               type: :custom,
+               field_dynamic: {MyApp.CustomPet, :human_age, []},
+               filter: {MyApp.CustomPet, :human_age_filter, []},
+               bindings: []
+             }
+           } = Schema.field_info(%MyApp.CustomPet{}, :human_age)
+  end
+
+  test "raises if a filterable custom field has no filter function" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule NoFilter do
+          @derive {
+            Flop.Schema,
+            filterable: [:rank],
+            sortable: [],
+            custom_fields: [
+              rank: [
+                field_dynamic: {__MODULE__, :rank, []},
+                ecto_type: :integer
+              ]
+            ]
+          }
+
+          defstruct [:id]
+        end
+      end
+
+    assert error.message =~ "cannot filter by custom fields without a filter"
+  end
+
   test "raises error if custom field is added to sortable list" do
     error =
       assert_raise ArgumentError, fn ->

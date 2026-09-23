@@ -450,7 +450,26 @@ custom_fields: [
 ]
 ```
 
-`Flop.with_named_bindings/4` adds these bindings when the filter is used.
+`Flop.with_named_bindings/4` adds these bindings when the filter or order field
+is used.
+
+### Ordering
+
+```elixir
+custom_fields: [
+  human_age: [
+    field_dynamic: {CustomFields, :human_age, []},
+    ecto_type: :integer
+  ]
+]
+
+def human_age(_opts) do
+  dynamic([p], fragment("? * 7", p.age))
+end
+```
+
+Add the field to `:sortable`. Flop orders by the dynamic expression.
+`extra_opts` passed to Flop are merged into the options the function receives.
 
 ## Ecto types
 {: .col-2}

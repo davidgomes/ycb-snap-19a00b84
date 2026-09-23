@@ -5,6 +5,7 @@ defmodule FlopTest do
 
   alias __MODULE__.TestProvider
   alias Flop.Meta
+  alias MyApp.CustomPet
   alias MyApp.Fruit
   alias MyApp.Pet
   alias MyApp.Vegetable
@@ -41,6 +42,48 @@ defmodule FlopTest do
         repo: FlopTest.StubRepo,
         query_opts: [prefix: "backend", timeout: 1000]
       ]
+  end
+
+  describe "ordering by custom fields" do
+    test "orders by the dynamic expression" do
+      flop = %Flop{order_by: [:human_age], order_directions: [:desc]}
+
+      query =
+        Flop.query(CustomPet, flop,
+          for: CustomPet,
+          extra_opts: [factor: 2]
+        )
+
+      assert inspect(query) =~
+               ~s|order_by: [desc: fragment("(? * ?)", c0.age, ^2)]|
+    end
+
+    test "uses the default factor when no extra_opts are passed" do
+      flop = %Flop{order_by: [:human_age]}
+
+      query = Flop.query(CustomPet, flop, for: CustomPet)
+
+      assert inspect(query) =~
+               ~s|order_by: [asc: fragment("(? * ?)", c0.age, ^7)]|
+    end
+
+    test "raises when a custom field has no field_dynamic function" do
+      assert_raise ArgumentError, ~r/field_dynamic/, fn ->
+        Flop.query(Pet, %Flop{order_by: [:custom]}, for: Pet)
+      end
+    end
+
+    test "rejects custom fields for cursor pagination" do
+      cursor = Flop.Cursor.encode(%{human_age: 14})
+
+      assert_raise ArgumentError, ~r/custom fields/, fn ->
+        Flop.query(
+          CustomPet,
+          %Flop{first: 1, after: cursor, order_by: [:human_age]},
+          for: CustomPet
+        )
+      end
+    end
   end
 
   describe "validate/1" do
@@ -173,8 +216,7 @@ defmodule FlopTest do
     end
 
     test "requires limit for pagination" do
-      assert {:error, %Meta{} = meta} =
-               TestProviderWithoutLimit.validate(%{})
+      assert {:error, %Meta{} = meta} = TestProviderWithoutLimit.validate(%{})
 
       assert [{"can't be blank", _}] = meta.errors[:limit]
     end
