@@ -2,22 +2,43 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   @moduledoc """
   Checks for workers with unique configuration that don't include all recommended states.
 
-  When using unique constraints, you should typically include all non-final states:
-  `:available`, `:scheduled`, `:executing`, and `:retryable`.
+  When using unique constraints, include every non-final state so an in-progress
+  job still counts as a duplicate: `:available`, `:scheduled`, `:executing`, and
+  `:retryable`.
 
-  Missing states means duplicate jobs could be enqueued when existing jobs are
-  in the missing state.
+  Named state groups are expanded before that comparison:
+
+    * `:incomplete` and `:successful` include the recommended states
+    * `:all` is ignored here and reported by `ObanDoctor.Check.Worker.StateGroupUsage`
+    * `:scheduled` only covers `:scheduled`, so the other recommended states are
+      still reported as missing
+
+  A single-element list such as `[:incomplete]` is treated as that named group.
 
   ## Examples
 
-  Bad - only checks available state:
+  Bad — only checks the available state:
+
       unique: [fields: [:args], states: [:available]]
 
-  Good - includes all non-final states:
+  Good — named group for jobs that have not finished:
+
+      unique: [fields: [:args], states: :incomplete]
+
+  Also good — explicit non-final states:
+
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  ## References
+
+    * [Oban.Job.unique_states/1](https://hexdocs.pm/oban/Oban.Job.html#unique_states/1)
+    * [Unique Jobs](https://hexdocs.pm/oban/unique_jobs.html)
+    * [Upgrading to v2.20 — Update Unique States](https://hexdocs.pm/oban/v2-20.html#update-unique-states-optional)
   """
 
   use ObanDoctor.Check, category: :worker
+
+  alias ObanDoctor.UniqueStateGroups
 
   @recommended_states [:available, :scheduled, :executing, :retryable]
 
@@ -26,7 +47,7 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
 
   @impl true
   def description do
-    "Detects workers with unique config missing recommended states"
+    "Detects unique configs missing recommended states (named state groups are expanded)"
   end
 
   @impl true
@@ -51,39 +72,40 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   defp missing_recommended_states?(%{unique: unique}) do
     states = Keyword.get(unique, :states, [])
 
-    # Don't flag if they're using :all group (that's caught by another check)
+    # :all is reported by StateGroupUsage, including when mixed into a list.
     if uses_all_group?(states) do
       false
     else
-      state_list = normalize_states(states)
-      missing = @recommended_states -- state_list
-      not Enum.empty?(missing)
+      not Enum.empty?(missing_states(states))
     end
   end
 
-  defp uses_all_group?(:all), do: true
-  defp uses_all_group?([:all]), do: true
-  defp uses_all_group?(states) when is_list(states), do: :all in states
-  defp uses_all_group?(_), do: false
+  defp uses_all_group?(states) do
+    UniqueStateGroups.group_name(states) == :all or (is_list(states) and :all in states)
+  end
 
-  defp normalize_states(states) when is_list(states), do: states
-  defp normalize_states(_), do: []
+  defp missing_states(states) do
+    @recommended_states -- UniqueStateGroups.expand(states)
+  end
 
   defp build_issue(worker) do
     states = Keyword.get(worker.unique, :states, [])
-    missing = @recommended_states -- normalize_states(states)
+    missing = missing_states(states)
 
     Issue.new(
       check: __MODULE__,
       severity: default_severity(),
       message:
-        "Worker #{inspect(worker.module)} unique config missing states: #{inspect(missing)}",
+        "Worker #{inspect(worker.module)} unique config missing states: #{inspect(missing)}. " <>
+          "See #{UniqueStateGroups.unique_states_url()}",
       file: worker.file,
       line: worker.line,
       meta: %{
         worker: worker.module,
         configured_states: states,
-        missing_states: missing
+        missing_states: missing,
+        state_group: UniqueStateGroups.group_name(states),
+        docs: UniqueStateGroups.unique_states_url()
       }
     )
   end

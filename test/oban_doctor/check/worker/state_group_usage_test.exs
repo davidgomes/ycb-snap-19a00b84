@@ -26,6 +26,9 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsageTest do
       assert issue.check == StateGroupUsage
       assert issue.message =~ ":all state group"
       assert issue.message =~ "cannot be re-enqueued"
+      assert issue.message =~ "https://hexdocs.pm/oban/Oban.Job.html#unique_states/1"
+      assert issue.meta.state_group == :all
+      assert issue.meta.docs =~ "unique_states"
     end
 
     test "returns error when worker uses states: [:all]" do
@@ -64,6 +67,30 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsageTest do
       issues = StateGroupUsage.run(context)
 
       assert length(issues) == 1
+    end
+
+    test "returns no issues for the :incomplete named state group" do
+      workers = [
+        worker(MyApp.Workers.IncompleteWorker, states: :incomplete)
+      ]
+
+      assert StateGroupUsage.run(%{workers: workers}) == []
+    end
+
+    test "returns no issues for the :successful named state group" do
+      workers = [
+        worker(MyApp.Workers.SuccessfulWorker, states: :successful)
+      ]
+
+      assert StateGroupUsage.run(%{workers: workers}) == []
+    end
+
+    test "returns no issues for the :scheduled named state group" do
+      workers = [
+        worker(MyApp.Workers.ScheduledWorker, states: :scheduled)
+      ]
+
+      assert StateGroupUsage.run(%{workers: workers}) == []
     end
 
     test "returns no issues when worker uses explicit states" do
@@ -115,5 +142,16 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsageTest do
     test "returns :error" do
       assert StateGroupUsage.default_severity() == :error
     end
+  end
+
+  defp worker(module, opts) do
+    %{
+      module: module,
+      file: "lib/my_app/workers/worker.ex",
+      line: 1,
+      queue: :default,
+      unique: [fields: [:args], states: Keyword.fetch!(opts, :states)],
+      max_attempts: nil
+    }
   end
 end

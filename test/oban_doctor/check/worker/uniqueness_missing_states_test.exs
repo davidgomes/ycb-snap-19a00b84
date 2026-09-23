@@ -25,6 +25,8 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       assert issue.severity == :warning
       assert issue.check == UniquenessMissingStates
       assert issue.message =~ "missing states"
+      assert issue.message =~ "https://hexdocs.pm/oban/Oban.Job.html#unique_states/1"
+      assert issue.meta.docs =~ "unique_states"
       assert :available in issue.meta.missing_states
       assert :scheduled in issue.meta.missing_states
       assert :retryable in issue.meta.missing_states
@@ -88,6 +90,73 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       issues = UniquenessMissingStates.run(context)
 
       assert issues == []
+    end
+
+    test "does not flag the :incomplete named state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.IncompleteWorker,
+          file: "lib/my_app/workers/incomplete_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :incomplete],
+          max_attempts: nil
+        }
+      ]
+
+      assert UniquenessMissingStates.run(%{workers: workers}) == []
+    end
+
+    test "does not flag [:incomplete] as a partial state list" do
+      workers = [
+        %{
+          module: MyApp.Workers.IncompleteListWorker,
+          file: "lib/my_app/workers/incomplete_list_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: [:incomplete]],
+          max_attempts: nil
+        }
+      ]
+
+      assert UniquenessMissingStates.run(%{workers: workers}) == []
+    end
+
+    test "does not flag the :successful named state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.SuccessfulWorker,
+          file: "lib/my_app/workers/successful_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :successful],
+          max_attempts: nil
+        }
+      ]
+
+      assert UniquenessMissingStates.run(%{workers: workers}) == []
+    end
+
+    test "expands the :scheduled named state group before reporting missing states" do
+      workers = [
+        %{
+          module: MyApp.Workers.ScheduledWorker,
+          file: "lib/my_app/workers/scheduled_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :scheduled],
+          max_attempts: nil
+        }
+      ]
+
+      issues = UniquenessMissingStates.run(%{workers: workers})
+
+      assert length(issues) == 1
+      [issue] = issues
+      assert issue.meta.state_group == :scheduled
+      assert issue.meta.configured_states == :scheduled
+      assert issue.meta.missing_states == [:available, :executing, :retryable]
+      refute :scheduled in issue.meta.missing_states
     end
 
     test "does not flag workers using :all state group (handled by another check)" do
