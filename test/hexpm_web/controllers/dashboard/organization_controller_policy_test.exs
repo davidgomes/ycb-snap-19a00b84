@@ -135,6 +135,41 @@ defmodule HexpmWeb.Dashboard.OrganizationController.PolicyTest do
       assert Enum.any?(updated.repositories, &(&1.repository == org.name))
     end
 
+    test "removes the last override from a repository tab", %{user: user, organization: org} do
+      {:ok, %{policy: policy}} =
+        Policies.create(
+          org,
+          %{
+            "name" => "polone",
+            "visibility" => "public",
+            "repositories" => [
+              %{
+                "repository" => "hexpm",
+                "overrides" => [%{"action" => "deny", "package" => "badlib"}]
+              }
+            ]
+          },
+          audit: audit_data(user)
+        )
+
+      conn = build_conn() |> test_login(user)
+
+      params = %{
+        "policy" => %{
+          "visibility" => "public",
+          "repositories" => repository_params(policy, "hexpm", %{"overrides_drop" => [""]})
+        }
+      }
+
+      conn = post(conn, "/dashboard/orgs/#{org.name}/policies/#{policy.name}", params)
+
+      assert redirected_to(conn) =~ "/dashboard/orgs/#{org.name}/policies/polone"
+
+      updated = Policies.get(org, "polone")
+      hexpm = Enum.find(updated.repositories, &(&1.repository == "hexpm"))
+      assert hexpm.overrides == []
+    end
+
     test "ignores an attempt to rename the policy", %{user: user, organization: org} do
       {:ok, %{policy: policy}} =
         Policies.create(org, %{"name" => "polone", "visibility" => "public"},
