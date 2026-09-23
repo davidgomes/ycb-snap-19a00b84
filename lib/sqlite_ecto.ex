@@ -44,6 +44,7 @@ defmodule Sqlite.Ecto2 do
   ## Custom SQLite Types
 
   def loaders(:boolean, type), do: [&bool_decode/1, type]
+  def loaders(:float, type), do: [&float_decode/1, type]
   def loaders(:binary_id, type), do: [Ecto.UUID, type]
   def loaders(:utc_datetime, type), do: [&date_decode/1, type]
   def loaders(:naive_datetime, type), do: [&date_decode/1, type]
@@ -56,6 +57,9 @@ defmodule Sqlite.Ecto2 do
   defp bool_decode(0), do: {:ok, false}
   defp bool_decode(1), do: {:ok, true}
   defp bool_decode(x), do: {:ok, x}
+
+  defp float_decode(x) when is_integer(x), do: {:ok, x / 1}
+  defp float_decode(x), do: {:ok, x}
 
   defp date_decode(<<year :: binary-size(4), "-",
                      month :: binary-size(2), "-",

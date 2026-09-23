@@ -252,12 +252,16 @@ if Code.ensure_loaded?(Sqlitex.Server) do
       [?\s | intersperse_map(joins, ?\s, fn
         %JoinExpr{on: %QueryExpr{expr: expr}, qual: qual, ix: ix, source: source} ->
           {join, name} = get_source(query, sources, ix, source)
-          [join_qual(qual), join, " AS ", name, " ON " | expr(expr, sources, query)]
+          [join_qual(qual), join, " AS ", name | join_on(qual, expr, sources, query)]
       end)]
     end
 
+    defp join_on(:cross, true, _sources, _query), do: []
+    defp join_on(_qual, expr, sources, query), do: [" ON " | expr(expr, sources, query)]
+
     defp join_qual(:inner), do: "INNER JOIN "
     defp join_qual(:left), do: "LEFT JOIN "
+    defp join_qual(:cross), do: "CROSS JOIN "
     defp join_qual(mode), do: raise ArgumentError, "join `#{inspect mode}` not supported by SQLite"
 
     defp where(%Query{wheres: wheres} = query, sources) do
@@ -328,13 +332,10 @@ if Code.ensure_loaded?(Sqlitex.Server) do
       quote_qualified_name(field, sources, idx)
     end
 
-    defp expr({:&, _, [idx, fields, _counter]}, sources, query) do
-      {source, name, schema} = elem(sources, idx)
-      if is_nil(schema) and is_nil(fields) do
-        error!(query, "SQLite does not support selecting all fields from #{source} without a schema. " <>
-                      "Please specify a schema or specify exactly which fields you want to select")
-      end
-      intersperse_map(fields, ", ", &[name, ?. | quote_name(&1)])
+    defp expr({:&, _, [idx]}, sources, query) do
+      {source, _name, _schema} = elem(sources, idx)
+      error!(query, "SQLite does not support selecting all fields from #{source} without a schema. " <>
+                    "Please specify a schema or specify exactly which fields you want to select")
     end
 
     defp expr({:in, _, [left, right]}, sources, query) when is_list(right) do
@@ -363,8 +364,8 @@ if Code.ensure_loaded?(Sqlitex.Server) do
       ["NOT (", expr(expr, sources, query), ?)]
     end
 
-    defp expr(%Ecto.SubQuery{query: query, fields: fields}, _sources, _query) do
-      query.select.fields |> put_in(fields) |> all()
+    defp expr(%Ecto.SubQuery{query: query}, _sources, _query) do
+      all(query)
     end
 
     defp expr({:fragment, _, [kw]}, _sources, query) when is_list(kw) or tuple_size(kw) == 3 do
@@ -476,9 +477,10 @@ if Code.ensure_loaded?(Sqlitex.Server) do
     # transaction and trigger. See corresponding code in Sqlitex.
 
     defp returning(%Query{select: nil}, _sources, _cmd), do: []
-    defp returning(%Query{select: %{fields: [{:&, [], [_, fields, _]}]}}, sources, cmd) do
+    defp returning(%Query{select: %{fields: fields}}, sources, cmd) do
       cmd = cmd |> Atom.to_string |> String.upcase
       table = table_from_first_source(sources)
+      fields = Enum.map(fields, fn {{:., _, [{:&, _, [0]}, field]}, _, []} -> field end)
       fields = Enum.map_join([table | fields], ",", &quote_id/1)
       [@pseudo_returning_statement, cmd, ?\s, fields]
     end
@@ -702,7 +704,7 @@ if Code.ensure_loaded?(Sqlitex.Server) do
       column_options(default, type, null, pk)
     end
 
-    defp column_options(_default, :serial, _, true) do
+    defp column_options(_default, type, _, true) when type in [:serial, :bigserial] do
       " PRIMARY KEY AUTOINCREMENT"
     end
     defp column_options(default, type, null, pk) do
@@ -764,7 +766,7 @@ if Code.ensure_loaded?(Sqlitex.Server) do
     # stored value. Thus, "strings" are all text and "numerics" have arbitrary
     # precision regardless of the declared column type. Decimals are the
     # only exception.
-    defp column_type(:serial, _opts), do: "INTEGER"
+    defp column_type(serial, _opts) when serial in [:serial, :bigserial], do: "INTEGER"
     defp column_type(:string, _opts), do: "TEXT"
     defp column_type(:map, _opts), do: "TEXT"
     defp column_type({:map, _}, _opts), do: "TEXT"
@@ -793,7 +795,7 @@ if Code.ensure_loaded?(Sqlitex.Server) do
     defp reference_name(%Reference{name: name}, _table, _column),
       do: quote_name(name)
 
-    defp reference_column_type(:serial, _opts), do: "INTEGER"
+    defp reference_column_type(serial, _opts) when serial in [:serial, :bigserial], do: "INTEGER"
     defp reference_column_type(type, opts), do: column_type(type, opts)
 
     defp reference_on_delete(:nilify_all), do: " ON DELETE SET NULL"
