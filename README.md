@@ -11,11 +11,17 @@ Add PlugRailsCookieSessionStore as a dependency to your `mix.exs` file:
 
 ```elixir
 def deps do
-  [{:plug_rails_cookie_session_store, "~> 0.1"}]
+  [{:plug_rails_cookie_session_store, "~> 1.0"}]
 end
 ```
 
-And do not forget to add `:plug_rails_cookie_session_store` to the applications list.
+If you are on Elixir < 1.4 (or list applications explicitly), do not forget to add `:plug_rails_cookie_session_store` to the applications list.
+
+## Supported Rails versions
+
+* Rails 4.x and Rails 5.0 / 5.1 (encrypted, AES-256-CBC cookies).
+* Rails 5.2 with authenticated (AES-256-GCM) cookie encryption turned off, see below.
+* Rails 3.2 (signed cookies with `ExMarshal`), see the serializer section below.
 
 ## How to use with Phoenix
 
@@ -36,6 +42,16 @@ Rails.application.config.session_store :cookie_store, key: '_SOMETHING_HERE_sess
 Rails.application.config.action_dispatch.encrypted_cookie_salt =  'encryption salt'
 Rails.application.config.action_dispatch.encrypted_signed_cookie_salt = 'signing salt'
 ```
+
+If you don't set them, Rails uses `'encrypted cookie'` as the encryption salt and `'signed encrypted cookie'` as the signing salt.
+
+Rails 5.2 encrypts cookies with AES-256-GCM by default, which this library does not support. Switch Rails back to AES-256-CBC cookies (the Rails 4 / 5.0 / 5.1 format) with:
+
+```ruby
+Rails.application.config.action_dispatch.use_authenticated_cookie_encryption = false
+```
+
+Rails 4 and 5 derive their keys with PBKDF2-HMAC-SHA1, 1000 iterations and a 64 byte key length, so make sure to set `key_iterations: 1000`, `key_length: 64` and `key_digest: :sha` as shown below (these are not the defaults).
 
 #### Configure the Cookie Store in Phoenix. 
 
