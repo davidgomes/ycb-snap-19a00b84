@@ -53,7 +53,8 @@ defmodule EctoShorts.CommonFilters do
   """
   alias EctoShorts.{
     CommonSchemas,
-    QueryBuilder
+    QueryBuilder,
+    QueryHelpers
   }
 
   @type source :: binary()
@@ -87,18 +88,21 @@ defmodule EctoShorts.CommonFilters do
 
   def convert_params_to_filter(queryable, params) do
     query = CommonSchemas.get_schema_query(queryable)
+    queryable = QueryHelpers.get_queryable(query)
 
     params
     |> ensure_last_is_final_filter
-    |> Enum.reduce(query, &reduce_schema_filter/2)
-  end
-
-  defp reduce_schema_filter({filter_key, filter_value}, query) do
-    create_schema_filter(query, filter_key, filter_value)
+    |> Enum.reduce(query, fn {filter_key, filter_value}, query ->
+      build_query(queryable, filter_key, filter_value, query)
+    end)
   end
 
   @doc """
-  Implementation for `c:EctoShorts.QueryBuilder.create_schema_filter/2`.
+  Adds the filter to the query.
+
+  Filters listed in `EctoShorts.QueryBuilder.Common.filters/0` are built by
+  `EctoShorts.QueryBuilder.Common`, all other filters are built by
+  `EctoShorts.QueryBuilder.Schema`.
 
   ### Examples
 
@@ -110,12 +114,18 @@ defmodule EctoShorts.CommonFilters do
     filter_key :: filter_key(),
     filter_value :: filter_value()
   ) :: query()
-  def create_schema_filter(query, filter, value) when filter in @common_filters do
-    QueryBuilder.create_schema_filter(QueryBuilder.Common, {filter, value}, query)
+  def create_schema_filter(query, filter, value) do
+    query
+    |> QueryHelpers.get_queryable()
+    |> build_query(filter, value, query)
   end
 
-  def create_schema_filter(query, filter, value) do
-    QueryBuilder.create_schema_filter(QueryBuilder.Schema, {filter, value}, query)
+  defp build_query(queryable, filter, value, query) when filter in @common_filters do
+    QueryBuilder.build_query(QueryBuilder.Common, queryable, filter, value, query)
+  end
+
+  defp build_query(queryable, filter, value, query) do
+    QueryBuilder.build_query(QueryBuilder.Schema, queryable, filter, value, query)
   end
 
   defp ensure_last_is_final_filter(params) do
