@@ -4609,9 +4609,16 @@ export const PetalComboBox = {
 // assembled around the already-encoded rest of the query) and a hidden
 // data-phx-link anchor; the hook fills a template in and clicks the
 // anchor so navigation stays LiveView's own.
+//
+// Selection (both modes): indeterminate is a DOM property with no HTML
+// attribute, so the server stamps data-pc-dt-indeterminate on the header
+// checkbox and the hook mirrors it. checked is re-synced from the
+// attribute too - a just-clicked, still-focused checkbox keeps its
+// client-toggled property through LiveView's patch otherwise.
 export const PetalDataTable = {
   mounted() {
     this.searchTimer = null;
+    this.syncSelection();
 
     this.onInput = (e) => {
       if (!e.target.closest("[data-pc-dt-search]")) return;
@@ -4661,11 +4668,24 @@ export const PetalDataTable = {
     this.el.addEventListener("submit", this.onSubmit);
   },
 
+  updated() {
+    this.syncSelection();
+  },
+
   destroyed() {
     clearTimeout(this.searchTimer);
     this.el.removeEventListener("input", this.onInput);
     this.el.removeEventListener("change", this.onChange);
     this.el.removeEventListener("submit", this.onSubmit);
+  },
+
+  syncSelection() {
+    this.el
+      .querySelectorAll("[data-pc-dt-select-all], [data-pc-dt-select]")
+      .forEach((box) => {
+        box.checked = box.hasAttribute("checked");
+        box.indeterminate = box.hasAttribute("data-pc-dt-indeterminate");
+      });
   },
 
   committedFilters() {

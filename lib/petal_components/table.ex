@@ -54,7 +54,7 @@ defmodule PetalComponents.Table do
     """
 
   slot :col do
-    attr :label, :string
+    attr :label, :any, doc: "header content - a string, or a rendered fragment (e.g. a checkbox)"
     attr :class, :any
     attr :row_class, :any
     attr :sortable, :boolean, doc: "render the header as a sort button"
@@ -161,7 +161,13 @@ defmodule PetalComponents.Table do
   defp resolve_on_sort(on_sort, key) when is_function(on_sort, 1), do: on_sort.(key)
   defp resolve_on_sort(on_sort, _key), do: on_sort
 
-  defp sort_key(col), do: col[:sort_key] || String.downcase(col[:label] || "")
+  defp sort_key(col) do
+    case col do
+      %{sort_key: key} when is_binary(key) -> key
+      %{label: label} when is_binary(label) -> String.downcase(label)
+      _ -> ""
+    end
+  end
 
   defp sort_state(col, sort_by, sort_dir) do
     if sort_by && to_string(sort_by) == sort_key(col), do: sort_dir, else: "none"

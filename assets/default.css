@@ -2595,6 +2595,36 @@
   .pc-data-table__toolbar {
     @apply mb-3 flex flex-wrap items-center gap-2;
   }
+  /* the normal toolbar stays mounted (link mode reads its search input)
+     while the selection bar replaces it */
+  .pc-data-table__toolbar[hidden] {
+    @apply hidden;
+  }
+  /* same height as the controls it replaces, so the morph never jumps */
+  .pc-data-table__toolbar--selection {
+    @apply min-h-9;
+  }
+  .pc-data-table__selection-count {
+    @apply text-sm font-medium text-gray-900 dark:text-white;
+  }
+  .pc-data-table__bulk-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pc-data-table__clear-selection {
+    @apply ml-auto;
+  }
+  .pc-data-table__select-cell {
+    @apply w-px pr-0;
+  }
+  .pc-data-table__select-all,
+  .pc-data-table__select {
+    @apply block;
+  }
+  /* the checkbox column takes the table's first-col slot; the first data
+     column keeps its emphasis */
+  .pc-table__td.pc-data-table__select-cell + .pc-table__td {
+    @apply font-semibold;
+  }
   .pc-data-table__scroll {
     @apply overflow-x-auto;
   }
