@@ -1611,6 +1611,14 @@ select {
   --tw-ring-offset-color: #1f2937;
 }
 
+.dark\:checked\:border-transparent:checked:is(.dark *) {
+  border-color: transparent;
+}
+
+.dark\:checked\:bg-current:checked:is(.dark *) {
+  background-color: currentColor;
+}
+
 .dark\:hover\:bg-gray-700:hover:is(.dark *) {
   --tw-bg-opacity: 1;
   background-color: rgb(55 65 81 / var(--tw-bg-opacity));
@@ -1632,6 +1640,11 @@ select {
 
 .dark\:hover\:text-white\/80:hover:is(.dark *) {
   color: rgb(255 255 255 / 0.8);
+}
+
+.dark\:focus\:border-blue-500:focus:is(.dark *) {
+  --tw-border-opacity: 1;
+  border-color: rgb(59 130 246 / var(--tw-border-opacity));
 }
 
 .dark\:focus\:ring-gray-500:focus:is(.dark *) {

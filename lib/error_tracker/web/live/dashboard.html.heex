@@ -9,7 +9,7 @@
     value={@search_form[:reason].value}
     type="text"
     placeholder="Error"
-    class="border text-sm rounded-lg block p-2.5 bg-gray-50 border-gray-300 placeholder-gray-500 text-gray-900 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+    class="border text-sm rounded-lg block p-2.5 bg-gray-50 border-gray-300 placeholder-gray-500 text-gray-900 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:border-blue-500"
     phx-debounce
   />
   <input
@@ -17,7 +17,7 @@
     value={@search_form[:source_line].value}
     type="text"
     placeholder="Source line"
-    class="border text-sm rounded-lg block p-2.5 bg-gray-50 border-gray-300 placeholder-gray-500 text-gray-900 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+    class="border text-sm rounded-lg block p-2.5 bg-gray-50 border-gray-300 placeholder-gray-500 text-gray-900 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:border-blue-500"
     phx-debounce
   />
   <input
@@ -25,12 +25,12 @@
     value={@search_form[:source_function].value}
     type="text"
     placeholder="Source function"
-    class="border text-sm rounded-lg block p-2.5 bg-gray-50 border-gray-300 placeholder-gray-500 text-gray-900 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+    class="border text-sm rounded-lg block p-2.5 bg-gray-50 border-gray-300 placeholder-gray-500 text-gray-900 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:border-blue-500"
     phx-debounce
   />
   <select
     name={@search_form[:status].name}
-    class="border text-sm rounded-lg block p-2.5 bg-gray-50 border-gray-300 placeholder-gray-500 text-gray-900 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+    class="border text-sm rounded-lg block p-2.5 bg-gray-50 border-gray-300 placeholder-gray-500 text-gray-900 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:border-blue-500"
   >
     <option value="" selected={@search_form[:status].value == ""}>All</option>
     <option value="unresolved" selected={@search_form[:status].value == "unresolved"}>

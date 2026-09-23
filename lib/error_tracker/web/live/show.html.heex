@@ -53,7 +53,7 @@
             <input
               type="checkbox"
               id="show-app-frames"
-              class="ml-2 mr-2 mb-1 mt-1 inline-block text-sky-600 rounded focus:ring-sky-600 ring-offset-white focus:ring-2 bg-gray-100 border-gray-300 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600"
+              class="ml-2 mr-2 mb-1 mt-1 inline-block text-sky-600 rounded focus:ring-sky-600 ring-offset-white focus:ring-2 bg-gray-100 border-gray-300 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600 dark:checked:bg-current dark:checked:border-transparent"
               phx-click={JS.toggle(to: "#stacktrace tr:not([data-app=#{@app}])")}
             />
             <span class="text-md inline-block">
@@ -94,7 +94,7 @@
       <form phx-change="occurrence_navigation">
         <select
           name="occurrence_id"
-          class="w-full border text-sm rounded-lg block p-2.5 bg-gray-50 border-gray-300 placeholder-gray-500 text-gray-900 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white"
+          class="w-full border text-sm rounded-lg block p-2.5 bg-gray-50 border-gray-300 placeholder-gray-500 text-gray-900 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:border-blue-500"
         >
           <option
             :for={occurrence <- @occurrences}
