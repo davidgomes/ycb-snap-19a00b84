@@ -7,12 +7,24 @@ defmodule EctoJob.SupervisorTest do
 
     assert [
              {EctoJob.WorkerSupervisor, _, :supervisor, [EctoJob.WorkerSupervisor]},
-             {EctoJob.Producer, producer_pid, :worker, [EctoJob.Producer]},
-             {Postgrex.Notifications, notifications_pid, :worker, [Postgrex.Notifications]}
+             {EctoJob.Producer, producer_pid, :worker, [EctoJob.Producer]}
+             | notifier_children
            ] = Supervisor.which_children(pid)
 
     assert Process.whereis(JobQueue.Supervisor) == pid
-    assert Process.whereis(JobQueue.Notifier) == notifications_pid
     assert Process.whereis(JobQueue.Producer) == producer_pid
+    assert_notifier(EctoJob.Test.Repo.__adapter__(), notifier_children)
+  end
+
+  defp assert_notifier(Ecto.Adapters.Postgres, notifier_children) do
+    assert [{Postgrex.Notifications, notifications_pid, :worker, [Postgrex.Notifications]}] =
+             notifier_children
+
+    assert Process.whereis(JobQueue.Notifier) == notifications_pid
+  end
+
+  defp assert_notifier(Ecto.Adapters.MyXQL, notifier_children) do
+    assert notifier_children == []
+    assert Process.whereis(JobQueue.Notifier) == nil
   end
 end

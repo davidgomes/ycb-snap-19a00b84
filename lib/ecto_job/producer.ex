@@ -9,6 +9,9 @@ defmodule EctoJob.Producer do
   Installs a timer to check for expired jobs, and uses a `Postgrex.Notifications` listener
   to dispatch jobs immediately when new jobs are inserted into the database and there is
   pending demand.
+
+  Notifications are only available with PostgreSQL. With MySQL, new jobs are dispatched
+  when the timer fires or when new demand arrives.
   """
 
   use GenStage
@@ -18,7 +21,7 @@ defmodule EctoJob.Producer do
 
   @type repo :: module
   @type schema :: module
-  @type notifier :: pid
+  @type notifier :: pid | nil
   @type timeout_ms :: non_neg_integer
 
   defmodule State do
@@ -68,7 +71,7 @@ defmodule EctoJob.Producer do
    - `name` : The process name to register this GenStage as
    - `repo` : The Ecto Repo module to user for querying
    - `schema` : The EctoJob.JobQueue module to query
-   - `notifier` : The name of the `Postgrex.Notifications` notifier process
+   - `notifier` : The name of the `Postgrex.Notifications` notifier process, if one is running
    - `poll_interval` : Timer interval for activating scheduled/expired jobs
    - `notifications_listen_timeout`: Time in milliseconds that Notifications.listen!/3 is alloted to start listening to notifications from postgrex for new jobs
   """
@@ -133,7 +136,9 @@ defmodule EctoJob.Producer do
   end
 
   # Starts listening to notifications from postgrex for new jobs
-  @spec start_listener(notifier, schema, timeout_ms) :: reference
+  @spec start_listener(notifier, schema, timeout_ms) :: reference | nil
+  defp start_listener(nil, _schema, _notifications_listen_timeout), do: nil
+
   defp start_listener(notifier, schema, notifications_listen_timeout) do
     table_name = schema.__schema__(:source)
     Notifications.listen!(notifier, table_name, timeout: notifications_listen_timeout)
