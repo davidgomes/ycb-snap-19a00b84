@@ -6,7 +6,8 @@
 Mix.install([
   {:spider_man, "~> 0.5"},
   {:floki, "~> 0.34"},
-  {:nimble_csv, "~> 1.2"}
+  {:nimble_csv, "~> 1.2"},
+  {:kino, "~> 0.15"}
 ])
 ```
 
@@ -138,6 +139,18 @@ end
 
 callbacks = [init: init, handle_response: handle_response]
 {:ok, settings} = SpiderMan.CommonSpider.check_callbacks_and_merge_settings(callbacks, settings)
+```
+
+show the throughput infos of the spider on a table, it would refresh every second while the spider is running
+
+```elixir
+keys = [:component, :total, :success, :fail, :tps, :duration]
+throughput_table = Kino.DataTable.new([], name: "Throughput")
+
+print_stats = &Kino.DataTable.update(throughput_table, &1, keys: keys)
+settings = Keyword.put(settings, :print_stats, print_stats)
+
+throughput_table
 ```
 
 run ther spider
