@@ -594,6 +594,42 @@ defmodule Phoenix.LiveView.UploadChannelTest do
                  render_upload(avatar, "foo.jpeg")
       end
 
+      @tag allow: [
+             max_entries: 1,
+             chunk_size: 20,
+             accept: :any,
+             auto_upload: true,
+             max_entries_mode: :total,
+             progress: :consume
+           ]
+      test "consumed auto uploads count towards max_entries in :total mode", %{lv: lv} do
+        first = file_input(lv, "form", :avatar, [%{name: "first.jpeg", content: "first"}])
+        assert render_upload(first, "first.jpeg") =~ "consumed:first.jpeg"
+
+        second = file_input(lv, "form", :avatar, [%{name: "second.jpeg", content: "second"}])
+
+        assert lv
+               |> form("form", user: %{})
+               |> render_change(second) =~ "config_error::too_many_files"
+
+        assert {:error, :not_allowed} = render_upload(second, "second.jpeg")
+      end
+
+      @tag allow: [
+             max_entries: 1,
+             chunk_size: 20,
+             accept: :any,
+             auto_upload: true,
+             progress: :consume
+           ]
+      test "consumed auto uploads free max_entries capacity by default", %{lv: lv} do
+        first = file_input(lv, "form", :avatar, [%{name: "first.jpeg", content: "first"}])
+        assert render_upload(first, "first.jpeg") =~ "consumed:first.jpeg"
+
+        second = file_input(lv, "form", :avatar, [%{name: "second.jpeg", content: "second"}])
+        assert render_upload(second, "second.jpeg") =~ "consumed:second.jpeg"
+      end
+
       @tag allow: [max_entries: 1, chunk_size: 20, accept: :any, auto_upload: true]
       test "render_upload too many files with auto_upload", %{lv: lv} do
         avatar =

@@ -305,6 +305,44 @@ defmodule Phoenix.LiveView.UploadExternalTest do
   end
 
   @tag allow: [
+         max_entries: 1,
+         max_entries_mode: :total,
+         chunk_size: 20,
+         accept: :any,
+         external: :preflight
+       ]
+  test "consumed external entries count towards max_entries in :total mode", %{lv: lv} do
+    avatar = file_input(lv, "form", :avatar, [%{name: "foo.jpeg", content: "ok"}])
+    assert render_upload(avatar, "foo.jpeg", 100) =~ "foo.jpeg:100%"
+
+    run(lv, fn socket ->
+      Phoenix.LiveView.consume_uploaded_entries(socket, :avatar, fn _meta, _entry ->
+        {:ok, :ok}
+      end)
+
+      {:reply, :ok, socket}
+    end)
+
+    run(lv, fn socket ->
+      assert socket.assigns.uploads.avatar.consumed_entries == 1
+
+      new_socket =
+        Phoenix.LiveView.allow_upload(socket, :avatar,
+          max_entries: 1,
+          max_entries_mode: :total,
+          chunk_size: 20,
+          accept: :any,
+          external: &__MODULE__.preflight/2
+        )
+
+      {:reply, :ok, new_socket}
+    end)
+
+    retry = file_input(lv, "form", :avatar, [%{name: "retry.jpeg", content: "retry"}])
+    assert render_upload(retry, "retry.jpeg", 100) =~ "retry.jpeg:100%"
+  end
+
+  @tag allow: [
          max_entries: 5,
          chunk_size: 20,
          accept: :any,
