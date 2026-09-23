@@ -1,37 +1,14 @@
 defmodule ObanChoreWeb.JobComponent do
   @moduledoc false
   use Phoenix.LiveComponent
+  import ObanChoreWeb.CoreComponents
 
   @impl true
   def render(assigns) do
     ~H"""
     <div class={if @selected, do: "oc-block", else: "oc-hidden"} data-role="job-details" data-job-id={@job.id}>
       <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-        <div class="oc-card">
-          <div class="oc-job-header">
-            <h3 class="oc-text-sm" style="font-weight: 600; color: var(--oc-gray-900);">Arguments</h3>
-            <div class="oc-flex oc-items-center oc-gap-2">
-              <span class="oc-badge" style={state_style(@job.state)}>
-                <%= String.capitalize(to_string(@job.state)) %>
-              </span>
-              <span class="oc-text-xs oc-text-gray-500 oc-font-mono">ID: <%= @job.id %></span>
-            </div>
-          </div>
-          <div class="oc-job-args-grid">
-            <%= if map_size(@job.args) > 0 do %>
-              <%= for {key, value} <- @job.args do %>
-                <div>
-                  <dt class="oc-job-arg-title"><%= key %></dt>
-                  <dd class="oc-job-arg-value" title={inspect(value)}>
-                    <%= inspect(value) %>
-                  </dd>
-                </div>
-              <% end %>
-            <% else %>
-              <p class="oc-text-xs oc-text-gray-500" style="font-style: italic;">No arguments provided.</p>
-            <% end %>
-          </div>
-        </div>
+        <.job_args_card job={@job} />
 
         <div style="display: flex; flex-direction: column; gap: 1rem;">
           <h3 class="oc-text-sm" style="font-weight: 600; color: var(--oc-gray-900); padding-left: 0.25rem;">Execution Logs</h3>
@@ -82,28 +59,6 @@ defmodule ObanChoreWeb.JobComponent do
        |> assign(logs: [])}
     else
       {:ok, assign(socket, assigns)}
-    end
-  end
-
-  defp state_style(state) do
-    case state do
-      :executing ->
-        "background-color: var(--oc-blue-50); color: var(--oc-blue-700); box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.1);"
-
-      :available ->
-        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
-
-      :scheduled ->
-        "background-color: var(--oc-amber-50); color: var(--oc-amber-800); box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.2);"
-
-      :completed ->
-        "background-color: var(--oc-emerald-50); color: var(--oc-emerald-800); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.2);"
-
-      :discarded ->
-        "background-color: var(--oc-rose-50); color: var(--oc-rose-900); box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.1);"
-
-      _ ->
-        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
     end
   end
 end

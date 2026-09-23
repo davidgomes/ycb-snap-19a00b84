@@ -131,6 +131,74 @@ defmodule ObanChoreWeb.CoreComponents do
   end
 
   @doc """
+  Renders a badge with the state of a job.
+  """
+  attr(:state, :atom, required: true)
+
+  def state_badge(assigns) do
+    ~H"""
+    <span class="oc-badge" style={state_style(@state)} data-role="job-state">
+      <%= String.capitalize(to_string(@state)) %>
+    </span>
+    """
+  end
+
+  @doc """
+  Renders a card with the state, id and arguments of a job.
+  """
+  attr(:job, :map, required: true)
+
+  def job_args_card(assigns) do
+    ~H"""
+    <div class="oc-card">
+      <div class="oc-job-header">
+        <h3 class="oc-text-sm" style="font-weight: 600; color: var(--oc-gray-900);">Arguments</h3>
+        <div class="oc-flex oc-items-center oc-gap-2">
+          <.state_badge state={@job.state} />
+          <span class="oc-text-xs oc-text-gray-500 oc-font-mono">ID: <%= @job.id %></span>
+        </div>
+      </div>
+      <div class="oc-job-args-grid">
+        <%= if map_size(@job.args) > 0 do %>
+          <%= for {key, value} <- @job.args do %>
+            <div>
+              <dt class="oc-job-arg-title"><%= key %></dt>
+              <dd class="oc-job-arg-value" title={inspect(value)}>
+                <%= inspect(value) %>
+              </dd>
+            </div>
+          <% end %>
+        <% else %>
+          <p class="oc-text-xs oc-text-gray-500" style="font-style: italic;">No arguments provided.</p>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  defp state_style(state) do
+    case state do
+      :executing ->
+        "background-color: var(--oc-blue-50); color: var(--oc-blue-700); box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.1);"
+
+      :available ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+
+      state when state in [:scheduled, :retryable] ->
+        "background-color: var(--oc-amber-50); color: var(--oc-amber-800); box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.2);"
+
+      :completed ->
+        "background-color: var(--oc-emerald-50); color: var(--oc-emerald-800); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.2);"
+
+      :discarded ->
+        "background-color: var(--oc-rose-50); color: var(--oc-rose-900); box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.1);"
+
+      _ ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+    end
+  end
+
+  @doc """
   Renders a warning banner for duplicate chore execution.
   """
   attr(:on_dismiss, :string, required: true)
@@ -415,6 +483,17 @@ defmodule ObanChoreWeb.CoreComponents do
         min = div(rem(diff, 3600), 60)
         "#{hours}h #{min}m"
     end
+  end
+
+  @doc """
+  Formats a job timestamp for display, e.g. `2024-01-31 13:45:00 UTC`.
+  """
+  def format_datetime(nil), do: "—"
+
+  def format_datetime(datetime) do
+    datetime
+    |> to_datetime()
+    |> Calendar.strftime("%Y-%m-%d %H:%M:%S UTC")
   end
 
   defp to_datetime(%DateTime{} = dt), do: dt
