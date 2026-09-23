@@ -109,10 +109,12 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "Status is any of Pending, Paid"
     assert html =~ ~s(aria-label="Clear Status filter")
     # event mode carries the op grammar in hidden inputs; the hook mounts
-    # only to close top-layer popovers - no URL wiring
+    # only to close the popovers - no URL wiring. The panels live in the
+    # page, anchored to their trigger, not in the top layer
     assert html =~ ~s(name="op" value="filter")
     assert html =~ ~s(phx-hook="PetalDataTable")
-    assert html =~ ~s(popover="auto")
+    refute html =~ ~s(popover="auto")
+    refute html =~ "PetalPopover"
     refute html =~ "data-nav-template"
     refute html =~ "data-filters="
   end

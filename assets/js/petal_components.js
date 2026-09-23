@@ -4854,16 +4854,11 @@ export const PetalDataTable = {
   closePopover(form) {
     const panel = form.closest(".pc-popover__panel");
     if (!panel) return;
-    if (
-      panel.hasAttribute("popover") &&
-      typeof panel.hidePopover === "function"
-    ) {
-      // top-layer panels close through the native API, which also
-      // restores focus and light-dismiss state
-      panel.hidePopover();
-      return;
-    }
-    panel.style.display = "none";
+    // through LiveView's JS when mounted: the trigger's JS.toggle is
+    // sticky across patches, and the patch this Apply causes would
+    // otherwise re-show a panel hidden behind its back
+    if (typeof this.js === "function") this.js().hide(panel);
+    else panel.style.display = "none";
     const trigger = document.getElementById(`${panel.id}-trigger`);
     if (trigger) trigger.setAttribute("aria-expanded", "false");
   },

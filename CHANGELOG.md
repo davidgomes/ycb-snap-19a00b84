@@ -3,6 +3,14 @@
 
 #### Fixed
 
+- **`data_table` menus live in the page.** The filter editors and the
+  Columns dropdown were top-layer popovers, repositioned by JS on every
+  scroll, resize and visual-viewport change - and still lagging or
+  drifting on mobile. The toolbar sits outside the table's scroll
+  region, so nothing clips them: they are now ordinary anchored
+  popovers that scroll with the page for free. The hook closes a
+  filter editor after Apply through LiveView's JS, so the close sticks
+  across the patch that follows.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to

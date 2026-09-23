@@ -221,8 +221,8 @@ describe("PetalDataTable", () => {
     expect(url).toContain("filters[0][field]=email");
   });
 
-  it("closes a top-layer panel through the native popover API", () => {
-    const { el, patched, form } = mountWithFilter({
+  it("closes the panel through LiveView JS when the hook has it", () => {
+    const { hook, el, patched, form } = mountWithFilter({
       navTemplate: "/orders?:filters",
       filters: [],
       formHtml: `
@@ -234,12 +234,11 @@ describe("PetalDataTable", () => {
     });
 
     const panel = el.querySelector(".pc-popover__panel");
-    panel.setAttribute("popover", "auto");
     const hidden = [];
-    panel.hidePopover = () => hidden.push(true);
+    hook.js = () => ({ hide: (target) => hidden.push(target) });
 
     submit(form);
-    expect(hidden).toEqual([true]);
+    expect(hidden).toEqual([panel]);
     expect(patched).toHaveLength(1);
   });
 
