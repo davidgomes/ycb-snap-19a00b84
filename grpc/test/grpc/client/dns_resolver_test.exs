@@ -151,6 +151,21 @@ defmodule GRPC.Client.ReResolveTest do
     :sys.get_state(worker_pid)
   end
 
+  # Collects the distinct pick results (hosts or errors) seen until `deadline`.
+  defp pick_until(channel, deadline, seen) do
+    if System.monotonic_time(:millisecond) >= deadline do
+      seen
+    else
+      seen =
+        case Connection.pick_channel(channel) do
+          {:ok, %{host: host}} -> MapSet.put(seen, host)
+          error -> MapSet.put(seen, error)
+        end
+
+      pick_until(channel, deadline, seen)
+    end
+  end
+
   describe "scale-up: new backends discovered" do
     test "adds channels for addresses that appear in DNS", ctx do
       {:ok, channel} =
@@ -1042,14 +1057,14 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "refresh handler with failed channels" do
+  describe "per-request pick with failed channels" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.2"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
       Map.put(ctx, :failing_adapter, GRPC.Test.FailingClientAdapter)
     end
 
-    test "GenServer survives when :refresh picks a failed channel", ctx do
+    test "round robin never picks a channel that failed to connect", ctx do
       # Connect with 2 backends — one healthy, one failing
       expect(ctx.resolver, :resolve, fn _target ->
         {:ok,
@@ -1088,20 +1103,115 @@ defmodule GRPC.Client.ReResolveTest do
       state = get_state(ctx.ref)
       assert match?({:failed, _}, Map.get(state.real_channels, "10.0.0.2:50051"))
 
-      # Wait for several :refresh cycles (15s default, but we'll trigger manually).
-      # Round-robin will eventually pick 10.0.0.2. Without the fix, this crashes.
-      pid = whereis_name(ctx.ref)
-
       for _ <- 1..5 do
-        send(pid, :refresh)
+        assert {:ok, %{host: "10.0.0.1"}} = Connection.pick_channel(channel)
       end
 
-      # Small sleep for messages to process
-      Process.sleep(50)
+      disconnect_and_wait(channel)
+    end
+  end
 
-      assert Process.alive?(pid)
-      assert {:ok, picked} = Connection.pick_channel(channel)
-      assert picked.host == "10.0.0.1"
+  describe "round robin after re-resolution" do
+    test "rotates across every backend discovered by re-resolution", ctx do
+      {:ok, channel} =
+        connect_with_resolver(
+          ctx.ref,
+          ctx.resolver,
+          ctx.adapter,
+          [%{address: "10.0.0.1", port: 50051}],
+          lb_policy: :round_robin
+        )
+
+      stub(ctx.resolver, :resolve, fn _target ->
+        {:ok,
+         %{
+           addresses: [%{address: "10.0.0.1", port: 50051}, %{address: "10.0.0.2", port: 50051}],
+           service_config: nil
+         }}
+      end)
+
+      Process.sleep(@wait)
+
+      hosts =
+        for _ <- 1..4 do
+          {:ok, %{host: host}} = Connection.pick_channel(channel)
+          host
+        end
+
+      assert hosts |> Enum.uniq() |> Enum.sort() == ["10.0.0.1", "10.0.0.2"]
+
+      disconnect_and_wait(channel)
+    end
+
+    test "re-resolution updates the load balancer without writing to persistent_term", ctx do
+      {:ok, channel} =
+        connect_with_resolver(
+          ctx.ref,
+          ctx.resolver,
+          ctx.adapter,
+          [%{address: "10.0.0.1", port: 50051}],
+          lb_policy: :round_robin
+        )
+
+      published = :persistent_term.get({Connection, ctx.ref})
+      pid = whereis_name(ctx.ref)
+
+      :erlang.trace_pattern({:persistent_term, :put, 2}, true, [:global])
+      :erlang.trace(pid, true, [:call])
+
+      on_exit(fn -> :erlang.trace_pattern({:persistent_term, :put, 2}, false, [:global]) end)
+
+      stub(ctx.resolver, :resolve, fn _target ->
+        {:ok,
+         %{
+           addresses: [%{address: "10.0.0.1", port: 50051}, %{address: "10.0.0.2", port: 50051}],
+           service_config: nil
+         }}
+      end)
+
+      Process.sleep(@wait)
+
+      assert map_size(get_state(ctx.ref).real_channels) == 2
+      :erlang.trace(pid, false, [:call])
+
+      refute_received {:trace, ^pid, :call, {:persistent_term, :put, _args}}
+      assert :persistent_term.get({Connection, ctx.ref}) === published
+
+      disconnect_and_wait(channel)
+    end
+
+    test "concurrent picks never fail while backends are removed", ctx do
+      {:ok, channel} =
+        connect_with_resolver(
+          ctx.ref,
+          ctx.resolver,
+          ctx.adapter,
+          [
+            %{address: "10.0.0.1", port: 50051},
+            %{address: "10.0.0.2", port: 50051},
+            %{address: "10.0.0.3", port: 50051}
+          ],
+          lb_policy: :round_robin
+        )
+
+      stub(ctx.resolver, :resolve, fn _target ->
+        {:ok, %{addresses: [%{address: "10.0.0.1", port: 50051}], service_config: nil}}
+      end)
+
+      deadline = System.monotonic_time(:millisecond) + @wait
+
+      seen =
+        1..20
+        |> Enum.map(fn _ -> Task.async(fn -> pick_until(channel, deadline, MapSet.new()) end) end)
+        |> Task.await_many(5_000)
+        |> Enum.reduce(&MapSet.union/2)
+
+      assert map_size(get_state(ctx.ref).real_channels) == 1
+      assert MapSet.subset?(seen, MapSet.new(["10.0.0.1", "10.0.0.2", "10.0.0.3"]))
+
+      for _ <- 1..3 do
+        assert {:ok, %{host: "10.0.0.1"}} = Connection.pick_channel(channel)
+      end
 
       disconnect_and_wait(channel)
     end

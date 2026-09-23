@@ -33,6 +33,152 @@ defmodule GRPC.Client.ConnectionTest do
     end
   end
 
+  describe "pick_channel/2 - per-request load balancing" do
+    setup do
+      on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
+      %{multi_target: "ipv4:127.0.0.1:50051,127.0.0.2:50051"}
+    end
+
+    test "round_robin rotates across channels on every pick", ctx do
+      {:ok, channel} =
+        Connection.connect(ctx.multi_target,
+          adapter: ctx.adapter,
+          name: ctx.ref,
+          lb_policy: :round_robin
+        )
+
+      assert pick_hosts(channel, 4) == ~w(127.0.0.1 127.0.0.2 127.0.0.1 127.0.0.2)
+
+      Connection.disconnect(channel)
+    end
+
+    test "pick_first sticks to the first channel", ctx do
+      {:ok, channel} = Connection.connect(ctx.multi_target, adapter: ctx.adapter, name: ctx.ref)
+
+      assert pick_hosts(channel, 3) == ~w(127.0.0.1 127.0.0.1 127.0.0.1)
+
+      Connection.disconnect(channel)
+    end
+
+    test "only channels that connected are picked", ctx do
+      Application.put_env(:grpc, :grpc_test_failing_hosts, ["127.0.0.1"])
+
+      {:ok, channel} =
+        Connection.connect(ctx.multi_target,
+          adapter: GRPC.Test.FailingClientAdapter,
+          name: ctx.ref,
+          lb_policy: :round_robin
+        )
+
+      assert channel.host == "127.0.0.2"
+      assert pick_hosts(channel, 3) == ~w(127.0.0.2 127.0.0.2 127.0.0.2)
+
+      Connection.disconnect(channel)
+    end
+
+    test "connect/2 returns the connect error when no channel connects", ctx do
+      Application.put_env(:grpc, :grpc_test_failing_hosts, ["127.0.0.1", "127.0.0.2"])
+
+      assert {:error, :connection_refused} =
+               Connection.connect(ctx.multi_target,
+                 adapter: GRPC.Test.FailingClientAdapter,
+                 name: ctx.ref
+               )
+
+      assert {:error, :no_connection} = Connection.pick_channel(%Channel{ref: ctx.ref})
+    end
+  end
+
+  describe "load balancer lifecycle" do
+    test "outlives the process that called connect/2", %{
+      ref: ref,
+      target: target,
+      adapter: adapter
+    } do
+      parent = self()
+
+      {pid, mon} =
+        spawn_monitor(fn ->
+          {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
+          send(parent, {:connected, channel})
+        end)
+
+      assert_receive {:connected, channel}
+      assert_receive {:DOWN, ^mon, :process, ^pid, :normal}
+
+      assert {:ok, ^channel} = Connection.pick_channel(channel)
+
+      Connection.disconnect(channel)
+    end
+
+    test "disconnect/1 frees the load balancer table", %{
+      ref: ref,
+      target: target,
+      adapter: adapter
+    } do
+      {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
+      %{lb_state: %{tid: tid}} = :sys.get_state(whereis_name(ref))
+
+      {:ok, _} = Connection.disconnect(channel)
+
+      assert :ets.info(tid) == :undefined
+    end
+
+    test "terminate/2 frees the load balancer table", %{
+      ref: ref,
+      target: target,
+      adapter: adapter
+    } do
+      {:ok, _channel} = Connection.connect(target, adapter: adapter, name: ref)
+      pid = whereis_name(ref)
+      %{lb_state: %{tid: tid}} = :sys.get_state(pid)
+
+      ref_mon = Process.monitor(pid)
+      GenServer.stop(pid, :shutdown)
+      assert_receive {:DOWN, ^ref_mon, :process, ^pid, :shutdown}, 500
+
+      assert :ets.info(tid) == :undefined
+    end
+
+    test "concurrent picks racing disconnect/1 fail with :no_connection, never crash", %{
+      ref: ref,
+      adapter: adapter
+    } do
+      {:ok, channel} =
+        Connection.connect("ipv4:127.0.0.1:50051,127.0.0.2:50051",
+          adapter: adapter,
+          name: ref,
+          lb_policy: :round_robin
+        )
+
+      pickers = for _ <- 1..50, do: Task.async(fn -> pick_until_disconnected(channel, 0) end)
+
+      Process.sleep(10)
+      {:ok, _} = Connection.disconnect(channel)
+
+      assert Enum.all?(Task.await_many(pickers, 5_000), &(&1 > 0))
+      assert {:error, :no_connection} = Connection.pick_channel(channel)
+    end
+
+    test "connect/disconnect cycles leak neither persistent_term entries nor ETS tables", %{
+      target: target,
+      adapter: adapter
+    } do
+      terms_before = connection_terms()
+      tables_before = lb_tables()
+
+      for policy <- [:pick_first, :round_robin], _ <- 1..100 do
+        {:ok, channel} =
+          Connection.connect(target, adapter: adapter, name: make_ref(), lb_policy: policy)
+
+        {:ok, _} = Connection.disconnect(channel)
+      end
+
+      assert connection_terms() == terms_before
+      assert lb_tables() == tables_before
+    end
+  end
+
   describe "connect/2 - already_started branch" do
     test "returns {:ok, channel} when the GenServer for the same ref is already running", %{
       ref: ref,
@@ -156,5 +302,28 @@ defmodule GRPC.Client.ConnectionTest do
       [{pid, _value}] -> pid
       [] -> nil
     end
+  end
+
+  defp pick_hosts(channel, n) do
+    for _ <- 1..n do
+      {:ok, %Channel{host: host}} = Connection.pick_channel(channel)
+      host
+    end
+  end
+
+  defp pick_until_disconnected(channel, picks) do
+    case Connection.pick_channel(channel) do
+      {:ok, %Channel{}} -> pick_until_disconnected(channel, picks + 1)
+      {:error, :no_connection} -> picks
+    end
+  end
+
+  defp connection_terms do
+    for {{Connection, _} = key, _value} <- :persistent_term.get(), do: key
+  end
+
+  defp lb_tables do
+    lb_mods = [GRPC.Client.LoadBalancing.PickFirst, GRPC.Client.LoadBalancing.RoundRobin]
+    :ets.all() |> Enum.filter(&(:ets.info(&1, :name) in lb_mods)) |> Enum.sort()
   end
 end
