@@ -1,5 +1,6 @@
 defmodule GRPC.Client.ConnectionTest do
   use GRPC.Client.DataCase, async: false
+  import Mox
 
   alias GRPC.Channel
   alias GRPC.Client.Connection
@@ -16,13 +17,15 @@ defmodule GRPC.Client.ConnectionTest do
   end
 
   describe "pick_channel/2" do
-    test "returns {:error, :no_connection} when no persistent_term entry exists", %{ref: ref} do
+    test "returns {:error, :no_connection} when no connection is registered for the ref", %{
+      ref: ref
+    } do
       channel = %Channel{ref: ref}
 
       assert {:error, :no_connection} = Connection.pick_channel(channel)
     end
 
-    test "returns {:ok, channel} when a channel is stored in persistent_term", %{
+    test "returns {:ok, channel} when a connection is registered for the ref", %{
       ref: ref,
       target: target,
       adapter: adapter
@@ -30,6 +33,67 @@ defmodule GRPC.Client.ConnectionTest do
       {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
 
       assert {:ok, ^channel} = Connection.pick_channel(%Channel{ref: ref})
+    end
+  end
+
+  describe "pick_channel/2 - per-request load balancing" do
+    setup do
+      Mox.set_mox_global()
+
+      stub(GRPC.Client.MockResolver, :resolve, fn _target ->
+        {:ok,
+         %{
+           addresses: [%{address: "10.0.0.1", port: 50051}, %{address: "10.0.0.2", port: 50051}],
+           service_config: nil
+         }}
+      end)
+
+      stub(GRPC.Client.MockResolver, :init, fn _target, _opts -> {:ok, nil} end)
+      :ok
+    end
+
+    test "round_robin rotates across backends on every pick", %{ref: ref, adapter: adapter} do
+      channel = connect_multi(ref, adapter, :round_robin)
+
+      assert pick_hosts(channel, 4) == ["10.0.0.1", "10.0.0.2", "10.0.0.1", "10.0.0.2"]
+
+      Connection.disconnect(channel)
+    end
+
+    test "round_robin spreads concurrent picks evenly", %{ref: ref, adapter: adapter} do
+      channel = connect_multi(ref, adapter, :round_robin)
+
+      hosts =
+        1..10
+        |> Task.async_stream(fn _ -> pick_hosts(channel, 10) end)
+        |> Enum.flat_map(fn {:ok, hosts} -> hosts end)
+
+      assert Enum.frequencies(hosts) == %{"10.0.0.1" => 50, "10.0.0.2" => 50}
+
+      Connection.disconnect(channel)
+    end
+
+    test "pick_first always returns the first backend", %{ref: ref, adapter: adapter} do
+      channel = connect_multi(ref, adapter, :pick_first)
+
+      assert pick_hosts(channel, 4) == List.duplicate("10.0.0.1", 4)
+
+      Connection.disconnect(channel)
+    end
+
+    test "picks without calling the connection process", %{ref: ref, adapter: adapter} do
+      channel = connect_multi(ref, adapter, :round_robin)
+      pid = whereis_name(ref)
+
+      :sys.suspend(pid)
+
+      try do
+        assert {:ok, %Channel{}} = Connection.pick_channel(channel)
+      after
+        :sys.resume(pid)
+      end
+
+      Connection.disconnect(channel)
     end
   end
 
@@ -69,7 +133,7 @@ defmodule GRPC.Client.ConnectionTest do
       assert_receive {:DOWN, ^ref_mon, :process, ^pid, _reason}, 500
     end
 
-    test "pick_channel returns {:error, :no_connection} after disconnect (persistent_term is erased)",
+    test "pick_channel returns {:error, :no_connection} right after disconnect",
          %{ref: ref, target: target, adapter: adapter} do
       {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
 
@@ -79,8 +143,8 @@ defmodule GRPC.Client.ConnectionTest do
     end
   end
 
-  describe "terminate/2 - persistent_term cleanup on process kill" do
-    test "persistent_term is erased when process is killed without disconnect", %{
+  describe "terminate/2 - LB cleanup on process stop" do
+    test "pick_channel fails when process is stopped without disconnect", %{
       ref: ref,
       target: target,
       adapter: adapter
@@ -149,6 +213,25 @@ defmodule GRPC.Client.ConnectionTest do
   catch
     :exit, _reason ->
       :ok
+  end
+
+  defp connect_multi(ref, adapter, lb_policy) do
+    {:ok, channel} =
+      Connection.connect("dns://my-service.local:50051",
+        adapter: adapter,
+        name: ref,
+        resolver: GRPC.Client.MockResolver,
+        lb_policy: lb_policy
+      )
+
+    channel
+  end
+
+  defp pick_hosts(channel, count) do
+    for _ <- 1..count do
+      {:ok, %Channel{host: host}} = Connection.pick_channel(channel)
+      host
+    end
   end
 
   defp whereis_name(ref) do
