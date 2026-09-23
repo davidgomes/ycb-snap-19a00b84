@@ -417,6 +417,59 @@ defmodule Phoenix.LiveView.UploadConfigTest do
     end
   end
 
+  describe "fail_entry/3" do
+    setup do
+      socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any, max_entries: 2)
+      entry = build_client_entry(:avatar)
+      {:ok, conf} = UploadConfig.put_entries(socket.assigns.uploads.avatar, [entry])
+      {:ok, conf} = UploadConfig.register_entry_upload(conf, self(), entry["ref"])
+      {:ok, conf: conf, ref: entry["ref"]}
+    end
+
+    test "retains the entry with the error", %{conf: conf, ref: ref} do
+      conf = UploadConfig.fail_entry(conf, ref, {:writer_failure, :boom})
+
+      assert [%UploadEntry{ref: ^ref, done?: false}] = conf.entries
+      assert conf.errors == [{ref, {:writer_failure, :boom}}]
+      assert UploadConfig.entry_pid(conf, UploadConfig.get_entry_by_ref(conf, ref)) == nil
+    end
+
+    test "does not duplicate the same error", %{conf: conf, ref: ref} do
+      conf =
+        conf
+        |> UploadConfig.fail_entry(ref, {:writer_failure, :boom})
+        |> UploadConfig.fail_entry(ref, {:writer_failure, :boom})
+
+      assert conf.errors == [{ref, {:writer_failure, :boom}}]
+    end
+
+    test "disallows registering the failed entry again", %{conf: conf, ref: ref} do
+      conf = UploadConfig.fail_entry(conf, ref, {:writer_failure, :boom})
+      channel_pid = spawn(fn -> :ok end)
+
+      assert UploadConfig.register_entry_upload(conf, channel_pid, ref) == {:error, :disallowed}
+    end
+
+    test "is kept when its upload channel is unregistered", %{conf: conf, ref: ref} do
+      conf = UploadConfig.fail_entry(conf, ref, {:writer_failure, :boom})
+
+      assert UploadConfig.unregister_completed_entry(conf, ref) == conf
+    end
+
+    test "is dropped when cancelled", %{conf: conf, ref: ref} do
+      conf = UploadConfig.fail_entry(conf, ref, {:writer_failure, :boom})
+      conf = UploadConfig.cancel_entry(conf, UploadConfig.get_entry_by_ref(conf, ref))
+
+      assert conf.entries == []
+      assert conf.errors == []
+      assert conf.entry_refs_to_pids == %{}
+    end
+
+    test "ignores unknown entries", %{conf: conf} do
+      assert UploadConfig.fail_entry(conf, "unknown", {:writer_failure, :boom}) == conf
+    end
+  end
+
   test "supports binary upload name" do
     assert LiveView.allow_upload(build_socket(), "avatar", accept: ~w(image/png .jpeg))
   end
