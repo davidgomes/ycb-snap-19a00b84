@@ -1,13 +1,20 @@
 defmodule GRPC.Client.Adapters.MintTest do
-  use GRPC.Client.DataCase, async: false
+  use GRPC.Client.DataCase, async: true
 
   alias GRPC.Client.Adapters.Mint
 
+  # Unique Ranch listener name so this module can run async without racing
+  # other suites that still start the shared FeatureServer module directly.
+  defmodule Endpoint do
+    use GRPC.Endpoint
+    run(FeatureServer)
+  end
+
   setup do
-    {:ok, _, port} = GRPC.Server.start(FeatureServer, 0)
+    {:ok, _, port} = GRPC.Server.start_endpoint(Endpoint, 0)
 
     on_exit(fn ->
-      :ok = GRPC.Server.stop(FeatureServer)
+      :ok = GRPC.Server.stop_endpoint(Endpoint)
     end)
 
     %{port: port}
