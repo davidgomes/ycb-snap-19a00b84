@@ -13,7 +13,12 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsage do
       unique: [fields: [:args], states: :all]
 
   Good - allows re-enqueueing after completion:
-      unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+      unique: [fields: [:args], states: :incomplete]
+
+  ## References
+
+  - [Oban.Worker unique jobs](https://hexdocs.pm/oban/Oban.Worker.html#module-unique-jobs)
+  - [Unique Jobs guide](https://hexdocs.pm/oban/unique_jobs.html)
   """
 
   use ObanDoctor.Check, category: :worker

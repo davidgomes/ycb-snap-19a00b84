@@ -15,11 +15,29 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
 
   Good - includes all non-final states:
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  Good - uses the `:incomplete` named state group:
+      unique: [fields: [:args], states: :incomplete]
+
+  Named state groups (`:all`, `:incomplete`, `:scheduled`, `:successful`) are
+  expanded to their member states before checking.
+
+  ## References
+
+  - [Oban.Worker unique jobs](https://hexdocs.pm/oban/Oban.Worker.html#module-unique-jobs)
+  - [Unique Jobs guide](https://hexdocs.pm/oban/unique_jobs.html)
   """
 
   use ObanDoctor.Check, category: :worker
 
   @recommended_states [:available, :scheduled, :executing, :retryable]
+
+  @state_groups %{
+    all: [:available, :scheduled, :executing, :retryable, :completed, :cancelled, :discarded],
+    incomplete: [:available, :scheduled, :executing, :retryable],
+    scheduled: [:scheduled],
+    successful: [:available, :scheduled, :executing, :retryable, :completed]
+  }
 
   @impl true
   def id, do: :uniqueness_missing_states
@@ -66,7 +84,15 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   defp uses_all_group?(states) when is_list(states), do: :all in states
   defp uses_all_group?(_), do: false
 
-  defp normalize_states(states) when is_list(states), do: states
+  defp normalize_states(group) when is_map_key(@state_groups, group),
+    do: Map.fetch!(@state_groups, group)
+
+  defp normalize_states(states) when is_list(states) do
+    states
+    |> Enum.flat_map(fn state -> Map.get(@state_groups, state, [state]) end)
+    |> Enum.uniq()
+  end
+
   defp normalize_states(_), do: []
 
   defp build_issue(worker) do
