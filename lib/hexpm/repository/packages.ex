@@ -98,29 +98,25 @@ defmodule Hexpm.Repository.Packages do
   def attach_latest_releases(packages) do
     package_ids = Enum.map(packages, & &1.id)
 
+    latest =
+      from(r in Release,
+        where: r.package_id == parent_as(:package).id,
+        select: %{version: r.version, inserted_at: r.inserted_at}
+      )
+      |> Release.latest(only_stable: true, unstable_fallback: true)
+
     releases =
-      from(
-        r in Release,
-        where: r.package_id in ^package_ids,
-        group_by: r.package_id,
-        select:
-          {r.package_id,
-           {fragment("array_agg(?)", r.version), fragment("array_agg(?)", r.inserted_at)}}
+      from(p in Package,
+        as: :package,
+        where: p.id in ^package_ids,
+        inner_lateral_join: r in subquery(latest),
+        on: true,
+        select: {p.id, %Release{version: r.version, inserted_at: r.inserted_at}}
       )
       |> Repo.all()
-      |> Map.new(fn {package_id, {versions, inserted_ats}} ->
-        {package_id,
-         Enum.zip_with(versions, inserted_ats, fn version, inserted_at ->
-           %Release{version: version, inserted_at: inserted_at}
-         end)}
-      end)
+      |> Map.new()
 
-    Enum.map(packages, fn package ->
-      release =
-        Release.latest_version(releases[package.id], only_stable: true, unstable_fallback: true)
-
-      %{package | latest_release: release}
-    end)
+    Enum.map(packages, &%{&1 | latest_release: releases[&1.id]})
   end
 
   def search(repositories, page, packages_per_page, query, sort, fields) do

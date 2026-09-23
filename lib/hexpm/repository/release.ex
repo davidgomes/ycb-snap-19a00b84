@@ -11,6 +11,12 @@ defmodule Hexpm.Repository.Release do
     field :outer_checksum, :binary
     field :has_docs, :boolean, default: false
     field :vulnerable?, :boolean, virtual: true, default: false
+
+    # Set by the releases_set_semver_sort_key trigger. Comparing keys bytewise
+    # gives SemVer precedence.
+    field :semver_sort_key, :binary, load_in_query: false, writable: :never
+    field :stable, :boolean, load_in_query: false, writable: :never
+
     timestamps()
 
     belongs_to :package, Package
@@ -191,6 +197,34 @@ defmodule Hexpm.Repository.Release do
       latest(with_docs_releases)
     else
       latest(stable_releases)
+    end
+  end
+
+  @doc """
+  Limits a releases query to its latest release, taking the same options as
+  `latest_version/2`.
+  """
+  def latest(query, opts) do
+    only_stable? = Keyword.fetch!(opts, :only_stable)
+    unstable_fallback? = Keyword.get(opts, :unstable_fallback, false)
+    with_docs? = Keyword.get(opts, :with_docs)
+
+    query =
+      if with_docs? do
+        from(r in query, where: r.has_docs)
+      else
+        query
+      end
+
+    cond do
+      not only_stable? ->
+        from(r in query, order_by: [desc: r.semver_sort_key], limit: 1)
+
+      unstable_fallback? ->
+        from(r in query, order_by: [desc: r.stable, desc: r.semver_sort_key], limit: 1)
+
+      true ->
+        from(r in query, where: r.stable, order_by: [desc: r.semver_sort_key], limit: 1)
     end
   end
 
