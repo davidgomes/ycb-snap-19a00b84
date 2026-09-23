@@ -282,6 +282,35 @@ defmodule SpiderMan.EngineTest do
     assert :ok = SpiderMan.stop(spider)
   end
 
+  test "print_stats with fun/1" do
+    parent = self()
+    spider = :print_stats_fun
+
+    assert {:ok, _pid} =
+             CommonSpider.start(
+               spider,
+               [handle_response: empty_handle_response_fun()],
+               print_stats: &send(parent, {:stats, &1}),
+               downloader_options: [requester: JustReturn],
+               item_processor_options: [storage: false]
+             )
+
+    assert SpiderMan.insert_request(spider, Utils.build_request("1"))
+
+    assert_receive {:stats,
+                    [
+                      %{component: :downloader, total: 1, success: 1, fail: 0, tps: _},
+                      %{component: :spider, total: 1, success: 1, fail: 0, tps: _},
+                      %{component: :item_processor, total: 0, success: 0, fail: 0, tps: 0}
+                    ]},
+                   5000
+
+    %{stats_tid: stats_tid} = SpiderMan.get_state(spider)
+
+    assert "Downloader:[1/1 " <> _ = SpiderMan.Stats.print_spider_stats(stats_tid, true)
+    assert :ok = SpiderMan.stop(spider)
+  end
+
   test "setup_ets_tables - new", %{spider: spider} do
     check_ets_tables(spider)
   end
