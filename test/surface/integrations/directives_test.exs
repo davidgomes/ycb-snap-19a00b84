@@ -889,6 +889,47 @@ defmodule Surface.DirectivesTest do
       assert js_attribute(doc, "div > button", "phx-click") == [["push", %{"event" => "ok"}]]
     end
 
+    test "translate all supported events" do
+      html =
+        render_surface do
+          ~F"""
+          <div
+            :on-click="click"
+            :on-click-away="click_away"
+            :on-change="change"
+            :on-submit="submit"
+            :on-blur="blur"
+            :on-focus="focus"
+            :on-window-blur="window_blur"
+            :on-window-focus="window_focus"
+            :on-keydown="keydown"
+            :on-keyup="keyup"
+            :on-window-keydown="window_keydown"
+            :on-window-keyup="window_keyup"
+            :on-viewport-top="viewport_top"
+            :on-viewport-bottom="viewport_bottom"
+          />
+          """
+        end
+
+      doc = parse_document!(html)
+
+      assert attribute(doc, "phx-click") == ["click"]
+      assert attribute(doc, "phx-click-away") == ["click_away"]
+      assert attribute(doc, "phx-change") == ["change"]
+      assert attribute(doc, "phx-submit") == ["submit"]
+      assert attribute(doc, "phx-blur") == ["blur"]
+      assert attribute(doc, "phx-focus") == ["focus"]
+      assert attribute(doc, "phx-window-blur") == ["window_blur"]
+      assert attribute(doc, "phx-window-focus") == ["window_focus"]
+      assert attribute(doc, "phx-keydown") == ["keydown"]
+      assert attribute(doc, "phx-keyup") == ["keyup"]
+      assert attribute(doc, "phx-window-keydown") == ["window_keydown"]
+      assert attribute(doc, "phx-window-keyup") == ["window_keyup"]
+      assert attribute(doc, "phx-viewport-top") == ["viewport_top"]
+      assert attribute(doc, "phx-viewport-bottom") == ["viewport_bottom"]
+    end
+
     test "do not translate invalid events" do
       html =
         render_surface do
