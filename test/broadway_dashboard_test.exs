@@ -109,6 +109,41 @@ defmodule BroadwayDashboardTest do
       Process.exit(registry, :normal)
     end
 
+    test "shows the pipeline registered using via after auto discover" do
+      start_supervised!({Registry, keys: :unique, name: DashboardTestRegistry})
+      name = {:via, Registry, {DashboardTestRegistry, new_unique_name()}}
+
+      {:ok, _broadway} =
+        Broadway.start_link(UsesRegistry,
+          name: name,
+          producer: [module: {Broadway.DummyProducer, []}],
+          processors: [default: []],
+          batchers: [default: []]
+        )
+
+      nav_name = inspect(name) |> URI.encode_www_form()
+      {:ok, live, _} = live(build_conn(), "/dashboard/broadway_auto_discovery?nav=#{nav_name}")
+
+      rendered = render(live)
+      assert rendered =~ "Throughput"
+      assert rendered =~ "All time"
+      assert rendered =~ "prod_0"
+      assert rendered =~ "proc_0"
+
+      assert has_element?(live, ".banner-card-value", "0")
+      refute has_element?(live, ".banner-card-value", "1")
+
+      ref = Broadway.test_message(name, "hello world")
+      assert_receive {:ack, ^ref, [_successful], []}
+
+      send(Metrics.server_name(name), :refresh)
+      render(live)
+
+      assert has_element?(live, ".banner-card-value", "1")
+
+      :ok = Broadway.stop(name)
+    end
+
     defp via_tuple(name), do: {:via, Registry, {MyRegistry, name}}
   end
 

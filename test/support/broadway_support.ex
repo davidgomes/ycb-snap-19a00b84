@@ -11,10 +11,20 @@ defmodule BroadwayDashboard.BroadwaySupport do
       send(test_pid, {:batch_handled, batcher, messages})
       messages
     end
+
+    def process_name({:via, registry, {registry_name, name}}, base_name) do
+      {:via, registry, {registry_name, {name, base_name}}}
+    end
+
+    def process_name(name, base_name), do: super(name, base_name)
   end
 
   def new_unique_name do
     :"Elixir.Broadway#{System.unique_integer([:positive, :monotonic])}"
+  end
+
+  def new_unique_via_name(registry) do
+    {:via, Registry, {registry, new_unique_name()}}
   end
 
   def start_linked_dummy_pipeline(name \\ new_unique_name()) do
