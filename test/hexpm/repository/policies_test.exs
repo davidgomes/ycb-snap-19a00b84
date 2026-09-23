@@ -101,6 +101,81 @@ defmodule Hexpm.Repository.PoliciesTest do
       assert tab(updated, "hexpm").cooldown == "14d"
     end
 
+    test "removes the last override from a tab",
+         %{organization: org, audit_data: audit_data} do
+      {:ok, %{policy: policy}} =
+        Policies.create(
+          org,
+          %{
+            "name" => "pol1",
+            "visibility" => "public",
+            "repositories" => [
+              %{
+                "repository" => "hexpm",
+                "overrides" => [%{"action" => "deny", "package" => "badlib"}]
+              }
+            ]
+          },
+          audit: audit_data
+        )
+
+      hexpm = tab(policy, "hexpm")
+
+      params = %{
+        "repositories" => [
+          %{"id" => hexpm.id, "repository" => "hexpm", "overrides_drop" => [""]}
+        ]
+      }
+
+      {:ok, %{policy: updated}} = Policies.update(policy, params, audit: audit_data)
+
+      assert tab(updated, "hexpm").overrides == []
+      assert tab(Policies.get(org, "pol1"), "hexpm").overrides == []
+    end
+
+    test "removes one override and keeps the others",
+         %{organization: org, audit_data: audit_data} do
+      {:ok, %{policy: policy}} =
+        Policies.create(
+          org,
+          %{
+            "name" => "pol1",
+            "visibility" => "public",
+            "repositories" => [
+              %{
+                "repository" => "hexpm",
+                "overrides" => [
+                  %{"action" => "deny", "package" => "badlib"},
+                  %{"action" => "allow", "package" => "goodlib"}
+                ]
+              }
+            ]
+          },
+          audit: audit_data
+        )
+
+      hexpm = tab(policy, "hexpm")
+      [_badlib, goodlib] = hexpm.overrides
+
+      params = %{
+        "repositories" => [
+          %{
+            "id" => hexpm.id,
+            "repository" => "hexpm",
+            "overrides_drop" => [""],
+            "overrides" => %{
+              "1" => %{"id" => goodlib.id, "action" => "allow", "package" => "goodlib"}
+            }
+          }
+        ]
+      }
+
+      {:ok, %{policy: updated}} = Policies.update(policy, params, audit: audit_data)
+
+      assert [%{id: id, package: "goodlib"}] = tab(updated, "hexpm").overrides
+      assert id == goodlib.id
+    end
+
     test "writes a policy.update audit log entry",
          %{organization: org, audit_data: audit_data} do
       {:ok, %{policy: policy}} =
