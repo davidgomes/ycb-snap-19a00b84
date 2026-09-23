@@ -1305,6 +1305,19 @@
         "difficulty": 3
       },
       {
+        "slug": "prism",
+        "name": "Prism",
+        "uuid": "f42c7136-2b25-44c1-a51d-a471b684332a",
+        "practices": [],
+        "prerequisites": [
+          "floating-point-numbers",
+          "lists",
+          "maps",
+          "enum"
+        ],
+        "difficulty": 5
+      },
+      {
         "slug": "bob",
         "name": "Bob",
         "uuid": "d20b49dc-cb6d-45fc-a168-78d002072c75",
