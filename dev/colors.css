@@ -308,12 +308,14 @@
 
 /* Neutral accent, dark mode: checked primary-600 is near-white, so white
    check glyphs vanish. The radio dot follows --pc-button-solid-fg by
-   itself; the checkbox tick is an image, swapped via its token.
+   itself; the checkbox tick and mixed dash are images, swapped via their
+   tokens.
    `.dark` sits on the document element while data-primary sits on the
    playground wrapper, so match dark as ancestor OR same element. */
 .dark [data-primary="neutral"],
 .dark[data-primary="neutral"] {
   --pc-checkbox-check: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%2318181b' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+  --pc-checkbox-dash: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3cpath stroke='%2318181b' stroke-linecap='round' stroke-width='2' d='M4 8h8'/%3e%3c/svg%3e");
 }
 
 /* Neutral accent, dark mode: the checked switch track is near-white, so the

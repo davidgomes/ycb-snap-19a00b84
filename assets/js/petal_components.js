@@ -4659,6 +4659,11 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+    this.syncSelection();
+  },
+
+  updated() {
+    this.syncSelection();
   },
 
   destroyed() {
@@ -4666,6 +4671,15 @@ export const PetalDataTable = {
     this.el.removeEventListener("input", this.onInput);
     this.el.removeEventListener("change", this.onChange);
     this.el.removeEventListener("submit", this.onSubmit);
+  },
+
+  // A checkbox's mixed state is the indeterminate property - there is no
+  // attribute to render - so the server's page verdict is stamped on the
+  // root (any change patches it, so updated() always sees it) and
+  // mirrored onto the header checkbox here.
+  syncSelection() {
+    const box = this.el.querySelector("[data-pc-dt-select-page]");
+    if (box) box.indeterminate = this.el.dataset.pageSelection === "some";
   },
 
   committedFilters() {
