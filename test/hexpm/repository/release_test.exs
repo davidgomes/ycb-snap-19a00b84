@@ -594,4 +594,106 @@ defmodule Hexpm.Repository.ReleaseTest do
              |> Hexpm.Repo.all()
              |> Release.latest_version(only_stable: true, with_docs: true)
   end
+
+  describe "semver_key" do
+    property "sorts versions like Version.compare/2" do
+      check all(versions <- uniq_list_of(version(build: true), min_length: 2, max_length: 20)) do
+        %{rows: rows} =
+          Hexpm.Repo.query!(
+            "SELECT version FROM unnest($1::text[]) AS version ORDER BY semver_sort_key(version)",
+            [versions]
+          )
+
+        sorted = Enum.map(rows, fn [version] -> Version.parse!(version) end)
+
+        assert Enum.sort(sorted, Version) == sorted
+      end
+    end
+
+    test "is stored with the stability flag when the version is written" do
+      release = insert(:release, package: insert(:package), version: "1.0.0-rc.1")
+
+      assert stored_key(release) == {sort_key("1.0.0-rc.1"), false}
+
+      Hexpm.Repo.update_all(from(r in Release, where: r.id == ^release.id),
+        set: [version: "1.0.0"]
+      )
+
+      assert stored_key(release) == {sort_key("1.0.0"), true}
+    end
+  end
+
+  property "latest/2 picks the release latest_version/2 picks" do
+    check all(
+            versions <- uniq_list_of(version(build: false), min_length: 1, max_length: 8),
+            docs <- list_of(boolean(), length: length(versions)),
+            max_runs: 50
+          ) do
+      package = insert(:package)
+
+      releases =
+        Enum.zip_with(versions, docs, fn version, has_docs ->
+          insert(:release, package: package, version: version, has_docs: has_docs)
+        end)
+
+      for only_stable <- [true, false],
+          unstable_fallback <- [true, false],
+          with_docs <- [true, false] do
+        opts = [
+          only_stable: only_stable,
+          unstable_fallback: unstable_fallback,
+          with_docs: with_docs
+        ]
+
+        expected = Release.latest_version(releases, opts)
+
+        actual =
+          from(r in Release, where: r.package_id == ^package.id)
+          |> Release.latest(opts)
+          |> Hexpm.Repo.one()
+
+        assert (actual && actual.id) == (expected && expected.id), inspect(opts)
+      end
+    end
+  end
+
+  defp version(build: build?) do
+    number = frequency([{9, integer(0..12)}, {1, integer(0..(10 ** 30))}])
+
+    letters = string([?a..?z, ?A..?Z, ?-], min_length: 1, max_length: 3)
+    digits = string(?0..?9, max_length: 2)
+    alphanumeric = map({letters, digits}, fn {letters, digits} -> letters <> digits end)
+
+    identifier = one_of([map(number, &Integer.to_string/1), alphanumeric])
+    build = if build?, do: list_of(alphanumeric, max_length: 2), else: constant([])
+
+    gen all(
+          major <- number,
+          minor <- number,
+          patch <- number,
+          pre <- list_of(identifier, max_length: 3),
+          build <- build
+        ) do
+      "#{major}.#{minor}.#{patch}"
+      |> append_identifiers("-", pre)
+      |> append_identifiers("+", build)
+    end
+  end
+
+  defp append_identifiers(version, _separator, []), do: version
+
+  defp append_identifiers(version, separator, identifiers) do
+    version <> separator <> Enum.join(identifiers, ".")
+  end
+
+  defp stored_key(release) do
+    Hexpm.Repo.one!(
+      from(r in Release, where: r.id == ^release.id, select: {r.semver_key, r.stable})
+    )
+  end
+
+  defp sort_key(version) do
+    %{rows: [[key]]} = Hexpm.Repo.query!("SELECT semver_sort_key($1)", [version])
+    key
+  end
 end

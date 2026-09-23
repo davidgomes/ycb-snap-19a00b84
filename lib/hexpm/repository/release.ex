@@ -10,6 +10,9 @@ defmodule Hexpm.Repository.Release do
     field :inner_checksum, :binary
     field :outer_checksum, :binary
     field :has_docs, :boolean, default: false
+    # Set by the releases_set_semver_key trigger whenever the version is written
+    field :semver_key, :binary, writable: :never, load_in_query: false
+    field :stable, :boolean, writable: :never, load_in_query: false
     field :vulnerable?, :boolean, virtual: true, default: false
     timestamps()
 
@@ -213,6 +216,32 @@ defmodule Hexpm.Repository.Release do
   defp to_version(%Release{version: version}), do: to_version(version)
   defp to_version(%Version{} = version), do: version
   defp to_version(version) when is_binary(version), do: Version.parse!(version)
+
+  @doc """
+  Narrows `query` to the release that `latest_version/2` picks from the same
+  releases, ordering by the stored SemVer key so the database can use an index.
+  """
+  def latest(query, opts) do
+    only_stable? = Keyword.fetch!(opts, :only_stable)
+    unstable_fallback? = Keyword.get(opts, :unstable_fallback, false)
+    with_docs? = Keyword.get(opts, :with_docs, false)
+
+    query = if with_docs?, do: from(r in query, where: r.has_docs), else: query
+
+    query =
+      cond do
+        only_stable? and unstable_fallback? ->
+          from(r in query, order_by: [desc: r.stable, desc: r.semver_key])
+
+        only_stable? ->
+          from(r in query, where: r.stable, order_by: [desc: r.semver_key])
+
+        true ->
+          from(r in query, order_by: [desc: r.semver_key])
+      end
+
+    from(r in query, limit: 1)
+  end
 
   def all(package) do
     assoc(package, :releases)
