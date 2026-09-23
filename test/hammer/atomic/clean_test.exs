@@ -83,4 +83,96 @@ defmodule Hammer.Atomic.CleanTest do
       :ets.tab2list(RateAtomicLimitLeakyBucket) == []
     end)
   end
+
+  describe "before_clean" do
+    import ExUnit.CaptureLog
+
+    def forward(algorithm, entries, pid), do: send(pid, {:mfa_before_clean, algorithm, entries})
+
+    defp notify(pid),
+      do: fn algorithm, entries -> send(pid, {:before_clean, algorithm, entries}) end
+
+    test "is called with expired fix window entries" do
+      start_supervised!(
+        {RateAtomicLimit, clean_period: 50, key_older_than: 10, before_clean: notify(self())}
+      )
+
+      assert {:allow, 1} = RateAtomicLimit.hit("key", 100, 10)
+      assert {:allow, 2} = RateAtomicLimit.hit("key", 100, 10)
+
+      assert_receive {:before_clean, :fix_window,
+                      [%{key: "key", window: _, count: 2, expires_at: _}]},
+                     2000
+
+      assert :ets.tab2list(RateAtomicLimit) == []
+    end
+
+    test "is called with expired token bucket entries" do
+      start_supervised!(
+        {RateAtomicLimitTokenBucket,
+         clean_period: 100, key_older_than: 1000, before_clean: notify(self())}
+      )
+
+      assert {:allow, 9} = RateAtomicLimitTokenBucket.hit("key", 1, 10, 1)
+
+      assert_receive {:before_clean, :token_bucket, [%{key: "key", tokens: 9, last_update: _}]},
+                     4000
+
+      assert :ets.tab2list(RateAtomicLimitTokenBucket) == []
+    end
+
+    test "is called with expired leaky bucket entries" do
+      start_supervised!(
+        {RateAtomicLimitLeakyBucket,
+         clean_period: 100, key_older_than: 1000, before_clean: notify(self())}
+      )
+
+      assert {:allow, 1} = RateAtomicLimitLeakyBucket.hit("key", 1, 10, 1)
+
+      assert_receive {:before_clean, :leaky_bucket, [%{key: "key", level: 1, last_update: _}]},
+                     4000
+
+      assert :ets.tab2list(RateAtomicLimitLeakyBucket) == []
+    end
+
+    test "accepts a {module, function, args} tuple" do
+      start_supervised!(
+        {RateAtomicLimit,
+         clean_period: 50, key_older_than: 10, before_clean: {__MODULE__, :forward, [self()]}}
+      )
+
+      assert {:allow, 1} = RateAtomicLimit.hit("key", 100, 10)
+
+      assert_receive {:mfa_before_clean, :fix_window, [%{key: "key", count: 1}]}, 2000
+    end
+
+    test "is not called when nothing expired" do
+      start_supervised!({RateAtomicLimit, clean_period: 50, before_clean: notify(self())})
+
+      refute_receive {:before_clean, _, _}, 300
+    end
+
+    test "entries are still removed when the callback raises" do
+      log =
+        capture_log(fn ->
+          start_supervised!(
+            {RateAtomicLimit,
+             clean_period: 50, key_older_than: 10, before_clean: fn _, _ -> raise "boom" end}
+          )
+
+          assert {:allow, 1} = RateAtomicLimit.hit("key", 100, 10)
+
+          eventually(fn -> :ets.tab2list(RateAtomicLimit) == [] end)
+        end)
+
+      assert log =~ ":before_clean callback failed"
+      assert log =~ "boom"
+    end
+
+    test "rejects an invalid callback" do
+      assert_raise ArgumentError, ~r/:before_clean/, fn ->
+        RateAtomicLimit.start_link(before_clean: :not_a_callback)
+      end
+    end
+  end
 end
