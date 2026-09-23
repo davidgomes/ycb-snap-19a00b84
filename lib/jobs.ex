@@ -72,9 +72,8 @@ defmodule Oban.Console.Jobs do
   def debug_jobs([]), do: :ok
 
   def debug_jobs(job_id) when is_integer(job_id) do
-    Oban
-    |> Oban.config()
-    |> Oban.Repo.get(Oban.Job, job_id)
+    job_id
+    |> Repo.get_job()
     |> then(fn
       nil ->
         ["Job", job_id, "Job not found"] |> Printer.title() |> IO.puts()
@@ -93,7 +92,7 @@ defmodule Oban.Console.Jobs do
   def retry_jobs([]), do: :ok
 
   def retry_jobs(job_id) when is_integer(job_id) do
-    Oban.retry_job(job_id)
+    Repo.retry_job(job_id)
     ["Retried", job_id] |> Printer.title() |> IO.puts()
   end
 
@@ -105,7 +104,7 @@ defmodule Oban.Console.Jobs do
   def cancel_jobs([]), do: :ok
 
   def cancel_jobs(job_id) when is_integer(job_id) do
-    Oban.cancel_job(job_id)
+    Repo.cancel_job(job_id)
     ["Cancelled", job_id] |> Printer.title() |> IO.puts()
   end
 
