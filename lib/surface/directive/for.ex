@@ -43,10 +43,7 @@ defmodule Surface.Directive.For do
   end
 
   defp handle_modifiers([{_, clause_meta, _} = list], ["index" | modifiers], meta) do
-    var =
-      quote do
-        var!(index)
-      end
+    var = Macro.var(:index, nil)
 
     udpated_list =
       quote do
