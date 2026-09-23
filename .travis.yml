@@ -1,0 +1,20 @@
+language: elixir
+
+elixir:
+  - 1.8.2
+
+otp_release:
+  - 21.3
+
+services:
+  - postgresql
+
+addons:
+  postgresql: "9.6"
+
+env:
+  - MIX_ENV=test POSTGRES_PASSWORD=""
+
+script:
+  - mix format --check-formatted
+  - mix test
