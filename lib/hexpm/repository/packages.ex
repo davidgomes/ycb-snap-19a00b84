@@ -87,7 +87,13 @@ defmodule Hexpm.Repository.Packages do
       where: req.dependency_id == ^dependency.id,
       where: rel.package_id in ^package_ids,
       where: is_nil(rel.retirement),
-      order_by: [asc: rel.package_id, desc: rel.version],
+      order_by: [
+        asc: rel.package_id,
+        desc: field(rel, :version_major),
+        desc: field(rel, :version_minor),
+        desc: field(rel, :version_patch),
+        desc: field(rel, :version_pre)
+      ],
       distinct: rel.package_id,
       select: {rel.package_id, req.requirement}
     )
@@ -102,24 +108,22 @@ defmodule Hexpm.Repository.Packages do
       from(
         r in Release,
         where: r.package_id in ^package_ids,
-        group_by: r.package_id,
-        select:
-          {r.package_id,
-           {fragment("array_agg(?)", r.version), fragment("array_agg(?)", r.inserted_at)}}
+        distinct: r.package_id,
+        order_by: [
+          asc: r.package_id,
+          asc: not is_nil(field(r, :version_pre)),
+          desc: field(r, :version_major),
+          desc: field(r, :version_minor),
+          desc: field(r, :version_patch),
+          desc: field(r, :version_pre)
+        ],
+        select: {r.package_id, %Release{version: r.version, inserted_at: r.inserted_at}}
       )
       |> Repo.all()
-      |> Map.new(fn {package_id, {versions, inserted_ats}} ->
-        {package_id,
-         Enum.zip_with(versions, inserted_ats, fn version, inserted_at ->
-           %Release{version: version, inserted_at: inserted_at}
-         end)}
-      end)
+      |> Map.new()
 
     Enum.map(packages, fn package ->
-      release =
-        Release.latest_version(releases[package.id], only_stable: true, unstable_fallback: true)
-
-      %{package | latest_release: release}
+      %{package | latest_release: releases[package.id]}
     end)
   end
 
