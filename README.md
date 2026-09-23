@@ -185,6 +185,16 @@ Once scheduled, the dashboard displays a **live remaining time countdown** (e.g.
 
 ---
 
+## 📜 Execution History
+
+Each chore has a **History** tab listing its 20 most recent previous runs (retryable, completed, discarded, and cancelled jobs), newest first. Every entry shows the job ID, state, attempts, finish time, the arguments it ran with, and the latest error for failed runs. While the tab is open, the list refreshes automatically as the chore's jobs change state.
+
+> [!NOTE]
+> History is read directly from the `oban_jobs` table, so it only reaches as far back as the jobs retained by Oban's `Pruner` plugin.
+
+
+---
+
 ## 🛠️ Field Configuration
 
 ### Supported Types
@@ -251,6 +261,7 @@ end
 * 🛠️ **Zero-Boilerplate Internal Tooling:** Stop building custom HTML forms and controllers for one-off admin tasks. Define your argument schema once in the backend, and let ObanChore generate the UI.
 * 📡 **Live Execution Streaming:** Leveraging Phoenix PubSub and Telemetry, ObanChore streams logs and status updates from the background process directly back to the user's browser in real-time.
 * 🕒 **Future Scheduling & Real-time Countdown:** Delay chore runs using convenient time presets or custom minute inputs, accompanied by a dynamic real-time countdown.
+* 📜 **Execution History:** Review each chore's previous runs, including their arguments, final state, and latest error.
 * 🔐 **Operational Safety:** 
     * **Idempotency Check:** Automatically detects if a job with the same arguments is already running.
     * **Unique Execution Toggle:** Manually enforce single-job execution via the dashboard UI. (you can override this from the job definition)
