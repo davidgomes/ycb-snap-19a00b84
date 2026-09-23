@@ -2,6 +2,7 @@ defmodule ObanEventsTest do
   use ExUnit.Case, async: true
 
   alias ObanEvents.DispatchWorker
+  alias ObanEvents.Event
 
   # Test handler module
   defmodule TestHandler do
@@ -12,16 +13,29 @@ defmodule ObanEventsTest do
     def handle_event(_event, _data), do: :ok
   end
 
+  # Test handler that reports the received event to the test process
+  defmodule NotifyingHandler do
+    @moduledoc false
+    use ObanEvents.Handler
+
+    @impl true
+    def handle_event(event_name, event) do
+      send(self(), {:handled, __MODULE__, event_name, event})
+      :ok
+    end
+  end
+
   # Test event bus with handlers registered (uses defaults)
   defmodule TestEventBus do
     @moduledoc false
     use ObanEvents
 
-    alias ObanEventsTest.TestHandler
+    alias ObanEventsTest.{NotifyingHandler, TestHandler}
 
     @event_handlers %{
       investment_status_changed: [TestHandler],
       investment_created: [TestHandler],
+      investment_updated: [TestHandler, NotifyingHandler],
       investment_cancelled: [],
       portfolio_company_added: [],
       portfolio_company_removed: [],
@@ -97,6 +111,86 @@ defmodule ObanEventsTest do
     test "requires data to be a map" do
       assert_raise FunctionClauseError, fn ->
         TestEventBus.emit(:event_name, "not a map")
+      end
+    end
+  end
+
+  describe "emit/3 event metadata" do
+    test "stores event metadata in job args" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{id: 1}, metadata: %{actor_id: 7})
+
+      assert {:ok, _} = Ecto.UUID.cast(job.args["event_id"])
+      assert {:ok, %DateTime{}, 0} = DateTime.from_iso8601(job.args["emitted_at"])
+      assert job.args["metadata"] == %{"actor_id" => 7}
+      assert job.args["causation_id"] == nil
+      assert job.args["correlation_id"] == job.args["event_id"]
+    end
+
+    test "defaults metadata to an empty map" do
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{id: 1})
+      assert job.args["metadata"] == %{}
+    end
+
+    test "all handlers of one emit share the same event" do
+      assert {:ok, [job1, job2]} = TestEventBus.emit(:investment_updated, %{id: 1})
+
+      assert job1.args["event_id"] == job2.args["event_id"]
+      assert job1.args["emitted_at"] == job2.args["emitted_at"]
+      assert job1.args["handler"] != job2.args["handler"]
+    end
+
+    test "each emit gets a new event id" do
+      {:ok, [job1]} = TestEventBus.emit(:investment_created, %{id: 1})
+      {:ok, [job2]} = TestEventBus.emit(:investment_created, %{id: 1})
+
+      assert job1.args["event_id"] != job2.args["event_id"]
+    end
+
+    test "handlers receive an Event struct with string keys" do
+      assert {:ok, _jobs} =
+               TestEventBus.emit(:investment_updated, %{id: 1, status: :active},
+                 metadata: %{actor_id: 7}
+               )
+
+      assert_received {:handled, NotifyingHandler, :investment_updated, %Event{} = event}
+      assert event.name == :investment_updated
+      assert event.data == %{"id" => 1, "status" => "active"}
+      assert event.metadata == %{"actor_id" => 7}
+      assert %DateTime{} = event.emitted_at
+      assert event.correlation_id == event.id
+    end
+
+    test "accepts explicit causation_id and correlation_id" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{},
+                 causation_id: "cause-1",
+                 correlation_id: "corr-1"
+               )
+
+      assert job.args["causation_id"] == "cause-1"
+      assert job.args["correlation_id"] == "corr-1"
+    end
+
+    test "caused_by links the new event to the causing event" do
+      parent = Event.new(:investment_created, %{}, correlation_id: "corr-1")
+
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{}, caused_by: parent)
+
+      assert job.args["causation_id"] == parent.id
+      assert job.args["correlation_id"] == "corr-1"
+      assert job.args["event_id"] != parent.id
+    end
+
+    test "raises ArgumentError for unknown options" do
+      assert_raise ArgumentError, fn ->
+        TestEventBus.emit(:investment_created, %{}, unknown: true)
+      end
+    end
+
+    test "raises ArgumentError for non-map metadata" do
+      assert_raise ArgumentError, ~r/:metadata must be a map/, fn ->
+        TestEventBus.emit(:investment_created, %{}, metadata: [actor_id: 1])
       end
     end
   end

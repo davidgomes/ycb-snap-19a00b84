@@ -3,9 +3,9 @@ defmodule ObanEvents.DispatchWorker do
   Generic Oban worker that dispatches events to their handlers.
 
   This worker:
-  1. Receives an event name, handler module, and data from the job args
-  2. Converts strings back to atoms safely
-  3. Calls the handler's `handle_event/2` callback
+  1. Receives the serialized event and handler module from the job args
+  2. Rebuilds the `ObanEvents.Event` struct, converting strings back to atoms safely
+  3. Calls the handler's `handle_event/2` callback with the event
   4. Logs success/failure for observability
 
   ## Job Arguments
@@ -13,6 +13,8 @@ defmodule ObanEvents.DispatchWorker do
   - `event`: String representation of the event name
   - `handler`: String representation of the handler module
   - `data`: Map of event-specific data
+  - `event_id`, `metadata`, `emitted_at`, `causation_id`, `correlation_id`: Event
+    metadata, see `ObanEvents.Event`. Optional, so jobs enqueued without them still run.
 
   ## Configuration
 
@@ -28,20 +30,24 @@ defmodule ObanEvents.DispatchWorker do
 
   use Oban.Worker
 
+  alias ObanEvents.Event
+
   require Logger
 
   @impl Oban.Worker
   def perform(%Oban.Job{
-        args: %{"event" => event_name_string, "handler" => handler_module_string, "data" => data}
+        args: %{"event" => _, "handler" => handler_module_string, "data" => _} = args
       }) do
     # Safely convert strings back to atoms
     # These atoms should already exist since they were created during emit
-    event = String.to_existing_atom(event_name_string)
+    %Event{name: event} = event_struct = Event.from_args(args)
     handler = String.to_existing_atom(handler_module_string)
 
-    Logger.info("Processing event: #{event} with handler: #{inspect(handler)}")
+    Logger.info(
+      "Processing event: #{event} (id: #{event_struct.id}) with handler: #{inspect(handler)}"
+    )
 
-    case handler.handle_event(event, data) do
+    case handler.handle_event(event, event_struct) do
       :ok ->
         Logger.info("Event processed successfully: #{event} by #{inspect(handler)}")
         :ok

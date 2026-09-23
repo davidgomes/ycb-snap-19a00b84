@@ -3,7 +3,8 @@ defmodule ObanEvents.Handler do
   Behaviour for event handlers.
 
   Event handlers process events asynchronously via Oban workers.
-  Each handler implements a single callback: `handle_event/2`.
+  Each handler implements a single callback: `handle_event/2`, which receives the event
+  name and an `ObanEvents.Event` struct.
 
   See the [README](README.md) for architectural guidance and best practices.
 
@@ -12,8 +13,10 @@ defmodule ObanEvents.Handler do
       defmodule MyApp.UserHandler do
         use ObanEvents.Handler
 
+        alias ObanEvents.Event
+
         @impl true
-        def handle_event(:user_created, data) do
+        def handle_event(:user_created, %Event{data: data}) do
           %{"user_id" => user_id} = data
           # Process the event
           :ok
@@ -47,20 +50,20 @@ defmodule ObanEvents.Handler do
   @doc """
   Handle an event.
 
-  Receives the event name (atom) and event-specific data (map).
+  Receives the event name (atom) and the `ObanEvents.Event` struct.
   Should process the event and return an ok/error tuple.
 
   ## Parameters
 
   - `event_name`: Atom representing the event (e.g., `:user_created`)
-  - `data`: Map containing event-specific data
+  - `event`: `ObanEvents.Event` struct with the event data (string keys) and metadata
 
   ## Return Values
 
   - `:ok` | `{:ok, any()}` - Success
   - `{:error, any()}` - Failure (will trigger retry)
   """
-  @callback handle_event(event_name :: atom(), data :: map()) ::
+  @callback handle_event(event_name :: atom(), event :: ObanEvents.Event.t()) ::
               :ok | {:ok, any()} | {:error, any()}
 
   @doc false
