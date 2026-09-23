@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
@@ -17,6 +17,11 @@
 
     <title>{assigns[:page_title] || "ErrorTracker"}</title>
 
+    <script nonce={@csp_nonces[:script]}>
+      if (localStorage.getItem("et-theme") === "light" || (!localStorage.getItem("et-theme") && window.matchMedia("(prefers-color-scheme: light)").matches)) {
+        document.documentElement.classList.remove("dark");
+      }
+    </script>
     <style nonce={@csp_nonces[:style]}>
       <%= raw get_content(:css) %>
     </style>
@@ -25,7 +30,7 @@
     </script>
   </head>
 
-  <body class="bg-gray-800 text-white">
+  <body class="bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-white">
     {@inner_content}
   </body>
 </html>

@@ -44,3 +44,8 @@ window.addEventListener("phx:page-loading-stop", (_info) => topbar.hide());
 // connect if there are any LiveViews on the page
 liveSocket.connect();
 window.liveSocket = liveSocket;
+
+window.addEventListener("et:toggle-theme", () => {
+  const isDark = document.documentElement.classList.toggle("dark");
+  localStorage.setItem("et-theme", isDark ? "dark" : "light");
+});

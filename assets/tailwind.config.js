@@ -4,6 +4,7 @@
 let plugin = require('tailwindcss/plugin')
 
 module.exports = {
+  darkMode: 'class',
   content: [
     './js/**/*.js',
     '../lib/error_tracker/web.ex',

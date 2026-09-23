@@ -95,14 +95,14 @@ defmodule ErrorTracker.Web.CoreComponents do
     <div class="mt-10 w-full flex">
       <button
         :if={@page > 1}
-        class="flex items-center justify-center px-4 h-10 text-base font-medium text-gray-400  bg-gray-900 border border-gray-400 rounded-lg hover:bg-gray-800 hover:text-white"
+        class="flex items-center justify-center px-4 h-10 text-base font-medium text-gray-600 dark:text-gray-400  bg-gray-100 dark:bg-gray-900 border border-gray-600 dark:border-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
         phx-click={@event_previous}
       >
         Previous page
       </button>
       <button
         :if={@page < @total_pages}
-        class="flex items-center justify-center px-4 h-10 text-base font-medium text-gray-400 bg-gray-900 border border-gray-400 rounded-lg hover:bg-gray-800 hover:text-white"
+        class="flex items-center justify-center px-4 h-10 text-base font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-900 border border-gray-600 dark:border-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
         phx-click={@event_next}
       >
         Next page
