@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix key type inconsistency in backend implementations: ETS and Atomic algorithms now spec keys as `term()`, matching `t:Hammer.key/0`
+
 ## 7.0.1 - 2025-03-04
 
 - Fix race condition in Atomic backends during creation of key.
