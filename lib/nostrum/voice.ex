@@ -51,6 +51,7 @@ defmodule Nostrum.Voice do
   alias Nostrum.Struct.VoiceWSState
   alias Nostrum.Util
   alias Nostrum.Voice.Audio
+  alias Nostrum.Voice.Crypto
   alias Nostrum.Voice.Opus
   alias Nostrum.Voice.Ports
   alias Nostrum.Voice.Session
@@ -695,20 +696,19 @@ defmodule Nostrum.Voice do
 
     if VoiceState.ready_for_rtp?(voice) do
       packets = Audio.get_unique_rtp_packets(voice, num_packets)
-
-      if raw_rtp do
-        Enum.map(packets, fn {header, payload} -> header <> payload end)
-      else
-        # credo:disable-for-next-line Credo.Check.Refactor.Nesting
-        Enum.map(packets, fn {header, payload} ->
-          <<_::16, seq::integer-16, time::integer-32, ssrc::integer-32>> = header
-          opus = Opus.strip_rtp_ext(payload)
-          {{seq, time, ssrc}, opus}
-        end)
-      end
+      ws_state = Session.get_ws_state(voice.session_pid)
+      Enum.map(packets, &decrypt_listened_packet(&1, ws_state, raw_rtp))
     else
       {:error, "Must be connected to voice channel to listen for incoming data."}
     end
+  end
+
+  defp decrypt_listened_packet({header, payload}, ws_state, raw_rtp) do
+    <<_::16, seq::integer-16, time::integer-32, ssrc::integer-32>> = header
+    opus = Opus.strip_rtp_ext(payload)
+    rtp_ext = binary_part(payload, 0, byte_size(payload) - byte_size(opus))
+    opus = Crypto.decrypt_dave(ws_state, ssrc, opus)
+    if raw_rtp, do: header <> rtp_ext <> opus, else: {{seq, time, ssrc}, opus}
   end
 
   @doc """

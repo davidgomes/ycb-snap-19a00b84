@@ -55,16 +55,21 @@ defmodule Nostrum.Voice.Audio do
     socket
   end
 
+  # RTCP is multiplexed on the same socket as RTP, and RTCP packet types
+  # fall within a range that RTP payload types never use (RFC 5761)
+  def rtcp?(<<2::2, _::6, packet_type::8, _rest::binary>>) when packet_type in 192..223,
+    do: true
+
+  def rtcp?(_packet), do: false
+
   def get_rtp_packet(%VoiceState{udp_socket: socket} = v) do
     {:ok, {_ip, _port, payload}} = :gen_udp.recv(socket, 1024)
 
-    case payload do
-      # Skip RTCP packets
-      <<2::2, 0::1, 1::5, 201::8, _rest::binary>> ->
-        get_rtp_packet(v)
-
-      <<header::bytes-size(12), _::binary>> = data ->
-        {header, Crypto.decrypt(v, data)}
+    if rtcp?(payload) do
+      get_rtp_packet(v)
+    else
+      <<header::bytes-size(12), _::binary>> = payload
+      {header, Crypto.decrypt(v, payload)}
     end
   end
 

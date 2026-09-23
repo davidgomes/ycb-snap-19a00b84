@@ -1,4 +1,6 @@
 defmodule Nostrum.Voice.CryptoTest do
+  alias Nostrum.Struct.VoiceState
+  alias Nostrum.Voice.Crypto
   alias Nostrum.Voice.Crypto.Aes
   alias Nostrum.Voice.Crypto.Chacha
   alias Nostrum.Voice.Crypto.Salsa
@@ -68,6 +70,33 @@ defmodule Nostrum.Voice.CryptoTest do
       altered_cipher_text = <<Bitwise.bxor(first_byte, 0xFF), rest::binary>>
 
       :error = Salsa.decrypt(altered_cipher_text, key, nonce)
+    end
+  end
+
+  describe "DAVE" do
+    setup do
+      %{session: Dave.new_session(1, 42, 5678), frame: <<0x78, 1, 2, 3, 4, 5>>}
+    end
+
+    test "frames are sent as-is without a DAVE session", %{frame: frame} do
+      assert Crypto.encrypt_dave(%VoiceState{dave_session: nil}, frame) == frame
+    end
+
+    test "frames are sent as-is before joining an MLS group", %{session: session, frame: frame} do
+      assert Crypto.encrypt_dave(%VoiceState{dave_session: session}, frame) == frame
+    end
+
+    test "frames are received as-is without a DAVE session", %{frame: frame} do
+      assert Crypto.decrypt_dave(%{dave_session: nil, ssrc_map: %{1 => 99}}, 1, frame) == frame
+    end
+
+    test "frames from unknown SSRCs are received as-is", %{session: session, frame: frame} do
+      assert Crypto.decrypt_dave(%{dave_session: session, ssrc_map: %{}}, 1, frame) == frame
+    end
+
+    test "frames that can't be decrypted are received as-is", %{session: session, frame: frame} do
+      assert Crypto.decrypt_dave(%{dave_session: session, ssrc_map: %{1 => 99}}, 1, frame) ==
+               frame
     end
   end
 end

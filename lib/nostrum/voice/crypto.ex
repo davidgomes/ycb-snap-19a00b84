@@ -6,6 +6,9 @@ defmodule Nostrum.Voice.Crypto do
   - `Nostrum.Voice.Crypto.Aes`
   - `Nostrum.Voice.Crypto.Chacha`
   - `Nostrum.Voice.Crypto.Salsa`
+
+  When the DAVE protocol is active, opus frames are also end-to-end encrypted
+  with `Dave` beneath the transport encryption.
   """
 
   alias Nostrum.Struct.VoiceState
@@ -56,12 +59,39 @@ defmodule Nostrum.Voice.Crypto do
   @doc false
   def encrypt(%VoiceState{encryption_mode: mode} = voice, data) do
     header = Audio.rtp_header(voice)
+    data = encrypt_dave(voice, data)
     apply(__MODULE__, :"encrypt_#{mode}", [voice, data, header])
   end
 
   @doc false
   def decrypt(%{secret_key: key, encryption_mode: mode}, data) do
     apply(__MODULE__, :"decrypt_#{mode}", [key, data])
+  end
+
+  # Frames are sent without end-to-end encryption until the session has joined an MLS group
+  @doc false
+  def encrypt_dave(%VoiceState{dave_session: nil}, frame), do: frame
+
+  def encrypt_dave(%VoiceState{dave_session: session}, frame) do
+    case Dave.encrypt(session, :audio, :opus, frame) do
+      :error -> frame
+      encrypted_frame -> encrypted_frame
+    end
+  end
+
+  # Takes an opus frame that has been transport decrypted and stripped of its RTP header
+  # extension. Frames from unknown SSRCs or that fail decryption are returned untouched.
+  @doc false
+  def decrypt_dave(%{dave_session: nil}, _ssrc, frame), do: frame
+
+  def decrypt_dave(%{dave_session: session, ssrc_map: ssrc_map}, ssrc, frame) do
+    with {:ok, user_id} <- Map.fetch(ssrc_map, ssrc),
+         decrypted_frame when is_binary(decrypted_frame) <-
+           Dave.decrypt(session, user_id, :audio, frame) do
+      decrypted_frame
+    else
+      _ -> frame
+    end
   end
 
   @doc false
