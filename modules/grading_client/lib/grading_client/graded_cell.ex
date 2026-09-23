@@ -69,25 +69,25 @@ defmodule GradingClient.GradedCell do
 
     case String.split(header, ":", parts: 2) do
       [module_id, question_id] ->
-        with {:ok, module_id} <- parse_module_id(module_id, modules),
-             {:ok, question_id} <- parse_question_id(question_id) do
+        with {:ok, module_id} <- parse_module_id(String.trim(module_id), modules),
+             {:ok, question_id} <- parse_question_id(String.trim(question_id)) do
           {:ok, module_id, question_id}
         end
 
       _ ->
-        {:error, "invalid question header: #{header}"}
+        {:error, "invalid question header: #{String.trim(header)}"}
     end
   end
 
   defp parse_module_id(module_id, modules) do
-    case modules[String.trim(module_id)] do
+    case modules[module_id] do
       nil -> {:error, "invalid module id: #{module_id}"}
       module -> {:ok, module}
     end
   end
 
   defp parse_question_id(question_id) do
-    case Integer.parse(String.trim(question_id)) do
+    case Integer.parse(question_id) do
       {id, ""} -> {:ok, id}
       _ -> {:error, "invalid question id: #{question_id}"}
     end
