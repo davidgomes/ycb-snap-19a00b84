@@ -13,6 +13,12 @@ defmodule Flop.Adapter.Ecto.Dialect do
   # and DESC, and the other two need `field IS NULL` as an extra sort key.
   @without_nulls_ordering [Ecto.Adapters.MyXQL]
 
+  # PostgreSQL sorts NULLs as if they were larger than any value, so plain ASC
+  # puts them last and plain DESC first. MySQL and SQLite sort them as the
+  # smallest value, which reverses both. Cursor predicates need to know which
+  # side of the cursor the NULLs are on.
+  @with_smallest_nulls [Ecto.Adapters.MyXQL, Ecto.Adapters.SQLite3]
+
   # Ecto's MyXQL adapter can store arrays in JSON columns, but it cannot build
   # array operations. Flop uses JSON_CONTAINS and JSON_LENGTH instead.
   @without_arrays [Ecto.Adapters.MyXQL]
@@ -24,10 +30,14 @@ defmodule Flop.Adapter.Ecto.Dialect do
   @type t :: %__MODULE__{
           arrays?: boolean,
           ilike?: boolean,
+          nulls_largest?: boolean,
           nulls_ordering?: boolean
         }
 
-  defstruct arrays?: true, ilike?: true, nulls_ordering?: true
+  defstruct arrays?: true,
+            ilike?: true,
+            nulls_largest?: true,
+            nulls_ordering?: true
 
   @nulls_ordering_fallback %{
     asc_nulls_first: {:native, :asc},
@@ -47,6 +57,7 @@ defmodule Flop.Adapter.Ecto.Dialect do
     %__MODULE__{
       arrays?: adapter not in @without_arrays,
       ilike?: adapter not in @without_ilike,
+      nulls_largest?: adapter not in @with_smallest_nulls,
       nulls_ordering?: adapter not in @without_nulls_ordering
     }
   end
@@ -84,6 +95,33 @@ defmodule Flop.Adapter.Ecto.Dialect do
   def order_direction(%__MODULE__{}, direction) do
     Map.get(@nulls_ordering_fallback, direction, {:native, direction})
   end
+
+  @doc """
+  Returns the plain direction of an order direction and whether it sorts NULLs
+  first or last.
+
+  `:asc` and `:desc` leave the placement of NULLs to the database.
+  """
+  @spec nulls_position(t, atom) :: {:asc | :desc, :nulls_first | :nulls_last}
+  def nulls_position(%__MODULE__{}, :asc_nulls_first), do: {:asc, :nulls_first}
+  def nulls_position(%__MODULE__{}, :asc_nulls_last), do: {:asc, :nulls_last}
+
+  def nulls_position(%__MODULE__{}, :desc_nulls_first),
+    do: {:desc, :nulls_first}
+
+  def nulls_position(%__MODULE__{}, :desc_nulls_last), do: {:desc, :nulls_last}
+
+  def nulls_position(%__MODULE__{nulls_largest?: true}, :asc),
+    do: {:asc, :nulls_last}
+
+  def nulls_position(%__MODULE__{nulls_largest?: true}, :desc),
+    do: {:desc, :nulls_first}
+
+  def nulls_position(%__MODULE__{nulls_largest?: false}, :asc),
+    do: {:asc, :nulls_first}
+
+  def nulls_position(%__MODULE__{nulls_largest?: false}, :desc),
+    do: {:desc, :nulls_last}
 
   defp adapter(repo) when is_atom(repo) and not is_nil(repo) do
     if Code.ensure_loaded?(repo) and
