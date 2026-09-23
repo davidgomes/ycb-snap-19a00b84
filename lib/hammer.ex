@@ -15,6 +15,12 @@ defmodule Hammer do
       MyApp.RateLimit.hit("some-key", _scale = :timer.seconds(1), _limit = 10)
   """
 
+  @typedoc """
+  The identifier of what is being rate limited.
+
+  The built-in ETS and Atomic backends accept any term as a key. Other backends
+  may be more restrictive, for example the Redis backend requires string keys.
+  """
   @type key :: term
   @type scale :: pos_integer
   @type limit :: pos_integer
