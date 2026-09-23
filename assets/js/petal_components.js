@@ -1662,6 +1662,60 @@ export const PetalPopover = {
   },
 };
 
+// Dropdown panel: opens below its trigger, flips above when the viewport
+// has no room below AND more room above. The panel is revealed by a
+// JS.toggle, which hands the hook no callback - and LiveView only writes
+// `display` a couple of frames after phx:show-start - so a style observer
+// catches the reveal and measures before that frame paints.
+export const PetalDropdown = {
+  mounted() {
+    this.wasOpen = false;
+    this.observer = new MutationObserver(() => this.sync());
+    this.observer.observe(this.el, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+  },
+
+  // a patch re-renders the panel from the server, dropping data-pc-flip
+  updated() {
+    this.wasOpen = false;
+    this.sync();
+  },
+
+  destroyed() {
+    this.observer?.disconnect();
+  },
+
+  sync() {
+    const open = this.el.style.display !== "none";
+    if (open && !this.wasOpen) this.position();
+    this.wasOpen = open;
+  },
+
+  // Measured with the flip cleared so the natural (downward) layout
+  // decides. offsetHeight rather than the rect: the opening transition
+  // starts the panel at scale-95.
+  position() {
+    this.el.removeAttribute("data-pc-flip");
+    const anchor = this.el.parentElement;
+    const panelH = this.el.offsetHeight;
+    if (!anchor || !panelH) return; // jsdom / unrendered
+
+    const vv = window.visualViewport;
+    const viewTop = vv ? vv.offsetTop : 0;
+    const viewBottom = viewTop + (vv ? vv.height : window.innerHeight);
+    const a = anchor.getBoundingClientRect();
+    const gap = 8;
+    const below = viewBottom - a.bottom - gap;
+    const above = a.top - viewTop - gap;
+
+    if (panelH > below && above > below) {
+      this.el.setAttribute("data-pc-flip", "top");
+    }
+  },
+};
+
 // Command palette: client-side filtering + WAI-ARIA combobox keyboard model.
 // Items are hidden, never reordered - the server owns DOM order, so the
 // palette stays safe under LiveView patches. Scoring: value prefix beats
@@ -5467,6 +5521,7 @@ export default {
   PetalTypingEffect,
   PetalInputOTP,
   PetalPopover,
+  PetalDropdown,
   PetalCommand,
   PetalCommandTrigger,
   PetalAurora,

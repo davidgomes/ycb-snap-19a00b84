@@ -17,6 +17,22 @@
   patch that removes an open dialog fires no close event at all, so
   `destroyed()` releases it too, guarded on `open` so tearing down a
   closed palette cannot strip a lock another overlay owns.
+- **`dropdown` panels flip upward when the viewport leaves no room
+  below.** The panel always hung below its trigger, so a menu opened
+  near the bottom of the screen (a table's last row, a footer, a
+  sidebar's account menu) rendered its items off-screen. The panel now
+  mounts a small `PetalDropdown` hook that measures on every open and
+  flips the panel above the trigger when the space below can't hold it
+  AND there is more space above - the same rule `combo_box` uses. The
+  transform origin flips with it, so the open transition still grows out
+  of the trigger. The panel is revealed by a `JS.toggle`, which gives a
+  hook no callback, so the hook watches the panel's `style` and measures
+  in the same frame `display` is written, before it paints; a LiveView
+  patch that drops the flip on an open panel re-applies it. The hook
+  ships in the default bundle, so `hooks: { ...PetalComponents }` picks
+  it up with no change; without it, the dropdown opens and closes as
+  before, just always downward. `user_dropdown_menu`, `language_select`
+  and the scheme dropdown get the fix for free.
 
 ### 4.14.0 - 2026-08-11
 
