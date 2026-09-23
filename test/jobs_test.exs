@@ -56,4 +56,73 @@ defmodule Oban.Console.JobsTest do
               }} = Storage.get_profile()
     end
   end
+
+  describe "debug_jobs/1" do
+    test "with an empty list of ids" do
+      assert :ok = Jobs.debug_jobs([])
+    end
+
+    test "with a list of ids" do
+      Mimic.expect(Repo, :get_job, 1, fn 102_030 -> %Oban.Job{} end)
+      Mimic.expect(Repo, :get_job, 1, fn 102_040 -> %Oban.Job{} end)
+
+      assert :ok = Jobs.debug_jobs([102_030, 102_040])
+    end
+
+    test "with a single id" do
+      Mimic.expect(Repo, :get_job, 1, fn 102_040 -> %Oban.Job{} end)
+
+      assert :ok = Jobs.debug_jobs(102_040)
+    end
+
+    test "with an invalid id" do
+      assert :ok = Jobs.debug_jobs("jose")
+    end
+  end
+
+  describe "cancel_jobs/1" do
+    test "with an empty list of ids" do
+      assert :ok = Jobs.cancel_jobs([])
+    end
+
+    test "with a list of ids" do
+      Mimic.expect(Repo, :cancel_job, 1, fn 102_030 -> %Oban.Job{} end)
+      Mimic.expect(Repo, :cancel_job, 1, fn 102_040 -> %Oban.Job{} end)
+
+      assert :ok = Jobs.cancel_jobs([102_030, 102_040])
+    end
+
+    test "with a single id" do
+      Mimic.expect(Repo, :cancel_job, 1, fn 102_040 -> %Oban.Job{} end)
+
+      assert :ok = Jobs.cancel_jobs(102_040)
+    end
+
+    test "with an invalid id" do
+      assert :ok = Jobs.cancel_jobs("jose")
+    end
+  end
+
+  describe "retry_jobs/1" do
+    test "with an empty list of ids" do
+      assert :ok = Jobs.retry_jobs([])
+    end
+
+    test "with a list of ids" do
+      Mimic.expect(Repo, :retry_job, 1, fn 102_030 -> %Oban.Job{} end)
+      Mimic.expect(Repo, :retry_job, 1, fn 102_040 -> %Oban.Job{} end)
+
+      assert :ok = Jobs.retry_jobs([102_030, 102_040])
+    end
+
+    test "with a single id" do
+      Mimic.expect(Repo, :retry_job, 1, fn 102_040 -> %Oban.Job{} end)
+
+      assert :ok = Jobs.retry_jobs(102_040)
+    end
+
+    test "with an invalid id" do
+      assert :ok = Jobs.retry_jobs("jose")
+    end
+  end
 end
