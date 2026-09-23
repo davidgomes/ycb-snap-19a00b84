@@ -875,6 +875,64 @@ defmodule PaginatorTest do
            end) == encode_cursor(%{charged_at: "10", id: p1.id})
   end
 
+  describe "paginate a collection of payments, sorting by an expression" do
+    test "paginates forward", %{
+      payments: {_p1, _p2, _p3, p4, p5, p6, p7, p8, _p9, _p10, _p11, _p12}
+    } do
+      opts = [cursor_fields: doubled_amount_cursor_fields(), limit: 2]
+
+      page = payments_by_doubled_amount() |> Repo.paginate(opts)
+      assert to_ids(page.entries) == to_ids([p8, p7])
+
+      assert page.metadata.after ==
+               encode_cursor(%{doubled_amount: p7.amount * 2, id: p7.id})
+
+      page = payments_by_doubled_amount() |> Repo.paginate(opts ++ [after: page.metadata.after])
+      assert to_ids(page.entries) == to_ids([p5, p4])
+
+      assert page.metadata.before ==
+               encode_cursor(%{doubled_amount: p5.amount * 2, id: p5.id})
+
+      page = payments_by_doubled_amount() |> Repo.paginate(opts ++ [after: page.metadata.after])
+      assert to_ids(page.entries) == to_ids([p6])
+      assert page.metadata.after == nil
+    end
+
+    test "paginates backward", %{
+      payments: {_p1, _p2, _p3, p4, p5, p6, p7, p8, _p9, _p10, _p11, _p12}
+    } do
+      opts = [cursor_fields: doubled_amount_cursor_fields(), limit: 2]
+
+      page =
+        payments_by_doubled_amount()
+        |> Repo.paginate(opts ++ [before: encode_cursor(%{doubled_amount: 4, id: p6.id})])
+
+      assert to_ids(page.entries) == to_ids([p5, p4])
+
+      page = payments_by_doubled_amount() |> Repo.paginate(opts ++ [before: page.metadata.before])
+      assert to_ids(page.entries) == to_ids([p8, p7])
+      assert page.metadata.before == nil
+    end
+
+    test "accepts an expression cursor field without a direction", %{
+      payments: {_p1, _p2, _p3, p4, p5, p6, p7, p8, _p9, _p10, _p11, _p12}
+    } do
+      query =
+        payments_by_doubled_amount()
+        |> exclude(:order_by)
+        |> order_by([p], asc: p.amount * 2, asc: p.id)
+
+      page =
+        Repo.paginate(query,
+          cursor_fields: [{:doubled_amount, fn -> dynamic([p], p.amount * 2) end}, :id],
+          after: encode_cursor(%{doubled_amount: 4, id: p4.id}),
+          limit: 10
+        )
+
+      assert to_ids(page.entries) == to_ids([p6, p5, p7, p8])
+    end
+  end
+
   test "sorts on two different directions with before cursor", %{
     payments: {_p1, _p2, _p3, p4, p5, p6, p7, _p8, _p9, _p10, _p11, _p12}
   } do
@@ -1064,6 +1122,19 @@ defmodule PaginatorTest do
       ],
       select: p
     )
+  end
+
+  defp payments_by_doubled_amount do
+    from(
+      p in Payment,
+      where: p.amount < 10,
+      order_by: [desc: p.amount * 2, asc: p.id],
+      select: %{id: p.id, doubled_amount: p.amount * 2}
+    )
+  end
+
+  defp doubled_amount_cursor_fields do
+    [{{:doubled_amount, fn -> dynamic([p], p.amount * 2) end}, :desc}, id: :asc]
   end
 
   defp payments_by_charged_at(direction \\ :asc) do

@@ -166,6 +166,28 @@ defmodule Paginator do
         limit: 50
       )
 
+  ## Example with sorting on an expression
+
+  A cursor field can also be `{name, fun}` where `fun` is a zero-arity function
+  returning an `Ecto.Query.dynamic/2` expression. The expression is used to
+  filter records, while `name` is used as the key in the cursor and passed to
+  `:fetch_cursor_value_fun` to read the value from the returned records.
+
+      query =
+        from(
+          p in Payment,
+          select: %{id: p.id, doubled_amount: p.amount * 2},
+          order_by: [desc: p.amount * 2, asc: p.id]
+        )
+
+      Repo.paginate(query,
+        cursor_fields: [
+          {{:doubled_amount, fn -> dynamic([p], p.amount * 2) end}, :desc},
+          id: :asc
+        ],
+        limit: 50
+      )
+
   """
   @callback paginate(queryable :: Ecto.Query.t(), opts :: Keyword.t(), repo_opts :: Keyword.t()) ::
               Paginator.Page.t()
@@ -309,6 +331,12 @@ defmodule Paginator do
        }) do
     cursor_fields
     |> Enum.map(fn
+      {{cursor_field, handler}, _order} when is_function(handler, 0) ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
+      {cursor_field, handler} when is_function(handler, 0) ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
       {cursor_field, _order} ->
         {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
 
