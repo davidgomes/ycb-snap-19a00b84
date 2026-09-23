@@ -39,7 +39,7 @@ defmodule FreeObanUiWeb.JobLive.Components do
 
   def job_actions(assigns) do
     ~H"""
-    <div class="flex items-center justify-end gap-3">
+    <span class="inline-flex items-center gap-3">
       <button
         :if={Jobs.can_retry?(@job)}
         type="button"
@@ -69,7 +69,7 @@ defmodule FreeObanUiWeb.JobLive.Components do
       >
         Delete
       </button>
-    </div>
+    </span>
     """
   end
 
