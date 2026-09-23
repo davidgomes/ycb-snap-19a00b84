@@ -55,6 +55,12 @@ The second task creates a new `web/templates/layout/app.html.slime` with the
 exact same content as the `app.html.eex` file. Do not forget to remove the old
 `app.html.eex` file.
 
+For Phoenix 1.3 projects, use the `phx` prefixed equivalents, which accept the
+same arguments as `phx.gen.html`:
+
+`mix phx.gen.html.slime`
+`mix phx.gen.layout.slime`
+
 Generated files have `.slime` extension by default. If you prefer `.slim`, you could add the following line to your config:
 
 ```elixir
