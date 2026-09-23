@@ -13,6 +13,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Support SQLite.
 - Support MySQL.
 - Support ordering by custom fields via a new `field_dynamic` option.
+- Support filtering by custom fields with `field_dynamic`. Flop applies the
+  built-in filter operators to the returned expression when the field has no
+  `filter` function.
 
 ### Fixed
 
