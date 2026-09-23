@@ -1046,6 +1046,133 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       end
     end
 
+    test "filters by a custom field with field_dynamic" do
+      insert_custom_field_pets([10, 20, 30, nil])
+
+      for {op, value, expected} <- [
+            {:==, 40, [20]},
+            {:!=, 40, [10, 30]},
+            {:>, 40, [30]},
+            {:>=, 40, [20, 30]},
+            {:<, 40, [10]},
+            {:<=, 40, [10, 20]},
+            {:in, [20, 60], [10, 30]},
+            {:not_in, [20, 60], [20]},
+            {:not_in, [20, nil], [20, 30]},
+            {:empty, true, [nil]},
+            {:empty, false, [10, 20, 30]},
+            {:not_empty, true, [10, 20, 30]}
+          ] do
+        result =
+          Flop.all(
+            CustomFieldPet,
+            %Flop{
+              filters: [%Filter{field: :age_score, op: op, value: value}],
+              order_by: [:age_score],
+              order_directions: [:asc_nulls_first]
+            },
+            for: CustomFieldPet
+          )
+
+        assert Enum.map(result, & &1.age) == expected,
+               "#{inspect(op)} #{inspect(value)}"
+      end
+    end
+
+    test "filters by a custom field with field_dynamic and text operators" do
+      for name <- ["Harry", "harriet", "Sally", "sal"] do
+        Repo.insert!(%CustomFieldPet{name: name})
+      end
+
+      for {op, value, expected} <- [
+            {:=~, "har", ["Harry", "harriet"]},
+            {:like, "sal", ["Sally", "sal"]},
+            {:not_like, "har", ["Sally", "sal"]},
+            {:ilike, "rr", ["Harry", "harriet"]},
+            {:not_ilike, "rr", ["Sally", "sal"]},
+            {:like_and, "ha ry", ["Harry"]},
+            {:like_or, "ly et", ["harriet", "Sally"]},
+            {:ilike_and, ["s", "y"], ["Sally"]},
+            {:ilike_or, ["et", "al"], ["harriet", "Sally", "sal"]},
+            {:starts_with, "sal", ["Sally", "sal"]},
+            {:ends_with, "y", ["Harry", "Sally"]}
+          ] do
+        result =
+          CustomFieldPet
+          |> order_by(:id)
+          |> Flop.all(
+            %Flop{
+              filters: [%Filter{field: :lower_name, op: op, value: value}]
+            },
+            for: CustomFieldPet
+          )
+
+        assert Enum.map(result, & &1.name) == expected,
+               "#{inspect(op)} #{inspect(value)}"
+      end
+    end
+
+    test "filters by a custom field with field_dynamic and array operators" do
+      for tags <- [["a", "b"], ["b"], []] do
+        Repo.insert!(%CustomFieldPet{tags: tags})
+      end
+
+      for {op, value, expected} <- [
+            {:contains, "a", [["a", "b"]]},
+            {:contains, "b", [["a", "b"], ["b"]]},
+            {:not_contains, "a", [["b"], []]},
+            {:empty, true, [[]]},
+            {:not_empty, true, [["a", "b"], ["b"]]}
+          ] do
+        result =
+          CustomFieldPet
+          |> order_by(:id)
+          |> Flop.all(
+            %Flop{filters: [%Filter{field: :tag_list, op: op, value: value}]},
+            for: CustomFieldPet
+          )
+
+        assert Enum.map(result, & &1.tags) == expected,
+               "#{inspect(op)} #{inspect(value)}"
+      end
+    end
+
+    test "filters by a custom field with field_dynamic on a named binding" do
+      older = insert(:owner, age: 60)
+      younger = insert(:owner, age: 20)
+
+      Repo.insert!(%CustomFieldPet{age: 1, owner_id: older.id})
+      Repo.insert!(%CustomFieldPet{age: 2, owner_id: younger.id})
+
+      flop = %Flop{
+        filters: [%Filter{field: :owner_age_score, op: :>, value: 30}]
+      }
+
+      assert Flop.named_bindings(flop, CustomFieldPet) == [:owner]
+
+      assert [%CustomFieldPet{age: 1}] =
+               CustomFieldPet
+               |> join(:inner, [pet], owner in assoc(pet, :owner), as: :owner)
+               |> Flop.all(flop, for: CustomFieldPet)
+    end
+
+    test "passes merged options to field_dynamic when filtering" do
+      insert_custom_field_pets([10, 20])
+
+      assert {:ok, {[%CustomFieldPet{age: 20}], _meta}} =
+               Flop.validate_and_run(
+                 CustomFieldPet,
+                 %{filters: [%{field: :age_score, op: :==, value: "40"}]},
+                 for: CustomFieldPet,
+                 extra_opts: [factor: -1, test_pid: self()]
+               )
+
+      assert_receive {:age_score_dynamic_opts, opts}
+      assert opts[:factor] == 2
+      assert opts[:compile_only] == :available
+      assert opts[:test_pid] == self()
+    end
+
     test "silently ignores nil values for field and value" do
       flop = %Flop{filters: [%Filter{op: :>=, value: 4}]}
       assert Flop.query(Pet, flop) == Pet

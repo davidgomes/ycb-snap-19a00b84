@@ -39,6 +39,19 @@ defmodule Flop.Adapter.Ecto.Operators do
     end
   end
 
+  # Replaces the field references in a fragment with an interpolated
+  # `field_expr` variable, so that the operator can be applied to a dynamic
+  # expression instead of a schema field.
+  def field_expr_fragment(fragment) do
+    Macro.prewalk(fragment, fn
+      {:field, _, [{:r, _, _}, {:^, _, [{:var!, _, [{:field, _, _}]}]}]} ->
+        quote do: ^var!(field_expr)
+
+      ast ->
+        ast
+    end)
+  end
+
   def reduce_dynamic(:and, values, inner_func) do
     Enum.reduce(values, true, fn value, dynamic ->
       dynamic([r], ^dynamic and ^inner_func.(value))
@@ -304,7 +317,24 @@ defmodule Flop.Adapter.Ecto.Operators do
     end
   end
 
-  defmacro empty(:array) do
+  defmacro empty(kind), do: empty_fragment(kind)
+
+  # Ecto cannot infer the type of a dynamic expression, so it is cast
+  # explicitly to allow the empty value to be cast to the same runtime type.
+  defmacro empty(kind, :field_expr) when kind in [:array, :map] do
+    empty_value = if kind == :array, do: [], else: Macro.escape(%{})
+
+    quote do
+      is_nil(^var!(field_expr)) or
+        type(^var!(field_expr), ^var!(ecto_type)) ==
+          type(^unquote(empty_value), ^var!(ecto_type))
+    end
+  end
+
+  defmacro empty(kind, :field_expr),
+    do: kind |> empty_fragment() |> field_expr_fragment()
+
+  defp empty_fragment(:array) do
     quote do
       is_nil(field(r, ^var!(field))) or
         field(r, ^var!(field)) == type(^[], ^var!(ecto_type))
@@ -312,27 +342,32 @@ defmodule Flop.Adapter.Ecto.Operators do
   end
 
   # for adapters that store an array as a JSON column
-  defmacro empty(:json_array) do
+  defp empty_fragment(:json_array) do
     quote do
       is_nil(field(r, ^var!(field))) or
         fragment("JSON_LENGTH(?) = 0", field(r, ^var!(field)))
     end
   end
 
-  defmacro empty(:map) do
+  defp empty_fragment(:map) do
     quote do
       is_nil(field(r, ^var!(field))) or
         field(r, ^var!(field)) == type(^%{}, ^var!(ecto_type))
     end
   end
 
-  defmacro empty(:other) do
+  defp empty_fragment(:other) do
     quote do
       is_nil(field(r, ^var!(field)))
     end
   end
 
-  defmacro json_contains do
+  defmacro json_contains, do: json_contains_fragment()
+
+  defmacro json_contains(:field_expr),
+    do: field_expr_fragment(json_contains_fragment())
+
+  defp json_contains_fragment do
     quote do
       fragment(
         "JSON_CONTAINS(?, ?)",

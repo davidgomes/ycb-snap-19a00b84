@@ -419,6 +419,9 @@ defmodule CustomFields do
 end
 ```
 
+If you omit `filter`, Flop filters by applying the filter operator to the
+expression returned by `field_dynamic`.
+
 ### Query
 
 ```elixir
