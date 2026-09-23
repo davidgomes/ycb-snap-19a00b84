@@ -77,6 +77,7 @@ defmodule FreeObanUiWeb.JobLive.Index do
     <.table
       id="jobs"
       rows={@jobs}
+      row_id={fn job -> "jobs-#{job.id}" end}
       row_click={fn job -> JS.navigate(~p"/jobs/#{job.id}") end}
     >
       <:col :let={job} label="ID"><%= job.id %></:col>

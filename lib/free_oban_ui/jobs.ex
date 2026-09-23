@@ -77,7 +77,14 @@ defmodule FreeObanUi.Jobs do
   @doc """
   Permanently deletes a job. Executing jobs are left untouched.
   """
-  def delete_job(%Job{} = job), do: Oban.delete_job(job)
+  def delete_job(%Job{id: id}) do
+    Job
+    |> where(id: ^id)
+    |> where([j], j.state != "executing")
+    |> Repo.delete_all()
+
+    :ok
+  end
 
   defp filter_state(query, state) when state in @states, do: where(query, state: ^state)
   defp filter_state(query, _state), do: query
