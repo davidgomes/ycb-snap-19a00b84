@@ -58,20 +58,50 @@ defmodule Ecto.Integration.SQLTest do
   end
 
   test "quoted strings and identifiers cannot break out into ClickHouse syntax" do
-    string = ~S|value' FROM numbers(10) -- \ $tag$body$tag$ /* comment */|
-    result = TestRepo.query!(["SELECT ", Connection.quote_name(string, ?')])
-
-    assert result.rows == [[string]]
-
-    for {quoter, name} <- [
-          {?\", ~S|alias" FROM numbers(10) -- \ $tag$body$tag$ /* comment */|},
-          {?`, ~S|alias` FROM numbers(10) -- \ $tag$body$tag$ /* comment */|}
+    for string <- [
+          ~S|value' FROM numbers(10) -- \ $tag$body$tag$ /* comment */|,
+          "trailing backslash \\",
+          ~S(mixed \' '' " ` \\)
         ] do
-      result = TestRepo.query!(["SELECT 1 AS ", Connection.quote_name(name, quoter)])
+      result = TestRepo.query!(["SELECT ", Connection.quote_string(string)])
+      assert result.rows == [[string]]
+
+      result =
+        TestRepo.query!(["SELECT {$0:String} = ", Connection.quote_string(string)], [string])
+
+      assert result.rows == [[1]]
+    end
+
+    for name <- [
+          ~S|alias" FROM numbers(10) -- \ $tag$body$tag$ /* comment */|,
+          ~S|alias` FROM numbers(10) -- \ $tag$body$tag$ /* comment */|,
+          "trailing backslash \\"
+        ] do
+      result = TestRepo.query!(["SELECT 1 AS ", Connection.quote_name(name)])
 
       assert result.columns == [name]
       assert result.rows == [[1]]
     end
+  end
+
+  test "quoted table and column names round trip through ClickHouse" do
+    table = ~S|quoted "table" `name` \ 'x'|
+    column = ~S|quoted "column" `name` \ 'y'|
+
+    TestRepo.query!([
+      "CREATE TABLE ",
+      Connection.quote_name(table),
+      " (",
+      Connection.quote_name(column),
+      " String) ENGINE Memory"
+    ])
+
+    on_exit(fn -> TestRepo.query!(["DROP TABLE ", Connection.quote_name(table)]) end)
+
+    field = String.to_atom(column)
+    TestRepo.insert_all(table, [[{field, "value"}]], types: [{field, :string}])
+
+    assert TestRepo.all(from t in table, select: field(t, ^field)) == ["value"]
   end
 
   test "disconnect_all/2" do

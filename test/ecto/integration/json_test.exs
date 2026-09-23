@@ -89,6 +89,7 @@ defmodule Ecto.Integration.JsonTest do
       %{
         json: %{
           "from" => "insert_all",
+          "FROM" => %{"select" => "keyword"},
           "nested" => %{"name" => "Test", "arr" => ["abc", "b=deb"]},
           "edge cases" => %{
             "space key" => "space",
@@ -113,6 +114,7 @@ defmodule Ecto.Integration.JsonTest do
              from s in SemiStructured,
                select: %{
                  from: json_extract_path(s.json, ["from"]),
+                 keyword: json_extract_path(s.json, ["FROM", "select"]),
                  name: json_extract_path(s.json, ["nested", "name"]),
                  edge_space: json_extract_path(s.json, ["edge cases", "space key"]),
                  edge_dash: json_extract_path(s.json, ["edge cases", "dash-key"]),
@@ -131,6 +133,7 @@ defmodule Ecto.Integration.JsonTest do
            ) == [
              %{
                from: "insert_all",
+               keyword: "keyword",
                name: "Test",
                edge_space: "space",
                edge_dash: "dash",
