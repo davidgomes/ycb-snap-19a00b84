@@ -264,6 +264,23 @@ describe("PetalDataTable", () => {
     expect(wrap.style.display).toBe("none");
   });
 
+  it("sets the header checkbox indeterminate when the page is mixed", () => {
+    const { el } = mountBase({});
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.dataset.pcDtSelectAll = "";
+    box.dataset.state = "mixed";
+    el.appendChild(box);
+
+    const hook = mounted[mounted.length - 1];
+    hook.syncSelection();
+    expect(box.indeterminate).toBe(true);
+
+    box.dataset.state = "all";
+    hook.syncSelection();
+    expect(box.indeterminate).toBe(false);
+  });
+
   it("destroyed cancels a pending search patch", () => {
     const { hook, el, patched } = mount({
       navTemplate: "/orders?search=:term",

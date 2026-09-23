@@ -140,6 +140,30 @@ defmodule PetalComponents.DataTable.StateTest do
     end
   end
 
+  describe "apply_selection/3" do
+    test "select, select_page, and clear_selection" do
+      assert State.apply_selection([], %{"op" => "select", "id" => "2", "selected" => "true"}) ==
+               ["2"]
+
+      assert State.apply_selection([1], %{"op" => "select", "id" => "1", "selected" => "true"}) ==
+               [1]
+
+      assert State.apply_selection([1, 2], %{"op" => "select", "id" => "1", "selected" => "false"}) ==
+               [2]
+
+      assert State.apply_selection([1], %{"op" => "select_page", "selected" => "true"}, [1, 2, 3]) ==
+               [1, 2, 3]
+
+      assert State.apply_selection([1, 9], %{"op" => "select_page", "selected" => "false"}, [
+               "1",
+               "2"
+             ]) == [9]
+
+      assert State.apply_selection([1], %{"op" => "clear_selection"}) == []
+      assert State.apply_selection([1], %{"op" => "nope"}) == [1]
+    end
+  end
+
   describe "handle_op/3" do
     @opts [fields: [:name, :amount, :status]]
 

@@ -3,6 +3,14 @@
 
 #### Added
 
+- **`<.data_table>` row selection.** `selectable` adds a leading
+  checkbox column. The header box is tri-state for the current page
+  (none / mixed / all) and posts `select_page`; each row posts
+  `select` with its id. While any id is selected the toolbar morphs
+  in place into a count, the `:bulk_action` slot, and a clear control
+  (`clear_selection`). Selection stays out of `State` and the URL;
+  `State.apply_selection/3` updates the id list. The `PetalDataTable`
+  hook sets the header's `indeterminate` flag from `data-state`.
 - **`<.data_table>` - the component core (4.12 data table, milestone 1).**
   Composed around `<.table>`, driven entirely by `DataTable.State`:
   `:col` slots (field, label, sortable, align), sortable headers with

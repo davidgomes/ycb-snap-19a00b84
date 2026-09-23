@@ -30,6 +30,14 @@ defmodule PetalComponents.DataTable do
   by the `PetalDataTable` hook (patch URLs built from templates the
   component renders); event mode needs no JS.
 
+  Row selection is controlled and ephemeral (it is not part of
+  `State` and never lands in the URL). Pass `selectable`, the current
+  `selected` ids, and `on_select` (or reuse `on_change`). The header
+  checkbox is tri-state for the current page; while anything is
+  selected the toolbar morphs into a count plus the `:bulk_action`
+  slot. `State.apply_selection/3` speaks the `select` /
+  `select_page` / `clear_selection` ops.
+
   Rows can be any enumerable of maps/structs; pair with
   `PetalComponents.DataTable.Engine.List` for zero-setup in-memory
   data, or run the state against your own query layer.
@@ -108,6 +116,25 @@ defmodule PetalComponents.DataTable do
 
   attr :class, :any, default: nil
 
+  attr :selectable, :boolean, default: false, doc: "render a leading checkbox column"
+
+  attr :selected, :list,
+    default: [],
+    doc: "selected row ids (any term `row_id` returns; compared as strings)"
+
+  attr :row_id, :any,
+    default: nil,
+    doc: "function of a row returning its id (defaults to `& &1.id` when selectable)"
+
+  attr :on_select, :string,
+    default: nil,
+    doc: "event for selection ops; falls back to `on_change`"
+
+  attr :select_row_label, :string, default: "Select row"
+  attr :select_page_label, :string, default: "Select all rows on this page"
+  attr :selected_label, :string, default: "selected", doc: "the noun after the count"
+  attr :clear_selection_label, :string, default: "Clear"
+
   slot :col, required: true do
     attr :field, :atom, required: true
     attr :label, :string
@@ -126,11 +153,21 @@ defmodule PetalComponents.DataTable do
 
   slot :action, doc: "trailing actions column, `:let` receives the row"
   slot :toolbar, doc: "custom toolbar content rendered above the table"
+
+  slot :bulk_action,
+    doc: "actions in the selection toolbar; `:let` receives the selected ids"
+
   slot :empty, doc: "custom empty state; a filters-aware default renders otherwise"
 
   def data_table(assigns) do
     if is_nil(assigns.path) and is_nil(assigns.on_change) do
       raise ArgumentError, "data_table needs either path (link mode) or on_change (event mode)"
+    end
+
+    select_event = assigns.on_select || assigns.on_change
+
+    if assigns.selectable and is_nil(select_event) do
+      raise ArgumentError, "selectable data_table needs on_select or on_change"
     end
 
     {sort_by, sort_dir} =
@@ -149,7 +186,27 @@ defmodule PetalComponents.DataTable do
     # top-layer popovers the hook closes after an Apply.
     hooked? =
       (link_mode? and (assigns.searchable or assigns.page_size_options != [])) or
-        filter_cols != []
+        filter_cols != [] or assigns.selectable
+
+    row_id = assigns.row_id || (& &1.id)
+
+    page_ids =
+      if assigns.selectable and not assigns.loading do
+        Enum.map(assigns.rows, &(row_id.(&1) |> to_string()))
+      else
+        []
+      end
+
+    selected_ids = MapSet.new(assigns.selected, &to_string/1)
+
+    page_selected = Enum.count(page_ids, &(&1 in selected_ids))
+
+    selection_state =
+      cond do
+        page_ids != [] and page_selected == length(page_ids) -> :all
+        page_selected > 0 -> :some
+        true -> :none
+      end
 
     assigns =
       assigns
@@ -160,6 +217,15 @@ defmodule PetalComponents.DataTable do
       |> assign(:filter_cols, filter_cols)
       |> assign(:op_labels, Map.merge(default_op_labels(), assigns.filter_op_labels))
       |> assign(:hooked?, hooked?)
+      |> assign(:select_event, select_event)
+      |> assign(:row_id_fun, row_id)
+      |> assign(:selected_ids, selected_ids)
+      |> assign(:selection_state, selection_state)
+      |> assign(
+        :selecting?,
+        assigns.selectable and not assigns.loading and selected_ids != MapSet.new()
+      )
+      |> assign(:tools?, assigns.toolbar != [] or assigns.searchable or filter_cols != [] or assigns.state.filters != [])
       |> assign(
         :nav_template,
         link_mode? && hooked? && nav_template(assigns.path, assigns.state, assigns, filter_cols)
@@ -172,17 +238,15 @@ defmodule PetalComponents.DataTable do
     ~H"""
     <div
       id={@id}
-      class={["pc-data-table", @class]}
+      class={["pc-data-table", @selecting? && "pc-data-table--selecting", @class]}
       phx-hook={@hooked? && "PetalDataTable"}
       data-debounce={@hooked? && @search_debounce}
       data-nav-template={@nav_template || nil}
       data-filters={@filters_json || nil}
     >
       <a :if={@hooked?} data-pc-dt-nav data-phx-link="patch" data-phx-link-state="push" hidden></a>
-      <div
-        :if={@toolbar != [] or @searchable or @filter_cols != [] or @state.filters != []}
-        class="pc-data-table__toolbar"
-      >
+      <div :if={@tools? or @selecting?} class="pc-data-table__toolbar">
+        <div class={["pc-data-table__toolbar-tools", !@tools? && "hidden"]}>
         <div :if={@searchable} class="pc-data-table__search">
           <.icon name="hero-magnifying-glass" class="pc-data-table__search-icon" />
           <%= if @on_change do %>
@@ -247,6 +311,29 @@ defmodule PetalComponents.DataTable do
             {@reset_filters_label}
           </.button>
         <% end %>
+        </div>
+        <div
+          :if={@selectable}
+          class="pc-data-table__selection"
+          aria-hidden={not @selecting?}
+        >
+          <span class="pc-data-table__selection-count">
+            {MapSet.size(@selected_ids)} {@selected_label}
+          </span>
+          {render_slot(@bulk_action, @selected)}
+          <.button
+            type="button"
+            size="sm"
+            variant="ghost"
+            color="gray"
+            class="pc-data-table__selection-clear"
+            phx-click={@select_event}
+            phx-target={@target}
+            phx-value-op="clear_selection"
+          >
+            {@clear_selection_label}
+          </.button>
+        </div>
       </div>
 
       <div class="pc-data-table__scroll">
@@ -261,6 +348,38 @@ defmodule PetalComponents.DataTable do
           sort_dir={@sort_dir}
           on_sort={@on_sort}
         >
+          <:head :if={@selectable} class="pc-data-table__check-th">
+            <input
+              type="checkbox"
+              class="pc-checkbox pc-data-table__check"
+              aria-label={@select_page_label}
+              aria-checked={selection_aria(@selection_state)}
+              checked={@selection_state == :all}
+              disabled={@loading or @rows == []}
+              data-pc-dt-select-all
+              data-state={selection_data(@selection_state)}
+              phx-click={@select_event}
+              phx-target={@target}
+              phx-value-op="select_page"
+              phx-value-selected={if @selection_state == :all, do: "false", else: "true"}
+            />
+          </:head>
+          <:lead :let={row} :if={@selectable} class="pc-data-table__check-td">
+            <input
+              :if={!@loading}
+              type="checkbox"
+              class="pc-checkbox pc-data-table__row-check"
+              aria-label={@select_row_label}
+              checked={row_selected?(row, @row_id_fun, @selected_ids)}
+              phx-click={@select_event}
+              phx-target={@target}
+              phx-value-op="select"
+              phx-value-id={row_key(row, @row_id_fun)}
+              phx-value-selected={
+                if(row_selected?(row, @row_id_fun, @selected_ids), do: "false", else: "true")
+              }
+            />
+          </:lead>
           <:col
             :let={row}
             :for={col <- @col}
@@ -360,6 +479,18 @@ defmodule PetalComponents.DataTable do
     </div>
     """
   end
+
+  defp row_selected?(row, row_id, selected_ids), do: row_key(row, row_id) in selected_ids
+
+  defp row_key(row, row_id), do: row |> row_id.() |> to_string()
+
+  defp selection_aria(:all), do: "true"
+  defp selection_aria(:some), do: "mixed"
+  defp selection_aria(:none), do: "false"
+
+  defp selection_data(:all), do: "all"
+  defp selection_data(:some), do: "mixed"
+  defp selection_data(:none), do: "none"
 
   # -- wiring ----------------------------------------------------------------
 

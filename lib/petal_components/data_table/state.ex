@@ -201,6 +201,50 @@ defmodule PetalComponents.DataTable.State do
     end
   end
 
+  @doc """
+  Applies a row-selection op to a list of selected ids.
+
+  Selection is ephemeral UI state, not part of the `State` struct and
+  never written into the URL. Ids are compared as strings, so `1` and
+  `"1"` are the same row.
+
+    * `%{"op" => "select", "id" => id, "selected" => "true" | "false"}`
+      adds or drops one row.
+    * `%{"op" => "select_page", "selected" => "true" | "false"}` adds or
+      drops every id in `page_ids` (the rows currently rendered).
+    * `%{"op" => "clear_selection"}` returns `[]`.
+
+  Anything else returns `selected` unchanged.
+  """
+  def apply_selection(selected, params, page_ids \\ [])
+
+  def apply_selection(selected, %{"op" => "select", "id" => id, "selected" => "true"}, _page_ids)
+      when is_list(selected) do
+    Enum.uniq_by(selected ++ [id], &to_string/1)
+  end
+
+  def apply_selection(selected, %{"op" => "select", "id" => id, "selected" => "false"}, _page_ids)
+      when is_list(selected) do
+    drop = to_string(id)
+    Enum.reject(selected, &(to_string(&1) == drop))
+  end
+
+  def apply_selection(selected, %{"op" => "select_page", "selected" => "true"}, page_ids)
+      when is_list(selected) do
+    Enum.uniq_by(selected ++ List.wrap(page_ids), &to_string/1)
+  end
+
+  def apply_selection(selected, %{"op" => "select_page", "selected" => "false"}, page_ids)
+      when is_list(selected) do
+    drop = MapSet.new(page_ids, &to_string/1)
+    Enum.reject(selected, &(to_string(&1) in drop))
+  end
+
+  def apply_selection(selected, %{"op" => "clear_selection"}, _page_ids) when is_list(selected),
+    do: []
+
+  def apply_selection(selected, _params, _page_ids) when is_list(selected), do: selected
+
   defp apply_filter_op(state, field, params) do
     resolved =
       cond do

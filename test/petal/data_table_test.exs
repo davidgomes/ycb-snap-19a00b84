@@ -363,6 +363,65 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "pc-data-table__actions"
   end
 
+  test "selectable renders a tri-state header and per-row checks" do
+    rows = [%{id: 1, name: "Amy"}, %{id: 2, name: "Bea"}]
+    assigns = base(%{rows: rows, selected: [1]})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable selected={@selected}>
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:bulk_action :let={ids}>
+          <button type="button">Export {length(ids)}</button>
+        </:bulk_action>
+      </.data_table>
+      """)
+
+    assert html =~ ~s(data-pc-dt-select-all)
+    assert html =~ ~s(data-state="mixed")
+    assert html =~ ~s(aria-checked="mixed")
+    assert html =~ ~s(phx-value-op="select_page")
+    assert html =~ ~s(phx-value-selected="true")
+    assert html =~ ~s(phx-value-id="1")
+    assert html =~ ~s(phx-value-selected="false")
+    assert html =~ ~s(phx-value-id="2")
+    assert html =~ "pc-data-table--selecting"
+    assert html =~ "1 selected"
+    assert html =~ "Export 1"
+    assert html =~ ~s(phx-value-op="clear_selection")
+    assert html =~ ~s(phx-hook="PetalDataTable")
+  end
+
+  test "header checks the whole page only when every row is selected" do
+    rows = [%{id: 1, name: "Amy"}, %{id: 2, name: "Bea"}]
+    assigns = base(%{rows: rows, selected: [1, 2]})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable selected={@selected}>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert html =~ ~s(data-state="all")
+    assert html =~ ~s(phx-value-op="select_page")
+    assert html =~ ~s(phx-value-selected="false")
+    assert html =~ "2 selected"
+  end
+
+  test "raises when selectable without an event" do
+    rows = [%{id: 1, name: "Amy"}]
+    assigns = base(%{rows: rows})
+
+    assert_raise ArgumentError, ~r/on_select or on_change/, fn ->
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} path={@path} selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+    end
+  end
+
   test "raises without either wiring mode" do
     assigns = base(%{path: nil})
 

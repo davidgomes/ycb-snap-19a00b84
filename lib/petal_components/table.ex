@@ -53,6 +53,15 @@ defmodule PetalComponents.Table do
     how the data table patches per-column sort URLs in link mode.
     """
 
+  slot :head, doc: "leading header cells rendered before the columns (selection checkbox)" do
+    attr :class, :any
+  end
+
+  slot :lead,
+    doc: "leading body cells rendered before the columns; `:let` receives the row" do
+    attr :class, :any
+  end
+
   slot :col do
     attr :label, :string
     attr :class, :any
@@ -94,6 +103,12 @@ defmodule PetalComponents.Table do
         <thead>
           <.tr>
             <.th
+              :for={head <- @head}
+              class={[head[:class], @sticky_header && "pc-table__th--sticky"]}
+            >
+              {render_slot(head)}
+            </.th>
+            <.th
               :for={col <- @col}
               class={[col[:class], @sticky_header && "pc-table__th--sticky"]}
               aria-sort={col[:sortable] && aria_sort(sort_state(col, @sort_by, @sort_dir))}
@@ -122,7 +137,7 @@ defmodule PetalComponents.Table do
           >
             <.td
               :for={empty_state <- @empty_state}
-              colspan={length(@col)}
+              colspan={length(@head) + length(@col)}
               class={empty_state[:row_class]}
             >
               {render_slot(empty_state)}
@@ -133,6 +148,9 @@ defmodule PetalComponents.Table do
             id={@row_id && @row_id.(row)}
             class={["group", @row_click && "pc-table__tr--row-click"]}
           >
+            <.td :for={lead <- @lead} class={lead[:class]}>
+              {render_slot(lead, @row_item.(row))}
+            </.td>
             <.td
               :for={{col, i} <- Enum.with_index(@col)}
               phx-click={@row_click && @row_click.(row)}

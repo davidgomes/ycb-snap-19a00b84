@@ -4659,6 +4659,20 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+    this.syncSelection();
+  },
+
+  updated() {
+    this.syncSelection();
+  },
+
+  // the header checkbox is tri-state for the current page; CSS paints
+  // the dash from data-state, and indeterminate keeps the native
+  // control in the same state for assistive tech
+  syncSelection() {
+    this.el.querySelectorAll("[data-pc-dt-select-all]").forEach((box) => {
+      box.indeterminate = box.dataset.state === "mixed";
+    });
   },
 
   destroyed() {

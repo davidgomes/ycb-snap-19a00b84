@@ -2593,7 +2593,39 @@
     @apply min-w-0 max-w-full;
   }
   .pc-data-table__toolbar {
-    @apply mb-3 flex flex-wrap items-center gap-2;
+    @apply mb-3 grid;
+  }
+  .pc-data-table__toolbar-tools,
+  .pc-data-table__selection {
+    grid-area: 1 / 1;
+  }
+  .pc-data-table__toolbar-tools {
+    @apply flex min-h-9 flex-wrap items-center gap-2;
+  }
+  /* both layers share one cell so a selection swaps the tools in place */
+  .pc-data-table--selecting .pc-data-table__toolbar-tools,
+  .pc-data-table:not(.pc-data-table--selecting) .pc-data-table__selection {
+    @apply invisible pointer-events-none;
+  }
+  .pc-data-table__selection {
+    @apply flex min-h-9 flex-wrap items-center gap-2;
+  }
+  .pc-data-table__selection-count {
+    @apply text-sm font-medium text-gray-900 tabular-nums dark:text-gray-100;
+  }
+  .pc-data-table__selection-clear {
+    @apply ml-auto;
+  }
+  .pc-data-table__check-th,
+  .pc-data-table__check-td {
+    @apply w-px pr-0;
+  }
+  .pc-data-table__check[data-state="mixed"] {
+    @apply border-primary-600 bg-primary-600;
+    background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23fff' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M4 8h8' stroke='%23fff' stroke-width='2' stroke-linecap='round'/%3e%3c/svg%3e");
+  }
+  :is(.pc-table--basic, .pc-table--ghost) tbody .pc-table__tr:has(.pc-data-table__row-check:checked) {
+    @apply bg-primary-600/5 dark:bg-primary-500/10;
   }
   .pc-data-table__scroll {
     @apply overflow-x-auto;
