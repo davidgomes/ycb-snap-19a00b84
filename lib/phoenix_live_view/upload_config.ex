@@ -551,6 +551,7 @@ defmodule Phoenix.LiveView.UploadConfig do
 
     cond do
       too_many? && new_conf.auto_upload? ->
+        new_conf = invalidate_excess_entries(new_conf)
         {:ok, put_error(new_conf, new_conf.ref, @too_many_files)}
 
       too_many? ->
@@ -579,6 +580,23 @@ defmodule Phoenix.LiveView.UploadConfig do
 
   defp maybe_replace_sole_entry(%UploadConfig{} = conf, _new_entries) do
     conf
+  end
+
+  # Excess auto upload entries must never be uploaded, even once earlier
+  # entries are consumed and they would otherwise fall within max_entries.
+  defp invalidate_excess_entries(%UploadConfig{max_entries: max} = conf) do
+    {new_entries, new_pids} =
+      conf.entries
+      |> Enum.with_index()
+      |> Enum.map_reduce(conf.entry_refs_to_pids, fn {entry, i}, pids ->
+        if i >= max and not entry.preflighted? and entry.valid? do
+          {%{entry | valid?: false}, Map.put(pids, entry.ref, @invalid)}
+        else
+          {entry, pids}
+        end
+      end)
+
+    %{conf | entries: new_entries, entry_refs_to_pids: new_pids}
   end
 
   defp too_many_files?(%UploadConfig{entries: entries, max_entries: max}) do

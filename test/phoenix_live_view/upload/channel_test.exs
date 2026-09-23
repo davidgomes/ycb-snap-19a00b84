@@ -615,6 +615,26 @@ defmodule Phoenix.LiveView.UploadChannelTest do
         assert {:error, :not_allowed} = render_upload(avatar, "foo2.jpeg")
       end
 
+      @tag allow: [max_entries: 1, chunk_size: 20, accept: :any, auto_upload: true]
+      test "excess auto_upload entries stay rejected after earlier entries are consumed",
+           %{lv: lv} do
+        avatar =
+          file_input(lv, "form", :avatar, [
+            %{name: "foo1.jpeg", content: "bytes"},
+            %{name: "foo2.jpeg", content: "bytes"}
+          ])
+
+        lv |> form("form", user: %{}) |> render_change(avatar)
+        assert render_upload(avatar, "foo1.jpeg") =~ "foo1.jpeg:100%"
+
+        UploadLive.run(lv, fn socket ->
+          [entry | _] = socket.assigns.uploads.avatar.entries
+          {:reply, :ok, Phoenix.LiveView.cancel_upload(socket, :avatar, entry.ref)}
+        end)
+
+        refute render_upload(avatar, "foo2.jpeg") =~ "foo2.jpeg:100%"
+      end
+
       @tag allow: [
              max_entries: 1,
              chunk_size: 20,
