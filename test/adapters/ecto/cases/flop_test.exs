@@ -2124,7 +2124,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
         )
     end
 
-    test "nil values for cursors are ignored when using for option" do
+    test "nil cursor values paginate when using for option" do
       check all pets <- uniq_list_of_pets(length: 2..2),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}) do
@@ -2146,7 +2146,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                    for: Pet
                  )
 
-        assert {:ok, _} =
+        assert {:ok, {[_], _meta}} =
                  Flop.validate_and_run(
                    pets_with_owners_query(),
                    %Flop{
@@ -2197,7 +2197,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                "cursor pagination is not supported for alias fields"
     end
 
-    test "nil values for cursors are ignored when not using for option" do
+    test "nil cursor values paginate when not using for option" do
       check all pets <- uniq_list_of_pets(length: 2..2),
                 directions <- order_directions(%Pet{}) do
         checkin_checkout()
@@ -2218,7 +2218,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                    }
                  )
 
-        assert {:ok, _} =
+        assert {:ok, {[_], _meta}} =
                  Flop.validate_and_run(
                    pets_with_owners_query(),
                    %Flop{
