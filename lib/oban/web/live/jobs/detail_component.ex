@@ -6,6 +6,8 @@ defmodule Oban.Web.Jobs.DetailComponent do
   alias Oban.Web.Jobs.{HistoryChartComponent, TimelineComponent}
   alias Oban.Web.{Resolver, Timing}
 
+  @awaiting_states ~w(available executing retryable scheduled)
+
   @impl Phoenix.LiveComponent
   def update(assigns, socket) do
     auto_open_diagnostics? =
@@ -231,7 +233,7 @@ defmodule Oban.Web.Jobs.DetailComponent do
         </div>
       </div>
 
-      <.job_data_section job={@job} resolver={@resolver} />
+      <.job_data_section job={@job} os_time={@os_time} resolver={@resolver} />
 
       <div class="px-3 py-6 border-t border-gray-200 dark:border-gray-700">
         <button
@@ -618,6 +620,7 @@ defmodule Oban.Web.Jobs.DetailComponent do
   # Job Data Section
 
   attr :job, :map, required: true
+  attr :os_time, :integer, required: true
   attr :resolver, :any, required: true
 
   defp job_data_section(assigns) do
@@ -700,6 +703,56 @@ defmodule Oban.Web.Jobs.DetailComponent do
             </div>
             <pre class="font-mono text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-all">{format_recorded(@job, @resolver)}</pre>
           </div>
+        </div>
+
+        <.signal_block job={@job} os_time={@os_time} resolver={@resolver} />
+      </div>
+    </div>
+    """
+  end
+
+  attr :job, :map, required: true
+  attr :os_time, :integer, required: true
+  attr :resolver, :any, required: true
+
+  defp signal_block(assigns) do
+    assigns = assign(assigns, :status, signal_status(assigns.job))
+
+    ~H"""
+    <div :if={@status} id="job-signal" class="mt-4">
+      <div class="relative bg-gray-50 dark:bg-gray-800 rounded-md p-4">
+        <div class="flex justify-between items-start mb-2">
+          <div class="flex items-center space-x-2">
+            <h4 class="font-medium text-xs uppercase text-gray-500 dark:text-gray-400">
+              {if @status == :received, do: "Received Signal", else: "Awaiting Signal"}
+            </h4>
+            <.pro_badge id="signal-pro-badge" tooltip="Awaitable signal from Oban.Pro.Worker" />
+          </div>
+          <button
+            :if={@status == :received}
+            type="button"
+            id="copy-signal"
+            class="w-9 h-9 -mr-2 -mt-2 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-white dark:hover:bg-gray-700 cursor-pointer"
+            data-title="Copy to clipboard"
+            phx-hook="Tippy"
+            phx-click={copy_to_clipboard(format_signal(@job, @resolver))}
+          >
+            <Icons.icon name="icon-clipboard" class="w-4 h-4" />
+          </button>
+        </div>
+
+        <pre
+          :if={@status == :received}
+          class="font-mono text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-all"
+        >{format_signal(@job, @resolver)}</pre>
+
+        <div
+          :if={@status == :awaiting}
+          id="signal-deadline"
+          class="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400"
+        >
+          <Icons.icon name="icon-clock" class="w-4 h-4" />
+          <span>{format_signal_deadline(@job, @os_time)}</span>
         </div>
       </div>
     </div>
@@ -805,14 +858,10 @@ defmodule Oban.Web.Jobs.DetailComponent do
   end
 
   defp format_meta(%{meta: meta} = job, resolver) do
-    job =
-      if meta["recorded"] do
-        %{job | meta: Map.delete(meta, "return")}
-      else
-        job
-      end
+    meta = if meta["recorded"], do: Map.delete(meta, "return"), else: meta
+    meta = if meta["signal"], do: Map.delete(meta, "signal"), else: meta
 
-    Resolver.call_with_fallback(resolver, :format_job_meta, [job])
+    Resolver.call_with_fallback(resolver, :format_job_meta, [%{job | meta: meta}])
   end
 
   defp format_recorded(%{meta: meta} = job, resolver) do
@@ -827,6 +876,44 @@ defmodule Oban.Web.Jobs.DetailComponent do
         "Recording Not Enabled"
     end
   end
+
+  defp signal_status(%{meta: meta, state: state}) do
+    cond do
+      is_binary(meta["signal"]) -> :received
+      Map.has_key?(meta, "signal_deadline") and state in @awaiting_states -> :awaiting
+      true -> nil
+    end
+  end
+
+  defp format_signal(%{meta: %{"signal" => signal}} = job, resolver) do
+    Resolver.call_with_fallback(resolver, :format_signal, [signal, job])
+  end
+
+  defp format_signal_deadline(%{meta: meta}, os_time) do
+    case parse_signal_deadline(meta["signal_deadline"]) do
+      %DateTime{} = deadline ->
+        relative =
+          deadline
+          |> DateTime.diff(DateTime.from_unix!(os_time))
+          |> Timing.to_words()
+
+        "Deadline #{DateTime.truncate(deadline, :second)} (#{relative})"
+
+      nil ->
+        "No deadline, waiting indefinitely"
+    end
+  end
+
+  defp parse_signal_deadline(unix) when is_integer(unix), do: DateTime.from_unix!(unix)
+
+  defp parse_signal_deadline(iso8601) when is_binary(iso8601) do
+    case DateTime.from_iso8601(iso8601) do
+      {:ok, datetime, _offset} -> datetime
+      {:error, _reason} -> nil
+    end
+  end
+
+  defp parse_signal_deadline(_deadline), do: nil
 
   defp error_entry(assigns) do
     error =
