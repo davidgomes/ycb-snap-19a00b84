@@ -34,6 +34,15 @@ defmodule Oban.Web.ResolverTest do
     end
   end
 
+  describe "decode_signal/2" do
+    test "decoding a compressed signal payload" do
+      assert %{ok: true} ==
+               %{ok: true}
+               |> encode_recorded()
+               |> Resolver.decode_signal()
+    end
+  end
+
   describe "decode_recorded/2" do
     test "guarding against executable terms in safe mode" do
       assert_raise ArgumentError, fn ->

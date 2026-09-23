@@ -57,6 +57,43 @@ defmodule Oban.Web.Jobs.DetailComponentTest do
     assert html =~ ~s(id="detail-delete" type="button" disabled)
   end
 
+  test "displaying an awaited signal deadline" do
+    deadline = DateTime.utc_now() |> DateTime.add(3_600, :second) |> DateTime.to_unix(:millisecond)
+
+    job = %Oban.Job{
+      id: 1,
+      worker: "MyApp.Worker",
+      args: %{},
+      meta: %{"wait_until" => deadline}
+    }
+
+    html = render_component(Component, assigns(job), router: Router)
+
+    assert html =~ "Awaiting Signal"
+    assert html =~ "Deadline in"
+    refute html =~ "Received Signal"
+  end
+
+  test "displaying a received signal payload" do
+    payload =
+      %{status: "ready"}
+      |> :erlang.term_to_binary()
+      |> Base.encode64(padding: false)
+
+    job = %Oban.Job{
+      id: 1,
+      worker: "MyApp.Worker",
+      args: %{},
+      meta: %{"signal" => payload, "wait_until" => "infinity"}
+    }
+
+    html = render_component(Component, assigns(job), router: Router)
+
+    assert html =~ "Received Signal"
+    assert html =~ "ready"
+    refute html =~ payload
+  end
+
   test "customizing args formatting with a resolver" do
     job = %Oban.Job{id: 1, worker: "MyApp.Worker", args: %{"secret" => "sauce"}}
 
