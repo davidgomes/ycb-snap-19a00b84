@@ -115,6 +115,12 @@ by setting `phx-ignore-missing-id` or disable it globally with the `:missing_for
 
 See the module documentation or `Phoenix.LiveViewTest` for more information.
 
+## Unreleased
+
+### Enhancements
+
+* Dispatch a cancelable `phx:before-navigate` event on window before client-side live navigation. Calling `preventDefault()` cancels the navigation ([#4332](https://github.com/phoenixframework/phoenix_live_view/pull/4332))
+
 ## v1.2.7 (2026-07-13)
 
 ### Security fixes
