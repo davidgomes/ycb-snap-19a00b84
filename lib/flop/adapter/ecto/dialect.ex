@@ -17,6 +17,11 @@ defmodule Flop.Adapter.Ecto.Dialect do
   # array operations. Flop uses JSON_CONTAINS and JSON_LENGTH instead.
   @without_arrays [Ecto.Adapters.MyXQL]
 
+  # PostgreSQL sorts NULLs as if they were larger than any value, so plain ASC
+  # puts them last and plain DESC first. MySQL and SQLite sort them as smaller
+  # than any value. Cursor pagination needs to know where they are.
+  @with_nulls_smallest [Ecto.Adapters.MyXQL, Ecto.Adapters.SQLite3]
+
   @typedoc """
   Feature support of a repo's Ecto adapter, resolved once per query and passed
   to the query builders.
@@ -24,10 +29,14 @@ defmodule Flop.Adapter.Ecto.Dialect do
   @type t :: %__MODULE__{
           arrays?: boolean,
           ilike?: boolean,
+          nulls_largest?: boolean,
           nulls_ordering?: boolean
         }
 
-  defstruct arrays?: true, ilike?: true, nulls_ordering?: true
+  defstruct arrays?: true,
+            ilike?: true,
+            nulls_largest?: true,
+            nulls_ordering?: true
 
   @nulls_ordering_fallback %{
     asc_nulls_first: {:native, :asc},
@@ -47,6 +56,7 @@ defmodule Flop.Adapter.Ecto.Dialect do
     %__MODULE__{
       arrays?: adapter not in @without_arrays,
       ilike?: adapter not in @without_ilike,
+      nulls_largest?: adapter not in @with_nulls_smallest,
       nulls_ordering?: adapter not in @without_nulls_ordering
     }
   end
@@ -84,6 +94,27 @@ defmodule Flop.Adapter.Ecto.Dialect do
   def order_direction(%__MODULE__{}, direction) do
     Map.get(@nulls_ordering_fallback, direction, {:native, direction})
   end
+
+  @doc """
+  Returns the order direction with the position of NULLs made explicit.
+
+  `:asc` and `:desc` leave the position of NULLs to the database. The other
+  directions are returned unchanged.
+  """
+  @spec explicit_direction(t, atom) :: atom
+  def explicit_direction(%__MODULE__{nulls_largest?: true}, :asc),
+    do: :asc_nulls_last
+
+  def explicit_direction(%__MODULE__{nulls_largest?: true}, :desc),
+    do: :desc_nulls_first
+
+  def explicit_direction(%__MODULE__{nulls_largest?: false}, :asc),
+    do: :asc_nulls_first
+
+  def explicit_direction(%__MODULE__{nulls_largest?: false}, :desc),
+    do: :desc_nulls_last
+
+  def explicit_direction(%__MODULE__{}, direction), do: direction
 
   defp adapter(repo) when is_atom(repo) and not is_nil(repo) do
     if Code.ensure_loaded?(repo) and

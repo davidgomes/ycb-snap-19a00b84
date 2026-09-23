@@ -38,6 +38,23 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     Enum.map(ages, &Repo.insert!(%CustomFieldPet{age: &1}))
   end
 
+  # follows the cursors from the first page with `first`, or from the last page
+  # with `last`, and returns the rows of all pages in order
+  defp all_pages(%Flop{} = flop, opts) do
+    {:ok, {page, meta}} = Flop.validate_and_run(Pet, flop, opts)
+
+    cond do
+      flop.last && meta.has_previous_page? ->
+        all_pages(Flop.to_previous_cursor(meta), opts) ++ page
+
+      flop.first && meta.has_next_page? ->
+        page ++ all_pages(Flop.to_next_cursor(meta), opts)
+
+      true ->
+        page
+    end
+  end
+
   describe "ordering" do
     test "adds order_by to query if set" do
       pets = insert_list(20, :pet)
@@ -1635,7 +1652,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
 
   describe "cursor pagination" do
     property "querying cursor by cursor forward includes all items in order" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
+      check all pets <- uniq_list_of_pets_with_nils(length: 1..25),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}) do
         checkin_checkout()
@@ -1714,7 +1731,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "querying all items returns same list forward and backward" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
+      check all pets <- uniq_list_of_pets_with_nils(length: 1..25),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}) do
         checkin_checkout()
@@ -1748,7 +1765,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "querying cursor by cursor backward includes all items in order" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
+      check all pets <- uniq_list_of_pets_with_nils(length: 1..25),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}) do
         checkin_checkout()
@@ -1823,7 +1840,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_previous_page? is false without after and last" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
+      check all pets <- uniq_list_of_pets_with_nils(length: 1..25),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}),
                 first <- integer(1..(length(pets) + 1)) do
@@ -1844,7 +1861,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_previous_page? is true with after" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
+      check all pets <- uniq_list_of_pets_with_nils(length: 1..25),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}),
                 first <- integer(1..(length(pets) + 1)),
@@ -1874,7 +1891,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_previous_page? is true with last set and items left" do
-      check all pets <- uniq_list_of_pets(length: 3..50),
+      check all pets <- uniq_list_of_pets_with_nils(length: 3..50),
                 pet_count = length(pets),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}),
@@ -1914,7 +1931,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_previous_page? is false with last set and no items left" do
-      check all pets <- uniq_list_of_pets(length: 3..50),
+      check all pets <- uniq_list_of_pets_with_nils(length: 3..50),
                 pet_count = length(pets),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}),
@@ -1957,7 +1974,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_next_page? is false without first and before" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
+      check all pets <- uniq_list_of_pets_with_nils(length: 1..25),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}),
                 last <- integer(1..(length(pets) + 1)) do
@@ -1978,7 +1995,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_next_page? is true with before" do
-      check all pets <- uniq_list_of_pets(length: 1..25),
+      check all pets <- uniq_list_of_pets_with_nils(length: 1..25),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}),
                 last <- integer(1..(length(pets) + 1)),
@@ -2008,7 +2025,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     end
 
     property "has_next_page? is true with first set and items left" do
-      check all pets <- uniq_list_of_pets(length: 3..50),
+      check all pets <- uniq_list_of_pets_with_nils(length: 3..50),
                 pet_count = length(pets),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}),
@@ -2050,7 +2067,8 @@ defmodule Flop.Adapters.Ecto.FlopTest do
 
     property "has_next_page? is false with first set and no items left" do
       check all pet_count <- integer(3..50),
-                pets <- uniq_list_of_pets(length: pet_count..pet_count),
+                pets <-
+                  uniq_list_of_pets_with_nils(length: pet_count..pet_count),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}),
                 # include test with limits greater than item count
@@ -2124,39 +2142,29 @@ defmodule Flop.Adapters.Ecto.FlopTest do
         )
     end
 
-    test "nil values for cursors are ignored when using for option" do
-      check all pets <- uniq_list_of_pets(length: 2..2),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}) do
-        checkin_checkout()
+    test "pages over nil values in every nulls order direction" do
+      for {name, age} <- [
+            {"Ada", 3},
+            {"Bo", 1},
+            {"Cy", nil},
+            {"Dee", nil},
+            {"Eve", 5}
+          ] do
+        insert(:pet, name: name, age: age)
+      end
 
-        # set name fields to nil and insert
-        pets
-        |> Enum.map(&Map.update!(&1, :name, fn _ -> nil end))
-        |> Enum.each(&Repo.insert!(&1))
+      for {direction, expected} <- [
+            {:asc_nulls_first, ~w(Cy Dee Bo Ada Eve)},
+            {:asc_nulls_last, ~w(Bo Ada Eve Cy Dee)},
+            {:desc_nulls_first, ~w(Cy Dee Eve Ada Bo)},
+            {:desc_nulls_last, ~w(Eve Ada Bo Cy Dee)}
+          ] do
+        flop = %Flop{order_by: [:age, :name], order_directions: [direction]}
 
-        assert {:ok, {[_], %Meta{end_cursor: end_cursor}}} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   },
-                   for: Pet
-                 )
-
-        assert {:ok, _} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     after: end_cursor,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   },
-                   for: Pet
-                 )
+        for pagination <- [%{flop | first: 2}, %{flop | last: 2}] do
+          assert pagination |> all_pages(for: Pet) |> Enum.map(& &1.name) ==
+                   expected
+        end
       end
     end
 
@@ -2197,37 +2205,17 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                "cursor pagination is not supported for alias fields"
     end
 
-    test "nil values for cursors are ignored when not using for option" do
-      check all pets <- uniq_list_of_pets(length: 2..2),
+    property "pages over nil values without the for option" do
+      check all pets <- uniq_list_of_pets_with_nils(length: 1..25),
                 directions <- order_directions(%Pet{}) do
         checkin_checkout()
-        cursor_fields = [:name, :age]
+        Enum.each(pets, &Repo.insert!(&1))
 
-        # set name fields to nil and insert
-        pets
-        |> Enum.map(&Map.update!(&1, :name, fn _ -> nil end))
-        |> Enum.each(&Repo.insert!(&1))
+        flop = %Flop{order_by: [:name, :age, :id], order_directions: directions}
+        expected = Flop.all(Pet, flop)
 
-        assert {:ok, {[_], %Meta{end_cursor: end_cursor}}} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   }
-                 )
-
-        assert {:ok, _} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     after: end_cursor,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   }
-                 )
+        assert all_pages(%{flop | first: 2}, []) == expected
+        assert all_pages(%{flop | last: 2}, []) == expected
       end
     end
 

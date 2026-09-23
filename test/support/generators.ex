@@ -66,6 +66,37 @@ defmodule Flop.Generators do
     end
   end
 
+  @doc """
+  Generates pets like `uniq_list_of_pets/1`, with some of the sortable fields
+  set to `nil`. Every pet keeps at least one of them, so that the combination
+  of the sortable fields stays unique. A pet without owner name and owner age
+  has no owner, so that the join fields are `NULL` because of the left join.
+  """
+  def uniq_list_of_pets_with_nils(opts) do
+    gen all pets <- uniq_list_of_pets(opts),
+            nil_fields <-
+              [:name, :age, :owner_name, :owner_age]
+              |> member_of()
+              |> uniq_list_of(max_length: 3)
+              |> list_of(length: length(pets)) do
+      pets
+      |> Enum.zip(nil_fields)
+      |> Enum.map(fn {pet, fields} ->
+        pet = Enum.reduce(fields, pet, &put_nil(&2, &1))
+
+        case pet.owner do
+          %{name: nil, age: nil} -> %{pet | owner: nil}
+          _ -> pet
+        end
+      end)
+    end
+  end
+
+  defp put_nil(pet, :name), do: %{pet | name: nil}
+  defp put_nil(pet, :age), do: %{pet | age: nil}
+  defp put_nil(pet, :owner_name), do: %{pet | owner: %{pet.owner | name: nil}}
+  defp put_nil(pet, :owner_age), do: %{pet | owner: %{pet.owner | age: nil}}
+
   def uniq_list_of_owners(len) do
     gen all names <- uniq_list_of_strings(len),
             ages <- uniq_list_of(integer(1..500), length: len),
