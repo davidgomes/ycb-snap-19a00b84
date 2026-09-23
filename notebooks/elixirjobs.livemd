@@ -6,7 +6,8 @@
 Mix.install([
   {:spider_man, "~> 0.5"},
   {:floki, "~> 0.34"},
-  {:nimble_csv, "~> 1.2"}
+  {:nimble_csv, "~> 1.2"},
+  {:kino, "~> 0.10"}
 ])
 ```
 
@@ -41,6 +42,7 @@ requester_options = [
 
 settings = [
   log2file: false,
+  print_stats: false,
   downloader_options: [requester: {SpiderMan.Requester.Finch, requester_options}],
   spider_options: [pipelines: []],
   item_processor_options: [
@@ -140,7 +142,28 @@ callbacks = [init: init, handle_response: handle_response]
 {:ok, settings} = SpiderMan.CommonSpider.check_callbacks_and_merge_settings(callbacks, settings)
 ```
 
-run ther spider
+show throughput infos of the spider, refresh every second
+
+```elixir
+Kino.animate(Stream.interval(1000), fn _ ->
+  case SpiderMan.throughput(spider) do
+    nil ->
+      Kino.Markdown.new("spider not running")
+
+    stats ->
+      rows =
+        Enum.map(stats, fn {component, %{total: total, success: success, fail: fail, tps: tps}} ->
+          "| #{component} | #{total} | #{success} | #{fail} | #{tps} |"
+        end)
+
+      ["| Component | Total | Success | Fail | TPS |", "| --- | --- | --- | --- | --- |" | rows]
+      |> Enum.join("\n")
+      |> Kino.Markdown.new()
+  end
+end)
+```
+
+run the spider
 
 ```elixir
 SpiderMan.run_until_zero(spider, settings, 5_000)

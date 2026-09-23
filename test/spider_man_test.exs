@@ -55,6 +55,20 @@ defmodule SpiderMan.SpiderManTest do
            ] = SpiderMan.stats(spider)
   end
 
+  test "throughput", %{spider: spider} do
+    assert [
+             downloader: %{total: _, success: _, fail: _, tps: _},
+             spider: %{total: _, success: _, fail: _, tps: _},
+             item_processor: %{total: _, success: _, fail: _, tps: _}
+           ] = SpiderMan.throughput(spider)
+
+    assert SpiderMan.format_throughput(spider) =~
+             ~r/^Downloader:\[.+\] Spider:\[.+\] ItemProcessor:\[.+\]$/
+
+    assert nil == SpiderMan.throughput(NotStartedSpider)
+    assert nil == SpiderMan.format_throughput(NotStartedSpider)
+  end
+
   test "list_spiders", %{spider: spider} do
     spiders = SpiderMan.list_spiders()
     assert is_list(spiders)

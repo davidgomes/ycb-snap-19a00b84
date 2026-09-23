@@ -92,7 +92,12 @@ defmodule SpiderMan.Configuration do
     ]
 
     [
-      print_stats: [type: :boolean, default: true, doc: "Print the stats of spider, "],
+      print_stats: [
+        type: :boolean,
+        default: true,
+        doc:
+          "Print the stats of spider, the stats can also be fetched by `SpiderMan.throughput/1`, "
+      ],
       log2file: [type: {:or, [:boolean, :string]}, default: true, doc: "Save the log to files, "],
       status: [
         type: {:in, [:running, :suspended]},

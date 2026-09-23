@@ -40,6 +40,12 @@ defmodule SpiderMan do
   @type requests :: [request]
   @type component :: :downloader | :spider | :item_processor
   @type ets_stats :: [size: pos_integer, memory: pos_integer] | nil
+  @type throughput_stats :: %{
+          total: non_neg_integer,
+          success: non_neg_integer,
+          fail: non_neg_integer,
+          tps: number
+        }
   @type prepare_for_start_stage :: :pre | :post
 
   @callback handle_response(Response.t(), context :: map) :: %{
@@ -145,16 +151,7 @@ defmodule SpiderMan do
           item_processor_tid: ets_stats
         ]
   def stats(spider) do
-    components =
-      :persistent_term.get(spider)
-      |> Enum.sort()
-      |> Enum.map(fn {key, tid} ->
-        {key,
-         tid
-         |> :ets.info()
-         |> Keyword.take([:size, :memory])}
-      end)
-
+    components = spider |> ets_stats() |> Enum.sort()
     [{:status, Engine.status(spider)} | components]
   end
 
@@ -168,12 +165,52 @@ defmodule SpiderMan do
         ]
   def ets_stats(spider) do
     :persistent_term.get(spider)
+    |> Map.delete(:stats_tid)
     |> Enum.map(fn {key, tid} ->
       {key,
        tid
        |> :ets.info()
        |> Keyword.take([:size, :memory])}
     end)
+  end
+
+  @doc """
+  fetch spider's throughput stats of each component
+
+  Returns `nil` if the spider isn't running.
+
+  ## Example
+
+      iex> SpiderMan.throughput(spider)
+      [
+        downloader: %{total: 10, success: 8, fail: 0, tps: 2.5},
+        spider: %{total: 8, success: 8, fail: 0, tps: 100.0},
+        item_processor: %{total: 80, success: 80, fail: 0, tps: 999.99}
+      ]
+  """
+  @spec throughput(spider) :: [{component, throughput_stats}] | nil
+  def throughput(spider) do
+    if tid = stats_tid(spider), do: SpiderMan.Stats.get_stats(tid)
+  end
+
+  @doc """
+  fetch spider's throughput stats of each component as a formatted string,
+  the same as the one printed by `print_stats: true`.
+
+  Returns `nil` if the spider isn't running.
+  """
+  @spec format_throughput(spider) :: String.t() | nil
+  def format_throughput(spider) do
+    if tid = stats_tid(spider), do: SpiderMan.Stats.format_stats(tid)
+  end
+
+  defp stats_tid(spider) do
+    with %{stats_tid: tid} <- :persistent_term.get(spider, nil),
+         info when is_list(info) <- :ets.info(tid) do
+      tid
+    else
+      _ -> nil
+    end
   end
 
   @spec components :: [component]
