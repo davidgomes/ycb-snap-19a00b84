@@ -304,41 +304,68 @@ defmodule Flop.Adapter.Ecto.Operators do
     end
   end
 
-  defmacro empty(:array) do
-    quote do
-      is_nil(field(r, ^var!(field))) or
-        field(r, ^var!(field)) == type(^[], ^var!(ecto_type))
+  defmacro empty(kind, source \\ :column) do
+    expr = field_expr(source)
+
+    case kind do
+      :array ->
+        quote do
+          is_nil(unquote(expr)) or
+            unquote(expr) == type(^[], ^var!(ecto_type))
+        end
+
+      # for adapters that store an array as a JSON column
+      :json_array ->
+        quote do
+          is_nil(unquote(expr)) or
+            fragment("JSON_LENGTH(?) = 0", unquote(expr))
+        end
+
+      :map ->
+        quote do
+          is_nil(unquote(expr)) or
+            unquote(expr) == type(^%{}, ^var!(ecto_type))
+        end
+
+      :other ->
+        quote do
+          is_nil(unquote(expr))
+        end
     end
   end
 
-  # for adapters that store an array as a JSON column
-  defmacro empty(:json_array) do
-    quote do
-      is_nil(field(r, ^var!(field))) or
-        fragment("JSON_LENGTH(?) = 0", field(r, ^var!(field)))
-    end
-  end
+  defmacro json_contains(source \\ :column) do
+    expr = field_expr(source)
 
-  defmacro empty(:map) do
-    quote do
-      is_nil(field(r, ^var!(field))) or
-        field(r, ^var!(field)) == type(^%{}, ^var!(ecto_type))
-    end
-  end
-
-  defmacro empty(:other) do
-    quote do
-      is_nil(field(r, ^var!(field)))
-    end
-  end
-
-  defmacro json_contains do
     quote do
       fragment(
         "JSON_CONTAINS(?, ?)",
-        field(r, ^var!(field)),
+        unquote(expr),
         ^[Dialect.dump_array_element(var!(value), var!(ecto_type))]
       )
+    end
+  end
+
+  @doc false
+  def field_as_dynamic(ast) do
+    Macro.prewalk(ast, fn
+      {:field, _, [{:r, _, _}, {:^, _, [{:var!, _, [{:field, _, _}]}]}]} ->
+        quote(do: ^var!(field))
+
+      other ->
+        other
+    end)
+  end
+
+  defp field_expr(:column) do
+    quote do
+      field(r, ^var!(field))
+    end
+  end
+
+  defp field_expr(:dynamic) do
+    quote do
+      ^var!(field)
     end
   end
 
