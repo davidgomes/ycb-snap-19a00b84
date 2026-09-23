@@ -1,0 +1,74 @@
+<.header>
+  Job <%= @job.id %>
+  <:subtitle><%= @job.worker %></:subtitle>
+  <:actions>
+    <div class="flex gap-2">
+      <.button :if={Jobs.retryable?(@job)} id="retry-job" phx-click="retry">
+        Retry
+      </.button>
+      <.button
+        :if={Jobs.cancellable?(@job)}
+        id="cancel-job"
+        phx-click="cancel"
+        data-confirm="Cancel this job?"
+      >
+        Cancel
+      </.button>
+      <.button
+        :if={Jobs.deletable?(@job)}
+        id="delete-job"
+        phx-click="delete"
+        data-confirm="Permanently delete this job?"
+        class="bg-rose-600 hover:bg-rose-500"
+      >
+        Delete
+      </.button>
+    </div>
+  </:actions>
+</.header>
+
+<.list>
+  <:item title="State"><.state_badge state={@job.state} /></:item>
+  <:item title="Queue"><%= @job.queue %></:item>
+  <:item title="Attempt"><%= @job.attempt %> of <%= @job.max_attempts %></:item>
+  <:item title="Priority"><%= @job.priority %></:item>
+  <:item :if={@job.tags != []} title="Tags"><%= Enum.join(@job.tags, ", ") %></:item>
+  <:item title="Inserted at"><%= format_timestamp(@job.inserted_at) %></:item>
+  <:item title="Scheduled at"><%= format_timestamp(@job.scheduled_at) %></:item>
+  <:item :if={@job.attempted_at} title="Attempted at">
+    <%= format_timestamp(@job.attempted_at) %>
+  </:item>
+  <:item :if={@job.attempted_by} title="Attempted by">
+    <%= Enum.join(@job.attempted_by, " / ") %>
+  </:item>
+  <:item :if={@job.completed_at} title="Completed at">
+    <%= format_timestamp(@job.completed_at) %>
+  </:item>
+  <:item :if={@job.cancelled_at} title="Cancelled at">
+    <%= format_timestamp(@job.cancelled_at) %>
+  </:item>
+  <:item :if={@job.discarded_at} title="Discarded at">
+    <%= format_timestamp(@job.discarded_at) %>
+  </:item>
+  <:item title="Args">
+    <pre id="job-args" class="whitespace-pre-wrap break-all font-mono text-xs"><%= format_json(@job.args) %></pre>
+  </:item>
+  <:item title="Meta">
+    <pre id="job-meta" class="whitespace-pre-wrap break-all font-mono text-xs"><%= format_json(@job.meta) %></pre>
+  </:item>
+</.list>
+
+<section :if={@job.errors != []} id="job-errors" class="mt-14">
+  <h2 class="text-sm font-semibold leading-6 text-zinc-800">Errors</h2>
+  <div
+    :for={error <- Enum.reverse(@job.errors)}
+    class="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4"
+  >
+    <p class="text-xs text-rose-700">
+      Attempt <%= error["attempt"] %> at <%= error["at"] %>
+    </p>
+    <pre class="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-rose-900"><%= error["error"] %></pre>
+  </div>
+</section>
+
+<.back navigate={~p"/jobs"}>Back to jobs</.back>
