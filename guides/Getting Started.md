@@ -56,7 +56,7 @@ Open the generated migration and call the `up` and `down` functions on `ErrorTra
 defmodule MyApp.Repo.Migrations.AddErrorTracker do
   use Ecto.Migration
 
-  def up, do: ErrorTracker.Migration.up(version: 4)
+  def up, do: ErrorTracker.Migration.up(version: 5)
 
   # We specify `version: 1` in `down`, to ensure we remove all migrations.
   def down, do: ErrorTracker.Migration.down(version: 1)
@@ -144,6 +144,8 @@ However, it provides some detailed Telemetry events that you may use to implemen
 
 If you want to take a look at the events you can attach to, take a look at `ErrorTracker.Telemetry` module documentation.
 
+Noisy errors can be muted so you are not notified about them. Take a look at the [Muting errors](#muting-errors) section below.
+
 ## Pruning resolved errors
 
 By default errors are kept in the database indefinitely. This is not ideal for production
@@ -158,3 +160,19 @@ ErrorTracker tracks every error by default. In certain cases some errors may be 
 ErrorTracker provides functionality that allows you to ignore errors based on their attributes and context.
 
 Take a look at the `ErrorTracker.Ignorer` behaviour for more information about how to implement your own ignorer.
+
+## Muting errors
+
+Some errors may be too noisy to be notified about every time they happen, but you may still want to keep track of them. In those cases you can mute the error from the web dashboard or by calling `ErrorTracker.mute/1`.
+
+Muted errors are still tracked: their occurrences are stored and they will be moved to the unresolved state if they happen again after being resolved. The Telemetry events emitted for new occurrences of a muted error include `muted: true` in their metadata, so your notification handlers can skip them.
+
+```elixir
+def handle_event([:error_tracker, :occurrence, :new], _measurements, metadata, _config) do
+  unless metadata.muted do
+    # Notify the new occurrence
+  end
+end
+```
+
+You can unmute an error at any moment from the web dashboard or by calling `ErrorTracker.unmute/1`.

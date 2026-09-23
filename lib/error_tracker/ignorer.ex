@@ -21,6 +21,12 @@ defmodule ErrorTracker.Ignorer do
   With this configuration in place, the ErrorTracker will call `MyApp.ErrorIgnorer.ignore?/2` before
   tracking errors. If the function returns `true` the error will be ignored and won't be tracked.
 
+  > #### Ignoring vs muting errors {: .tip}
+  >
+  > Ignored errors are not stored at all. If you want to keep tracking an error but don't want to
+  > be notified about its new occurrences, you can mute it instead with `ErrorTracker.mute/1` or
+  > from the web dashboard.
+
   > #### A note on performance {: .warning}
   >
   > Keep in mind that the `ignore?/2` will be called in the context of the ErrorTracker itself.
