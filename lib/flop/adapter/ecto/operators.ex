@@ -342,6 +342,58 @@ defmodule Flop.Adapter.Ecto.Operators do
     end
   end
 
+  # Replaces the field of an operator fragment with the dynamic expression
+  # returned by the field_dynamic function of a custom field.
+  def field_dynamic_fragment(fragment) do
+    Macro.prewalk(fragment, fn
+      {:field, _, [{:r, _, _}, {:^, _, [{:var!, _, [{:field, _, _}]}]}]} ->
+        quote do: ^var!(field_dynamic)
+
+      expr ->
+        expr
+    end)
+  end
+
+  # The typed empty value is interpolated as a dynamic, because comparing an
+  # interpolated value with `type(^value, ^type)` makes Ecto use the
+  # interpolated type as the type of the other side, which does not compile.
+  defmacro field_dynamic_empty(:array) do
+    quote do
+      is_nil(^var!(field_dynamic)) or
+        ^var!(field_dynamic) == ^dynamic(type(^[], ^var!(ecto_type)))
+    end
+  end
+
+  defmacro field_dynamic_empty(:json_array) do
+    quote do
+      is_nil(^var!(field_dynamic)) or
+        fragment("JSON_LENGTH(?) = 0", ^var!(field_dynamic))
+    end
+  end
+
+  defmacro field_dynamic_empty(:map) do
+    quote do
+      is_nil(^var!(field_dynamic)) or
+        ^var!(field_dynamic) == ^dynamic(type(^%{}, ^var!(ecto_type)))
+    end
+  end
+
+  defmacro field_dynamic_empty(:other) do
+    quote do
+      is_nil(^var!(field_dynamic))
+    end
+  end
+
+  defmacro field_dynamic_json_contains do
+    quote do
+      fragment(
+        "JSON_CONTAINS(?, ?)",
+        ^var!(field_dynamic),
+        ^[Dialect.dump_array_element(var!(value), var!(ecto_type))]
+      )
+    end
+  end
+
   defp prelude(:add_wildcard) do
     quote do
       var!(value) = Flop.Misc.add_wildcard(var!(value))

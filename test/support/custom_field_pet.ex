@@ -9,7 +9,13 @@ defmodule MyApp.CustomFieldPet do
 
   @derive {
     Flop.Schema,
-    filterable: [],
+    filterable: [
+      :age_score,
+      :owner_age_score,
+      :lower_name,
+      :tag_list,
+      :reverse_name
+    ],
     sortable: [:age_score, :owner_age_score],
     adapter_opts: [
       custom_fields: [
@@ -23,6 +29,19 @@ defmodule MyApp.CustomFieldPet do
           field_dynamic: {__MODULE__, :owner_age_score_dynamic, []},
           bindings: [:owner],
           ecto_type: :integer
+        ],
+        lower_name: [
+          field_dynamic: {__MODULE__, :lower_name_dynamic, []},
+          ecto_type: :string
+        ],
+        tag_list: [
+          field_dynamic: {__MODULE__, :tag_list_dynamic, []},
+          ecto_type: {:array, :string}
+        ],
+        reverse_name: [
+          filter: {__MODULE__, :reverse_name_filter, []},
+          field_dynamic: {__MODULE__, :name_dynamic, []},
+          ecto_type: :string
         ]
       ]
     ]
@@ -30,6 +49,8 @@ defmodule MyApp.CustomFieldPet do
 
   schema "pets" do
     field :age, :integer
+    field :name, :string
+    field :tags, {:array, :string}
     belongs_to :owner, Owner
   end
 
@@ -44,5 +65,21 @@ defmodule MyApp.CustomFieldPet do
 
   def owner_age_score_dynamic(_opts) do
     dynamic([owner: owner], owner.age)
+  end
+
+  def lower_name_dynamic(_opts) do
+    dynamic([pet], fragment("lower(?)", pet.name))
+  end
+
+  def tag_list_dynamic(_opts) do
+    dynamic([pet], pet.tags)
+  end
+
+  def reverse_name_filter(query, %Flop.Filter{value: value}, _opts) do
+    where(query, [pet], pet.name == ^String.reverse(value))
+  end
+
+  def name_dynamic(_opts) do
+    dynamic([pet], pet.name)
   end
 end
