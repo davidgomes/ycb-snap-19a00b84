@@ -67,6 +67,14 @@ defmodule Phoenix.LiveView.UploadWriter do
     * `{:error, reason}` - The upload was canceled due to an error returned from `write_chunk/2`.
       For example, if `write_chunk/2` returns `{:error, :enoent, state}`, the upload will be cancelled
       and `close/2` will be called with the reason `{:error, :enoent}`.
+
+  ## Writer failures
+
+  When `init/1`, `write_chunk/2`, or `close/2` returns an error, the upload channel is
+  closed and the entry is kept with a `{:writer_failure, reason}` error, as returned by
+  `Phoenix.Component.upload_errors/2`, until it is cancelled with
+  `Phoenix.LiveView.cancel_upload/3`. The `:progress` callback given to
+  `Phoenix.LiveView.allow_upload/3` is also invoked with the failed entry.
   """
 
   @callback init(opts :: term) :: {:ok, state :: term} | {:error, term}
