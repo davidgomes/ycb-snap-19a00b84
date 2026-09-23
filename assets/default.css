@@ -2605,7 +2605,7 @@
     @apply min-w-0 max-w-full;
   }
   .pc-data-table__toolbar {
-    @apply mb-3 flex flex-wrap items-center gap-2;
+    @apply relative mb-3 flex flex-wrap items-center gap-2;
   }
   .pc-data-table__scroll {
     @apply overflow-x-auto;
@@ -2667,6 +2667,14 @@
   }
   .pc-data-table__filter {
     @apply flex items-center gap-1;
+  }
+  /* The menus are in-page popovers, anchored by CSS alone. On a phone a
+     button near the screen edge would run its panel off-screen, so there
+     the wrappers stop being the containing block and panels anchor to
+     the toolbar instead, whose edges are the table's. */
+  .pc-data-table__filter-popover,
+  .pc-data-table__columns {
+    @apply max-sm:static;
   }
   /* Doubled selector + !important: icon sizing contract (see pagination chevrons). */
   .pc-data-table__filter-icon.pc-data-table__filter-icon {

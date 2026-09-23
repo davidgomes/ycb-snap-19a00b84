@@ -14,6 +14,17 @@ defmodule PetalComponents.DataTableTest do
     Map.merge(%{rows: @rows, state: %State{total: 74}, path: "/orders"}, assigns)
   end
 
+  # the JS commands a filter editor's form runs on Apply
+  defp submit_ops(html, field) do
+    [encoded] =
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(~s(form[data-field="#{field}"]))
+      |> LazyHTML.attribute("phx-submit")
+
+    Jason.decode!(encoded)
+  end
+
   test "searchable event mode: a phx-change form posts the search op with debounce" do
     assigns = base(%{state: %State{total: 74, search: "amy"}})
 
@@ -108,13 +119,26 @@ defmodule PetalComponents.DataTableTest do
     # active trigger reads the predicate; its clear button posts removal
     assert html =~ "Status is any of Pending, Paid"
     assert html =~ ~s(aria-label="Clear Status filter")
-    # event mode carries the op grammar in hidden inputs; the hook mounts
-    # only to close top-layer popovers - no URL wiring
+    # event mode carries the op grammar in hidden inputs; the editors are
+    # in-page popovers, so nothing needs the hook
     assert html =~ ~s(name="op" value="filter")
-    assert html =~ ~s(phx-hook="PetalDataTable")
-    assert html =~ ~s(popover="auto")
+    refute html =~ "PetalDataTable"
+    refute html =~ ~s(popover="auto")
+    assert html =~ ~s(id="t-filter-email-trigger")
     refute html =~ "data-nav-template"
     refute html =~ "data-filters="
+
+    # Apply closes the editor through LiveView.JS (sticky across the
+    # patch it causes), hands focus back to its button, and pushes
+    assert [
+             ["hide", %{"to" => "#t-filter-email"}],
+             [
+               "set_attr",
+               %{"attr" => ["aria-expanded", "false"], "to" => "#t-filter-email-trigger"}
+             ],
+             ["focus", %{"to" => "#t-filter-email-trigger"}],
+             ["push", %{"event" => "table"}]
+           ] = submit_ops(html, "email")
   end
 
   test "filterable link mode: hook + :filters placeholder + JSON stamp + clear URL" do
@@ -139,6 +163,8 @@ defmodule PetalComponents.DataTableTest do
     # the clear affordance patches to a filterless URL
     assert html =~ ~s(aria-label="Clear Email filter")
     refute html =~ ~s(href="/orders?filters)
+    # Apply only closes the editor - the hook turns the submit into a patch
+    assert [["hide", _], ["set_attr", _], ["focus", _]] = submit_ops(html, "email")
   end
 
   test "selectable renders the checkbox column with tri-state header and morphing toolbar" do
@@ -334,6 +360,11 @@ defmodule PetalComponents.DataTableTest do
 
     # the hidden column leaves the table but stays listed in the dropdown
     refute html =~ "amy@x.com"
+    # an in-page popover: LiveView.JS opens it and keeps it open across
+    # each toggle's patch, so no hook mounts
+    refute html =~ ~s(popover="auto")
+    refute html =~ "PetalDataTable"
+    assert html =~ ~s(id="t-columns-trigger")
     assert html =~ ~s(phx-value-op="toggle_column")
     assert html =~ ~s(phx-value-field="email")
     # the last visible column's checkbox is disabled - a table needs one
