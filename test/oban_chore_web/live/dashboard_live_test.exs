@@ -206,6 +206,75 @@ defmodule ObanChoreWeb.DashboardLiveTest do
     assert ObanChore.TestRepo.aggregate(Oban.Job, :count) == 1
   end
 
+  describe "history" do
+    defp insert_finished_job!(worker, args, changes) do
+      args
+      |> worker.new()
+      |> Ecto.Changeset.change(changes)
+      |> ObanChore.TestRepo.insert!()
+    end
+
+    test "shows finished runs for the selected chore" do
+      now = DateTime.utc_now()
+
+      completed =
+        insert_finished_job!(DashboardTestChore, %{username: "done_user"},
+          state: "completed",
+          attempt: 1,
+          completed_at: now
+        )
+
+      discarded =
+        insert_finished_job!(DashboardTestChore, %{username: "failed_user"},
+          state: "discarded",
+          attempt: 20,
+          discarded_at: now,
+          errors: [%{"attempt" => 20, "at" => now, "error" => "boom"}]
+        )
+
+      other_chore =
+        insert_finished_job!(DashboardUniqueChore, %{username: "other_user"},
+          state: "completed",
+          completed_at: now
+        )
+
+      {:ok, active} = Oban.insert(DashboardTestChore.new(%{username: "active_user"}))
+
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+      chore_module = to_string(DashboardTestChore)
+
+      view
+      |> element("button[data-role=chore-select][data-chore-module=\"#{chore_module}\"]")
+      |> render_click()
+
+      refute has_element?(view, "[data-role=history]")
+
+      html = view |> element("button[data-role=history-tab]") |> render_click()
+
+      assert has_element?(view, ~s([data-role="history-row"][data-job-id="#{completed.id}"]))
+      assert has_element?(view, ~s([data-role="history-row"][data-job-id="#{discarded.id}"]))
+      refute has_element?(view, ~s([data-role="history-row"][data-job-id="#{other_chore.id}"]))
+      refute has_element?(view, ~s([data-role="history-row"][data-job-id="#{active.id}"]))
+      assert html =~ "boom"
+
+      # Most recent run first
+      assert :binary.match(html, ~s(data-job-id="#{discarded.id}")) <
+               :binary.match(html, ~s(data-job-id="#{completed.id}"))
+    end
+
+    test "shows an empty state when there are no previous runs" do
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+      chore_module = to_string(DashboardTestChore)
+
+      view
+      |> element("button[data-role=chore-select][data-chore-module=\"#{chore_module}\"]")
+      |> render_click()
+
+      assert view |> element("button[data-role=history-tab]") |> render_click() =~
+               "No previous runs."
+    end
+  end
+
   describe "relative scheduling" do
     test "schedules a chore using presets" do
       conn = build_conn()

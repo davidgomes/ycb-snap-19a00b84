@@ -5,6 +5,8 @@ defmodule ObanChoreWeb.DashboardLive do
 
   require Logger
 
+  @finished_states [:completed, :discarded, :cancelled]
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -71,6 +73,17 @@ defmodule ObanChoreWeb.DashboardLive do
               >
                 New Execution
               </button>
+              <button
+                phx-click="select_tab"
+                phx-value-tab="history"
+                data-role="history-tab"
+                class={[
+                  "oc-tab-item",
+                  if(@selected_tab == :history, do: "oc-tab-item--active", else: "")
+                ]}
+              >
+                History
+              </button>
               <%= for job_id <- Map.get(@chore_jobs, @selected_chore_module, []), job = @jobs[job_id] do %>
                 <button
                   phx-click="select_tab"
@@ -125,6 +138,8 @@ defmodule ObanChoreWeb.DashboardLive do
                     />
                   <% end %>
               <% end %>
+
+              <.history_table :if={@selected_tab == :history} jobs={@history} />
             </div>
           </div>
         <% else %>
@@ -157,8 +172,52 @@ defmodule ObanChoreWeb.DashboardLive do
        jobs: %{},
        chore_jobs: %{},
        selected_tab: :new,
+       history: [],
        now: DateTime.utc_now()
      )}
+  end
+
+  attr(:jobs, :list, required: true)
+
+  defp history_table(assigns) do
+    ~H"""
+    <div class="oc-card" data-role="history">
+      <%= if @jobs == [] do %>
+        <p class="oc-card-body oc-text-sm oc-text-gray-500" style="font-style: italic;">
+          No previous runs.
+        </p>
+      <% else %>
+        <table class="oc-history-table">
+          <thead>
+            <tr>
+              <th>Job</th>
+              <th>State</th>
+              <th>Arguments</th>
+              <th>Attempts</th>
+              <th>Finished At</th>
+              <th>Last Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={job <- @jobs} data-role="history-row" data-job-id={job.id}>
+              <td class="oc-font-mono">#<%= job.id %></td>
+              <td>
+                <span class="oc-badge" style={state_style(job.state)}>
+                  <%= String.capitalize(to_string(job.state)) %>
+                </span>
+              </td>
+              <td class="oc-font-mono oc-history-args" title={inspect(job.args)}>
+                <%= inspect(job.args) %>
+              </td>
+              <td><%= job.attempt %>/<%= job.max_attempts %></td>
+              <td class="oc-font-mono"><%= format_datetime(finished_at(job)) %></td>
+              <td class="oc-history-error" title={last_error(job)}><%= last_error(job) %></td>
+            </tr>
+          </tbody>
+        </table>
+      <% end %>
+    </div>
+    """
   end
 
   @impl true
@@ -227,6 +286,11 @@ defmodule ObanChoreWeb.DashboardLive do
   end
 
   @impl true
+  def handle_event("select_tab", %{"tab" => "history"}, socket) do
+    {:noreply, socket |> assign(selected_tab: :history) |> load_history()}
+  end
+
+  @impl true
   def handle_event("select_tab", %{"tab" => "job_" <> id_str}, socket) do
     id = String.to_integer(id_str)
     {:noreply, assign(socket, selected_tab: {:job, id})}
@@ -285,7 +349,14 @@ defmodule ObanChoreWeb.DashboardLive do
       # Forward to JobComponent
       send_update(ObanChoreWeb.JobComponent, id: job_id, new_state: state)
 
-      {:noreply, assign(socket, jobs: new_jobs)}
+      socket = assign(socket, jobs: new_jobs)
+
+      socket =
+        if socket.assigns.selected_tab == :history and state in @finished_states,
+          do: load_history(socket),
+          else: socket
+
+      {:noreply, socket}
     else
       {:noreply, socket}
     end
@@ -301,6 +372,27 @@ defmodule ObanChoreWeb.DashboardLive do
   def handle_info(:tick, socket) do
     {:noreply, assign(socket, now: DateTime.utc_now())}
   end
+
+  defp load_history(%{assigns: %{selected_chore_module: nil}} = socket),
+    do: assign(socket, history: [])
+
+  defp load_history(socket) do
+    assign(socket, history: ObanChore.list_job_history(socket.assigns.selected_chore_module))
+  end
+
+  defp finished_at(job), do: job.completed_at || job.discarded_at || job.cancelled_at
+
+  defp format_datetime(nil), do: "-"
+
+  defp format_datetime(dt) do
+    dt |> DateTime.truncate(:second) |> Calendar.strftime("%Y-%m-%d %H:%M:%S UTC")
+  end
+
+  defp last_error(%{errors: [_ | _] = errors}) do
+    errors |> List.last() |> Map.get("error")
+  end
+
+  defp last_error(_job), do: nil
 
   defp fetch_counts(chores) do
     Map.new(chores, fn chore -> {chore.module, ObanChore.count_running(chore.module, Oban)} end)
