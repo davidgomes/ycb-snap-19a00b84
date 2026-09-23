@@ -1,5 +1,7 @@
 defmodule EctoJob.ProducerTest do
-  use ExUnit.Case, async: true
+  # MySQL InnoDB deadlocks when sandboxed tests update the jobs table concurrently.
+  use ExUnit.Case,
+    async: Application.compile_env!(:ecto_job, EctoJob.Test.Repo)[:adapter] != Ecto.Adapters.MyXQL
   alias Ecto.Adapters.SQL.Sandbox
   alias EctoJob.Producer
   alias EctoJob.Test.{JobQueue, Repo}

@@ -43,7 +43,9 @@ defmodule EctoJob.Mixfile do
 
   defp dialyzer do
     [
-      flags: ["-Werror_handling", "-Wno_unused", "-Wunmatched_returns", "-Wunderspecs"]
+      flags: ["-Werror_handling", "-Wno_unused", "-Wunmatched_returns", "-Wunderspecs"],
+      # postgrex is optional, so calls into Postgrex.Notifications are unknown on MySQL-only builds
+      ignore_warnings: ".dialyzer.ignore-warnings.exs"
     ]
   end
 

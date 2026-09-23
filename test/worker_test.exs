@@ -1,7 +1,9 @@
 defmodule EctoJob.WorkerTest do
   # credo:disable-for-this-file
 
-  use ExUnit.Case, async: true
+  # MySQL InnoDB deadlocks when sandboxed tests update the jobs table concurrently.
+  use ExUnit.Case,
+    async: Application.compile_env!(:ecto_job, EctoJob.Test.Repo)[:adapter] != Ecto.Adapters.MyXQL
   alias EctoJob.Test.Repo
   alias EctoJob.Worker
 
