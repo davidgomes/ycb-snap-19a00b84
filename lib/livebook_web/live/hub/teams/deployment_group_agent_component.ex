@@ -212,7 +212,7 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
   end
 
   defp docker_instructions(image, env) do
-    envs = Enum.map_join(env, "\n", fn {key, value} -> ~s/  -e #{key}="#{value}" \\/ end)
+    envs = Enum.map_join(env, "\n", fn {key, value} -> "  -e #{key}=#{shell_quote(value)} \\" end)
 
     """
     docker run -p 8080:8080 -p 8081:8081 --pull always \\
@@ -222,7 +222,7 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
   end
 
   defp fly_instructions(image, env, hub_name, deployment_group_name) do
-    envs = Enum.map_join(env, " \\\n", fn {key, value} -> ~s/  #{key}="#{value}"/ end)
+    envs = Enum.map_join(env, " \\\n", fn {key, value} -> "  #{key}=#{shell_quote(value)}" end)
 
     example_dir =
       "lb-server-#{hub_name}-#{deployment_group_name}"
@@ -353,6 +353,12 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
     """,
     [:image, :envs, :secrets, :replicas, :dg_suffix]
   )
+
+  # Single-quoted POSIX shell literal so `$`, backticks, and quotes in
+  # environment values are not expanded when the instructions are copied.
+  defp shell_quote(value) do
+    "'" <> String.replace(to_string(value), "'", "'\\''") <> "'"
+  end
 
   def sanitize_for_node_name(string) do
     sanitized =
