@@ -997,7 +997,9 @@ defmodule PaginatorTest do
       page = Repo.paginate(query, cursor_fields: cursor_fields, limit: 4)
       assert to_ids(page.entries) == to_ids([p1, p3, p6, p4])
 
-      page = Repo.paginate(query, cursor_fields: cursor_fields, limit: 4, after: page.metadata.after)
+      page =
+        Repo.paginate(query, cursor_fields: cursor_fields, limit: 4, after: page.metadata.after)
+
       assert to_ids(page.entries) == to_ids([p8, p5, p2, p7])
       assert page.metadata.after == nil
     end
@@ -1020,7 +1022,9 @@ defmodule PaginatorTest do
       assert page.metadata.after == Paginator.cursor_for_record(p3, cursor_fields)
       assert page.metadata.before == Paginator.cursor_for_record(p4, cursor_fields)
 
-      page = Repo.paginate(query, cursor_fields: cursor_fields, limit: 4, after: page.metadata.after)
+      page =
+        Repo.paginate(query, cursor_fields: cursor_fields, limit: 4, after: page.metadata.after)
+
       assert to_ids(page.entries) == to_ids([p6])
     end
   end
