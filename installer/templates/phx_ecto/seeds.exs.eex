@@ -5,6 +5,8 @@
 # Inside the script, you can read and write to any of your
 # repositories directly:
 #
+#     import Ecto.Query
+#
 #     <%= @app_module %>.Repo.insert!(%<%= @app_module %>.SomeSchema{})
 #
 # We recommend using the bang functions (`insert!`, `update!`
