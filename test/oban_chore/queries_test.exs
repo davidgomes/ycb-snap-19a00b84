@@ -15,7 +15,7 @@ defmodule ObanChore.QueriesTest do
 
     def all(query) do
       send(self(), {:repo_all, query})
-      []
+      Process.get(:repo_all_result, [])
     end
 
     # Minimal callbacks for Oban start_link / validation
@@ -77,5 +77,29 @@ defmodule ObanChore.QueriesTest do
     query_str = inspect(query)
     assert query_str =~ "j0.state in [\"available\", \"scheduled\", \"executing\"]"
     assert query_str =~ "j0.worker == ^\"SomeWorker\""
+  end
+
+  test "list_active_jobs/2 returns jobs with their state as an atom", %{oban_name: oban_name} do
+    Process.put(:repo_all_result, [
+      %Oban.Job{id: 1, state: "executing"},
+      %Oban.Job{id: 2, state: "scheduled"}
+    ])
+
+    assert [%Oban.Job{id: 1, state: :executing}, %Oban.Job{id: 2, state: :scheduled}] =
+             ObanChore.list_active_jobs(SomeWorker, oban_name)
+  end
+
+  test "running_with_args?/3 matches args by their string keys", %{oban_name: oban_name} do
+    ObanChore.running_with_args?(SomeWorker, %{user_id: 123, reason: "fix"}, oban_name)
+
+    assert_receive {:repo_exists, query}
+    assert inspect(query) =~ ~s(^%{"reason" => "fix", "user_id" => 123})
+  end
+
+  test "accepts worker names given as strings", %{oban_name: oban_name} do
+    ObanChore.count_running("MyApp.SomeWorker", oban_name)
+
+    assert_receive {:repo_aggregate, query}
+    assert inspect(query) =~ "j0.worker == ^\"MyApp.SomeWorker\""
   end
 end

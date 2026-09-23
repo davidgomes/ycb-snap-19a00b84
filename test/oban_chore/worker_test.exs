@@ -48,6 +48,96 @@ defmodule ObanChore.WorkerTest do
     def perform(_), do: :ok
   end
 
+  defmodule UnnamedWorker do
+    use ObanChore.Worker, fields: []
+
+    @impl Oban.Worker
+    def perform(_), do: :ok
+  end
+
+  defmodule UniqueWorker do
+    use ObanChore.Worker,
+      name: "Unique Chore",
+      queue: :operational,
+      max_attempts: 5,
+      unique: [period: 60],
+      fields: [user_id: [type: :integer, required: true]]
+
+    @impl Oban.Worker
+    def perform(_), do: :ok
+  end
+
+  defmodule TemporalWorker do
+    use ObanChore.Worker,
+      name: "Temporal Chore",
+      fields: [
+        amount: [type: :float],
+        run_on: [type: :date],
+        run_at: [type: :time],
+        starts_at: [type: :utc_datetime]
+      ]
+
+    @impl Oban.Worker
+    def perform(_), do: :ok
+  end
+
+  test "exposes the module and declared fields in __chore_info__" do
+    info = MyTestChore.__chore_info__()
+
+    assert info.module == MyTestChore
+    assert info.name == "My Test Chore"
+    assert info.fields == [user_id: [type: :integer, required: true], age: [type: :integer]]
+  end
+
+  test "defaults the chore name to the module name" do
+    assert UnnamedWorker.__chore_info__().name == "ObanChore.WorkerTest.UnnamedWorker"
+  end
+
+  test "flags workers that define their own unique options" do
+    assert UniqueWorker.__chore_info__().unique
+    refute MyTestChore.__chore_info__().unique
+  end
+
+  test "passes Oban options through to Oban.Worker" do
+    changes = UniqueWorker.new(%{user_id: 1}).changes
+
+    assert changes.worker == "ObanChore.WorkerTest.UniqueWorker"
+    assert changes.queue == "operational"
+    assert changes.max_attempts == 5
+    assert changes.unique.period == 60
+  end
+
+  test "casts float, date, time and datetime fields from form input" do
+    params = %{
+      "amount" => "9.5",
+      "run_on" => "2024-05-06",
+      "run_at" => "13:45",
+      "starts_at" => "2024-05-06T13:45"
+    }
+
+    changeset = TemporalWorker.changeset(params)
+
+    assert changeset.valid?
+
+    assert changeset.changes == %{
+             amount: 9.5,
+             run_on: ~D[2024-05-06],
+             run_at: ~T[13:45:00],
+             starts_at: ~U[2024-05-06 13:45:00Z]
+           }
+  end
+
+  test "fields are optional unless marked as required" do
+    assert ComprehensiveWorker.changeset(%{}).valid?
+  end
+
+  test "reports cast errors without also flagging required fields as blank" do
+    changeset = MyTestChore.changeset(%{"user_id" => "abc"})
+
+    refute changeset.valid?
+    assert errors_on(changeset).user_id == ["is invalid"]
+  end
+
   test "captures description in __chore_info__" do
     info = DescriptiveWorker.__chore_info__()
     assert info.description == "This chore has a helpful description."
