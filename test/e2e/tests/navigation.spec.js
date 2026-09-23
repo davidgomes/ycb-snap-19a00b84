@@ -146,6 +146,108 @@ test("popstate", async ({ page }) => {
   expect(networkEvents).toEqual([]);
 });
 
+const recordNavigationEvents = async (page, { prevent }) => {
+  await page.evaluate((prevent) => {
+    window.beforeNavigateEvents = [];
+    window.navigateEvents = [];
+    window.preventNavigation = prevent;
+    window.addEventListener("phx:before-navigate", (event) => {
+      window.beforeNavigateEvents.push(event.detail);
+      if (window.preventNavigation) {
+        event.preventDefault();
+      }
+    });
+    window.addEventListener("phx:navigate", (event) => {
+      window.navigateEvents.push(event.detail);
+    });
+  }, prevent);
+};
+
+test("can prevent live link navigation with phx:before-navigate", async ({
+  page,
+}) => {
+  await page.goto("/navigation/a");
+  await syncLV(page);
+  await recordNavigationEvents(page, { prevent: true });
+
+  networkEvents = [];
+  webSocketEvents = [];
+
+  await page.getByRole("link", { name: "LiveView B" }).click();
+
+  await expect(page).toHaveURL("/navigation/a");
+  expect(networkEvents).toEqual([]);
+  expect(webSocketEvents).toEqual([]);
+  expect(await page.evaluate(() => window.beforeNavigateEvents)).toEqual([
+    {
+      href: "http://localhost:4004/navigation/b",
+      patch: false,
+      pop: false,
+      direction: "forward",
+    },
+  ]);
+  expect(await page.evaluate(() => window.navigateEvents)).toEqual([]);
+
+  await page.evaluate(() => (window.preventNavigation = false));
+  await page.getByRole("link", { name: "LiveView B" }).click();
+  await syncLV(page);
+
+  await expect(page).toHaveURL("/navigation/b");
+  expect(networkEvents).toEqual([]);
+});
+
+test("can prevent popstate navigation with phx:before-navigate", async ({
+  page,
+}) => {
+  await page.goto("/navigation/a");
+  await syncLV(page);
+
+  await page.getByRole("link", { name: "LiveView B" }).click();
+  await syncLV(page);
+  await expect(page).toHaveURL("/navigation/b");
+
+  await recordNavigationEvents(page, { prevent: true });
+
+  networkEvents = [];
+  webSocketEvents = [];
+
+  await page.goBack();
+
+  await expect(page).toHaveURL("/navigation/b");
+  expect(networkEvents).toEqual([]);
+  expect(webSocketEvents).toEqual([]);
+  expect(await page.evaluate(() => window.beforeNavigateEvents)).toEqual([
+    {
+      href: "http://localhost:4004/navigation/a",
+      patch: false,
+      pop: true,
+      direction: "backward",
+    },
+  ]);
+  expect(await page.evaluate(() => window.navigateEvents)).toEqual([]);
+
+  await page.evaluate(() => (window.preventNavigation = false));
+  await page.goBack();
+  await syncLV(page);
+
+  await expect(page).toHaveURL("/navigation/a");
+  expect(networkEvents).toEqual([]);
+});
+
+test("phx:before-navigate does not prevent server-side navigation", async ({
+  page,
+}) => {
+  await page.goto("/navigation/a");
+  await syncLV(page);
+  await recordNavigationEvents(page, { prevent: true });
+
+  await page.getByRole("button", { name: "Server Navigate" }).click();
+  await syncLV(page);
+
+  await expect(page).toHaveURL("/navigation/b");
+  expect(await page.evaluate(() => window.beforeNavigateEvents)).toEqual([]);
+});
+
 test("patch with replace replaces history", async ({ page }) => {
   await page.goto("/navigation/a");
   await syncLV(page);
