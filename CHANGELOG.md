@@ -17,6 +17,20 @@
   patch that removes an open dialog fires no close event at all, so
   `destroyed()` releases it too, guarded on `open` so tearing down a
   closed palette cannot strip a lock another overlay owns.
+- **`dropdown` flips its panel upward when the viewport leaves no room
+  below the trigger.** The panel always dropped downward, so a dropdown
+  on a table's last row, in a footer, or under a mobile keyboard opened
+  off the bottom of the screen. A new `PetalDropdown` hook on the panel
+  decides the side on every open: when the panel does not fit below and
+  there is more room above, it opens above the trigger and scales in
+  from its bottom edge - the same rule the combo box and the data table
+  menus already follow. The decision lands on `phx:show-start`, while
+  `JS.toggle` still has the panel hidden, so no frame paints it on the
+  wrong side first. `user_dropdown_menu`, `language_select` and the
+  colour-scheme dropdown share the panel and pick this up too. If you
+  followed the install (`hooks: { ...PetalComponents }`) there is
+  nothing to do; if you register hooks individually, add
+  `PetalDropdown`. Without it the panel opens downward as before.
 
 ### 4.14.0 - 2026-08-11
 
