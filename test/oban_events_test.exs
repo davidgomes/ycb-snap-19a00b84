@@ -55,25 +55,15 @@ defmodule ObanEventsTest do
     }
   end
 
-  # Helper module for :if conditions
-  defmodule ConditionHelpers do
-    def check_enabled(event), do: event.data["enabled"] == true
-    def check_premium(event), do: event.data["plan"] == "premium"
-    def always_false(_event), do: false
-  end
-
-  # Test module with :if conditions
-  defmodule ConditionalHandlers do
+  # Test module passing arbitrary Oban.Job options globally and per-handler
+  defmodule ExtraOptionsEventBus do
     @moduledoc false
-    use ObanEvents
-
-    alias ObanEventsTest.ConditionHelpers
+    use ObanEvents,
+      oban: {Oban, queue: :custom_queue, meta: %{"source" => "global"}}
 
     @events %{
-      conditional_event: [
-        {TestHandler, if: {ConditionHelpers, :check_enabled, []}},
-        {TestHandler, if: {ConditionHelpers, :check_premium, []}},
-        {TestHandler, if: {ConditionHelpers, :always_false, []}},
+      extra_options_event: [
+        {TestHandler, oban: [priority: 0, meta: %{"source" => "handler"}, unique: [period: 60]]},
         TestHandler
       ]
     }
@@ -189,39 +179,45 @@ defmodule ObanEventsTest do
       assert job3.tags == []
     end
 
-    test ":if conditions filter handlers based on event data" do
-      # enabled=true, plan=premium -> should schedule first 2 handlers + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => true,
-                 "plan" => "premium"
-               })
+    test "passes any Oban.Job option through, merging per-handler options over global ones" do
+      assert {:ok, [job1, job2]} =
+               ExtraOptionsEventBus.emit(:extra_options_event, %{"test" => "data"})
 
-      assert length(jobs) == 3
+      # First handler: overrides priority and meta, adds unique, keeps other globals
+      assert job1.queue == "custom_queue"
+      assert job1.priority == 0
+      assert job1.max_attempts == 3
+      assert job1.meta == %{"source" => "handler"}
+      assert job1.unique.period == 60
 
-      # enabled=true, plan=free -> should schedule first handler + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{"enabled" => true, "plan" => "free"})
+      # Second handler: global options merged over library defaults
+      assert job2.queue == "custom_queue"
+      assert job2.priority == 2
+      assert job2.max_attempts == 3
+      assert job2.meta == %{"source" => "global"}
+      assert job2.unique == nil
+    end
 
-      assert length(jobs) == 2
+    test "raises at compile time for unsupported handler options" do
+      assert_raise CompileError, ~r/handler options only support the :oban key/, fn ->
+        Code.compile_string("""
+        defmodule TestUnsupportedHandlerOpts do
+          use ObanEvents
+          @events %{user_created: [{SomeHandler, if: {SomeModule, :enabled?, []}}]}
+        end
+        """)
+      end
+    end
 
-      # enabled=false, plan=premium -> should schedule second handler + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => false,
-                 "plan" => "premium"
-               })
-
-      assert length(jobs) == 2
-
-      # enabled=false, plan=free -> should only schedule default handler
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => false,
-                 "plan" => "free"
-               })
-
-      assert length(jobs) == 1
+    test "raises at compile time when :oban handler option is not a keyword list" do
+      assert_raise CompileError, ~r/handler options only support the :oban key/, fn ->
+        Code.compile_string("""
+        defmodule TestInvalidObanHandlerOpts do
+          use ObanEvents
+          @events %{user_created: [{SomeHandler, oban: :critical}]}
+        end
+        """)
+      end
     end
   end
 end
