@@ -64,27 +64,45 @@ defmodule BroadwayKafka.BrodClient do
            validate(opts, :begin_offset, default: @default_begin_offset),
          {:ok, group_config} <- validate_group_config(opts),
          {:ok, fetch_config} <- validate_fetch_config(opts),
-         {:ok, client_config} <- validate_client_config(opts) do
-      {:ok,
-       %{
-         hosts: parse_hosts(hosts),
-         group_id: group_id,
-         topics: topics,
-         receive_interval: receive_interval,
-         reconnect_timeout: reconnect_timeout,
-         offset_commit_on_ack: offset_commit_on_ack,
-         offset_reset_policy: offset_reset_policy,
-         begin_offset: begin_offset,
-         group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
-         fetch_config: Map.new(fetch_config || []),
-         client_config: client_config
-       }}
+         {:ok, client_config} <- validate_client_config(opts),
+         {:ok, shared_client} <- validate(opts, :shared_client, default: false) do
+      config = %{
+        hosts: parse_hosts(hosts),
+        group_id: group_id,
+        topics: topics,
+        receive_interval: receive_interval,
+        reconnect_timeout: reconnect_timeout,
+        offset_commit_on_ack: offset_commit_on_ack,
+        offset_reset_policy: offset_reset_policy,
+        begin_offset: begin_offset,
+        group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
+        fetch_config: Map.new(fetch_config || []),
+        client_config: client_config,
+        shared_client: shared_client,
+        shared_client_id: shared_client_id(shared_client, opts)
+      }
+
+      {:ok, shared_client_child_specs(config), config}
     end
+  end
+
+  defp shared_client_id(false, _opts), do: nil
+
+  defp shared_client_id(true, opts) do
+    prefix = get_in(opts, [:client_config, :client_id_prefix])
+    :"#{prefix}#{Module.concat([opts[:broadway][:name], SharedClient])}"
+  end
+
+  defp shared_client_child_specs(%{shared_client: false}), do: []
+
+  defp shared_client_child_specs(%{shared_client: true} = config) do
+    %{hosts: hosts, shared_client_id: client_id, client_config: client_config} = config
+    [%{id: client_id, start: {:brod, :start_link_client, [hosts, client_id, client_config]}}]
   end
 
   @impl true
   def setup(stage_pid, client_id, callback_module, config) do
-    with :ok <- :brod.start_client(config.hosts, client_id, config.client_config),
+    with :ok <- start_client(client_id, config),
          {:ok, group_coordinator} <-
            start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
       Process.monitor(client_id)
@@ -93,6 +111,12 @@ defmodule BroadwayKafka.BrodClient do
       {:ok, group_coordinator, ref}
     end
   end
+
+  # The shared client is started and supervised by the Broadway supervision tree
+  defp start_client(_client_id, %{shared_client: true}), do: :ok
+
+  defp start_client(client_id, config),
+    do: :brod.start_client(config.hosts, client_id, config.client_config)
 
   @impl true
   def fetch(client_id, topic, partition, offset, opts, _config) do
@@ -287,6 +311,9 @@ defmodule BroadwayKafka.BrodClient do
 
   defp validate_option(:query_api_versions, value) when not is_boolean(value),
     do: validation_error(:query_api_versions, "a boolean", value)
+
+  defp validate_option(:shared_client, value) when not is_boolean(value),
+    do: validation_error(:shared_client, "a boolean", value)
 
   defp validate_option(:ssl, value) when is_boolean(value), do: {:ok, value}
 

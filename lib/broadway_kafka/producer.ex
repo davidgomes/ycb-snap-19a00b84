@@ -49,6 +49,13 @@ defmodule BroadwayKafka.Producer do
       When set to `:reset`, the starting offset will be dictated by the `:offset_reset_policy` option, either
       starting from the `:earliest` or the `:latest` offsets of the topic. Default is `:assigned`.
 
+    * `:shared_client` - Optional. When `false`, each producer starts its own `:brod` client,
+      with its own connections to Kafka. When `true`, a single client is started as part of
+      the Broadway supervision tree and shared by all producers in the pipeline, which reduces
+      the number of connections and resources used. Note that requests from all producers to
+      the same broker will go through the same connection and, if the shared client crashes,
+      the whole pipeline is restarted. Default is `false`.
+
     * `:group_config` - Optional. A list of options used to configure the group
       coordinator. See the ["Group config options"](#module-group-config-options) section below for a list of all available
       options.
@@ -237,7 +244,7 @@ defmodule BroadwayKafka.Producer do
       {:error, message} ->
         raise ArgumentError, "invalid options given to #{inspect(client)}.init/1, " <> message
 
-      {:ok, config} ->
+      {:ok, _child_specs, config} ->
         {_, producer_name} = Process.info(self(), :registered_name)
 
         draining_after_revoke_flag =
@@ -246,7 +253,9 @@ defmodule BroadwayKafka.Producer do
           |> drain_after_revoke_table_init!()
 
         prefix = get_in(config, [:client_config, :client_id_prefix])
-        client_id = :"#{prefix}#{Module.concat([producer_name, Client])}"
+
+        client_id =
+          config[:shared_client_id] || :"#{prefix}#{Module.concat([producer_name, Client])}"
 
         max_demand =
           with [{_first, processor_opts}] <- opts[:broadway][:processors],
@@ -259,6 +268,7 @@ defmodule BroadwayKafka.Producer do
         state = %{
           client: client,
           client_id: client_id,
+          shared_client: Map.get(config, :shared_client, false),
           group_coordinator: nil,
           receive_timer: nil,
           receive_interval: config.receive_interval,
@@ -509,7 +519,16 @@ defmodule BroadwayKafka.Producer do
       |> Keyword.put(:processors, [updated_processor_entry | other_processors_entries])
       |> Keyword.put(:batchers, updated_batchers_entries)
 
-    {allocators, updated_opts}
+    {_producer_module, producer_opts} = opts[:producer][:module]
+    client = producer_opts[:client] || BroadwayKafka.BrodClient
+
+    case client.init(Keyword.put(producer_opts, :broadway, updated_opts)) do
+      {:error, message} ->
+        raise ArgumentError, "invalid options given to #{inspect(client)}.init/1, " <> message
+
+      {:ok, child_specs, _config} ->
+        {allocators ++ child_specs, updated_opts}
+    end
   end
 
   @impl :brod_group_member
@@ -547,7 +566,12 @@ defmodule BroadwayKafka.Producer do
   def terminate(_reason, state) do
     %{client: client, group_coordinator: group_coordinator, client_id: client_id} = state
     group_coordinator && Process.exit(group_coordinator, :shutdown)
-    client.disconnect(client_id)
+
+    # The shared client is owned by the Broadway supervision tree and used by other producers
+    unless state.shared_client do
+      client.disconnect(client_id)
+    end
+
     :ok
   end
 

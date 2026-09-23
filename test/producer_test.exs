@@ -43,7 +43,17 @@ defmodule BroadwayKafka.ProducerTest do
     defrecord :kafka_message, extract(:kafka_message, from_lib: "brod/include/brod.hrl")
 
     @impl true
-    def init(opts), do: {:ok, Map.new(opts)}
+    def init(opts) do
+      config = Map.new(opts)
+
+      if opts[:shared_client] do
+        client_id = Module.concat([opts[:broadway][:name], SharedClient])
+        start = {Agent, :start_link, [fn -> true end, [name: client_id]]}
+        {:ok, [%{id: client_id, start: start}], Map.put(config, :shared_client_id, client_id)}
+      else
+        {:ok, [], config}
+      end
+    end
 
     @impl true
     def setup(_stage_pid, client_id, _callback_module, config) do
@@ -103,7 +113,8 @@ defmodule BroadwayKafka.ProducerTest do
     end
 
     @impl true
-    def disconnect(_client_id) do
+    def disconnect(client_id) do
+      if pid = Process.whereis(client_id), do: Agent.stop(pid)
       :ok
     end
 
@@ -600,11 +611,67 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
+  describe "shared_client" do
+    test "all producers use a single client started in the Broadway supervision tree" do
+      {:ok, message_server} = MessageServer.start_link()
+      {:ok, pid} = start_broadway(message_server, shared_client: true, producers_concurrency: 2)
+
+      assert_receive {:setup, client_id}
+      assert_receive {:setup, ^client_id}
+
+      {_, name} = Process.info(pid, :registered_name)
+      children = Supervisor.which_children(:"#{name}.Broadway.Supervisor")
+      assert {^client_id, client_pid, :worker, _} = List.keyfind(children, client_id, 0)
+      assert Process.whereis(client_id) == client_pid
+
+      stop_broadway(pid)
+      refute Process.alive?(client_pid)
+    end
+
+    test "producers receive messages through the shared client" do
+      {:ok, message_server} = MessageServer.start_link()
+
+      {:ok, pid} =
+        start_broadway(message_server,
+          shared_client: true,
+          producers_concurrency: 2,
+          processors_concurrency: 2
+        )
+
+      put_assignments(get_producer(pid, 0), [[topic: "topic", partition: 0]])
+      put_assignments(get_producer(pid, 1), [[topic: "topic", partition: 1]])
+      MessageServer.push_messages(message_server, 1..5, topic: "topic", partition: 0)
+      MessageServer.push_messages(message_server, 6..10, topic: "topic", partition: 1)
+
+      for msg <- 1..10 do
+        assert_receive {:message_handled, %{data: ^msg}}
+      end
+
+      stop_broadway(pid)
+    end
+
+    test "terminating a producer does not disconnect the shared client" do
+      {:ok, message_server} = MessageServer.start_link()
+      {:ok, pid} = start_broadway(message_server, shared_client: true)
+
+      assert_receive {:setup, client_id}
+      client_pid = Process.whereis(client_id)
+
+      :ok = GenStage.stop(get_producer(pid))
+
+      assert_receive {:setup, ^client_id}
+      assert Process.whereis(client_id) == client_pid
+
+      stop_broadway(pid)
+    end
+  end
+
   defp start_broadway(message_server, opts \\ []) do
     producers_concurrency = Keyword.get(opts, :producers_concurrency, 1)
     processors_concurrency = Keyword.get(opts, :processors_concurrency, 1)
     batchers_concurrency = Keyword.get(opts, :batchers_concurrency)
     ack_raises_on_offset = Keyword.get(opts, :ack_raises_on_offset, nil)
+    shared_client = Keyword.get(opts, :shared_client, false)
 
     batchers =
       if batchers_concurrency do
@@ -630,7 +697,8 @@ defmodule BroadwayKafka.ProducerTest do
                max_bytes: 10,
                offset_commit_on_ack: false,
                begin_offset: :assigned,
-               ack_raises_on_offset: ack_raises_on_offset
+               ack_raises_on_offset: ack_raises_on_offset,
+               shared_client: shared_client
              ]},
           concurrency: producers_concurrency
         ],
