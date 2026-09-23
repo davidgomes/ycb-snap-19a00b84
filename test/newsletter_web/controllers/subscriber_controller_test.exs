@@ -2,6 +2,7 @@ defmodule NewsletterWeb.SubscriberControllerTest do
   use NewsletterWeb.ConnCase
 
   import Newsletter.SubscribersFixtures
+  import Swoosh.TestAssertions
 
   @create_attrs %{email: "some email", name: "some name"}
   @update_attrs %{email: "some updated email", name: "some updated name"}
@@ -35,6 +36,21 @@ defmodule NewsletterWeb.SubscriberControllerTest do
     test "renders errors when data is invalid", %{conn: conn} do
       conn = post(conn, Routes.subscriber_path(conn, :create), subscriber: @invalid_attrs)
       assert html_response(conn, 200) =~ "New Subscriber"
+      refute_email_sent()
+    end
+
+    test "sends a welcome email when data is valid", %{conn: conn} do
+      conn = post(conn, Routes.subscriber_path(conn, :create), subscriber: @create_attrs)
+
+      assert redirected_to(conn)
+
+      assert_email_sent(
+        subject: "Welcome to the DockYard Academy Newsletter",
+        to: {"some name", "some email"},
+        from: {"Brooklin", "brooklin.myers@dockyard.com"},
+        text_body: "Hello some name",
+        html_body: "<h1>Hello some name</h1>"
+      )
     end
   end
 
