@@ -29,6 +29,7 @@ defmodule ObanDoctor.ObanDiscovery do
           queues: [:default, :emails],    # Queue names (merged from all configs)
           plugins: [Oban.Plugins.Pruner], # Plugin modules (merged from all configs)
           insert_trigger: false,          # insert_trigger setting (nil if never set)
+          engine: Oban.Pro.Engines.Smart, # Engine module (nil if not specified)
           file: "config/config.exs",      # Primary source file (first definition)
           line: 95                        # Line number of first definition
         }
@@ -71,6 +72,7 @@ defmodule ObanDoctor.ObanDiscovery do
       queues: merge_value(earlier.queues, later.queues),
       plugins: merge_value(earlier.plugins, later.plugins),
       insert_trigger: merge_value(earlier.insert_trigger, later.insert_trigger),
+      engine: merge_value(earlier.engine, later.engine),
       # Keep the first file/line as the "primary" location
       file: earlier.file,
       line: earlier.line
@@ -163,6 +165,7 @@ defmodule ObanDoctor.ObanDiscovery do
       queues: extract_queues(opts),
       plugins: extract_plugins(opts),
       insert_trigger: extract_insert_trigger(opts),
+      engine: extract_engine(opts),
       file: file_path,
       line: Keyword.get(meta, :line)
     }
@@ -254,6 +257,14 @@ defmodule ObanDoctor.ObanDiscovery do
   defp extract_insert_trigger(opts) do
     case Keyword.fetch(opts, :insert_trigger) do
       {:ok, value} when is_boolean(value) -> value
+      _ -> nil
+    end
+  end
+
+  defp extract_engine(opts) do
+    case Keyword.get(opts, :engine) do
+      {:__aliases__, _, parts} -> Module.concat(parts)
+      engine when is_atom(engine) and not is_nil(engine) -> engine
       _ -> nil
     end
   end
