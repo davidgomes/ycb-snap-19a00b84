@@ -748,6 +748,7 @@ defmodule Dev.PlaygroundLive do
        combo: %{disabled: false, chosen: nil},
        rich: %{labels: ~w(feat bug imp des), team: ~w(amelia jonah)},
        dt: PetalComponents.DataTable.State |> struct(page_size: 5) |> run_dt(),
+       dt_selected: [],
        radio: %{
          style: "cards",
          variant: "outline",
@@ -1447,6 +1448,13 @@ defmodule Dev.PlaygroundLive do
 
     state = State.handle_op(state, params, fields: [:name, :email, :status, :amount])
     {:noreply, assign(socket, :dt, run_dt(state))}
+  end
+
+  # selection is UI state kept beside the table state, so it survives
+  # sorting, filtering and paging
+  def handle_event("pg_table_select", params, socket) do
+    selection = &PetalComponents.DataTable.Selection.handle_op(&1, params)
+    {:noreply, update(socket, :dt_selected, selection)}
   end
 
   defp run_dt(state) do
@@ -7318,10 +7326,22 @@ defmodule Dev.PlaygroundLive do
           rows={rows}
           state={state}
           on_change="pg_table"
+          on_select="pg_table_select"
+          selected={@dt_selected}
           striped
           searchable
           page_size_options={[5, 10, 20]}
         >
+          <:bulk_action :let={ids}>
+            <.button
+              size="sm"
+              color="danger"
+              phx-click="pg_table_select"
+              phx-value-op="clear_selection"
+            >
+              Delete {length(ids)}
+            </.button>
+          </:bulk_action>
           <:col :let={row} field={:name} sortable>{row.name}</:col>
           <:col :let={row} field={:email} filterable="text">{row.email}</:col>
           <:col
@@ -7354,7 +7374,7 @@ defmodule Dev.PlaygroundLive do
           ex <-
             examples_for(
               PetalComponents.Showcase.DataTable,
-              ~w(basic loading empty)a
+              ~w(basic selection loading empty)a
             )
         }
         class="mt-10"

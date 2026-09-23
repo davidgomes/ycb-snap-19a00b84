@@ -35,6 +35,32 @@ defmodule PetalComponents.Showcase.DataTable do
     """
   end
 
+  example :selection, "Row selection",
+    inert: true,
+    description:
+      "on_select adds a leading checkbox column whose header is tri-state over the visible page - none, some (indeterminate) or all - and pushes one select op, so a double click is idempotent. While anything is selected the toolbar morphs in place into a selection bar: the count (it spans pages), Clear selection and the :bulk_action slot, which receives the selected keys. Selection is UI state, not URL state: keep it in its own assign and apply ops with Selection.handle_op/2, in either wiring mode." do
+    ~H"""
+    <% state = %State{page_size: 5} %>
+    <% {rows, state} = Engine.List.run(PetalComponents.Showcase.DataTable.sample_rows(), state) %>
+    <.data_table
+      id="sx-dt-selection"
+      rows={rows}
+      state={state}
+      path="#"
+      on_select="select"
+      selected={[2, 4, 11]}
+    >
+      <:col :let={row} field={:name}>{row.name}</:col>
+      <:col :let={row} field={:email}>{row.email}</:col>
+      <:col :let={row} field={:amount} align="right">${row.amount}</:col>
+      <:bulk_action :let={ids}>
+        <.button size="sm" variant="outline" color="gray">Export {length(ids)}</.button>
+        <.button size="sm" color="danger">Delete</.button>
+      </:bulk_action>
+    </.data_table>
+    """
+  end
+
   example :loading, "Loading skeletons",
     description:
       "loading swaps the page for skeleton rows - one per page_size row, respecting column count and alignment. Flip it off when the query resolves." do
