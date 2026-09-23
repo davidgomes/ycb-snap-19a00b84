@@ -3,6 +3,19 @@
   <p>Peace of mind from prototype to production</p>
 </section>
 
+<section>
+  <h2>Subscribe to the Newsletter</h2>
+  <.form let={f} for={:user} action={Routes.page_path(@conn, :subscribe)}>
+    <%= label f, :name %>
+    <%= text_input f, :name, required: true %>
+
+    <%= label f, :email %>
+    <%= email_input f, :email, required: true %>
+
+    <%= submit "Subscribe" %>
+  </.form>
+</section>
+
 <section class="row">
   <article class="column">
     <h2>Resources</h2>
