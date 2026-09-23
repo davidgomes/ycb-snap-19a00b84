@@ -206,6 +206,44 @@ defmodule ObanChoreWeb.DashboardLiveTest do
     assert ObanChore.TestRepo.aggregate(Oban.Job, :count) == 1
   end
 
+  test "shows finished jobs in the history tab" do
+    {:ok, completed} =
+      %{username: "done_user"}
+      |> DashboardTestChore.new()
+      |> Oban.insert()
+
+    {:ok, active} =
+      %{username: "active_user"}
+      |> DashboardTestChore.new()
+      |> Oban.insert()
+
+    {:ok, other} =
+      %{username: "other_user"}
+      |> DashboardUniqueChore.new()
+      |> Oban.insert()
+
+    now = DateTime.utc_now()
+
+    for job <- [completed, other] do
+      job
+      |> Ecto.Changeset.change(state: "completed", completed_at: now)
+      |> ObanChore.TestRepo.update!()
+    end
+
+    {:ok, view, _html} = live(build_conn(), "/ops/chores")
+
+    view
+    |> element("button[data-role=chore-select][data-chore-module=\"#{DashboardTestChore}\"]")
+    |> render_click()
+
+    html = view |> element("button[data-role=history-tab]") |> render_click()
+
+    assert html =~ "Completed"
+    assert has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{completed.id}"]))
+    refute has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{active.id}"]))
+    refute has_element?(view, ~s(tr[data-role="history-row"][data-job-id="#{other.id}"]))
+  end
+
   describe "relative scheduling" do
     test "schedules a chore using presets" do
       conn = build_conn()

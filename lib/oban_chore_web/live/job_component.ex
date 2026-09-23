@@ -85,7 +85,8 @@ defmodule ObanChoreWeb.JobComponent do
     end
   end
 
-  defp state_style(state) do
+  @doc false
+  def state_style(state) do
     case state do
       :executing ->
         "background-color: var(--oc-blue-50); color: var(--oc-blue-700); box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.1);"
