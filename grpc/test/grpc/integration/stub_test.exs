@@ -83,6 +83,36 @@ defmodule GRPC.Integration.StubTest do
     end)
   end
 
+  test "named Gun channels keep working after the original caller exits" do
+    run_server(HelloServer, fn port ->
+      parent = self()
+      channel_name = {:named_gun_channel, make_ref()}
+
+      {caller_pid, caller_ref} =
+        spawn_monitor(fn ->
+          {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", name: channel_name)
+          req = %Helloworld.HelloRequest{name: "first caller"}
+          {:ok, reply} = Helloworld.Greeter.Stub.say_hello(channel, req)
+          send(parent, {:first_reply, channel, reply.message})
+        end)
+
+      assert_receive {:first_reply, channel, "Hello, first caller"}
+      assert_receive {:DOWN, ^caller_ref, :process, ^caller_pid, :normal}
+
+      %{adapter_payload: %{conn_pid: gun_conn_pid}} = channel
+      assert Process.alive?(gun_conn_pid)
+
+      req = %Helloworld.HelloRequest{name: "second caller"}
+      named_channel = %GRPC.Channel{ref: channel_name}
+      assert {:ok, reply} = Helloworld.Greeter.Stub.say_hello(named_channel, req)
+      assert reply.message == "Hello, second caller"
+
+      gun_ref = Process.monitor(gun_conn_pid)
+      assert {:ok, %{adapter_payload: %{conn_pid: nil}}} = GRPC.Stub.disconnect(channel)
+      assert_receive {:DOWN, ^gun_ref, :process, ^gun_conn_pid, _}
+    end)
+  end
+
   test "invalid channel function clause error" do
     req = %Helloworld.HelloRequest{name: "GRPC"}
 

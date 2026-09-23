@@ -85,6 +85,27 @@ defmodule GRPC.Client.Adapters.GunTest do
                  ]
                )
     end
+
+    test "connection outlives the process that opened it", %{port: port, credential: credential} do
+      channel = build(:channel, port: port, host: "localhost", cred: credential)
+      parent = self()
+
+      {caller_pid, caller_ref} =
+        spawn_monitor(fn ->
+          {:ok, connected} = Gun.connect(channel, [])
+          send(parent, {:connected, connected})
+        end)
+
+      assert_receive {:connected, connected}
+      assert_receive {:DOWN, ^caller_ref, :process, ^caller_pid, :normal}
+
+      %{conn_pid: gun_pid} = connected.adapter_payload
+      gun_ref = Process.monitor(gun_pid)
+      refute_receive {:DOWN, ^gun_ref, :process, ^gun_pid, _}, 200
+
+      {:ok, _} = Gun.disconnect(connected)
+      assert_receive {:DOWN, ^gun_ref, :process, ^gun_pid, _}
+    end
   end
 
   describe "disconnect/1" do

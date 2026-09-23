@@ -16,6 +16,8 @@ if Code.ensure_loaded?(:gun) do
 
     @behaviour GRPC.Client.Adapter
 
+    alias GRPC.Client.Adapters.Gun.ConnectionOwner
+
     @default_tcp_opts [nodelay: true]
     @max_retries 100
 
@@ -76,7 +78,14 @@ if Code.ensure_loaded?(:gun) do
 
       case :gun.await_up(conn_pid) do
         {:ok, :http2} ->
-          {:ok, Map.put(channel, :adapter_payload, %{conn_pid: conn_pid})}
+          case ConnectionOwner.take_ownership(conn_pid) do
+            :ok ->
+              {:ok, Map.put(channel, :adapter_payload, %{conn_pid: conn_pid})}
+
+            {:error, reason} ->
+              :gun.shutdown(conn_pid)
+              {:error, reason}
+          end
 
         {:ok, proto} ->
           :gun.shutdown(conn_pid)
