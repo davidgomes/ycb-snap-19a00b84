@@ -162,6 +162,113 @@ defmodule Flop.Adapter.Ecto.DialectTest do
     end
   end
 
+  describe "null_placement/2" do
+    test "follows the nulls directions on every adapter" do
+      for repo <- [PostgresRepo, MyXQLRepo, SQLite3Repo, UnknownRepo, nil] do
+        dialect = Dialect.new(repo)
+        assert Dialect.null_placement(dialect, :asc_nulls_first) == :first
+        assert Dialect.null_placement(dialect, :desc_nulls_first) == :first
+        assert Dialect.null_placement(dialect, :asc_nulls_last) == :last
+        assert Dialect.null_placement(dialect, :desc_nulls_last) == :last
+      end
+    end
+
+    test "sorts NULLs as the largest values on PostgreSQL" do
+      dialect = Dialect.new(PostgresRepo)
+      assert Dialect.null_placement(dialect, :asc) == :last
+      assert Dialect.null_placement(dialect, :desc) == :first
+    end
+
+    test "sorts NULLs as the smallest values on MySQL and SQLite" do
+      for repo <- [MyXQLRepo, SQLite3Repo] do
+        dialect = Dialect.new(repo)
+        assert Dialect.null_placement(dialect, :asc) == :first
+        assert Dialect.null_placement(dialect, :desc) == :last
+      end
+    end
+  end
+
+  describe "the query built for cursor pagination" do
+    test "includes the NULL rows after a value where they sort last" do
+      assert cursor_where_clause(PostgresRepo, [{:name, :asc, "a"}]) ==
+               ~S|p0.name > type(^"a", p0.name) or is_nil(p0.name)|
+
+      assert cursor_where_clause(MyXQLRepo, [{:name, :desc, "a"}]) ==
+               ~S|p0.name < type(^"a", p0.name) or is_nil(p0.name)|
+    end
+
+    test "excludes the NULL rows after a value where they sort first" do
+      assert cursor_where_clause(SQLite3Repo, [{:name, :asc, "a"}]) ==
+               ~S|p0.name > type(^"a", p0.name)|
+
+      assert cursor_where_clause(PostgresRepo, [{:name, :desc, "a"}]) ==
+               ~S|p0.name < type(^"a", p0.name)|
+    end
+
+    test "continues after NULL with the non-NULL rows where NULLs sort first" do
+      assert cursor_where_clause(SQLite3Repo, [{:name, :asc, nil}]) ==
+               "not is_nil(p0.name)"
+
+      assert cursor_where_clause(SQLite3Repo, [
+               {:name, :asc, nil},
+               {:age, :asc, 4}
+             ]) ==
+               ~S|not is_nil(p0.name) or (is_nil(p0.name) and p0.age > type(^4, p0.age))|
+    end
+
+    test "continues after NULL with the NULL rows only where NULLs sort last" do
+      assert cursor_where_clause(PostgresRepo, [{:name, :asc, nil}]) == "false"
+
+      assert cursor_where_clause(PostgresRepo, [
+               {:name, :asc, nil},
+               {:age, :asc, 4}
+             ]) ==
+               ~S|is_nil(p0.name) and (p0.age > type(^4, p0.age) or is_nil(p0.age))|
+    end
+
+    test "raises for :asc and :desc without a repo" do
+      for direction <- [:asc, :desc] do
+        error =
+          assert_raise ArgumentError, fn ->
+            cursor_where_clause(nil, [{:name, direction, "a"}])
+          end
+
+        assert error.message =~
+                 "cursor pagination with #{inspect(direction)} requires a repo"
+      end
+    end
+
+    test "uses the nulls directions without a repo" do
+      assert cursor_where_clause(nil, [{:name, :asc_nulls_last, "a"}]) ==
+               ~S|p0.name > type(^"a", p0.name) or is_nil(p0.name)|
+
+      assert cursor_where_clause(nil, [{:name, :desc_nulls_first, "a"}]) ==
+               ~S|p0.name < type(^"a", p0.name)|
+    end
+  end
+
+  defp cursor_where_clause(repo, fields) do
+    cursor =
+      fields
+      |> Map.new(fn {field, _direction, value} -> {field, value} end)
+      |> Flop.Cursor.encode()
+
+    flop = %Flop{
+      first: 2,
+      after: cursor,
+      order_by: Enum.map(fields, &elem(&1, 0)),
+      order_directions: Enum.map(fields, &elem(&1, 1))
+    }
+
+    MyApp.Pet
+    |> Flop.query(flop, for: MyApp.Pet, repo: repo)
+    |> inspect()
+    |> String.split("where: ")
+    |> List.last()
+    |> String.split(", order_by: ")
+    |> hd()
+  end
+
   defp order_by_clause(repo, direction) do
     flop = %Flop{order_by: [:name], order_directions: [direction]}
 

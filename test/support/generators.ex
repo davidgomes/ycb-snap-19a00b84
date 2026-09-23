@@ -66,6 +66,31 @@ defmodule Flop.Generators do
     end
   end
 
+  @doc """
+  Same as `uniq_list_of_pets/1`, but sets the age, the owner or the age of the
+  owner of some pets to `nil`. The names remain unique, so the combination of
+  the sortable fields is still unique.
+  """
+  def uniq_list_of_pets_with_nils(opts) do
+    gen all pets <- uniq_list_of_pets(opts),
+            nils <-
+              list_of(list_of(boolean(), length: 3), length: length(pets)) do
+      Enum.zip_with(pets, nils, fn pet,
+                                   [nil_age?, nil_owner?, nil_owner_age?] ->
+        owner = %{
+          pet.owner
+          | age: if(nil_owner_age?, do: nil, else: pet.owner.age)
+        }
+
+        %{
+          pet
+          | age: if(nil_age?, do: nil, else: pet.age),
+            owner: if(nil_owner?, do: nil, else: owner)
+        }
+      end)
+    end
+  end
+
   def uniq_list_of_owners(len) do
     gen all names <- uniq_list_of_strings(len),
             ages <- uniq_list_of(integer(1..500), length: len),
