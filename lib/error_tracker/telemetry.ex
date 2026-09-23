@@ -26,17 +26,24 @@ defmodule ErrorTracker.Telemetry do
   * `[:error_tracker, :occurrence, :new]`: is emitted when a new occurrence is
   stored.
 
+  ### Muted errors
+
+  Errors can be muted with `ErrorTracker.mute/1`. Occurrences of muted errors
+  are still stored and the `[:error_tracker, :occurrence, :new]` event is still
+  emitted, but its `:muted` metadata will be `true`. Use it to skip
+  notifications for noisy errors you don't want to be alerted about.
+
   ### Measures and metadata
 
   Each event is emitted with some measures and metadata, which can be used to
   receive information without having to query the database again:
 
-  | event                                   | measures       | metadata      |
-  | --------------------------------------- | -------------- | ------------- |
-  | `[:error_tracker, :error, :new]`        | `:system_time` | `:error`      |
-  | `[:error_tracker, :error, :unresolved]` | `:system_time` | `:error`      |
-  | `[:error_tracker, :error, :resolved]`   | `:system_time` | `:error`      |
-  | `[:error_tracker, :occurrence, :new]`   | `:system_time` | `:occurrence` |
+  | event                                   | measures       | metadata                |
+  | --------------------------------------- | -------------- | ----------------------- |
+  | `[:error_tracker, :error, :new]`        | `:system_time` | `:error`                |
+  | `[:error_tracker, :error, :unresolved]` | `:system_time` | `:error`                |
+  | `[:error_tracker, :error, :resolved]`   | `:system_time` | `:error`                |
+  | `[:error_tracker, :occurrence, :new]`   | `:system_time` | `:occurrence`, `:muted` |
   """
 
   @doc false
@@ -61,9 +68,9 @@ defmodule ErrorTracker.Telemetry do
   end
 
   @doc false
-  def new_occurrence(occurrence) do
+  def new_occurrence(occurrence, muted) do
     measurements = %{system_time: System.system_time()}
-    metadata = %{occurrence: occurrence}
+    metadata = %{occurrence: occurrence, muted: muted}
     :telemetry.execute([:error_tracker, :occurrence, :new], measurements, metadata)
   end
 end

@@ -114,16 +114,29 @@
     <.section title="Status" title_class="mb-3">
       <.badge :if={@error.status == :resolved} color={:green}>Resolved</.badge>
       <.badge :if={@error.status == :unresolved} color={:red}>Unresolved</.badge>
+      <.badge :if={@error.muted} color={:yellow}>Muted</.badge>
     </.section>
 
     <.section>
-      <.button :if={@error.status == :unresolved} phx-click="resolve">
-        Mark as resolved
-      </.button>
+      <div class="mb-2">
+        <.button :if={@error.status == :unresolved} phx-click="resolve">
+          Mark as resolved
+        </.button>
 
-      <.button :if={@error.status == :resolved} phx-click="unresolve">
-        Mark as unresolved
-      </.button>
+        <.button :if={@error.status == :resolved} phx-click="unresolve">
+          Mark as unresolved
+        </.button>
+      </div>
+
+      <div>
+        <.button :if={!@error.muted} phx-click="mute" type="link">
+          Mute
+        </.button>
+
+        <.button :if={@error.muted} phx-click="unmute" type="link">
+          Unmute
+        </.button>
+      </div>
     </.section>
   </div>
 </div>
