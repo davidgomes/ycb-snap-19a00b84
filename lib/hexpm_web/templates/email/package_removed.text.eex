@@ -1,0 +1,9 @@
+<%= PackageRemoved.title(@package) %>
+
+<%= PackageRemoved.message(@package) %>
+
+<%= Removal.reason_intro() %>
+
+<%= @reason %>
+
+<%= Removal.questions_notice(:text) %>

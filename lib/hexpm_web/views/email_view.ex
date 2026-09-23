@@ -84,6 +84,44 @@ defmodule HexpmWeb.EmailView do
     end
   end
 
+  defmodule AccountRemoved do
+    def title() do
+      "Your account has been removed"
+    end
+
+    def message(username) do
+      "The Hex.pm account \"#{username}\" has been removed by the Hex.pm team. " <>
+        "The username has been retired and cannot be registered again."
+    end
+
+    def packages_intro() do
+      "The following packages owned only by this account were also removed:"
+    end
+  end
+
+  defmodule PackageRemoved do
+    def title(package) do
+      "Package #{package} has been removed"
+    end
+
+    def message(package) do
+      "The package #{package} and all of its releases have been removed from Hex.pm " <>
+        "by the Hex.pm team. " <>
+        "You are receiving this email because you were an owner of the package."
+    end
+  end
+
+  defmodule Removal do
+    def reason_intro() do
+      "Reason for the removal:"
+    end
+
+    def questions_notice(format) do
+      "If you have any questions or believe this was a mistake, " <>
+        "please contact support at #{Common.support_link(format)}."
+    end
+  end
+
   defmodule Announcement do
     def title("Hex.pm - " <> title), do: title
     def title(subject), do: subject
