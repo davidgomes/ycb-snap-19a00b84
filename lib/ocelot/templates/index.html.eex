@@ -1,0 +1,46 @@
+<h1>Jobs</h1>
+
+<nav class="states">
+  <a href="<%= h(@base) %>/" class="<%= if is_nil(@state), do: "active" %>">
+    all<span class="count"><%= @counts |> Map.values() |> Enum.sum() %></span>
+  </a>
+  <%= for state <- @states do %>
+    <a href="<%= h(@base) %>/?state=<%= state %>" class="<%= if @state == state, do: "active" %>">
+      <%= state %><span class="count"><%= Map.fetch!(@counts, state) %></span>
+    </a>
+  <% end %>
+</nav>
+
+<%= if @jobs == [] do %>
+  <p class="muted">No jobs found.</p>
+<% else %>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Worker</th>
+        <th>Queue</th>
+        <th>State</th>
+        <th>Attempt</th>
+        <th>Args</th>
+        <th>Inserted at</th>
+      </tr>
+    </thead>
+    <tbody>
+      <%= for job <- @jobs do %>
+        <tr>
+          <td><a href="<%= h(@base) %>/jobs/<%= job.id %>">#<%= job.id %></a></td>
+          <td><%= h(job.worker) %></td>
+          <td><%= h(job.queue) %></td>
+          <td><span class="badge <%= h(job.state) %>"><%= h(job.state) %></span></td>
+          <td><%= job.attempt %>/<%= job.max_attempts %></td>
+          <td><code><%= h(Jason.encode!(job.args)) %></code></td>
+          <td class="muted"><%= format_time(job.inserted_at) %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+  <%= if length(@jobs) >= Ocelot.Jobs.default_limit() do %>
+    <p class="muted">Showing the latest <%= Ocelot.Jobs.default_limit() %> jobs.</p>
+  <% end %>
+<% end %>

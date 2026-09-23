@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><%= h(@title) %> · Ocelot</title>
+    <style>
+      :root { --fg: #1f2328; --muted: #656d76; --border: #d0d7de; --bg: #f6f8fa; --accent: #0969da; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: var(--fg); background: var(--bg); }
+      a { color: var(--accent); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      header { background: #24292f; color: #fff; padding: 12px 24px; }
+      header a { color: #fff; font-weight: 600; font-size: 16px; }
+      main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+      h1 { font-size: 20px; margin: 0 0 16px; }
+      h2 { font-size: 16px; margin: 24px 0 8px; }
+      .states { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+      .states a { padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--fg); }
+      .states a.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+      .states .count { color: var(--muted); margin-left: 4px; }
+      table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--border); border-radius: 6px; }
+      th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+      th { background: var(--bg); color: var(--muted); font-weight: 600; }
+      tr:last-child td { border-bottom: none; }
+      .muted { color: var(--muted); }
+      .badge { display: inline-block; padding: 0 8px; border-radius: 10px; font-size: 12px; background: #eaeef2; }
+      .badge.completed { background: #dafbe1; color: #1a7f37; }
+      .badge.executing, .badge.available { background: #ddf4ff; color: #0969da; }
+      .badge.retryable, .badge.scheduled { background: #fff8c5; color: #9a6700; }
+      .badge.discarded, .badge.cancelled { background: #ffebe9; color: #cf222e; }
+      pre { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow: auto; margin: 0; }
+      .actions { display: flex; gap: 8px; margin-bottom: 16px; }
+      .actions form { margin: 0; }
+      button { padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; font: inherit; }
+      button.danger { color: #cf222e; }
+      dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin: 0; }
+      dt { color: var(--muted); }
+      dd { margin: 0; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <header><a href="<%= h(@base) %>/">Ocelot</a></header>
+    <main>
+      <%= @content %>
+    </main>
+  </body>
+</html>

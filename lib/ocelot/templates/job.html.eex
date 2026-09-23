@@ -1,0 +1,53 @@
+<h1>
+  Job #<%= @job.id %>
+  <span class="badge <%= h(@job.state) %>"><%= h(@job.state) %></span>
+</h1>
+
+<div class="actions">
+  <%= if retryable?(@job) do %>
+    <form method="post" action="<%= h(@base) %>/jobs/<%= @job.id %>/retry">
+      <button type="submit">Retry</button>
+    </form>
+  <% end %>
+  <%= if cancellable?(@job) do %>
+    <form method="post" action="<%= h(@base) %>/jobs/<%= @job.id %>/cancel">
+      <button type="submit">Cancel</button>
+    </form>
+  <% end %>
+  <%= if deletable?(@job) do %>
+    <form method="post" action="<%= h(@base) %>/jobs/<%= @job.id %>/delete" onsubmit="return confirm('Delete this job?')">
+      <button type="submit" class="danger">Delete</button>
+    </form>
+  <% end %>
+</div>
+
+<dl>
+  <dt>Worker</dt><dd><%= h(@job.worker) %></dd>
+  <dt>Queue</dt><dd><%= h(@job.queue) %></dd>
+  <dt>Attempt</dt><dd><%= @job.attempt %>/<%= @job.max_attempts %></dd>
+  <dt>Priority</dt><dd><%= @job.priority %></dd>
+  <dt>Tags</dt><dd><%= h(Enum.join(@job.tags || [], ", ")) %></dd>
+  <dt>Attempted by</dt><dd><%= h(Enum.join(@job.attempted_by || [], ", ")) %></dd>
+  <dt>Inserted at</dt><dd><%= format_time(@job.inserted_at) %></dd>
+  <dt>Scheduled at</dt><dd><%= format_time(@job.scheduled_at) %></dd>
+  <dt>Attempted at</dt><dd><%= format_time(@job.attempted_at) %></dd>
+  <dt>Completed at</dt><dd><%= format_time(@job.completed_at) %></dd>
+  <dt>Cancelled at</dt><dd><%= format_time(@job.cancelled_at) %></dd>
+  <dt>Discarded at</dt><dd><%= format_time(@job.discarded_at) %></dd>
+</dl>
+
+<h2>Args</h2>
+<pre><code><%= h(format_json(@job.args)) %></code></pre>
+
+<h2>Meta</h2>
+<pre><code><%= h(format_json(@job.meta)) %></code></pre>
+
+<h2>Errors</h2>
+<%= if @job.errors in [nil, []] do %>
+  <p class="muted">No errors.</p>
+<% else %>
+  <%= for error <- Enum.reverse(@job.errors) do %>
+    <p class="muted">Attempt <%= h(error["attempt"]) %> at <%= h(error["at"]) %></p>
+    <pre><code><%= h(error["error"]) %></code></pre>
+  <% end %>
+<% end %>
