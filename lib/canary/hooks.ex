@@ -11,13 +11,17 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     > Note that the `event_name` is a string - but in Canary it's converted to an atom for consistency.
 
-    The main difference beteween `Canary.Hooks` and `Canary.Plugs` is that
-    in `Canary.Hooks` there is no `:non_id_actions` option. It won't load all resources
-    like it's done with plugs, but you can still use `:authorize_resource`.
+    `Canary.Hooks` accepts the same options as `Canary.Plugs` and handles them the same way.
+    The differences between `Canary.Hooks` and `Canary.Plugs` are:
 
+    * the `:index` action won't load all resources like it's done with plugs,
+      and the socket assigns are left untouched for the non-id actions,
+    * the not found handler is called only when the `:required` option is set,
+    * when the current user is not assigned, the socket is unauthorized instead of raising an error.
 
-    For the authorization actions, when the `:required` is not set (by default it's false) it might be nil.
-    Then the `Canada.Can` implementation should be the module name of the model rather than a struct.
+    For the non-id actions (`:index`, `:new`, `:create` and actions given in `:non_id_actions`)
+    the `Canada.Can` implementation should be the module name of the model rather than a struct,
+    unless the `:required` option is set.
 
     ## Example
       ```elixir
@@ -32,6 +36,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       mount_canary :authorize_resource,
         on: [:handle_event],
         model: Post,
+        non_id_actions: [:my_event],
         only: [:my_event]
 
       # ...
@@ -210,7 +215,9 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     1. The subject is the `:current_user` from the socket assigns. The `:current_user` key can be changed in the `opts` or in the `Application.get_env(:canary, :current_user, :current_user)`. By default it's `:current_user`.
     2. The action for `handle_params` is `socket.assigns.live_action`, for `handle_event` it uses the event name.
-    3. The resource is the loaded resource from the socket assigns or the model name if the resource is not loaded and not required.
+    3. The resource is the model name for the non-id actions (`:index`, `:new`, `:create` and `:non_id_actions`).
+       For other actions it's the resource from the socket assigns, or loaded from the database when it's not assigned.
+       When the resource cannot be found the socket is unauthorized.
 
     Required opts:
 
@@ -226,7 +233,11 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     * `:as` - Specifies the `resource_name` to get from assigns
     * `:current_user` - Specifies the key in the socket assigns to get the current user
-    * `:required` - Specifies if the resource is required, when it's not assigned in socket it will halt the socket
+    * `:preload` - Specifies association(s) to preload
+    * `:id_name` - Specifies the name of the id in `params`, defaults to "id"
+    * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
+    * `:required` - Specifies if the resource is required, the resource is used even for the non-id actions
+    * `:non_id_actions` - Specifies additional actions to authorize based on the model name
     * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
 
     Example:
@@ -246,14 +257,14 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     ```
     """
-    def authorize_resource(:handle_params, _params, _uri, %Socket{} = socket, opts) do
+    def authorize_resource(:handle_params, params, _uri, %Socket{} = socket, opts) do
       action = socket.assigns.live_action
-      do_authorize_resource(action, socket, opts)
+      do_authorize_resource(action, params, socket, opts)
     end
 
-    def authorize_resource(:handle_event, event_name, _unsigned_params, %Socket{} = socket, opts) do
+    def authorize_resource(:handle_event, event_name, unsigned_params, %Socket{} = socket, opts) do
       action = String.to_atom(event_name)
-      do_authorize_resource(action, socket, opts)
+      do_authorize_resource(action, unsigned_params, socket, opts)
     end
 
     @doc """
@@ -278,8 +289,12 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     * `:preload` - Specifies association(s) to preload
     * `:id_name` - Specifies the name of the id in `params`, defaults to "id"
     * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
-    * `:required` - Specifies if the resource is required, when it's not found it will halt the socket
+    * `:required` - Specifies if the resource is required, when it's not found it will halt the socket - even for the non-id actions
+    * `:non_id_actions` - Specifies additional actions for which the resource is not loaded
     * `:not_found_handler` - Specify a handler function to be called if the resource is not found
+
+    The resource is not loaded for the non-id actions (`:index`, `:new`, `:create` and `:non_id_actions`)
+    unless the `:required` option is set.
 
     Example:
 
@@ -303,12 +318,12 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     """
     def load_resource(:handle_params, params, _uri, %Socket{} = socket, opts) do
       action = socket.assigns.live_action
-      do_load_resource(action, socket, params, opts)
+      do_load_resource(action, params, socket, opts)
     end
 
     def load_resource(:handle_event, event_name, unsigned_params, %Socket{} = socket, opts) do
       action = String.to_atom(event_name)
-      do_load_resource(action, socket, unsigned_params, opts)
+      do_load_resource(action, unsigned_params, socket, opts)
     end
 
     @doc """
@@ -316,6 +331,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     halt the socket if the resource is not found. If the user is not authorized it will halt the socket.
 
     It combines `load_resource` and `authorize_resource` functions.
+    If the user is not authorized, the resource in the socket assigns is set to nil.
 
     Required opts:
 
@@ -333,7 +349,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     * `:preload` - Specifies association(s) to preload
     * `:id_name` - Specifies the name of the id in `params`, defaults to "id"
     * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
-    * `:required` - Specifies if the resource is required, when it's not found it will halt the socket
+    * `:required` - Specifies if the resource is required, when it's not found it will halt the socket - even for the non-id actions
+    * `:non_id_actions` - Specifies additional actions to authorize based on the model name
     * `:not_found_handler` - Specify a handler function to be called if the resource is not found
     * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
 
@@ -374,9 +391,9 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       do_load_and_authorize_resource(action, unsigned_params, socket, opts)
     end
 
-    defp do_load_resource(action, socket, params, opts) do
+    defp do_load_resource(action, params, socket, opts) do
       if action_valid?(action, opts) do
-        load_resource(socket, params, opts)
+        load_resource(socket, action, params, opts)
         |> verify_resource(opts)
       else
         {:cont, socket}
@@ -385,36 +402,38 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     defp do_load_and_authorize_resource(action, params, socket, opts) do
       if action_valid?(action, opts) do
-        load_resource(socket, params, opts)
-        |> check_authorization(action, opts)
+        load_resource(socket, action, params, opts)
+        |> check_authorization(action, params, opts)
+        |> purge_resource_if_unauthorized(opts)
         |> verify_authorized_resource(opts)
       else
         {:cont, socket}
       end
     end
 
-    defp do_authorize_resource(action, socket, opts) do
+    defp do_authorize_resource(action, params, socket, opts) do
       if action_valid?(action, opts) do
-        check_authorization(socket, action, opts)
+        check_authorization(socket, action, params, opts)
         |> verify_authorized_resource(opts)
       else
         {:cont, socket}
       end
     end
 
-    # Check if the resource is already loaded in the socket assigns
-    # If not we need to load and assign it
-    defp load_resource(%Socket{} = socket, params, opts) do
-      resource =
-        case fetch_resource(socket, opts) do
-          {:ok, resource} ->
-            resource
+    # Non-id actions have no resource to load, keep the socket assigns untouched
+    defp load_resource(%Socket{} = socket, action, params, opts) do
+      if non_id_action?(action, opts) do
+        socket
+      else
+        assign(socket, get_resource_name(opts), fetch_or_get_resource(socket, params, opts))
+      end
+    end
 
-          _ ->
-            repo_get_resource(params, opts)
-        end
-
-      assign(socket, get_resource_name(opts), resource)
+    defp fetch_or_get_resource(%Socket{} = socket, params, opts) do
+      case fetch_resource(socket, opts) do
+        {:ok, resource} -> resource
+        _ -> repo_get_resource(params, opts)
+      end
     end
 
     # Fetch the resource from the socket assigns or nil
@@ -443,37 +462,33 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     end
 
     # Perform the authorization check
-    defp check_authorization(%Socket{} = socket, action, opts) do
-      current_user_name =
-        opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
+    defp check_authorization(%Socket{} = socket, action, params, opts) do
+      current_user = Map.fetch(socket.assigns, get_current_user_name(opts))
 
-      current_user = Map.fetch(socket.assigns, current_user_name)
-      resource = fetch_resoruce_or_model(socket, opts)
+      resource =
+        if non_id_action?(action, opts) do
+          opts[:model]
+        else
+          fetch_or_get_resource(socket, params, opts)
+        end
 
       case {current_user, resource} do
         {{:ok, _current_user}, nil} ->
           assign(socket, :authorized, false)
+
         {{:ok, current_user}, _} ->
           assign(socket, :authorized, can?(current_user, action, resource))
+
         _ ->
           assign(socket, :authorized, false)
       end
     end
 
-    # Fetch resource form assigns or model name if empty and not required
-    defp fetch_resoruce_or_model(%Socket{} = socket, opts) do
-      case fetch_resource(socket, opts) do
-        {:ok, resource} ->
-          resource
+    defp purge_resource_if_unauthorized(%Socket{assigns: %{authorized: true}} = socket, _opts),
+      do: socket
 
-        _ ->
-          if required?(opts) do
-            nil
-          else
-            opts[:model]
-          end
-      end
-    end
+    defp purge_resource_if_unauthorized(%Socket{} = socket, opts),
+      do: assign(socket, get_resource_name(opts), nil)
 
     # Verify if subject is authorized to perform action on resource
     defp verify_authorized_resource(%Socket{} = socket, opts) do
@@ -495,20 +510,6 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         apply_error_handler(socket, :not_found_handler, opts)
       else
         {:cont, socket}
-      end
-    end
-
-    defp get_resource_name(opts) do
-      case opts[:as] do
-        nil ->
-          opts[:model]
-          |> Module.split()
-          |> List.last()
-          |> Macro.underscore()
-          |> String.to_atom()
-
-        as ->
-          as
       end
     end
 

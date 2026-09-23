@@ -107,6 +107,97 @@ defmodule Canary.Utils do
   end
 
   @doc """
+  Check if the resource should always be loaded from the database,
+  even for the non-id actions. It's true when `:persisted` or `:required` is set.
+
+      iex> Canary.Utils.persisted?(persisted: true)
+      true
+
+      iex> Canary.Utils.persisted?(required: true)
+      true
+
+      iex> Canary.Utils.persisted?([])
+      false
+  """
+  @spec persisted?(Keyword.t()) :: boolean
+  def persisted?(opts) do
+    !!Keyword.get(opts, :persisted, false) || required?(opts)
+  end
+
+  @doc """
+  Get the list of actions for which the resource is authorized by the model name,
+  instead of the loaded resource: `:index`, `:new`, `:create` and `opts[:non_id_actions]`.
+
+      iex> Canary.Utils.non_id_actions([])
+      [:index, :new, :create]
+
+      iex> Canary.Utils.non_id_actions(non_id_actions: [:find_by_name])
+      [:index, :new, :create, :find_by_name]
+  """
+  @spec non_id_actions(Keyword.t()) :: [atom]
+  def non_id_actions(opts) do
+    case opts[:non_id_actions] do
+      nil -> [:index, :new, :create]
+      actions -> Enum.concat([:index, :new, :create], actions)
+    end
+  end
+
+  @doc """
+  Check if the action is a non-id action and the resource does not have to be loaded,
+  see `non_id_actions/1` and `persisted?/1`.
+
+      iex> Canary.Utils.non_id_action?(:new, [])
+      true
+
+      iex> Canary.Utils.non_id_action?(:new, required: true)
+      false
+
+      iex> Canary.Utils.non_id_action?(:show, [])
+      false
+  """
+  @spec non_id_action?(atom, Keyword.t()) :: boolean
+  def non_id_action?(action, opts) do
+    action in non_id_actions(opts) and not persisted?(opts)
+  end
+
+  @doc """
+  Get the key name of the resource in assigns, either `opts[:as]` or
+  the underscored last part of the `opts[:model]` module name.
+
+      iex> Canary.Utils.get_resource_name(model: Some.Project.BlogPost)
+      :blog_post
+
+      iex> Canary.Utils.get_resource_name(model: Post, as: :my_post)
+      :my_post
+  """
+  @spec get_resource_name(Keyword.t()) :: atom
+  def get_resource_name(opts) do
+    case opts[:as] do
+      nil ->
+        opts[:model]
+        |> Module.split()
+        |> List.last()
+        |> Macro.underscore()
+        |> String.to_atom()
+
+      as ->
+        as
+    end
+  end
+
+  @doc """
+  Get the key name of the subject (current user) in assigns, either `opts[:current_user]`,
+  `Application.get_env(:canary, :current_user)` or `:current_user`.
+
+      iex> Canary.Utils.get_current_user_name(current_user: :current_member)
+      :current_member
+  """
+  @spec get_current_user_name(Keyword.t()) :: atom
+  def get_current_user_name(opts) do
+    opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
+  end
+
+  @doc """
   Apply the error handler to the connection or socket
   """
   @spec apply_error_handler(Plug.Conn.t() , atom, Keyword.t()) :: Plug.Conn.t()
