@@ -37,6 +37,10 @@ defmodule Repo do
 
   def preload(resources, _), do: resources
 
+  # Ecto raises when comparing with nil in get_by/2
+  def get_by(_, %{id: nil}), do: raise(ArgumentError, "nil given for :id")
+  def get_by(_, %{slug: nil}), do: raise(ArgumentError, "nil given for :slug")
+
   def get_by(User, %{id: "1"}), do: %User{}
   def get_by(User, _), do: nil
 

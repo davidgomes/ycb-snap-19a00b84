@@ -387,6 +387,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       if action_valid?(action, opts) do
         load_resource(socket, params, opts)
         |> check_authorization(action, opts)
+        |> purge_resource_if_unauthorized(opts)
         |> verify_authorized_resource(opts)
       else
         {:cont, socket}
@@ -432,16 +433,6 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       end
     end
 
-    # Load the resource from the repo
-    defp repo_get_resource(params, opts) do
-      repo = Application.get_env(:canary, :repo)
-      field_name = Keyword.get(opts, :id_field, "id")
-      get_map_args = %{String.to_atom(field_name) => get_resource_id(params, opts)}
-
-      repo.get_by(opts[:model], get_map_args)
-      |> preload_if_needed(repo, opts)
-    end
-
     # Perform the authorization check
     defp check_authorization(%Socket{} = socket, action, opts) do
       current_user_name =
@@ -474,6 +465,12 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
           end
       end
     end
+
+    defp purge_resource_if_unauthorized(%Socket{assigns: %{authorized: true}} = socket, _opts),
+      do: socket
+
+    defp purge_resource_if_unauthorized(%Socket{} = socket, opts),
+      do: assign(socket, get_resource_name(opts), nil)
 
     # Verify if subject is authorized to perform action on resource
     defp verify_authorized_resource(%Socket{} = socket, opts) do

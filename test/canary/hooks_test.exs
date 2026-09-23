@@ -7,6 +7,16 @@ defmodule Canary.HooksTest do
   alias Canary.HooksHelper.{PageLive, PostLive}
   @endpoint Canary.HooksHelper.Endpoint
 
+  defmodule CustomErrorHandler do
+    @behaviour Canary.ErrorHandler
+
+    import Phoenix.Component, only: [assign: 3]
+
+    def not_found_handler(socket), do: {:halt, assign(socket, :canary_error, :not_found)}
+
+    def unauthorized_handler(socket), do: {:halt, assign(socket, :canary_error, :unauthorized)}
+  end
+
   setup_all do
     Application.put_env(:canary, Canary.HooksHelper.Endpoint,
       live_view: [signing_salt: "eTh8jeshoe2Bie4e"],
@@ -226,6 +236,66 @@ defmodule Canary.HooksTest do
 
       assert socket.assigns.post == nil
       assert socket.assigns.authorized == false
+    end
+
+    test "load_and_authorize_resource removes the loaded resource when unauthorized" do
+      uri = "http://localhost/post"
+
+      metadata = %{
+        hook: :load_and_authorize_resource,
+        stage: :handle_params,
+        opts: [model: Post]
+      }
+
+      socket =
+        build_socket()
+        |> put_assigns(%{current_user: %User{id: 1}})
+
+      assert {:halt, socket} =
+               Canary.Hooks.handle_hook(metadata, [%{"id" => "2"}, uri, socket])
+
+      assert socket.assigns.post == nil
+      assert socket.assigns.authorized == false
+
+      metadata = %{metadata | stage: :handle_event}
+
+      socket =
+        build_socket()
+        |> put_assigns(%{current_user: %User{id: 1}})
+
+      assert {:halt, socket} =
+               Canary.Hooks.handle_hook(metadata, ["delete", %{"id" => "1"}, socket])
+
+      assert socket.assigns.post == nil
+      assert socket.assigns.authorized == false
+    end
+
+    test "accepts :error_handler to override the configured error handler" do
+      uri = "http://localhost/post"
+
+      metadata = %{
+        hook: :load_resource,
+        stage: :handle_params,
+        opts: [model: Post, required: true, error_handler: CustomErrorHandler]
+      }
+
+      assert {:halt, socket} =
+               Canary.Hooks.handle_hook(metadata, [%{"id" => "13"}, uri, build_socket()])
+
+      assert socket.assigns.canary_error == :not_found
+
+      metadata = %{
+        hook: :authorize_resource,
+        stage: :handle_params,
+        opts: [model: Post, error_handler: CustomErrorHandler]
+      }
+
+      socket =
+        build_socket(:delete)
+        |> put_assigns(%{post: %Post{id: 1}, current_user: %User{id: 1}})
+
+      assert {:halt, socket} = Canary.Hooks.handle_hook(metadata, [%{}, uri, socket])
+      assert socket.assigns.canary_error == :unauthorized
     end
 
     test "accepts :id_field to override the default id field" do

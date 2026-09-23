@@ -294,7 +294,14 @@ defmodule Canary.Plugs do
           fetch_resource(conn, opts)
       end
 
-    Plug.Conn.assign(conn, :authorized, can?(current_user, action, resource))
+    authorized =
+      cond do
+        resource -> can?(current_user, action, resource)
+        required?(opts) -> false
+        true -> can?(current_user, action, opts[:model])
+      end
+
+    Plug.Conn.assign(conn, :authorized, authorized)
   end
 
   @doc """
@@ -374,29 +381,19 @@ defmodule Canary.Plugs do
     do: Plug.Conn.assign(conn, get_resource_name(conn, opts), nil)
 
   defp fetch_resource(conn, opts) do
-    repo = Application.get_env(:canary, :repo)
-
-    field_name = Keyword.get(opts, :id_field, "id")
-
-    get_map_args = %{String.to_atom(field_name) => get_resource_id(conn, opts)}
-
     case Map.fetch(conn.assigns, get_resource_name(conn, opts)) do
       :error ->
-        repo.get_by(opts[:model], get_map_args)
-        |> preload_if_needed(repo, opts)
+        repo_get_resource(conn, opts)
 
       {:ok, nil} ->
-        repo.get_by(opts[:model], get_map_args)
-        |> preload_if_needed(repo, opts)
+        repo_get_resource(conn, opts)
 
       {:ok, resource} ->
         if resource.__struct__ == opts[:model] do
           # A resource of the type passed as opts[:model] is already loaded; do not clobber it
           resource
         else
-          opts[:model]
-          |> repo.get_by(get_map_args)
-          |> preload_if_needed(repo, opts)
+          repo_get_resource(conn, opts)
         end
     end
   end
@@ -465,19 +462,9 @@ defmodule Canary.Plugs do
   end
 
   defp handle_not_found(conn, opts) do
-    action = get_action(conn)
+    resource = Map.get(conn.assigns, get_resource_name(conn, opts))
 
-    non_id_actions =
-      if opts[:non_id_actions] do
-        Enum.concat([:index, :new, :create], opts[:non_id_actions])
-      else
-        [:index, :new, :create]
-      end
-
-    is_required = required?(opts)
-    resource_name = Map.get(conn.assigns, get_resource_name(conn, opts))
-
-    if is_nil(resource_name) and (is_required or action not in non_id_actions) do
+    if is_nil(resource) and required?(opts) do
       apply_error_handler(conn, :not_found_handler, opts)
     else
       conn

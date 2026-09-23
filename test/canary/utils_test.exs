@@ -43,6 +43,33 @@ defmodule UtilsTest do
     end
   end
 
+  describe "repo_get_resource/2" do
+    setup do
+      Application.put_env(:canary, :repo, Repo)
+    end
+
+    test "gets the resource by the id from the params" do
+      assert repo_get_resource(%{"id" => "1"}, model: Post) == %Post{id: 1}
+      assert repo_get_resource(%{"id" => "3"}, model: Post) == nil
+
+      conn = %Plug.Conn{params: %{"slug" => "slug1"}}
+
+      assert repo_get_resource(conn, model: Post, id_name: "slug", id_field: "slug") ==
+               %Post{id: 1, slug: "slug1"}
+    end
+
+    test "preloads associations" do
+      assert repo_get_resource(%{"id" => "2"}, model: Post, preload: :user) ==
+               %Post{id: 2, user_id: 2, user: %User{id: 2}}
+    end
+
+    test "returns nil without querying the repo when the id is not in the params" do
+      assert repo_get_resource(%{}, model: Post) == nil
+      assert repo_get_resource(%{"id" => "1"}, model: Post, id_name: "post_id") == nil
+      assert repo_get_resource(%Plug.Conn{params: %{}}, model: Post, id_field: "slug") == nil
+    end
+  end
+
   test "required?/1 returns true if the resource is required" do
     assert required?(required: true) == true
     assert required?(required: false) == false
@@ -104,6 +131,38 @@ defmodule UtilsTest do
         not_found_handler: {CustomErrorHandler, :custom_handler}
         ])
       assert conn.assigns[:ok_custom_handler] == true
+    end
+
+    defmodule OptsErrorHandler do
+      @behaviour Canary.ErrorHandler
+
+      def not_found_handler(%Plug.Conn{} = conn) do
+        %{conn | assigns: %{ok_opts_not_found_handler: true}}
+      end
+
+      def unauthorized_handler(%Plug.Conn{} = conn) do
+        %{conn | assigns: %{ok_opts_unauthorized_handler: true}}
+      end
+    end
+
+    test "allows overriding the error handler with the :error_handler option" do
+      opts = [error_handler: OptsErrorHandler]
+
+      conn = apply_error_handler(%Plug.Conn{}, :not_found_handler, opts)
+      assert conn.assigns[:ok_opts_not_found_handler] == true
+
+      conn = apply_error_handler(%Plug.Conn{}, :unauthorized_handler, opts)
+      assert conn.assigns[:ok_opts_unauthorized_handler] == true
+    end
+
+    test "prefers the handler option over the :error_handler option" do
+      opts = [
+        error_handler: OptsErrorHandler,
+        not_found_handler: {CustomErrorHandler, :custom_handler}
+      ]
+
+      conn = apply_error_handler(%Plug.Conn{}, :not_found_handler, opts)
+      assert conn.assigns == %{ok_custom_handler: true}
     end
   end
 end

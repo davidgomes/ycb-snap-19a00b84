@@ -37,6 +37,27 @@ defmodule Canary.Utils do
   end
 
   @doc """
+  Get the resource from the repo by `opts[:id_field]` (defaults to `"id"`) matching the
+  resource id from the params (see `get_resource_id/2`).
+
+  Returns `nil` when the resource id is not present in the params, without querying the repo.
+  """
+  @spec repo_get_resource(Plug.Conn.t() | map(), Keyword.t()) :: Ecto.Schema.t() | nil
+  def repo_get_resource(conn_or_params, opts) do
+    case get_resource_id(conn_or_params, opts) do
+      nil ->
+        nil
+
+      resource_id ->
+        repo = Application.get_env(:canary, :repo)
+        field_name = Keyword.get(opts, :id_field, "id")
+
+        repo.get_by(opts[:model], %{String.to_atom(field_name) => resource_id})
+        |> preload_if_needed(repo, opts)
+    end
+  end
+
+  @doc """
   Preload associations if needed
   """
   @spec preload_if_needed(nil, Ecto.Repo.t(), Keyword.t()) :: nil
@@ -108,6 +129,13 @@ defmodule Canary.Utils do
 
   @doc """
   Apply the error handler to the connection or socket
+
+  The handler is resolved in the following order:
+
+  1. `opts[handler_key]` - `{mod, fun}` tuple, e.g. `:not_found_handler` or `:unauthorized_handler`
+  2. `opts[:error_handler]` - module implementing `Canary.ErrorHandler`
+  3. `:error_handler` from the `:canary` config
+  4. `Canary.DefaultHandler`
   """
   @spec apply_error_handler(Plug.Conn.t() , atom, Keyword.t()) :: Plug.Conn.t()
   @spec apply_error_handler(Phoenix.LiveView.Socket.t() , atom, Keyword.t()) :: {:halt, Phoenix.LiveView.Socket.t()}
@@ -119,6 +147,7 @@ defmodule Canary.Utils do
   defp get_handler(handler_key, opts) do
     mod_or_mod_fun =
       Keyword.get(opts, handler_key) ||
+        Keyword.get(opts, :error_handler) ||
         Application.get_env(:canary, :error_handler, Canary.DefaultHandler)
 
     case mod_or_mod_fun do
