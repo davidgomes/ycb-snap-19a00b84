@@ -8,7 +8,7 @@ defmodule ObanChoreWeb.ChoreComponent do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class={if @selected, do: "oc-block", else: "oc-hidden"}>
+    <div class={if @selected, do: "oc-block", else: "oc-hidden"} data-chore={inspect(@chore.module)}>
       <div class="oc-container" style="display: flex; flex-direction: column; gap: 1.5rem;">
         <%= if @duplicate_warning do %>
           <.duplicate_warning_banner

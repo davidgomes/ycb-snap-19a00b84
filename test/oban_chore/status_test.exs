@@ -9,7 +9,7 @@ defmodule ObanChore.StatusTest do
     # In a real project, this would be in test_helper.exs or supervised
     start_supervised!({Phoenix.PubSub, name: ObanChore.TestPubSub})
 
-    :ok
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(ObanChore.Test.Repo)
   end
 
   test "telemetry broadcasts job state changes" do
