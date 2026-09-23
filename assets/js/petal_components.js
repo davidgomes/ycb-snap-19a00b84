@@ -5444,7 +5444,41 @@ export const PetalDataTable = {
   },
 };
 
+// Dropdown panel: opens downward, flipping above the trigger when the
+// viewport leaves no room below and there is more room above. JS.toggle
+// dispatches phx:show-start before the transition, once display is set.
+export const PetalDropdown = {
+  mounted() {
+    this.onShow = () => this.place();
+    this.el.addEventListener("phx:show-start", this.onShow);
+  },
+
+  destroyed() {
+    this.el.removeEventListener("phx:show-start", this.onShow);
+  },
+
+  place() {
+    const panel = this.el;
+    const trigger = panel.parentElement?.querySelector("button");
+    if (!trigger) return;
+    panel.removeAttribute("data-pc-flip");
+
+    const vv = window.visualViewport;
+    const viewTop = vv ? vv.offsetTop : 0;
+    const viewHeight = vv ? vv.height : window.innerHeight;
+    const t = trigger.getBoundingClientRect();
+    const below = viewTop + viewHeight - t.bottom;
+    const above = t.top - viewTop;
+    const pad = 8;
+
+    if (panel.offsetHeight + pad > below && above > below) {
+      panel.setAttribute("data-pc-flip", "top");
+    }
+  },
+};
+
 export default {
+  PetalDropdown,
   PetalChart,
   PetalColorScheme,
   PetalLocalTime,
