@@ -3,6 +3,7 @@ import { type LiveViewDiagnostic } from "phoenix_live_view/diagnostics";
 import { PHX_LV_DIAGNOSTIC_EVENT } from "phoenix_live_view/constants";
 import LiveSocket from "phoenix_live_view/live_socket";
 import JS from "phoenix_live_view/js";
+import Browser from "phoenix_live_view/browser";
 import { simulateJoinedView, simulateVisibility } from "./test_helpers";
 
 const container = (num) => global.document.getElementById(`container${num}`);
@@ -445,6 +446,98 @@ describe("LiveSocket", () => {
 
     // liveSocket constructor reads nav history position from sessionStorage
     expect(getItemCalls).toEqual(2);
+  });
+
+  describe("phx:before-navigate", () => {
+    let redirectSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      liveSocket = new LiveSocket("/live", Socket);
+      redirectSpy = jest
+        .spyOn(Browser, "redirect")
+        .mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      redirectSpy.mockRestore();
+    });
+
+    test("is dispatched before client navigation", () => {
+      const listener = jest.fn();
+      window.addEventListener("phx:before-navigate", listener);
+
+      expect(
+        liveSocket.historyRedirect(
+          new CustomEvent("phx:exec"),
+          "/a",
+          "push",
+          null,
+        ),
+      ).toBe(true);
+      expect(
+        liveSocket.pushHistoryPatch(
+          new CustomEvent("phx:exec"),
+          "/b",
+          "push",
+          null,
+        ),
+      ).toBe(true);
+
+      window.removeEventListener("phx:before-navigate", listener);
+      expect(listener).toHaveBeenCalledTimes(2);
+      expect(listener.mock.calls[0][0].detail).toEqual({
+        href: "/a",
+        patch: false,
+        target: null,
+      });
+      expect(listener.mock.calls[1][0].detail).toEqual({
+        href: "/b",
+        patch: true,
+        target: null,
+      });
+      expect(redirectSpy).toHaveBeenCalledTimes(2);
+    });
+
+    test("cancels navigation when default is prevented", () => {
+      const listener = (e: Event) => e.preventDefault();
+      window.addEventListener("phx:before-navigate", listener);
+
+      expect(
+        liveSocket.historyRedirect(
+          new CustomEvent("phx:exec"),
+          "/a",
+          "push",
+          null,
+        ),
+      ).toBe(false);
+      expect(
+        liveSocket.pushHistoryPatch(
+          new CustomEvent("phx:exec"),
+          "/b",
+          "push",
+          null,
+        ),
+      ).toBe(false);
+
+      window.removeEventListener("phx:before-navigate", listener);
+      expect(redirectSpy).not.toHaveBeenCalled();
+    });
+
+    test("is not dispatched for server navigation", () => {
+      const listener = jest.fn((e: Event) => e.preventDefault());
+      window.addEventListener("phx:before-navigate", listener);
+
+      liveSocket.historyRedirect(
+        new CustomEvent("phx:server-navigate"),
+        "/a",
+        "push",
+        null,
+      );
+
+      window.removeEventListener("phx:before-navigate", listener);
+      expect(listener).not.toHaveBeenCalled();
+      expect(redirectSpy).toHaveBeenCalledWith("/a", null);
+    });
   });
 
   describe("execJS", () => {

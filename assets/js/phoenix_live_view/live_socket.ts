@@ -1502,14 +1502,18 @@ export default class LiveSocket {
         }
 
         this.requestDOMUpdate(() => {
+          let navigated: boolean;
           if (type === "patch") {
-            this.pushHistoryPatch(e, href, linkState, target);
+            navigated = this.pushHistoryPatch(e, href, linkState, target);
           } else if (type === "redirect") {
-            this.historyRedirect(e, href, linkState, null, target);
+            navigated = this.historyRedirect(e, href, linkState, null, target);
           } else {
             throw new Error(
               `expected ${PHX_LIVE_LINK} to be "patch" or "redirect", got: ${type}`,
             );
+          }
+          if (!navigated) {
+            return;
           }
           const phxClick = target.getAttribute(this.binding("click"));
           if (phxClick) {
@@ -1549,9 +1553,13 @@ export default class LiveSocket {
   }
 
   /** @internal */
-  pushHistoryPatch(e, href, linkState, targetEl) {
+  pushHistoryPatch(e, href, linkState, targetEl): boolean {
+    if (!this.dispatchBeforeNavigate(e, href, true, targetEl)) {
+      return false;
+    }
     if (!this.isConnected() || !(this.main && this.main.isMain())) {
-      return Browser.redirect(href);
+      Browser.redirect(href);
+      return true;
     }
 
     this.withPageLoading({ to: href, kind: "patch" }, (done) => {
@@ -1560,6 +1568,30 @@ export default class LiveSocket {
         done();
       });
     });
+    return true;
+  }
+
+  /**
+   * Dispatches the cancelable `phx:before-navigate` event for client-initiated
+   * navigation. Returns false if a listener called `preventDefault()`.
+   *
+   * @internal
+   */
+  dispatchBeforeNavigate(
+    e: Event,
+    href: string,
+    patch: boolean,
+    targetEl?: Element | null,
+  ): boolean {
+    if (e && e.type === "phx:server-navigate") {
+      return true;
+    }
+    const event = new CustomEvent("phx:before-navigate", {
+      bubbles: true,
+      cancelable: true,
+      detail: { href, patch, target: targetEl || null },
+    });
+    return window.dispatchEvent(event);
   }
 
   /** @internal */
@@ -1601,13 +1633,17 @@ export default class LiveSocket {
     linkState: "replace" | "push",
     flash: string | null,
     targetEl?: Element | null,
-  ) {
+  ): boolean {
+    if (!this.dispatchBeforeNavigate(e, href, false, targetEl)) {
+      return false;
+    }
     const clickLoading = targetEl && e.isTrusted && e.type !== "popstate";
     if (clickLoading) {
       targetEl.classList.add("phx-click-loading");
     }
     if (!this.isConnected() || !(this.main && this.main.isMain())) {
-      return Browser.redirect(href, flash);
+      Browser.redirect(href, flash);
+      return true;
     }
 
     // convert to full href if only path prefix
@@ -1656,6 +1692,7 @@ export default class LiveSocket {
         done();
       });
     });
+    return true;
   }
 
   /** @internal */

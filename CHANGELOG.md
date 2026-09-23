@@ -115,6 +115,21 @@ by setting `phx-ignore-missing-id` or disable it globally with the `:missing_for
 
 See the module documentation or `Phoenix.LiveViewTest` for more information.
 
+## Cancelling client-side live navigation
+
+A cancelable `phx:before-navigate` event is now dispatched on `window` before
+client-initiated live navigation (`<.link navigate={...}>`, `<.link patch={...}>`,
+`JS.navigate/2` and `JS.patch/2`). Calling `preventDefault()` on the event aborts
+the navigation, for example to prompt the user about unsaved changes:
+
+```javascript
+window.addEventListener("phx:before-navigate", (e) => {
+  if (hasUnsavedChanges() && !confirm("Discard unsaved changes?")) {
+    e.preventDefault()
+  }
+})
+```
+
 ## v1.2.7 (2026-07-13)
 
 ### Security fixes
