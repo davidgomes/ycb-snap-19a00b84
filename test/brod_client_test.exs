@@ -363,6 +363,58 @@ defmodule BroadwayKafka.BrodClientTest do
 
       assert {:ok, %{client_config: [query_api_versions: false]}} = BrodClient.init(opts)
     end
+
+    test ":shared_client is an optional boolean. Default is false" do
+      assert {:ok, %{shared_client: false, shared_client_id: nil}} = BrodClient.init(@opts)
+
+      opts = Keyword.put(@opts, :shared_client, "true")
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :shared_client to be a boolean, got: \"true\""}
+
+      opts =
+        @opts
+        |> Keyword.put(:shared_client, true)
+        |> Keyword.put(:broadway, name: MyBroadway)
+
+      assert {:ok, %{shared_client: true, shared_client_id: MyBroadway.SharedClient}} =
+               BrodClient.init(opts)
+    end
+
+    test ":shared_client_id uses :client_id_prefix" do
+      opts =
+        @opts
+        |> Keyword.put(:shared_client, true)
+        |> Keyword.put(:broadway, name: MyBroadway)
+        |> put_in([:client_config, :client_id_prefix], "my_prefix.")
+
+      assert {:ok, %{shared_client_id: :"my_prefix.Elixir.MyBroadway.SharedClient"}} =
+               BrodClient.init(opts)
+    end
+  end
+
+  describe "shared_client_child_spec/1" do
+    test "returns no child specs when :shared_client is false" do
+      {:ok, config} = BrodClient.init(@opts)
+      assert BrodClient.shared_client_child_spec(config) == []
+    end
+
+    test "returns the brod client child spec when :shared_client is true" do
+      opts =
+        @opts
+        |> Keyword.put(:shared_client, true)
+        |> Keyword.put(:broadway, name: MyBroadway)
+
+      {:ok, config} = BrodClient.init(opts)
+
+      assert BrodClient.shared_client_child_spec(config) == [
+               %{
+                 id: MyBroadway.SharedClient,
+                 start:
+                   {:brod, :start_link_client, [[host: 9092], MyBroadway.SharedClient, []]}
+               }
+             ]
+    end
   end
 
   defmodule FakeSaslMechanismPlugin do
