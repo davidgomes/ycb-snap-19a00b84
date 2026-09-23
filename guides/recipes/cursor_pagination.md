@@ -157,13 +157,12 @@ Flop.validate_and_run(query, params,
 )
 ```
 
-Compound and alias fields cannot be ordered by at all when using cursor
-pagination, since neither is a column. `Flop.validate/2` returns an error naming
-the fields.
+Cursor pagination rejects compound, alias and custom fields as order fields.
+`Flop.validate/2` returns an error naming the fields.
 
 ```elixir
 [order_by: [
-  {"cursor pagination is not supported for compound and alias fields",
+  {"cursor pagination is not supported for compound, alias and custom fields",
    [unsupported_fields: [:rank]]}
 ]]
 ```

@@ -763,9 +763,10 @@ defmodule Flop.ValidationTest do
       params = %{first: 2, after: @cursor, order_by: [:full_name]}
       assert {:error, changeset} = validate(params, for: Thing)
 
-      assert errors_on(changeset)[:order_by] == [
-               "cursor pagination is not supported for compound and alias fields"
-             ]
+      message =
+        "cursor pagination is not supported for compound, alias and custom fields"
+
+      assert errors_on(changeset)[:order_by] == [message]
     end
 
     test "rejects an alias field as cursor order field" do
