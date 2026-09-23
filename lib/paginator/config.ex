@@ -89,6 +89,13 @@ defmodule Paginator.Config do
     sorted_cursor_fields =
       cursor_fields
       |> Enum.map(fn
+        {{field, %Ecto.Query.DynamicExpr{}}, value}
+        when is_atom(field) and value in @order_directions ->
+          field
+
+        {field, %Ecto.Query.DynamicExpr{}} when is_atom(field) ->
+          field
+
         {field, value} when is_atom(field) and value in @order_directions ->
           field
 

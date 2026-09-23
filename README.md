@@ -140,6 +140,30 @@ cursor_before = metadata.before
 IO.puts "total count: #{metadata.total_count}"
 ```
 
+### Paginating by expressions
+
+Cursor fields can also be expressions. Pair a name with an `Ecto.Query.dynamic/2`
+expression; the name is used as the cursor key and to read the cursor value from
+the returned records, so select the expression under that name:
+
+```elixir
+query =
+  from(
+    p in Post,
+    select: %{id: p.id, title_length: fragment("length(?)", p.title)},
+    order_by: [desc: fragment("length(?)", p.title), asc: p.id]
+  )
+
+Repo.paginate(
+  query,
+  cursor_fields: [
+    {{:title_length, dynamic([p], fragment("length(?)", p.title))}, :desc},
+    id: :asc
+  ],
+  limit: 50
+)
+```
+
 ## Security Considerations
 
 `Repo.paginate/4` will throw an `ArgumentError` should it detect an executable term in the cursor parameters passed to it (`before`, `after`).

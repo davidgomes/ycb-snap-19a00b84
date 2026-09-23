@@ -936,6 +936,54 @@ defmodule PaginatorTest do
            }
   end
 
+  describe "paginating by expressions" do
+    test "paginates forward and backward on an expression and a column" do
+      expr = dynamic([p], fragment("? * 2", p.amount))
+
+      query =
+        from(
+          p in Payment,
+          order_by: [desc: fragment("? * 2", p.amount), asc: p.id],
+          select: %{id: p.id, doubled_amount: fragment("? * 2", p.amount)}
+        )
+
+      opts = [cursor_fields: [{{:doubled_amount, expr}, :desc}, id: :asc], limit: 1]
+
+      expected_ids = query |> Repo.all() |> to_ids()
+
+      assert paginate_as_list(query, opts) == expected_ids
+      assert paginate_before_as_list(query, opts) == init([nil | expected_ids])
+    end
+
+    test "uses the expression name as cursor key", %{
+      payments: {_p1, _p2, _p3, _p4, _p5, _p6, _p7, _p8, _p9, _p10, _p11, _p12}
+    } do
+      query =
+        from(
+          p in Payment,
+          order_by: [asc: fragment("? * 2", p.amount), asc: p.id],
+          select: %{id: p.id, doubled_amount: fragment("? * 2", p.amount)}
+        )
+
+      [first, second | _] = Repo.all(query)
+
+      page =
+        Repo.paginate(query,
+          cursor_fields: [
+            {:doubled_amount, dynamic([p], fragment("? * 2", p.amount))},
+            :id
+          ],
+          after: encode_cursor(%{doubled_amount: first.doubled_amount, id: first.id}),
+          limit: 1
+        )
+
+      assert to_ids(page.entries) == [second.id]
+
+      assert page.metadata.after ==
+               encode_cursor(%{doubled_amount: second.doubled_amount, id: second.id})
+    end
+  end
+
   @available_sorting_order [
     :asc,
     :asc_nulls_last,

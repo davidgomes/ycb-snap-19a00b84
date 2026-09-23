@@ -1,6 +1,8 @@
 defmodule Paginator.ConfigTest do
   use ExUnit.Case, async: true
 
+  require Ecto.Query
+
   alias Paginator.{Config, Cursor}
 
   describe "Config.new/2" do
@@ -163,6 +165,24 @@ defmodule Paginator.ConfigTest do
               {:person, :last_name} => "Test"
             })
         )
+
+      Config.validate!(config)
+    end
+
+    test "ok when after cursor matches cursor_fields with expressions" do
+      expr = Ecto.Query.dynamic([p], fragment("? * 2", p.amount))
+
+      config =
+        Config.new(
+          cursor_fields: [{{:doubled_amount, expr}, :desc}, {:rank, expr}, :id],
+          after: Cursor.encode(%{doubled_amount: 10, rank: 1, id: 1})
+        )
+
+      assert config.cursor_fields == [
+               {{:doubled_amount, expr}, :desc},
+               {{:rank, expr}, :asc},
+               {:id, :asc}
+             ]
 
       Config.validate!(config)
     end

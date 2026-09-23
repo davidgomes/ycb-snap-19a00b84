@@ -166,6 +166,28 @@ defmodule Paginator do
         limit: 50
       )
 
+  ## Example with sorting on expressions
+
+  Expressions (e.g. fragments) can be used as cursor fields by pairing a name
+  with an `Ecto.Query.dynamic/2` expression. The name is used as the key in the
+  cursor and to look up the cursor value on the returned records, so the
+  expression must also be selected under that name.
+
+      query =
+        from(
+          p in Post,
+          select: %{id: p.id, title: p.title, title_length: fragment("length(?)", p.title)},
+          order_by: [desc: fragment("length(?)", p.title), asc: p.id]
+        )
+
+      Repo.paginate(query,
+        cursor_fields: [
+          {{:title_length, dynamic([p], fragment("length(?)", p.title))}, :desc},
+          id: :asc
+        ],
+        limit: 50
+      )
+
   """
   @callback paginate(queryable :: Ecto.Query.t(), opts :: Keyword.t(), repo_opts :: Keyword.t()) ::
               Paginator.Page.t()
@@ -309,6 +331,9 @@ defmodule Paginator do
        }) do
     cursor_fields
     |> Enum.map(fn
+      {{cursor_field, %Ecto.Query.DynamicExpr{}}, _order} ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
       {cursor_field, _order} ->
         {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
 
