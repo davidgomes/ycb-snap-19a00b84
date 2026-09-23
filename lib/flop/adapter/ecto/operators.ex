@@ -5,6 +5,21 @@ defmodule Flop.Adapter.Ecto.Operators do
 
   alias Flop.Adapter.Ecto.Dialect
 
+  defmacro build_dynamic(fragment, :dynamic, combinator) do
+    fragment =
+      Macro.prewalk(fragment, fn
+        {:field, _, [{:r, _, _}, {:^, _, [_]}]} ->
+          quote do: ^var!(field_dynamic)
+
+        node ->
+          node
+      end)
+
+    quote do
+      build_dynamic(unquote(fragment), false, unquote(combinator))
+    end
+  end
+
   defmacro build_dynamic(fragment, binding?, _combinator = nil) do
     binding_arg = binding_arg(binding?)
 
