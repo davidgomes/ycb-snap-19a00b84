@@ -109,6 +109,34 @@ defmodule BroadwayDashboardTest do
       Process.exit(registry, :normal)
     end
 
+    test "shows the pipeline after auto discover when registered using via" do
+      {:ok, registry} = Registry.start_link(keys: :unique, name: MyRegistry)
+      name = via_tuple(:broadway_page)
+
+      {:ok, _broadway} =
+        Broadway.start_link(UsesRegistry,
+          name: name,
+          context: %{test_pid: self()},
+          producer: [
+            module: {Broadway.DummyProducer, []},
+            rate_limiting: [allowed_messages: 1, interval: 5000]
+          ],
+          processors: [default: []],
+          batchers: [default: []]
+        )
+
+      nav_name = inspect(name) |> URI.encode_www_form()
+
+      {:ok, live, _} = live(build_conn(), "/dashboard/broadway_auto_discovery?nav=#{nav_name}")
+
+      rendered = render(live)
+      assert rendered =~ "Updates automatically"
+      assert rendered =~ "Throughput"
+      assert rendered =~ "All time"
+
+      Process.exit(registry, :normal)
+    end
+
     defp via_tuple(name), do: {:via, Registry, {MyRegistry, name}}
   end
 
