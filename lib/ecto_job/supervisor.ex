@@ -48,25 +48,34 @@ defmodule EctoJob.Supervisor do
     notifier_name = String.to_atom("#{schema}.Notifier")
     producer_name = String.to_atom("#{schema}.Producer")
 
-    children = [
-      worker(Postgrex.Notifications, [repo.config() ++ [name: notifier_name]]),
-      worker(Producer, [
+    children =
+      notifier_children(repo.__adapter__(), repo, notifier_name) ++
         [
-          name: producer_name,
-          repo: repo,
-          schema: schema,
-          notifier: notifier_name,
-          poll_interval: poll_interval,
-          reservation_timeout: reservation_timeout,
-          execution_timeout: execution_timeout,
-          notifications_listen_timeout: notifications_listen_timeout
+          worker(Producer, [
+            [
+              name: producer_name,
+              repo: repo,
+              schema: schema,
+              notifier: notifier_name,
+              poll_interval: poll_interval,
+              reservation_timeout: reservation_timeout,
+              execution_timeout: execution_timeout,
+              notifications_listen_timeout: notifications_listen_timeout
+            ]
+          ]),
+          supervisor(WorkerSupervisor, [
+            [config: config, subscribe_to: [{producer_name, max_demand: max_demand}]]
+          ])
         ]
-      ]),
-      supervisor(WorkerSupervisor, [
-        [config: config, subscribe_to: [{producer_name, max_demand: max_demand}]]
-      ])
-    ]
 
     Supervisor.start_link(children, strategy: :rest_for_one, name: supervisor_name)
   end
+
+  # Only Postgres supports LISTEN/NOTIFY; other adapters rely on polling.
+  @spec notifier_children(module, module, atom) :: [Supervisor.Spec.spec()]
+  defp notifier_children(Ecto.Adapters.Postgres, repo, notifier_name) do
+    [worker(Postgrex.Notifications, [repo.config() ++ [name: notifier_name]])]
+  end
+
+  defp notifier_children(_adapter, _repo, _notifier_name), do: []
 end
