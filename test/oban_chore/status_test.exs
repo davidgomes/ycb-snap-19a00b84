@@ -2,6 +2,8 @@ defmodule ObanChore.StatusTest do
   use ExUnit.Case, async: false
 
   setup do
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(ObanChore.TestRepo)
+
     # Ensure PubSub is configured for the test
     Application.put_env(:oban_chore, :pubsub_server, ObanChore.TestPubSub)
 
