@@ -423,7 +423,6 @@ defmodule Flop.SchemaTest do
             sortable: [],
             custom_fields: [
               inserted_at: [
-                field_dynamic: {__MODULE__, :some_function, []},
                 ecto_type: :utc_datetime
               ]
             ]
@@ -436,6 +435,31 @@ defmodule Flop.SchemaTest do
              "custom field without filter function marked as filterable"
 
     assert error.message =~ ":inserted_at"
+  end
+
+  test "allows a filterable custom field with only field_dynamic" do
+    defmodule Rosemary do
+      @derive {
+        Flop.Schema,
+        filterable: [:inserted_at],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [
+            field_dynamic: {__MODULE__, :field_dynamic, []},
+            ecto_type: :utc_datetime
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    assert %Flop.FieldInfo{
+             extra: %{
+               type: :custom,
+               filter: nil,
+               field_dynamic: {Rosemary, :field_dynamic, []}
+             }
+           } = Schema.field_info(struct(Rosemary), :inserted_at)
   end
 
   test "allows a custom field with only the callback it needs" do

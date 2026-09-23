@@ -197,6 +197,73 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       assert Enum.map(result, & &1.age) == [20, 30]
     end
 
+    test "filters by a custom field with field_dynamic" do
+      insert_custom_field_pets([30, 10, 40, 20])
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{
+            filters: [%Filter{field: :age_score, op: :==, value: 20}]
+          },
+          for: CustomFieldPet
+        )
+
+      assert Enum.map(result, & &1.age) == [10]
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{
+            filters: [%Filter{field: :age_score, op: :>=, value: 60}]
+          },
+          for: CustomFieldPet
+        )
+
+      assert Enum.map(result, & &1.age) == [30, 40]
+    end
+
+    test "filters by a custom field on a named binding" do
+      older = insert(:owner, age: 60)
+      younger = insert(:owner, age: 20)
+
+      Repo.insert!(%CustomFieldPet{age: 1, owner_id: older.id})
+      Repo.insert!(%CustomFieldPet{age: 2, owner_id: younger.id})
+
+      query =
+        CustomFieldPet
+        |> join(:inner, [pet], owner in assoc(pet, :owner), as: :owner)
+
+      result =
+        Flop.all(
+          query,
+          %Flop{
+            filters: [%Filter{field: :owner_age_score, op: :>, value: 40}]
+          },
+          for: CustomFieldPet
+        )
+
+      assert Enum.map(result, & &1.age) == [1]
+    end
+
+    test "merges runtime options when filtering with field_dynamic" do
+      insert_custom_field_pets([10])
+
+      result =
+        Flop.all(
+          CustomFieldPet,
+          %Flop{
+            filters: [%Filter{field: :age_score, op: :==, value: -10}]
+          },
+          for: CustomFieldPet,
+          extra_opts: [factor: -1, test_pid: self()]
+        )
+
+      assert Enum.map(result, & &1.age) == [10]
+      assert_receive {:age_score_dynamic_opts, opts}
+      assert opts[:factor] == 2
+    end
+
     test "raises when ordering by a custom field without field_dynamic" do
       assert_raise ArgumentError,
                    ~r/ordering by a custom field requires a field_dynamic/,

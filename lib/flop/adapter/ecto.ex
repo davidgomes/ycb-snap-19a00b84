@@ -268,13 +268,31 @@ defmodule Flop.Adapter.Ecto do
 
         apply(mod, fun, [query, filter, opts])
 
+      %FieldInfo{
+        extra: %{
+          type: :custom,
+          field_dynamic: {mod, fun, field_dynamic_opts}
+        }
+      } = field_info ->
+        opts =
+          opts
+          |> Keyword.get(:extra_opts, [])
+          |> Keyword.merge(field_dynamic_opts)
+
+        expr = apply(mod, fun, [opts])
+
+        Query.where(
+          query,
+          ^build_expr_op(field_info, filter, dialect(opts), expr)
+        )
+
       # only reachable with an unvalidated Flop struct
       %FieldInfo{extra: %{type: :custom}} ->
         raise ArgumentError, """
-        filtering by a custom field requires a filter function
+        filtering by a custom field requires a filter or field_dynamic function
 
-        No filter function is configured for #{inspect(field)}, so it cannot be
-        used as a filter field.
+        Neither a filter function nor a field_dynamic function is configured
+        for #{inspect(field)}, so it cannot be used as a filter field.
 
         Use Flop.validate/2 to turn this exception into a validation error.
         """
@@ -833,8 +851,31 @@ defmodule Flop.Adapter.Ecto do
     match_contains(dynamic([{^binding, r}], json_contains()), op)
   end
 
+  defp build_expr_op(
+         %FieldInfo{ecto_type: ecto_type, extra: %{type: :custom}},
+         %Filter{op: op, value: value},
+         %Dialect{arrays?: false},
+         expr
+       )
+       when op in [:contains, :not_contains] do
+    ecto_type = Flop.Misc.expand_type(ecto_type)
+    match_contains(dynamic([r], json_contains(:dynamic)), op)
+  end
+
   # operators whose SQL does not depend on the adapter
   for op <- @operators, op not in [:empty, :not_empty | @ilike_operators] do
+    {expr_fragment, expr_prelude, expr_combinator} = op_config(op, :dynamic)
+
+    defp build_expr_op(
+           %FieldInfo{extra: %{type: :custom}},
+           %Filter{op: unquote(op), value: value},
+           _dialect,
+           expr
+         ) do
+      unquote(expr_prelude)
+      build_dynamic(unquote(expr_fragment), false, unquote(expr_combinator))
+    end
+
     {fragment, prelude, combinator} = op_config(op)
 
     defp build_op(
@@ -860,6 +901,19 @@ defmodule Flop.Adapter.Ecto do
 
   # operators whose SQL depends on whether the Ecto adapter supports ilike
   for op <- @ilike_operators, ilike? <- [true, false] do
+    {expr_fragment, expr_prelude, expr_combinator} =
+      op_config(op, ilike?, :dynamic)
+
+    defp build_expr_op(
+           %FieldInfo{extra: %{type: :custom}},
+           %Filter{op: unquote(op), value: value},
+           %Dialect{ilike?: unquote(ilike?)},
+           expr
+         ) do
+      unquote(expr_prelude)
+      build_dynamic(unquote(expr_fragment), false, unquote(expr_combinator))
+    end
+
     {fragment, prelude, combinator} = op_config(op, ilike?)
 
     defp build_op(
@@ -881,6 +935,33 @@ defmodule Flop.Adapter.Ecto do
       unquote(prelude)
       build_dynamic(unquote(fragment), true, unquote(combinator))
     end
+  end
+
+  defp build_expr_op(
+         %FieldInfo{ecto_type: ecto_type, extra: %{type: :custom}},
+         %Filter{op: op, value: value},
+         dialect,
+         expr
+       )
+       when op in [:empty, :not_empty] do
+    ecto_type = Flop.Misc.expand_type(ecto_type)
+
+    condition =
+      case {array_or_map(ecto_type), dialect} do
+        {:array, %Dialect{arrays?: false}} ->
+          dynamic([r], empty(:json_array, :dynamic))
+
+        {:array, _} ->
+          dynamic([r], empty(:array, :dynamic))
+
+        {:map, _} ->
+          dynamic([r], empty(:map, :dynamic))
+
+        {:other, _} ->
+          dynamic([r], empty(:other, :dynamic))
+      end
+
+    match_empty(condition, op, value)
   end
 
   defp match_contains(condition, :contains), do: condition
@@ -1067,11 +1148,9 @@ defmodule Flop.Adapter.Ecto do
          %{custom_fields: custom_fields} = adapter_opts,
          opts
        ) do
-    validate_custom_field_callback!(
+    validate_filterable_custom_fields!(
       custom_fields,
-      Keyword.fetch!(opts, :filterable),
-      :filter,
-      "filterable"
+      Keyword.fetch!(opts, :filterable)
     )
 
     validate_custom_field_callback!(
@@ -1082,6 +1161,42 @@ defmodule Flop.Adapter.Ecto do
     )
 
     adapter_opts
+  end
+
+  defp validate_filterable_custom_fields!(custom_fields, fields) do
+    missing =
+      for {name, opts} <- custom_fields,
+          name in fields,
+          is_nil(opts[:filter]) and is_nil(opts[:field_dynamic]),
+          do: name
+
+    if missing != [] do
+      raise ArgumentError, """
+      custom field without filter function marked as filterable
+
+      A custom field needs a filter function or a field_dynamic function to be
+      filterable. These fields have neither:
+
+          #{inspect(missing)}
+
+      Configure a filter function like this:
+
+          custom_fields: [
+            #{hd(missing)}: [
+              filter: {MyApp.CustomFields, :filter, []}
+            ]
+          ]
+
+      Or configure field_dynamic so the filter operators are applied to the
+      returned expression:
+
+          custom_fields: [
+            #{hd(missing)}: [
+              field_dynamic: {MyApp.CustomFields, :field_dynamic, []}
+            ]
+          ]
+      """
+    end
   end
 
   defp duplicates(fields) do
