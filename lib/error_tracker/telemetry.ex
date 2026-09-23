@@ -24,19 +24,20 @@ defmodule ErrorTracker.Telemetry do
   There is only one event emitted for occurrences:
 
   * `[:error_tracker, :occurrence, :new]`: is emitted when a new occurrence is
-  stored.
+  stored. Its `:muted` metadata is `true` when the error has been muted, which
+  allows handlers to skip notifications for muted errors.
 
   ### Measures and metadata
 
   Each event is emitted with some measures and metadata, which can be used to
   receive information without having to query the database again:
 
-  | event                                   | measures       | metadata      |
-  | --------------------------------------- | -------------- | ------------- |
-  | `[:error_tracker, :error, :new]`        | `:system_time` | `:error`      |
-  | `[:error_tracker, :error, :unresolved]` | `:system_time` | `:error`      |
-  | `[:error_tracker, :error, :resolved]`   | `:system_time` | `:error`      |
-  | `[:error_tracker, :occurrence, :new]`   | `:system_time` | `:occurrence` |
+  | event                                   | measures       | metadata                |
+  | --------------------------------------- | -------------- | ----------------------- |
+  | `[:error_tracker, :error, :new]`        | `:system_time` | `:error`                |
+  | `[:error_tracker, :error, :unresolved]` | `:system_time` | `:error`                |
+  | `[:error_tracker, :error, :resolved]`   | `:system_time` | `:error`                |
+  | `[:error_tracker, :occurrence, :new]`   | `:system_time` | `:occurrence`, `:muted` |
   """
 
   @doc false
@@ -61,9 +62,9 @@ defmodule ErrorTracker.Telemetry do
   end
 
   @doc false
-  def new_occurrence(occurrence) do
+  def new_occurrence(occurrence, muted) do
     measurements = %{system_time: System.system_time()}
-    metadata = %{occurrence: occurrence}
+    metadata = %{occurrence: occurrence, muted: muted}
     :telemetry.execute([:error_tracker, :occurrence, :new], measurements, metadata)
   end
 end
