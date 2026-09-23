@@ -9,4 +9,9 @@ defmodule Oban.Console.Repo do
 
   def pause_queue(name), do: Oban.pause_queue(queue: name)
   def resume_queue(name), do: Oban.resume_queue(queue: name)
+
+  def jobs(query), do: Oban |> Oban.config() |> Oban.Repo.all(query)
+  def get_job(id), do: Oban |> Oban.config() |> Oban.Repo.get(Oban.Job, id)
+  def retry_job(id), do: Oban.retry_job(id)
+  def cancel_job(id), do: Oban.cancel_job(id)
 end
