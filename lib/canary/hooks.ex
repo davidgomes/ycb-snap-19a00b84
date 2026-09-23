@@ -228,6 +228,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     * `:current_user` - Specifies the key in the socket assigns to get the current user
     * `:required` - Specifies if the resource is required, when it's not assigned in socket it will halt the socket
     * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
+    * `:error_handler` - Specify a module implementing `Canary.ErrorHandler` to handle errors
 
     Example:
 
@@ -280,6 +281,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
     * `:required` - Specifies if the resource is required, when it's not found it will halt the socket
     * `:not_found_handler` - Specify a handler function to be called if the resource is not found
+    * `:error_handler` - Specify a module implementing `Canary.ErrorHandler` to handle errors
 
     Example:
 
@@ -336,6 +338,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     * `:required` - Specifies if the resource is required, when it's not found it will halt the socket
     * `:not_found_handler` - Specify a handler function to be called if the resource is not found
     * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
+    * `:error_handler` - Specify a module implementing `Canary.ErrorHandler` to handle errors
 
     Example:
 
@@ -402,76 +405,31 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       end
     end
 
-    # Check if the resource is already loaded in the socket assigns
-    # If not we need to load and assign it
     defp load_resource(%Socket{} = socket, params, opts) do
-      resource =
-        case fetch_resource(socket, opts) do
-          {:ok, resource} ->
-            resource
-
-          _ ->
-            repo_get_resource(params, opts)
-        end
-
-      assign(socket, get_resource_name(opts), resource)
+      assign(socket, get_resource_name(opts), get_resource(socket, params, opts))
     end
 
-    # Fetch the resource from the socket assigns or nil
-    defp fetch_resource(%Socket{} = socket, opts) do
-      case Map.get(socket.assigns, get_resource_name(opts), nil) do
-        resource when is_struct(resource) ->
-          if resource.__struct__ == opts[:model] do
-            {:ok, resource}
-          else
-            nil
-          end
-
-        _ ->
-          nil
-      end
-    end
-
-    # Load the resource from the repo
-    defp repo_get_resource(params, opts) do
-      repo = Application.get_env(:canary, :repo)
-      field_name = Keyword.get(opts, :id_field, "id")
-      get_map_args = %{String.to_atom(field_name) => get_resource_id(params, opts)}
-
-      repo.get_by(opts[:model], get_map_args)
-      |> preload_if_needed(repo, opts)
-    end
-
-    # Perform the authorization check
     defp check_authorization(%Socket{} = socket, action, opts) do
-      current_user_name =
-        opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
+      current_user = get_current_user(socket, opts)
 
-      current_user = Map.fetch(socket.assigns, current_user_name)
-      resource = fetch_resoruce_or_model(socket, opts)
-
-      case {current_user, resource} do
-        {{:ok, _current_user}, nil} ->
-          assign(socket, :authorized, false)
-        {{:ok, current_user}, _} ->
-          assign(socket, :authorized, can?(current_user, action, resource))
-        _ ->
-          assign(socket, :authorized, false)
+      case fetch_resoruce_or_model(socket, opts) do
+        nil -> assign(socket, :authorized, false)
+        resource -> assign(socket, :authorized, can?(current_user, action, resource))
       end
     end
 
     # Fetch resource form assigns or model name if empty and not required
     defp fetch_resoruce_or_model(%Socket{} = socket, opts) do
-      case fetch_resource(socket, opts) do
-        {:ok, resource} ->
-          resource
-
-        _ ->
+      case get_assigned_resource(socket, opts) do
+        nil ->
           if required?(opts) do
             nil
           else
             opts[:model]
           end
+
+        resource ->
+          resource
       end
     end
 
@@ -489,26 +447,12 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     # Verify if the resource is loaded and if it is required
     defp verify_resource(%Socket{} = socket, opts) do
       is_required = required?(opts)
-      resource = fetch_resource(socket, opts)
+      resource = get_assigned_resource(socket, opts)
 
       if is_nil(resource) && is_required do
         apply_error_handler(socket, :not_found_handler, opts)
       else
         {:cont, socket}
-      end
-    end
-
-    defp get_resource_name(opts) do
-      case opts[:as] do
-        nil ->
-          opts[:model]
-          |> Module.split()
-          |> List.last()
-          |> Macro.underscore()
-          |> String.to_atom()
-
-        as ->
-          as
       end
     end
 

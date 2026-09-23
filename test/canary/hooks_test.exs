@@ -309,12 +309,63 @@ defmodule Canary.HooksTest do
 
       socket =
         build_socket()
-        |> put_assigns(%{post: %Post{id: 1}, current_user: %User{id: 1}})
+        |> put_assigns(%{post: %Post{id: 1}, my_user: %User{id: 1}})
 
-      assert {:halt, socket} =
+      assert {:cont, socket} =
                Canary.Hooks.handle_hook(metadata, [params, uri, socket])
 
-      assert socket.assigns.authorized == false
+      assert socket.assigns.authorized == true
+
+      socket =
+        build_socket()
+        |> put_assigns(%{post: %Post{id: 1}, current_user: %User{id: 1}})
+
+      assert_raise KeyError, ~r/^key :my_user not found in: %{/, fn ->
+        Canary.Hooks.handle_hook(metadata, [params, uri, socket])
+      end
+    end
+
+    test "accepts atoms for :id_name and :id_field" do
+      uri = "http://localhost/post"
+
+      metadata = %{
+        hook: :load_resource,
+        stage: :handle_params,
+        opts: [model: Post, id_name: :post_slug, id_field: :slug]
+      }
+
+      params = %{"post_slug" => "slug2"}
+
+      assert {:cont, socket} =
+               Canary.Hooks.handle_hook(metadata, [params, uri, build_socket()])
+
+      assert socket.assigns.post == %Post{id: 2, slug: "slug2", user_id: 2}
+    end
+
+    test "accepts :error_handler to override the configured error handler" do
+      defmodule HaltErrorHandler do
+        @behaviour Canary.ErrorHandler
+
+        def not_found_handler(socket), do: {:halt, Phoenix.Component.assign(socket, :not_found, true)}
+        def unauthorized_handler(socket), do: {:halt, Phoenix.Component.assign(socket, :unauthorized, true)}
+      end
+
+      uri = "http://localhost/post"
+
+      metadata = %{
+        hook: :load_and_authorize_resource,
+        stage: :handle_params,
+        opts: [model: Post, error_handler: HaltErrorHandler]
+      }
+
+      socket =
+        build_socket(:delete)
+        |> put_assigns(%{current_user: %User{id: 1}})
+
+      assert {:halt, socket} =
+               Canary.Hooks.handle_hook(metadata, [%{"id" => "1"}, uri, socket])
+
+      assert socket.assigns.unauthorized == true
     end
 
     test "emits a warning when the hook is not defined" do

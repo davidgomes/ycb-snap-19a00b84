@@ -17,6 +17,10 @@ defmodule UtilsTest do
       assert get_resource_id(conn, id_name: "custom_id") == "1"
     end
 
+    test "accepts atom :id_name" do
+      assert get_resource_id(%{"user_id" => "7"}, id_name: :user_id) == "7"
+    end
+
     test "returns nil if the id is not found" do
       assert get_resource_id(%{"other_id" => "9"}, id_name: "id") == nil
 
@@ -40,6 +44,57 @@ defmodule UtilsTest do
       assert_raise ArgumentError, fn ->
         action_valid?(:index, only: [:index], except: :index)
       end
+    end
+  end
+
+  describe "get_resource_name/1" do
+    test "infers the name from the model" do
+      assert get_resource_name(model: Post) == :post
+      assert get_resource_name(model: Some.Project.BlogPost) == :blog_post
+    end
+
+    test "uses :as when provided" do
+      assert get_resource_name(model: Post, as: :my_post) == :my_post
+    end
+  end
+
+  describe "get_current_user/2" do
+    test "fetches the subject from conn or socket assigns" do
+      assert get_current_user(%Plug.Conn{assigns: %{current_user: %User{id: 1}}}, []) ==
+               %User{id: 1}
+
+      assert get_current_user(%Phoenix.LiveView.Socket{assigns: %{member: nil}}, current_user: :member) ==
+               nil
+    end
+
+    test "raises when the subject key is not assigned" do
+      assert_raise KeyError, ~r/^key :current_user not found/, fn ->
+        get_current_user(%Phoenix.LiveView.Socket{assigns: %{}}, [])
+      end
+    end
+  end
+
+  describe "get_resource/3" do
+    setup do
+      Application.put_env(:canary, :repo, Repo)
+    end
+
+    test "returns the assigned resource of the model type" do
+      conn = %Plug.Conn{assigns: %{post: %Post{id: 5}}}
+      assert get_assigned_resource(conn, model: Post) == %Post{id: 5}
+      assert get_resource(conn, %{"id" => "1"}, model: Post) == %Post{id: 5}
+    end
+
+    test "loads the resource when it's not assigned or of other type" do
+      socket = %Phoenix.LiveView.Socket{assigns: %{post: %User{id: 1}}}
+      assert get_assigned_resource(socket, model: Post) == nil
+      assert get_resource(socket, %{"id" => "1"}, model: Post) == %Post{id: 1}
+    end
+
+    test "accepts atom and string :id_field" do
+      params = %{"id" => "slug1"}
+      assert repo_get_resource(params, model: Post, id_field: :slug) == %Post{id: 1, slug: "slug1"}
+      assert repo_get_resource(params, model: Post, id_field: "slug") == %Post{id: 1, slug: "slug1"}
     end
   end
 
@@ -103,6 +158,21 @@ defmodule UtilsTest do
       conn = apply_error_handler(%Plug.Conn{}, :not_found_handler, [
         not_found_handler: {CustomErrorHandler, :custom_handler}
         ])
+      assert conn.assigns[:ok_custom_handler] == true
+    end
+
+    test "accepts :error_handler in opts" do
+      Application.put_env(:canary, :error_handler, Canary.DefaultHandler)
+
+      conn = apply_error_handler(%Plug.Conn{}, :not_found_handler, error_handler: CustomErrorHandler)
+      assert conn.assigns[:ok_custom_not_found_handler] == true
+
+      conn =
+        apply_error_handler(%Plug.Conn{}, :not_found_handler,
+          error_handler: Canary.DefaultHandler,
+          not_found_handler: {CustomErrorHandler, :custom_handler}
+        )
+
       assert conn.assigns[:ok_custom_handler] == true
     end
   end

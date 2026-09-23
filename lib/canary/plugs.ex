@@ -70,6 +70,7 @@ defmodule Canary.Plugs do
   * `:persisted` - Specifies the resource should always be loaded from the database, defaults to false
   * `:required` - Same as `:persisted` but with not found handler - even for :index, :new or :create action
   * `:not_found_handler` - Specify a handler function to be called if the resource is not found
+  * `:error_handler` - Specify a module implementing `Canary.ErrorHandler` to handle errors
 
 
   Examples:
@@ -148,7 +149,9 @@ defmodule Canary.Plugs do
 
   * `:only` - Specifies which actions to authorize
   * `:except` - Specifies which actions for which to skip authorization
+  * `:current_user` - Specifies the key in `conn.assigns` to get the current user
   * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
+  * `:error_handler` - Specify a module implementing `Canary.ErrorHandler` to handle errors
 
   Examples:
   ```
@@ -172,12 +175,7 @@ defmodule Canary.Plugs do
 
   defp do_authorize_controller(conn, opts) do
     controller = conn.assigns[:canary_controller] || conn.private[:phoenix_controller]
-
-    current_user_name =
-      opts[:current_user] ||
-        Application.get_env(:canary, :current_user, :current_user)
-
-    current_user = Map.fetch!(conn.assigns, current_user_name)
+    current_user = get_current_user(conn, opts)
     action = get_action(conn)
 
     Plug.Conn.assign(conn, :authorized, can?(current_user, action, controller))
@@ -241,7 +239,9 @@ defmodule Canary.Plugs do
   * `:id_name` - Specifies the name of the id in `conn.params`, defaults to "id"
   * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
   * `:persisted` - Specifies the resource should always be loaded from the database, defaults to false
+  * `:current_user` - Specifies the key in `conn.assigns` to get the current user
   * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
+  * `:error_handler` - Specify a module implementing `Canary.ErrorHandler` to handle errors
 
   Examples:
   ```
@@ -268,10 +268,7 @@ defmodule Canary.Plugs do
   end
 
   defp do_authorize_resource(conn, opts) do
-    current_user_name =
-      opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
-
-    current_user = Map.fetch!(conn.assigns, current_user_name)
+    current_user = get_current_user(conn, opts)
     action = get_action(conn)
     is_persisted = persisted?(opts)
 
@@ -322,8 +319,10 @@ defmodule Canary.Plugs do
   * `:preload` - Specifies association(s) to preload
   * `:id_name` - Specifies the name of the id in `conn.params`, defaults to "id"
   * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
+  * `:current_user` - Specifies the key in `conn.assigns` to get the current user
   * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
   * `:not_found_handler` - Specify a handler function to be called if the resource is not found
+  * `:error_handler` - Specify a module implementing `Canary.ErrorHandler` to handle errors
 
   Note: If both an `:unauthorized_handler` and a `:not_found_handler` are specified for `load_and_authorize_resource`,
   and the request meets the criteria for both, the `:unauthorized_handler` will be called first.
@@ -373,33 +372,7 @@ defmodule Canary.Plugs do
   defp purge_resource_if_unauthorized(%{assigns: %{authorized: false}} = conn, opts),
     do: Plug.Conn.assign(conn, get_resource_name(conn, opts), nil)
 
-  defp fetch_resource(conn, opts) do
-    repo = Application.get_env(:canary, :repo)
-
-    field_name = Keyword.get(opts, :id_field, "id")
-
-    get_map_args = %{String.to_atom(field_name) => get_resource_id(conn, opts)}
-
-    case Map.fetch(conn.assigns, get_resource_name(conn, opts)) do
-      :error ->
-        repo.get_by(opts[:model], get_map_args)
-        |> preload_if_needed(repo, opts)
-
-      {:ok, nil} ->
-        repo.get_by(opts[:model], get_map_args)
-        |> preload_if_needed(repo, opts)
-
-      {:ok, resource} ->
-        if resource.__struct__ == opts[:model] do
-          # A resource of the type passed as opts[:model] is already loaded; do not clobber it
-          resource
-        else
-          opts[:model]
-          |> repo.get_by(get_map_args)
-          |> preload_if_needed(repo, opts)
-        end
-    end
-  end
+  defp fetch_resource(conn, opts), do: get_resource(conn, conn.params, opts)
 
   defp fetch_all(conn, opts) do
     repo = Application.get_env(:canary, :repo)
@@ -432,25 +405,10 @@ defmodule Canary.Plugs do
   end
 
   defp get_resource_name(conn, opts) do
-    case opts[:as] do
-      nil ->
-        opts[:model]
-        |> Module.split()
-        |> List.last()
-        |> Macro.underscore()
-        |> pluralize_if_needed(conn, opts)
-        |> String.to_atom()
-
-      as ->
-        as
-    end
-  end
-
-  defp pluralize_if_needed(name, conn, opts) do
-    if get_action(conn) in [:index] and not persisted?(opts) do
-      name <> "s"
+    if is_nil(opts[:as]) and get_action(conn) == :index and not persisted?(opts) do
+      String.to_atom("#{get_resource_name(opts)}s")
     else
-      name
+      get_resource_name(opts)
     end
   end
 

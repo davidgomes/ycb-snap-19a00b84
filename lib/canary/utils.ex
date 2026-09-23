@@ -32,8 +32,99 @@ defmodule Canary.Utils do
         params["id"]
 
       id_name ->
-        params[id_name]
+        params[to_string(id_name)]
     end
+  end
+
+  @doc """
+  Get the key under which the resource is stored in assigns.
+
+  It's either the `:as` option or it's inferred from the model name - the most specific
+  (right most) name in the model's module name converted to underscore case.
+
+      iex> Canary.Utils.get_resource_name(model: Some.Project.BlogPost)
+      :blog_post
+
+      iex> Canary.Utils.get_resource_name(model: Post, as: :my_post)
+      :my_post
+  """
+  @doc since: "2.0.0"
+  @spec get_resource_name(Keyword.t()) :: atom
+  def get_resource_name(opts) do
+    case opts[:as] do
+      nil ->
+        opts[:model]
+        |> Module.split()
+        |> List.last()
+        |> Macro.underscore()
+        |> String.to_atom()
+
+      as ->
+        as
+    end
+  end
+
+  @doc """
+  Get the subject for the authorization from the conn or socket assigns.
+
+  The assigns key is taken from the `:current_user` option, then from
+  `config :canary, current_user: key`, and defaults to `:current_user`.
+
+  Raises `KeyError` when the key is not present in assigns.
+  """
+  @doc since: "2.0.0"
+  @spec get_current_user(Plug.Conn.t() | Phoenix.LiveView.Socket.t(), Keyword.t()) :: any
+  def get_current_user(%{assigns: assigns}, opts) do
+    current_user_name =
+      opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
+
+    Map.fetch!(assigns, current_user_name)
+  end
+
+  @doc """
+  Get the resource already present in the conn or socket assigns.
+
+  Returns `nil` unless the resource assigned under `get_resource_name/1` is a `opts[:model]` struct.
+  """
+  @doc since: "2.0.0"
+  @spec get_assigned_resource(Plug.Conn.t() | Phoenix.LiveView.Socket.t(), Keyword.t()) ::
+          Ecto.Schema.t() | nil
+  def get_assigned_resource(%{assigns: assigns}, opts) do
+    model = opts[:model]
+
+    case Map.get(assigns, get_resource_name(opts)) do
+      %{__struct__: ^model} = resource -> resource
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Get the resource from the conn or socket assigns, or load it from the repo when it's not assigned yet.
+
+  An already assigned resource of the `opts[:model]` type is never clobbered.
+  """
+  @doc since: "2.0.0"
+  @spec get_resource(Plug.Conn.t() | Phoenix.LiveView.Socket.t(), map(), Keyword.t()) ::
+          Ecto.Schema.t() | nil
+  def get_resource(conn_or_socket, params, opts) do
+    get_assigned_resource(conn_or_socket, opts) || repo_get_resource(params, opts)
+  end
+
+  @doc """
+  Load the resource from the configured repo.
+
+  The resource is looked up by the `:id_field` (defaults to `:id`) using the value
+  from `params` given by `get_resource_id/2`. Both `:id_name` and `:id_field` accept
+  an atom or a string.
+  """
+  @doc since: "2.0.0"
+  @spec repo_get_resource(map(), Keyword.t()) :: Ecto.Schema.t() | nil
+  def repo_get_resource(params, opts) do
+    repo = Application.get_env(:canary, :repo)
+    field_name = opts |> Keyword.get(:id_field, :id) |> to_string() |> String.to_atom()
+
+    repo.get_by(opts[:model], %{field_name => get_resource_id(params, opts)})
+    |> preload_if_needed(repo, opts)
   end
 
   @doc """
@@ -107,7 +198,14 @@ defmodule Canary.Utils do
   end
 
   @doc """
-  Apply the error handler to the connection or socket
+  Apply the error handler to the connection or socket.
+
+  The handler is resolved in the following order:
+
+  1. `opts[handler_key]` - a `{mod, fun}` tuple or a module implementing `Canary.ErrorHandler`
+  2. `opts[:error_handler]` - a module implementing `Canary.ErrorHandler`
+  3. `config :canary, error_handler: module`
+  4. `Canary.DefaultHandler`
   """
   @spec apply_error_handler(Plug.Conn.t() , atom, Keyword.t()) :: Plug.Conn.t()
   @spec apply_error_handler(Phoenix.LiveView.Socket.t() , atom, Keyword.t()) :: {:halt, Phoenix.LiveView.Socket.t()}
@@ -119,6 +217,7 @@ defmodule Canary.Utils do
   defp get_handler(handler_key, opts) do
     mod_or_mod_fun =
       Keyword.get(opts, handler_key) ||
+        Keyword.get(opts, :error_handler) ||
         Application.get_env(:canary, :error_handler, Canary.DefaultHandler)
 
     case mod_or_mod_fun do
