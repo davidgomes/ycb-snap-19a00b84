@@ -6,7 +6,19 @@ defmodule Sentry.ClientReport.Sender do
 
   use GenServer
 
-  alias Sentry.{Client, ClientReport, Config, Envelope, Transaction}
+  alias Sentry.{
+    Client,
+    ClientReport,
+    Config,
+    Envelope,
+    LogBatch,
+    LogEvent,
+    Metric,
+    MetricBatch,
+    Transaction
+  }
+
+  alias Sentry.Transport.RateLimiter
 
   @send_interval 30_000
 
@@ -39,6 +51,10 @@ defmodule Sentry.ClientReport.Sender do
                | Sentry.CheckIn.t()
                | ClientReport.t()
                | Sentry.Event.t()
+               | LogBatch.t()
+               | LogEvent.t()
+               | Metric.t()
+               | MetricBatch.t()
                | Sentry.Transaction.t()
   def record_discarded_events(reason, event_items, genserver)
       when is_list(event_items) do
@@ -65,8 +81,49 @@ defmodule Sentry.ClientReport.Sender do
     [{Envelope.get_data_category(transaction), 1}, {"span", span_count}]
   end
 
+  # Logs and metrics are reported both as a count of items and as the size in
+  # bytes of their serialized payload (the `log_byte`/`trace_metric_byte`
+  # categories), so that byte-based quotas can be accounted for.
+  defp data_categories(%LogBatch{log_events: log_events} = batch) do
+    sized_data_categories(Envelope.get_data_category(batch), log_events, &LogEvent.to_map/1)
+  end
+
+  defp data_categories(%MetricBatch{metrics: metrics} = batch) do
+    sized_data_categories(Envelope.get_data_category(batch), metrics, &Metric.to_map/1)
+  end
+
+  defp data_categories(%LogEvent{} = log_event) do
+    sized_data_categories("log_item", [log_event], &LogEvent.to_map/1)
+  end
+
+  defp data_categories(%Metric{} = metric) do
+    sized_data_categories("trace_metric", [metric], &Metric.to_map/1)
+  end
+
   defp data_categories(item) do
     [{Envelope.get_data_category(item), 1}]
+  end
+
+  defp sized_data_categories(_category, [], _to_map), do: []
+
+  defp sized_data_categories(category, items, to_map) do
+    json_library = Config.json_library()
+
+    byte_size =
+      Enum.reduce(items, 0, fn item, acc ->
+        case item |> to_map.() |> Sentry.JSON.encode(json_library) do
+          {:ok, encoded} -> acc + byte_size(encoded)
+          {:error, _reason} -> acc
+        end
+      end)
+
+    count_outcome = {category, length(items)}
+
+    if byte_size > 0 do
+      [count_outcome, {RateLimiter.byte_category(category), byte_size}]
+    else
+      [count_outcome]
+    end
   end
 
   ## Callbacks

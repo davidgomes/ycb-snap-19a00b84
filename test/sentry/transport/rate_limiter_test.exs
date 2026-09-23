@@ -134,5 +134,40 @@ defmodule Sentry.Transport.RateLimiterTest do
     end
   end
 
+  describe "rate_limited_for_category?/1" do
+    test "log_item is limited when log_byte is limited" do
+      RateLimiter.update_rate_limits("60:log_byte:organization")
+
+      assert RateLimiter.rate_limited?("log_item") == false
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == false
+    end
+
+    test "trace_metric is limited when trace_metric_byte is limited" do
+      RateLimiter.update_rate_limits("60:trace_metric_byte:organization")
+
+      assert RateLimiter.rate_limited?("trace_metric") == false
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == true
+      assert RateLimiter.rate_limited_for_category?("log_item") == false
+    end
+
+    test "honors the count category and global limits" do
+      RateLimiter.update_rate_limits("60:log_item")
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("error") == false
+
+      RateLimiter.update_global_rate_limit(60)
+      assert RateLimiter.rate_limited_for_category?("error") == true
+    end
+  end
+
+  describe "byte_category/1" do
+    test "maps count categories to their byte categories" do
+      assert RateLimiter.byte_category("log_item") == "log_byte"
+      assert RateLimiter.byte_category("trace_metric") == "trace_metric_byte"
+      assert RateLimiter.byte_category("error") == nil
+    end
+  end
+
   defp table_name, do: Process.get(:rate_limiter_table_name)
 end

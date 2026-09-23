@@ -87,7 +87,7 @@ defmodule Sentry.Transport do
     rate_limited? =
       Enum.any?(envelope_items, fn item ->
         category = Envelope.get_data_category(item)
-        RateLimiter.rate_limited?(category)
+        RateLimiter.rate_limited_for_category?(category)
       end)
 
     if rate_limited?, do: {:error, :rate_limited}, else: :ok

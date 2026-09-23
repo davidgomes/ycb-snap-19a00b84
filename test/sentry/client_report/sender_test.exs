@@ -4,7 +4,7 @@ defmodule Sentry.ClientReportTest do
   import Sentry.TestHelpers
 
   alias Sentry.ClientReport.Sender
-  alias Sentry.Event
+  alias Sentry.{Event, LogBatch, LogEvent, Metric, MetricBatch}
 
   setup do
     setup_bypass()
@@ -139,5 +139,70 @@ defmodule Sentry.ClientReportTest do
                {:before_send, "span"} => 1
              }
     end
+
+    test "records log_item and log_byte outcomes for discarded log events" do
+      start_supervised!({Sender, name: :test_log_report})
+
+      log_events = [make_log_event("first"), make_log_event("second")]
+      expected_bytes = Enum.sum(Enum.map(log_events, &encoded_size(LogEvent.to_map(&1))))
+
+      assert :ok = Sender.record_discarded_events(:cache_overflow, log_events, :test_log_report)
+
+      assert :sys.get_state(:test_log_report) == %{
+               {:cache_overflow, "log_item"} => 2,
+               {:cache_overflow, "log_byte"} => expected_bytes
+             }
+
+      batch = %LogBatch{log_events: log_events}
+      assert :ok = Sender.record_discarded_events(:ratelimit_backoff, [batch], :test_log_report)
+
+      assert %{
+               {:ratelimit_backoff, "log_item"} => 2,
+               {:ratelimit_backoff, "log_byte"} => ^expected_bytes
+             } = :sys.get_state(:test_log_report)
+    end
+
+    test "records trace_metric and trace_metric_byte outcomes for discarded metrics" do
+      start_supervised!({Sender, name: :test_metric_report})
+
+      metrics = [make_metric("first"), make_metric("second"), make_metric("third")]
+      expected_bytes = Enum.sum(Enum.map(metrics, &encoded_size(Metric.to_map(&1))))
+
+      batch = %MetricBatch{metrics: metrics}
+      assert :ok = Sender.record_discarded_events(:send_error, [batch], :test_metric_report)
+
+      assert :sys.get_state(:test_metric_report) == %{
+               {:send_error, "trace_metric"} => 3,
+               {:send_error, "trace_metric_byte"} => expected_bytes
+             }
+
+      assert :ok =
+               Sender.record_discarded_events(:send_error, [hd(metrics)], :test_metric_report)
+
+      assert %{{:send_error, "trace_metric"} => 4} = :sys.get_state(:test_metric_report)
+    end
+  end
+
+  defp make_log_event(body) do
+    %LogEvent{
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+      level: :info,
+      body: body
+    }
+  end
+
+  defp make_metric(name) do
+    %Metric{
+      type: :counter,
+      name: name,
+      value: 1,
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+      attributes: %{}
+    }
+  end
+
+  defp encoded_size(map) do
+    {:ok, encoded} = Sentry.JSON.encode(map, Sentry.Config.json_library())
+    byte_size(encoded)
   end
 end
