@@ -105,7 +105,9 @@ defmodule FreeObanUi.JobsTest do
   describe "retryable?/1 and cancellable?/1" do
     test "reflect which actions are allowed for each state" do
       retryable = for state <- Jobs.states(), Jobs.retryable?(%Oban.Job{state: state}), do: state
-      cancellable = for state <- Jobs.states(), Jobs.cancellable?(%Oban.Job{state: state}), do: state
+
+      cancellable =
+        for state <- Jobs.states(), Jobs.cancellable?(%Oban.Job{state: state}), do: state
 
       assert retryable == ~w(retryable completed discarded cancelled)
       assert cancellable == ~w(scheduled available executing retryable)
