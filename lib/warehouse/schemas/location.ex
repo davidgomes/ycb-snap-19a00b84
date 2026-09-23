@@ -12,6 +12,7 @@ defmodule Warehouse.Schemas.Location do
 
   schema "inventory_locations" do
     field :area, AreaEnum, default: :receiving
+    field :name, :string
     field :disabled, :boolean, default: false
     field :removed, :boolean, default: false
 

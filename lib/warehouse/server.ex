@@ -6,11 +6,12 @@ defmodule Warehouse.Server do
   import Ecto.Query
 
   alias Warehouse.{Repo, Components, Schemas}
-  alias Bottle.Inventory.V1.{Component, ComponentAvailabilityListRequest, ComponentAvailabilityListResponse}
+  alias Bottle.Inventory.V1.{Component, ListComponentAvailabilityRequest, ListComponentAvailabilityResponse, Location, Sku}
+  alias Bottle.Inventory.V1.ListComponentAvailabilityResponse.PickingOption
   alias GRPC.Server
 
-  @spec component_availability_list(ComponentAvailabilityListRequest.t(), GRPC.Server.Stream.t()) :: any()
-  def component_availability_list(%{components: components}, stream) do
+  @spec list_component_availability(ListComponentAvailabilityRequest.t(), GRPC.Server.Stream.t()) :: any()
+  def list_component_availability(%{components: components}, stream) do
     component_ids = Enum.map(components, & &1.id)
 
     query =
@@ -36,10 +37,42 @@ defmodule Warehouse.Server do
 
     Logger.info("Component #{component_id} has #{number_available} available")
 
-    ComponentAvailabilityListResponse.new(
-      available: number_available,
+    ListComponentAvailabilityResponse.new(
       component: Component.new(id: component_id),
+      total_available_quantity: number_available,
+      picking_options: picking_options(component),
       request_id: Bottle.RequestId.write(:rpc)
     )
+  end
+
+  defp picking_options(%Schemas.Component{id: component_id}) do
+    query =
+      from c in Schemas.Configuration,
+        join: s in assoc(c, :sku),
+        join: p in assoc(s, :parts),
+        join: l in assoc(p, :location),
+        where: c.component_id == ^component_id,
+        where: is_nil(p.assembly_build_id),
+        where: is_nil(p.rma_description),
+        where: l.area == :storage,
+        where: l.id not in ^Application.get_env(:warehouse, :exluded_picking_locations, []),
+        preload: [sku: {s, parts: {p, location: l}}]
+
+    query
+    |> Repo.all()
+    |> Enum.map(fn %{sku: sku, quantity: quantity} ->
+      # Recommend the location holding the most parts of this sku
+      {location, _parts} =
+        sku.parts
+        |> Enum.group_by(& &1.location)
+        |> Enum.max_by(fn {_location, parts} -> length(parts) end, fn -> {nil, []} end)
+
+      PickingOption.new(
+        sku: Sku.new(id: to_string(sku.id), name: sku.sku),
+        recommended_location: location && Location.new(id: to_string(location.id), name: location.name),
+        required_quantity_per_kit: quantity,
+        available_quantity: length(sku.parts)
+      )
+    end)
   end
 end
