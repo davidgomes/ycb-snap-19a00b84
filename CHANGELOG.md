@@ -14,6 +14,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Support MySQL.
 - Support ordering and filtering by custom fields via a new `field_dynamic`
   option. Cursor pagination is not supported yet.
+- Support cursor pagination on nullable columns. Rows with `NULL` in an order
+  field were skipped, because the cursor condition compared them with `>` or
+  `<`, and a `nil` cursor value dropped the condition on its field. Both are
+  now matched with `IS NULL` on the side of the cursor where the order direction
+  sorts them. For `:asc` and `:desc`, that side depends on the database.
 
 ### Fixed
 

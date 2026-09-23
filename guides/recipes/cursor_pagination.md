@@ -109,7 +109,10 @@ of replacing it. Replacing the order could drop the field that made it unique.
 
 ## Nullable fields
 
-Ordering by a nullable column loses the rows where it is `NULL`.
+No comparison with `NULL` is ever true, so a cursor condition of `age > 7` would
+never match Cy and Dee. Flop matches the rows where an order field is `NULL`
+with `IS NULL` instead, on the side of the cursor where the order direction
+sorts them.
 
 ```elixir
 %{first: 2, order_by: [:age, :id]}
@@ -119,20 +122,23 @@ Ordering by a nullable column loses the rows where it is `NULL`.
 |---|---|
 | 1 | Bo 1, Ada 3 |
 | 2 | Ada 5, Ada 7 |
-| 3 | — |
+| 3 | Cy, Dee |
 
-Cy and Dee never appear, and page 3 reports `has_next_page?: false`. PostgreSQL
-sorts them last, but the cursor comparison is `age > 7`, and no comparison with
-`NULL` is ever true. A second order field does not help, because the `NULL` is
-in the first one.
+PostgreSQL sorts the `NULL`s last, so page 3 asks for the rows after Ada 7 and
+the rows where `age` is `NULL`. Cy and Dee share the `NULL`, so `id` decides
+between them, as it does for any other tie.
 
-Until Flop builds null-aware predicates, order by a column that has no `NULL`,
-or sort on a computed field that substitutes a value, as in the [computed fields
-recipe](computed_and_embedded_fields.md):
+The `:asc_nulls_first`, `:asc_nulls_last`, `:desc_nulls_first` and
+`:desc_nulls_last` directions say where the `NULL`s go. `:asc` and `:desc`
+leave it to the database. PostgreSQL sorts `NULL` as larger than any value, so
+it puts them last ascending and first descending. MySQL and SQLite sort `NULL`
+as the smallest value and do the opposite, so there, the same request returns
+Cy and Dee on page 1.
 
-```sql
-SELECT coalesce(age, -1) AS age_sortable
-```
+When the `NULL`s sort after the cursor, the condition has an extra `IS NULL`
+branch, as in `age IS NULL OR age > 7`. Flop cannot tell from the schema whether
+a column is nullable, so it adds the branch for a column without `NULL` as
+well.
 
 ## Reading the cursor value
 
