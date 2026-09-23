@@ -280,7 +280,9 @@ defmodule ObanChoreWeb.DashboardLiveTest do
 
   describe "history" do
     test "lists previous runs of the selected chore" do
-      {:ok, completed} = Oban.insert(DashboardTestChore.new(%{username: "past_run", admin: false}))
+      {:ok, completed} =
+        Oban.insert(DashboardTestChore.new(%{username: "past_run", admin: false}))
+
       {:ok, discarded} = Oban.insert(DashboardTestChore.new(%{username: "failed_run"}))
       {:ok, active} = Oban.insert(DashboardTestChore.new(%{username: "active_run"}))
       {:ok, other} = Oban.insert(DashboardUniqueChore.new(%{username: "other_chore"}))
