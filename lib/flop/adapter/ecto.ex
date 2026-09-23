@@ -268,13 +268,35 @@ defmodule Flop.Adapter.Ecto do
 
         apply(mod, fun, [query, filter, opts])
 
+      %FieldInfo{
+        ecto_type: ecto_type,
+        extra: %{type: :custom, field_dynamic: {mod, fun, field_dynamic_opts}}
+      } ->
+        field_dynamic_opts =
+          opts
+          |> Keyword.get(:extra_opts, [])
+          |> Keyword.merge(field_dynamic_opts)
+
+        field_info = %FieldInfo{
+          ecto_type: Flop.Misc.expand_type(ecto_type),
+          extra: %{
+            type: :dynamic,
+            field_dynamic: apply(mod, fun, [field_dynamic_opts])
+          }
+        }
+
+        Query.where(
+          query,
+          ^build_op(schema_struct, field_info, filter, dialect(opts))
+        )
+
       # only reachable with an unvalidated Flop struct
       %FieldInfo{extra: %{type: :custom}} ->
         raise ArgumentError, """
-        filtering by a custom field requires a filter function
+        filtering by a custom field requires a filter or field_dynamic function
 
-        No filter function is configured for #{inspect(field)}, so it cannot be
-        used as a filter field.
+        Neither a filter function nor a field_dynamic function is configured
+        for #{inspect(field)}, so it cannot be used as a filter field.
 
         Use Flop.validate/2 to turn this exception into a validation error.
         """
@@ -745,10 +767,17 @@ defmodule Flop.Adapter.Ecto do
 
     condition =
       case {array_or_map(ecto_type), dialect} do
-        {:array, %Dialect{arrays?: false}} -> dynamic([r], empty(:json_array))
-        {:array, _} -> dynamic([r], empty(:array))
-        {:map, _} -> dynamic([r], empty(:map))
-        {:other, _} -> dynamic([r], empty(:other))
+        {:array, %Dialect{arrays?: false}} ->
+          dynamic([r], empty(:json_array, :field))
+
+        {:array, _} ->
+          dynamic([r], empty(:array, :field))
+
+        {:map, _} ->
+          dynamic([r], empty(:map, :field))
+
+        {:other, _} ->
+          dynamic([r], empty(:other, :field))
       end
 
     match_empty(condition, op, value)
@@ -763,7 +792,7 @@ defmodule Flop.Adapter.Ecto do
          _dialect
        )
        when op in [:empty, :not_empty] do
-    match_empty(dynamic([r], empty(:other)), op, value)
+    match_empty(dynamic([r], empty(:other, :field)), op, value)
   end
 
   defp build_op(
@@ -779,16 +808,44 @@ defmodule Flop.Adapter.Ecto do
     condition =
       case {array_or_map(ecto_type), dialect} do
         {:array, %Dialect{arrays?: false}} ->
-          dynamic([{^binding, r}], empty(:json_array))
+          dynamic([{^binding, r}], empty(:json_array, :field))
 
         {:array, _} ->
-          dynamic([{^binding, r}], empty(:array))
+          dynamic([{^binding, r}], empty(:array, :field))
 
         {:map, _} ->
-          dynamic([{^binding, r}], empty(:map))
+          dynamic([{^binding, r}], empty(:map, :field))
 
         {:other, _} ->
-          dynamic([{^binding, r}], empty(:other))
+          dynamic([{^binding, r}], empty(:other, :field))
+      end
+
+    match_empty(condition, op, value)
+  end
+
+  defp build_op(
+         _schema_struct,
+         %FieldInfo{
+           ecto_type: ecto_type,
+           extra: %{type: :dynamic, field_dynamic: field_dynamic}
+         },
+         %Filter{op: op, value: value},
+         dialect
+       )
+       when op in [:empty, :not_empty] do
+    condition =
+      case {array_or_map(ecto_type), dialect} do
+        {:array, %Dialect{arrays?: false}} ->
+          dynamic([r], empty(:json_array, :dynamic))
+
+        {:array, _} ->
+          dynamic([r], empty(:array, :dynamic))
+
+        {:map, _} ->
+          dynamic([r], empty(:map, :dynamic))
+
+        {:other, _} ->
+          dynamic([r], empty(:other, :dynamic))
       end
 
     match_empty(condition, op, value)
@@ -804,7 +861,7 @@ defmodule Flop.Adapter.Ecto do
        )
        when op in [:contains, :not_contains] do
     ecto_type = module.__schema__(:type, field)
-    match_contains(dynamic([r], json_contains()), op)
+    match_contains(dynamic([r], json_contains(:field)), op)
   end
 
   # without a schema there is no field type to dump the value with
@@ -816,7 +873,7 @@ defmodule Flop.Adapter.Ecto do
        )
        when op in [:contains, :not_contains] do
     ecto_type = nil
-    match_contains(dynamic([r], json_contains()), op)
+    match_contains(dynamic([r], json_contains(:field)), op)
   end
 
   defp build_op(
@@ -830,12 +887,26 @@ defmodule Flop.Adapter.Ecto do
        )
        when op in [:contains, :not_contains] do
     ecto_type = Flop.Misc.expand_type(ecto_type)
-    match_contains(dynamic([{^binding, r}], json_contains()), op)
+    match_contains(dynamic([{^binding, r}], json_contains(:field)), op)
+  end
+
+  defp build_op(
+         _schema_struct,
+         %FieldInfo{
+           ecto_type: ecto_type,
+           extra: %{type: :dynamic, field_dynamic: field_dynamic}
+         },
+         %Filter{op: op, value: value},
+         %Dialect{arrays?: false}
+       )
+       when op in [:contains, :not_contains] do
+    match_contains(dynamic([r], json_contains(:dynamic)), op)
   end
 
   # operators whose SQL does not depend on the adapter
   for op <- @operators, op not in [:empty, :not_empty | @ilike_operators] do
-    {fragment, prelude, combinator} = op_config(op)
+    {fragment, prelude, combinator} = op_config(op, :field)
+    {dynamic_fragment, _, _} = op_config(op, :dynamic)
 
     defp build_op(
            _schema_struct,
@@ -855,12 +926,23 @@ defmodule Flop.Adapter.Ecto do
          ) do
       unquote(prelude)
       build_dynamic(unquote(fragment), true, unquote(combinator))
+    end
+
+    defp build_op(
+           _schema_struct,
+           %FieldInfo{extra: %{type: :dynamic, field_dynamic: field_dynamic}},
+           %Filter{op: unquote(op), value: value},
+           _dialect
+         ) do
+      unquote(prelude)
+      build_dynamic(unquote(dynamic_fragment), false, unquote(combinator))
     end
   end
 
   # operators whose SQL depends on whether the Ecto adapter supports ilike
   for op <- @ilike_operators, ilike? <- [true, false] do
-    {fragment, prelude, combinator} = op_config(op, ilike?)
+    {fragment, prelude, combinator} = op_config(op, :field, ilike?)
+    {dynamic_fragment, _, _} = op_config(op, :dynamic, ilike?)
 
     defp build_op(
            _schema_struct,
@@ -880,6 +962,16 @@ defmodule Flop.Adapter.Ecto do
          ) do
       unquote(prelude)
       build_dynamic(unquote(fragment), true, unquote(combinator))
+    end
+
+    defp build_op(
+           _schema_struct,
+           %FieldInfo{extra: %{type: :dynamic, field_dynamic: field_dynamic}},
+           %Filter{op: unquote(op), value: value},
+           %Dialect{ilike?: unquote(ilike?)}
+         ) do
+      unquote(prelude)
+      build_dynamic(unquote(dynamic_fragment), false, unquote(combinator))
     end
   end
 
@@ -1036,19 +1128,22 @@ defmodule Flop.Adapter.Ecto do
     adapter_opts
   end
 
-  defp validate_custom_field_callback!(custom_fields, fields, callback, usage) do
+  defp validate_custom_field_callback!(custom_fields, fields, callbacks, usage) do
     missing =
       for {name, opts} <- custom_fields,
           name in fields,
-          is_nil(opts[callback]),
+          Enum.all?(callbacks, &is_nil(opts[&1])),
           do: name
 
     if missing != [] do
-      raise ArgumentError, """
-      custom field without #{callback} function marked as #{usage}
+      callback = hd(callbacks)
+      callback_names = Enum.join(callbacks, " or ")
 
-      A custom field needs a #{callback} function to be #{usage}. These fields
-      have none:
+      raise ArgumentError, """
+      custom field without #{callback_names} function marked as #{usage}
+
+      A custom field needs a #{callback_names} function to be #{usage}. These
+      fields have none:
 
           #{inspect(missing)}
 
@@ -1070,14 +1165,14 @@ defmodule Flop.Adapter.Ecto do
     validate_custom_field_callback!(
       custom_fields,
       Keyword.fetch!(opts, :filterable),
-      :filter,
+      [:filter, :field_dynamic],
       "filterable"
     )
 
     validate_custom_field_callback!(
       custom_fields,
       Keyword.fetch!(opts, :sortable),
-      :field_dynamic,
+      [:field_dynamic],
       "sortable"
     )
 
