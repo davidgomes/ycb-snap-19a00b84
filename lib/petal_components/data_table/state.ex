@@ -12,12 +12,24 @@ defmodule PetalComponents.DataTable.State do
         filters: [%{field: :email, op: :contains, value: "d"}],
         page: 1,
         page_size: 10,
-        total: 74            # nil = cursor/unknown mode
+        total: 74,           # nil = cursor/unknown mode
+        selected: ["3", "7"] # checked row ids - never in the URL
       }
 
   `from_params/2` and `to_params/1` round-trip the struct through URL
   params, so URL-as-state (shareable sorts/filters, working back button)
   is a one-liner in `handle_params` rather than a hand-rolled encoding.
+
+  ## Selection
+
+  `selected` holds the ids of the checked rows as strings - they
+  round-trip through the DOM, so `3` and `"3"` are the same row. Cast
+  them back in your bulk-action handler and scope them to what the user
+  may touch, like any params. Selection is interaction state, not a
+  query: `to_params/1` never encodes it, and every change to the visible
+  rows (sort, page, search, filters, page size) drops it, so a bulk
+  action only ever sees rows the user was looking at when they checked
+  them.
 
   ## Filter operators
 
@@ -35,7 +47,13 @@ defmodule PetalComponents.DataTable.State do
   """
 
   @enforce_keys []
-  defstruct order_by: [], filters: [], search: nil, page: 1, page_size: 10, total: nil
+  defstruct order_by: [],
+            filters: [],
+            search: nil,
+            page: 1,
+            page_size: 10,
+            total: nil,
+            selected: []
 
   @type order :: {atom(), :asc | :desc}
   @type filter :: %{field: atom(), op: atom(), value: term()}
@@ -45,7 +63,8 @@ defmodule PetalComponents.DataTable.State do
           search: String.t() | nil,
           page: pos_integer(),
           page_size: pos_integer(),
-          total: non_neg_integer() | nil
+          total: non_neg_integer() | nil,
+          selected: [String.t()]
         }
 
   @ops ~w(contains eq starts_with neq gt lt between in before on after)a
@@ -91,7 +110,8 @@ defmodule PetalComponents.DataTable.State do
   Encodes the state as a flat params map suitable for `push_patch`
   query strings. Defaults (page 1, empty sorts/filters, the default
   page size) are omitted so URLs stay clean; `total` never round-trips -
-  it is a result, not a request.
+  it is a result, not a request - and neither does `selected`, which is
+  interaction state.
 
   Pass the same `:page_size` default given to `from_params/2` so the
   two stay symmetric (an omitted size decodes back to that default).
@@ -110,7 +130,8 @@ defmodule PetalComponents.DataTable.State do
   @doc """
   Returns the state with `field` as the primary sort: cycles
   asc -> desc -> removed on repeated calls (the header-click grammar),
-  and always resets to page 1 - a reordered page 7 is meaningless.
+  and always resets to page 1 - a reordered page 7 is meaningless - and
+  drops the selection with it.
   """
   def toggle_sort(%__MODULE__{} = state, field) when is_atom(field) do
     order_by =
@@ -120,31 +141,73 @@ defmodule PetalComponents.DataTable.State do
         {^field, :desc} -> []
       end
 
-    %{state | order_by: order_by, page: 1}
+    %{state | order_by: order_by, page: 1, selected: []}
   end
 
-  @doc "Replaces the filter for `field` (or removes it when `value` is nil/empty), resetting to page 1."
+  @doc """
+  Replaces the filter for `field` (or removes it when `value` is nil/empty),
+  resetting to page 1 and dropping the selection.
+  """
   def put_filter(%__MODULE__{} = state, field, _op, value)
       when value in [nil, "", []] do
-    %{state | filters: Enum.reject(state.filters, &(&1.field == field)), page: 1}
+    %{
+      state
+      | filters: Enum.reject(state.filters, &(&1.field == field)),
+        page: 1,
+        selected: []
+    }
   end
 
   def put_filter(%__MODULE__{} = state, field, op, value)
       when is_atom(field) and op in @ops do
     filter = %{field: field, op: op, value: value}
     rest = Enum.reject(state.filters, &(&1.field == field))
-    %{state | filters: rest ++ [filter], page: 1}
+    %{state | filters: rest ++ [filter], page: 1, selected: []}
   end
 
-  @doc "Sets (or clears, for blank terms) the quick-search term, resetting to page 1."
+  @doc """
+  Sets (or clears, for blank terms) the quick-search term, resetting to
+  page 1 and dropping the selection.
+  """
   def put_search(%__MODULE__{} = state, term) do
-    %{state | search: parse_search(term), page: 1}
+    %{state | search: parse_search(term), page: 1, selected: []}
   end
 
-  @doc "Sets the page size (invalid values keep the current one), resetting to page 1."
+  @doc """
+  Sets the page size (invalid values keep the current one), resetting to
+  page 1 and dropping the selection.
+  """
   def put_page_size(%__MODULE__{} = state, size) do
-    %{state | page_size: parse_pos_int(size, state.page_size), page: 1}
+    %{state | page_size: parse_pos_int(size, state.page_size), page: 1, selected: []}
   end
+
+  @doc """
+  Toggles one row id in or out of the selection - the row checkbox's
+  click. Ids are kept as strings (see "Selection" above).
+  """
+  def toggle_selected(%__MODULE__{} = state, id)
+      when (is_binary(id) and id != "") or is_integer(id) do
+    id = to_string(id)
+
+    selected =
+      if id in state.selected,
+        do: List.delete(state.selected, id),
+        else: state.selected ++ [id]
+
+    %{state | selected: selected}
+  end
+
+  @doc """
+  Adds `ids` to the selection - the header checkbox's payload, the rows
+  on screen. Anything that isn't a string or integer id is dropped.
+  """
+  def select_all(%__MODULE__{} = state, ids) when is_list(ids) do
+    added = for id <- ids, (is_binary(id) and id != "") or is_integer(id), do: to_string(id)
+    %{state | selected: Enum.uniq(state.selected ++ added)}
+  end
+
+  @doc "Empties the selection."
+  def clear_selection(%__MODULE__{} = state), do: %{state | selected: []}
 
   @doc """
   Applies one event-mode op payload - the entire `data_table` event
@@ -157,10 +220,12 @@ defmodule PetalComponents.DataTable.State do
       end
 
   Ops: `sort` (field), `page` (page), `search` (term), `page_size`
-  (page_size), `filter` (field, filter_op, value/value2/values), and
-  `clear_filters`. Unknown ops and non-whitelisted fields leave the
-  state unchanged; like `from_params/2`, no atoms are ever created
-  from input.
+  (page_size), `filter` (field, filter_op, value/value2/values),
+  `clear_filters`, and the selection ops `select` (id - toggles one
+  row), `select_all` (ids - the rows on screen) and `clear_selection`.
+  Unknown ops and non-whitelisted fields leave the state unchanged;
+  like `from_params/2`, no atoms are ever created from input. Every op
+  that changes the visible rows drops the selection.
 
   A `filter` op's value normalizes by editor shape: a `values` list
   posts as-is (the select editor's `:in`), `between` pairs
@@ -179,7 +244,7 @@ defmodule PetalComponents.DataTable.State do
         end
 
       %{"op" => "page", "page" => page} ->
-        %{state | page: parse_pos_int(to_string(page), state.page)}
+        %{state | page: parse_pos_int(to_string(page), state.page), selected: []}
 
       %{"op" => "search", "term" => term} ->
         put_search(state, term)
@@ -195,6 +260,15 @@ defmodule PetalComponents.DataTable.State do
 
       %{"op" => "clear_filters"} ->
         clear_filters(state)
+
+      %{"op" => "select", "id" => id} when (is_binary(id) and id != "") or is_integer(id) ->
+        toggle_selected(state, id)
+
+      %{"op" => "select_all", "ids" => ids} when is_list(ids) ->
+        select_all(state, ids)
+
+      %{"op" => "clear_selection"} ->
+        clear_selection(state)
 
       _other ->
         state
@@ -233,8 +307,8 @@ defmodule PetalComponents.DataTable.State do
   defp normalize_between(min, max) when min in [nil, ""] or max in [nil, ""], do: ""
   defp normalize_between(min, max), do: [min, max]
 
-  @doc "Removes every filter, resetting to page 1."
-  def clear_filters(%__MODULE__{} = state), do: %{state | filters: [], page: 1}
+  @doc "Removes every filter, resetting to page 1 and dropping the selection."
+  def clear_filters(%__MODULE__{} = state), do: %{state | filters: [], page: 1, selected: []}
 
   @doc "Total pages when `total` is known, else nil (cursor/unknown mode)."
   def total_pages(%__MODULE__{total: nil}), do: nil
