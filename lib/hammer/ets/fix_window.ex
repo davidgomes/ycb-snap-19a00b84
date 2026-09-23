@@ -130,7 +130,12 @@ defmodule Hammer.ETS.FixWindow do
   @doc """
   Sets the counter for a given key in the fixed window algorithm.
   """
-  @spec set(table :: atom(), key :: Hammer.key(), scale :: pos_integer(), count :: pos_integer()) ::
+  @spec set(
+          table :: atom(),
+          key :: Hammer.key(),
+          scale :: pos_integer(),
+          count :: pos_integer()
+        ) ::
           integer()
   def set(table, key, scale, count) do
     window = div(ETS.now(), scale)
