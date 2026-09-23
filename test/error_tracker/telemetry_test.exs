@@ -16,7 +16,7 @@ defmodule ErrorTracker.TelemetryTest do
     assert_receive {:telemetry_event, [:error_tracker, :error, :new], _, %{error: %Error{}}}
 
     assert_receive {:telemetry_event, [:error_tracker, :occurrence, :new], _,
-                    %{occurrence: %Occurrence{}}}
+                    %{occurrence: %Occurrence{}, muted: false}}
 
     # The error is already known so the new error event won't be emitted
     report_error(fn -> raise "This is a test" end)
@@ -26,7 +26,34 @@ defmodule ErrorTracker.TelemetryTest do
                    150
 
     assert_receive {:telemetry_event, [:error_tracker, :occurrence, :new], _,
-                    %{occurrence: %Occurrence{}}}
+                    %{occurrence: %Occurrence{}, muted: false}}
+  end
+
+  test "events for muted errors are flagged as muted" do
+    %Occurrence{error: error = %Error{}} = report_error(fn -> raise "This is a test" end)
+
+    assert_receive {:telemetry_event, [:error_tracker, :occurrence, :new], _,
+                    %{occurrence: %Occurrence{}, muted: false}}
+
+    {:ok, muted = %Error{}} = ErrorTracker.mute(error)
+    {:ok, resolved = %Error{}} = ErrorTracker.resolve(muted)
+    assert_receive {:telemetry_event, [:error_tracker, :error, :resolved], _, %{error: %Error{}}}
+
+    # A new occurrence of the muted error moves it to the unresolved state
+    report_error(fn -> raise "This is a test" end)
+
+    assert_receive {:telemetry_event, [:error_tracker, :error, :unresolved], _,
+                    %{error: %Error{muted: true}}}
+
+    assert_receive {:telemetry_event, [:error_tracker, :occurrence, :new], _,
+                    %{occurrence: %Occurrence{}, muted: true}}
+
+    # Once unmuted, new occurrences are not flagged as muted anymore
+    {:ok, _unmuted} = ErrorTracker.unmute(resolved)
+    report_error(fn -> raise "This is a test" end)
+
+    assert_receive {:telemetry_event, [:error_tracker, :occurrence, :new], _,
+                    %{occurrence: %Occurrence{}, muted: false}}
   end
 
   test "events are emitted for resolved and unresolved errors" do

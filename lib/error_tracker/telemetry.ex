@@ -31,12 +31,34 @@ defmodule ErrorTracker.Telemetry do
   Each event is emitted with some measures and metadata, which can be used to
   receive information without having to query the database again:
 
-  | event                                   | measures       | metadata      |
-  | --------------------------------------- | -------------- | ------------- |
-  | `[:error_tracker, :error, :new]`        | `:system_time` | `:error`      |
-  | `[:error_tracker, :error, :unresolved]` | `:system_time` | `:error`      |
-  | `[:error_tracker, :error, :resolved]`   | `:system_time` | `:error`      |
-  | `[:error_tracker, :occurrence, :new]`   | `:system_time` | `:occurrence` |
+  | event                                   | measures       | metadata                |
+  | --------------------------------------- | -------------- | ----------------------- |
+  | `[:error_tracker, :error, :new]`        | `:system_time` | `:error`                |
+  | `[:error_tracker, :error, :unresolved]` | `:system_time` | `:error`                |
+  | `[:error_tracker, :error, :resolved]`   | `:system_time` | `:error`                |
+  | `[:error_tracker, :occurrence, :new]`   | `:system_time` | `:occurrence`, `:muted` |
+
+  The metadata keys contain the following data:
+
+  * `:error` - an `ErrorTracker.Error` struct.
+  * `:occurrence` - an `ErrorTracker.Occurrence` struct.
+  * `:muted` - a boolean indicating whether the error of the occurrence is
+  muted or not.
+
+  ### Muted errors
+
+  Errors can be muted using `ErrorTracker.mute/1` or the web dashboard. Muted
+  errors still emit all the events described above, but you may want to skip
+  them when implementing notifications. You can check the `:muted` metadata of
+  occurrence events or the `muted` field of the error for that purpose:
+
+  ```elixir
+  def handle_event([:error_tracker, :occurrence, :new], _measurements, metadata, _config) do
+    unless metadata.muted do
+      # Notify the new occurrence
+    end
+  end
+  ```
   """
 
   @doc false
@@ -61,9 +83,9 @@ defmodule ErrorTracker.Telemetry do
   end
 
   @doc false
-  def new_occurrence(occurrence) do
+  def new_occurrence(occurrence, muted) do
     measurements = %{system_time: System.system_time()}
-    metadata = %{occurrence: occurrence}
+    metadata = %{occurrence: occurrence, muted: muted}
     :telemetry.execute([:error_tracker, :occurrence, :new], measurements, metadata)
   end
 end
