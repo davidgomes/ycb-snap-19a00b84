@@ -5444,7 +5444,50 @@ export const PetalDataTable = {
   },
 };
 
+export const PetalDropdown = {
+  mounted() {
+    this.panel = this.el.querySelector(".pc-dropdown__menu-items-wrapper");
+    if (!this.panel) return;
+    this.observer = new MutationObserver(() => this.place());
+    this.observer.observe(this.panel, { attributes: true, attributeFilter: ["style"] });
+    this.onResize = () => {
+      this.wasOpen = false;
+      this.place();
+    };
+    window.addEventListener("resize", this.onResize);
+  },
+  updated() {
+    this.place();
+  },
+  place() {
+    const panel = this.panel;
+    if (!panel || panel.style.display === "none") {
+      this.wasOpen = false;
+      return;
+    }
+    // Measure only on open; re-measuring mid-transition (scale-95) or after
+    // flipping would make the panel oscillate.
+    if (this.wasOpen && this.flipped !== undefined) {
+      panel.classList.toggle("pc-dropdown__menu-items-wrapper--up", this.flipped);
+      return;
+    }
+    this.wasOpen = true;
+    panel.classList.remove("pc-dropdown__menu-items-wrapper--up");
+    const trigger = this.el.getBoundingClientRect();
+    const height = panel.offsetHeight + 8;
+    const below = window.innerHeight - trigger.bottom;
+    const above = trigger.top;
+    this.flipped = below < height && above > below;
+    panel.classList.toggle("pc-dropdown__menu-items-wrapper--up", this.flipped);
+  },
+  destroyed() {
+    this.observer?.disconnect();
+    if (this.onResize) window.removeEventListener("resize", this.onResize);
+  },
+};
+
 export default {
+  PetalDropdown,
   PetalChart,
   PetalColorScheme,
   PetalLocalTime,

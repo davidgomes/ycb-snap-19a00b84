@@ -57,6 +57,8 @@ defmodule PetalComponents.Dropdown do
 
     ~H"""
     <div
+      id={"#{@options_container_id}_container"}
+      phx-hook="PetalDropdown"
       {@rest}
       {js_attributes("container", @options_container_id, @on_close)}
       class={[@class, "pc-dropdown"]}
