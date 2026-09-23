@@ -134,7 +134,7 @@ defmodule Nostrum.Voice.E2EE do
   @doc """
   End-to-end encrypts an outgoing opus frame if the DAVE protocol is in effect.
   """
-  @spec encrypt(VoiceState.t(), binary()) :: binary()
+  @spec encrypt(%VoiceState{}, binary()) :: binary()
   def encrypt(%VoiceState{dave_protocol_version: version}, frame) when version in [nil, 0],
     do: frame
 
