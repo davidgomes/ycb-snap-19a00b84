@@ -304,6 +304,19 @@ defmodule Flop.Adapter.Ecto.Operators do
     end
   end
 
+  # Replaces the field references in a quoted fragment with the interpolated
+  # `field_dynamic` variable, so that the operator can be applied to the dynamic
+  # expression of a custom field.
+  def with_field_dynamic(fragment) do
+    Macro.prewalk(fragment, fn
+      {:field, _, [{:r, _, _}, {:^, _, [{:var!, _, [{:field, _, _}]}]}]} ->
+        quote do: ^var!(field_dynamic)
+
+      ast ->
+        ast
+    end)
+  end
+
   defmacro empty(:array) do
     quote do
       is_nil(field(r, ^var!(field))) or

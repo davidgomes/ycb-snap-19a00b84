@@ -378,12 +378,15 @@ defprotocol Flop.Schema do
   `{mod :: module, function :: atom, opts :: keyword}`.
 
   - `filter` is called to filter by the field. It receives the Ecto query, the
-    Flop filter and an options keyword list, and returns the updated query. A
-    custom field needs it to be filterable.
+    Flop filter and an options keyword list, and returns the updated query.
   - `field_dynamic` is called to order by the field. It receives an options
     keyword list and returns an `Ecto.Query.dynamic_expr`, which Flop applies
     the order direction to. It receives neither the query nor the direction. A
     custom field needs it to be sortable.
+
+  A filterable custom field needs at least one of them. If no `filter` function
+  is set, Flop applies the filter operator to the expression returned by
+  `field_dynamic`, the same way as it does for a regular field.
 
   If runtime options are necessary (like the timezone of the request or the user
   ID of the current user), use the `extra_opts` option when calling Flop
@@ -624,11 +627,11 @@ defprotocol Flop.Schema do
   - `:filter` - A module/function/options tuple referencing a custom filter
     function. The function must take the Ecto query, the `Flop.Filter` struct,
     and the options from the tuple as arguments, and return the updated query.
-    Required if the field is filterable.
   - `:field_dynamic` - A module/function/options tuple referencing a function
     that returns the field expression as an `Ecto.Query.dynamic_expr`. The
     function takes the options from the tuple as its only argument. Flop applies
-    the order direction to the expression. Required if the field is sortable.
+    the order direction to the expression. If no `:filter` function is set, Flop
+    also applies the filter operators to it. Required if the field is sortable.
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator
     and value validation is based on this option.
   - `:bindings` - If either callback requires certain named bindings to be
@@ -637,6 +640,8 @@ defprotocol Flop.Schema do
     is used.
   - `:operators` - Defines which filter operators are allowed for this field.
     If omitted, all operators will be accepted.
+
+  Either `:filter` or `:field_dynamic` is required if the field is filterable.
 
   If both the `:ecto_type` and the `:operators` option are set, the `:operators`
   option takes precedence and only the filter value validation is based on the
