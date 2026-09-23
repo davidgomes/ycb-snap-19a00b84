@@ -71,7 +71,8 @@ defmodule Paginator do
     * `:before` - Fetch the records before this cursor.
     * `:cursor_fields` - The fields with sorting direction used to determine the
     cursor. In most cases, this should be the same fields as the ones used for sorting in the query.
-    When you use named bindings in your query they can also be provided.
+    When you use named bindings in your query they can also be provided. Expressions can be
+    provided as `{name, fn -> dynamic(...) end}` tuples, see the example below.
     * `:fetch_cursor_value_fun` function of arity 2 to lookup cursor values on returned records.
     Defaults to `Paginator.default_fetch_cursor_value/2`
     * `:include_total_count` - Set this to true to return the total number of
@@ -165,6 +166,35 @@ defmodule Paginator do
         end,
         limit: 50
       )
+
+  ## Example with sorting on expressions
+
+      query =
+        from(
+          p in Post,
+          order_by: [asc: fragment("lower(?)", p.title), asc: p.id],
+          select_merge: %{lower_title: fragment("lower(?)", p.title)}
+        )
+
+      Repo.paginate(query,
+        cursor_fields: [
+          {{:lower_title, fn -> dynamic([p], fragment("lower(?)", p.title)) end}, :asc},
+          id: :asc
+        ],
+        limit: 50
+      )
+
+  To sort on an expression, pass a `{name, function}` tuple where the function
+  returns an `Ecto.Query.dynamic/2` equivalent to the expression used in the
+  query's `order_by`. The dynamic expression is used to filter the records
+  around the cursor, so it can reference any binding of the query.
+
+  The `name` is the key under which the value is stored in the cursor and is
+  what `fetch_cursor_value_fun` receives to look the value up on the returned
+  records. In this example `Post` has a virtual `:lower_title` field which
+  `select_merge` populates, so the default function can be used. Selecting the
+  value from the database, rather than computing it in Elixir, guarantees that
+  the cursor holds exactly the value the database compares against.
 
   """
   @callback paginate(queryable :: Ecto.Query.t(), opts :: Keyword.t(), repo_opts :: Keyword.t()) ::
@@ -309,6 +339,9 @@ defmodule Paginator do
        }) do
     cursor_fields
     |> Enum.map(fn
+      {{cursor_field, expression}, _order} when is_function(expression, 0) ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
       {cursor_field, _order} ->
         {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
 
