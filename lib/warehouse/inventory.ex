@@ -36,15 +36,14 @@ defmodule Warehouse.Inventory do
 
   defp broadcast_availability_change(%{component: component}) do
     component_id = to_string(component.id)
-    number_available = Components.number_available(component)
+    %{available: number_available} = Components.number_available(component)
 
-    Logger.info("Component #{component_id} has #{number_available} available")
+    Logger.info("Component #{component_id} has #{number_available} total available")
 
     message =
       ComponentAvailabilityUpdated.new(
         quantity: number_available,
-        component: Component.new(id: component_id),
-        request_id: Bottle.RequestId.write(:queue)
+        component: Component.new(id: component_id)
       )
 
     Bottle.publish(message, source: "warehouse")
