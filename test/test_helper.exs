@@ -55,6 +55,15 @@ end
 defmodule UsesRegistry do
   use Broadway
 
+  def start_link(opts) do
+    Broadway.start_link(__MODULE__,
+      name: Keyword.fetch!(opts, :broadway_name),
+      producer: [module: {Broadway.DummyProducer, []}],
+      processors: [default: []],
+      batchers: [default: []]
+    )
+  end
+
   def handle_message(_, message, _), do: message
   def handle_batch(_, messages, _, _), do: messages
 
@@ -125,6 +134,7 @@ end
 {:ok, _} =
   Supervisor.start_link(
     [
+      {Registry, keys: :unique, name: BroadwayDashboard.TestRegistry},
       {Phoenix.PubSub, name: Phoenix.LiveDashboardTest.PubSub, adapter: Phoenix.PubSub.PG2},
       Phoenix.LiveDashboardTest.Endpoint
     ],

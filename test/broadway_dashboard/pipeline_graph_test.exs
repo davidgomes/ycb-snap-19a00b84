@@ -16,6 +16,12 @@ defmodule BroadwayDashboard.PipelineGraphTest do
       send(test_pid, {:batch_handled, batcher, messages})
       messages
     end
+
+    def process_name({:via, Registry, {registry, id}}, base_name) do
+      {:via, Registry, {registry, {id, base_name}}}
+    end
+
+    def process_name(broadway_name, base_name), do: super(broadway_name, base_name)
   end
 
   defp new_unique_name do
@@ -102,18 +108,76 @@ defmodule BroadwayDashboard.PipelineGraphTest do
                ]
              ] = PipelineGraph.build_layers(topology_workload)
 
-      assert prod_id == :"#{broadway}.Broadway.Producer_0"
+      assert prod_id == {:"#{broadway}.Broadway.Producer", 0}
 
-      assert proc_0 == :"#{broadway}.Broadway.Processor_default_0"
-      assert proc_1 == :"#{broadway}.Broadway.Processor_default_1"
-      assert proc_2 == :"#{broadway}.Broadway.Processor_default_2"
+      assert proc_0 == {:"#{broadway}.Broadway.Processor_default", 0}
+      assert proc_1 == {:"#{broadway}.Broadway.Processor_default", 1}
+      assert proc_2 == {:"#{broadway}.Broadway.Processor_default", 2}
 
       assert default_batcher == :"#{broadway}.Broadway.Batcher_default"
 
-      assert batch_proc_0 == :"#{broadway}.Broadway.BatchProcessor_default_0"
-      assert batch_proc_1 == :"#{broadway}.Broadway.BatchProcessor_default_1"
+      assert batch_proc_0 == {:"#{broadway}.Broadway.BatchProcessor_default", 0}
+      assert batch_proc_1 == {:"#{broadway}.Broadway.BatchProcessor_default", 1}
 
-      assert batch_proc_s3 == :"#{broadway}.Broadway.BatchProcessor_s3_0"
+      assert batch_proc_s3 == {:"#{broadway}.Broadway.BatchProcessor_s3", 0}
+    end
+
+    test "with pipeline named using :via" do
+      registry = BroadwayDashboard.TestRegistry
+      id = new_unique_name()
+      broadway = {:via, Registry, {registry, id}}
+
+      Broadway.start_link(Forwarder,
+        name: broadway,
+        context: %{test_pid: self()},
+        producer: [module: {Broadway.DummyProducer, []}],
+        processors: [default: [concurrency: 2]],
+        batchers: [default: [concurrency: 2]]
+      )
+
+      topology = Broadway.topology(broadway)
+      counters = Counters.build(topology)
+
+      topology_workload = Counters.topology_workload(counters, topology)
+
+      assert [
+               [%{id: prod_id, children: [proc_0, proc_1], data: "prod_0"}],
+               [
+                 %{
+                   id: proc_0,
+                   children: [default_batcher],
+                   data: %{label: "proc_0", detail: 0}
+                 },
+                 %{
+                   id: proc_1,
+                   children: [default_batcher],
+                   data: %{label: "proc_1", detail: 0}
+                 }
+               ],
+               [
+                 %{
+                   children: [batch_proc_0, batch_proc_1],
+                   data: %{detail: 0, label: "default"},
+                   id: default_batcher
+                 }
+               ],
+               [
+                 %{children: [], data: %{detail: 0, label: "proc_0"}, id: batch_proc_0},
+                 %{children: [], data: %{detail: 0, label: "proc_1"}, id: batch_proc_1}
+               ]
+             ] = PipelineGraph.build_layers(topology_workload)
+
+      via = fn base_name -> {:via, Registry, {registry, {id, base_name}}} end
+
+      assert prod_id == {via.("Producer"), 0}
+
+      assert proc_0 == {via.("Processor_default"), 0}
+      assert proc_1 == {via.("Processor_default"), 1}
+
+      assert default_batcher == via.("Batcher_default")
+
+      assert batch_proc_0 == {via.("BatchProcessor_default"), 0}
+      assert batch_proc_1 == {via.("BatchProcessor_default"), 1}
     end
   end
 end

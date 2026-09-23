@@ -7,12 +7,12 @@ defmodule BroadwayDashboard.PipelineGraph do
   alias BroadwayDashboard.LiveDashboard.LayeGraphComponent
 
   @type topology_workload :: %{
-          :name => atom(),
+          :name => Broadway.name(),
           :concurrency => pos_integer(),
           optional(:workload) => non_neg_integer(),
           optional(:workloads) => [non_neg_integer()],
           optional(:batcher_key) => atom(),
-          optional(:batcher_name) => atom()
+          optional(:batcher_name) => Broadway.name()
         }
   @type topology_workload_item :: {:producers | :processors | :batchers, topology_workload()}
 
@@ -60,9 +60,7 @@ defmodule BroadwayDashboard.PipelineGraph do
 
             children_ids =
               previous_layer
-              |> Enum.filter(fn batch_proc ->
-                String.starts_with?(to_string(batch_proc.id), to_string(batcher.name))
-              end)
+              |> Enum.filter(fn %{id: {name, _index}} -> name == batcher.name end)
               |> Enum.map(& &1.id)
 
             %{
@@ -83,8 +81,6 @@ defmodule BroadwayDashboard.PipelineGraph do
     show_workload? = Keyword.get(opts, :show_workload?, true)
 
     for stage <- stage_details, i <- 0..(stage.concurrency - 1) do
-      name = :"#{stage.name}_#{i}"
-
       data =
         if show_workload? do
           workload = Enum.at(stage.workloads, i)
@@ -98,7 +94,7 @@ defmodule BroadwayDashboard.PipelineGraph do
         end
 
       %{
-        id: name,
+        id: {stage.name, i},
         children: Enum.map(children_layer, & &1.id),
         data: data
       }
