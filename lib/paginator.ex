@@ -72,6 +72,10 @@ defmodule Paginator do
     * `:cursor_fields` - The fields with sorting direction used to determine the
     cursor. In most cases, this should be the same fields as the ones used for sorting in the query.
     When you use named bindings in your query they can also be provided.
+    The sorting direction can be any of `:asc`, `:asc_nulls_last`, `:asc_nulls_first`, `:desc`,
+    `:desc_nulls_first` or `:desc_nulls_last`. Following PostgreSQL, `:asc` sorts nulls last and
+    `:desc` sorts nulls first. The last cursor field must not be nullable, otherwise a
+    `RuntimeError` is raised when its cursor value is `nil`.
     * `:fetch_cursor_value_fun` function of arity 2 to lookup cursor values on returned records.
     Defaults to `Paginator.default_fetch_cursor_value/2`
     * `:include_total_count` - Set this to true to return the total number of
