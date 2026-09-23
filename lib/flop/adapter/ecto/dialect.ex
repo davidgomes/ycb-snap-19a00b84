@@ -25,15 +25,19 @@ defmodule Flop.Adapter.Ecto.Dialect do
   @typedoc """
   Feature support of a repo's Ecto adapter, resolved once per query and passed
   to the query builders.
+
+  `adapter` is `nil` if no repo or adapter could be resolved.
   """
   @type t :: %__MODULE__{
+          adapter: module | nil,
           arrays?: boolean,
           ilike?: boolean,
           nulls_largest?: boolean,
           nulls_ordering?: boolean
         }
 
-  defstruct arrays?: true,
+  defstruct adapter: nil,
+            arrays?: true,
             ilike?: true,
             nulls_largest?: true,
             nulls_ordering?: true
@@ -54,6 +58,7 @@ defmodule Flop.Adapter.Ecto.Dialect do
     adapter = adapter(repo)
 
     %__MODULE__{
+      adapter: adapter,
       arrays?: adapter not in @without_arrays,
       ilike?: adapter not in @without_ilike,
       nulls_largest?: adapter not in @with_nulls_smallest,

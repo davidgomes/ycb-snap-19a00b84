@@ -32,6 +32,7 @@ defmodule Flop.Adapter.Ecto.DialectTest do
     test "reads the features of a known adapter" do
       assert Dialect.new(PostgresRepo) ==
                %Dialect{
+                 adapter: Ecto.Adapters.Postgres,
                  arrays?: true,
                  ilike?: true,
                  nulls_largest?: true,
@@ -40,6 +41,7 @@ defmodule Flop.Adapter.Ecto.DialectTest do
 
       assert Dialect.new(MyXQLRepo) ==
                %Dialect{
+                 adapter: Ecto.Adapters.MyXQL,
                  arrays?: false,
                  ilike?: false,
                  nulls_largest?: false,
@@ -48,6 +50,7 @@ defmodule Flop.Adapter.Ecto.DialectTest do
 
       assert Dialect.new(SQLite3Repo) ==
                %Dialect{
+                 adapter: Ecto.Adapters.SQLite3,
                  arrays?: true,
                  ilike?: false,
                  nulls_largest?: false,
@@ -56,7 +59,8 @@ defmodule Flop.Adapter.Ecto.DialectTest do
     end
 
     test "returns the defaults for an unknown adapter" do
-      assert Dialect.new(UnknownRepo) == %Dialect{}
+      assert Dialect.new(UnknownRepo) ==
+               %Dialect{adapter: SomeApp.Adapters.Unknown}
     end
 
     test "returns the defaults without a repo" do
@@ -67,6 +71,7 @@ defmodule Flop.Adapter.Ecto.DialectTest do
     test "defaults to leaving the query unmodified" do
       assert %Dialect{} ==
                %Dialect{
+                 adapter: nil,
                  arrays?: true,
                  ilike?: true,
                  nulls_largest?: true,
@@ -179,11 +184,6 @@ defmodule Flop.Adapter.Ecto.DialectTest do
                  direction
       end
     end
-
-    test "sorts NULLs as largest without a repo" do
-      assert Dialect.explicit_direction(Dialect.new(nil), :asc) ==
-               :asc_nulls_last
-    end
   end
 
   describe "the query built for cursor pagination" do
@@ -210,17 +210,46 @@ defmodule Flop.Adapter.Ecto.DialectTest do
       assert cursor_where_clause(PostgresRepo, name: nil, age: 3) ==
                ~S|is_nil(p0.name) and (is_nil(p0.age) or p0.age > type(^3, p0.age))|
     end
+
+    test "leaves out the NULL check for a primary key" do
+      id = Ecto.UUID.generate()
+
+      for repo <- [PostgresRepo, nil] do
+        assert cursor_where_clause(repo, [id: id], nil, MyApp.Fruit) ==
+                 ~s|f0.id > type(^"#{id}", f0.id)|
+      end
+    end
+
+    test "raises for :asc and :desc without a repo" do
+      for direction <- [:asc, :desc] do
+        error =
+          assert_raise ArgumentError, fn ->
+            cursor_where_clause(nil, [name: "Ada"], [direction])
+          end
+
+        assert error.message =~
+                 "cursor pagination with #{inspect(direction)} requires a repo"
+      end
+    end
+
+    test "accepts the nulls directions without a repo" do
+      for direction <- @order_directions -- [:asc, :desc] do
+        assert cursor_where_clause(nil, [name: "Ada"], [direction]) ==
+                 cursor_where_clause(PostgresRepo, [name: "Ada"], [direction])
+      end
+    end
   end
 
-  defp cursor_where_clause(repo, cursor) do
+  defp cursor_where_clause(repo, cursor, directions \\ nil, schema \\ MyApp.Pet) do
     flop = %Flop{
       first: 2,
       after: cursor |> Map.new() |> Flop.Cursor.encode(),
-      order_by: Keyword.keys(cursor)
+      order_by: Keyword.keys(cursor),
+      order_directions: directions
     }
 
-    MyApp.Pet
-    |> Flop.query(flop, for: MyApp.Pet, repo: repo)
+    schema
+    |> Flop.query(flop, for: schema, repo: repo)
     |> inspect()
     |> String.split("where: ")
     |> List.last()

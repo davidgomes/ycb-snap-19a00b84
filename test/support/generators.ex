@@ -77,7 +77,7 @@ defmodule Flop.Generators do
             nil_fields <-
               [:name, :age, :owner_name, :owner_age]
               |> member_of()
-              |> uniq_list_of(max_length: 3)
+              |> list_of(max_length: 3)
               |> list_of(length: length(pets)) do
       pets
       |> Enum.zip(nil_fields)

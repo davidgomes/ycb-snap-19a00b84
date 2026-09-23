@@ -479,16 +479,23 @@ defmodule Flop.Adapter.Ecto do
     |> offset(^offset_for_page)
   end
 
+  @asc_directions [:asc, :asc_nulls_first, :asc_nulls_last]
+  @desc_directions [:desc, :desc_nulls_first, :desc_nulls_last]
+  @nulls_first_directions [:asc_nulls_first, :desc_nulls_first]
+  @nulls_last_directions [:asc_nulls_last, :desc_nulls_last]
+
   @impl Flop.Adapter
   def apply_cursor(q, cursor_fields, opts) do
-    where_dynamic = cursor_dynamic(cursor_fields, dialect(opts))
+    where_dynamic =
+      cursor_dynamic(cursor_fields, dialect(opts), primary_key(opts[:for]))
+
     Query.where(q, ^where_dynamic)
   end
 
-  defp cursor_dynamic([], _dialect), do: true
+  defp cursor_dynamic([], _dialect, _primary_key), do: true
 
   # only reachable with an unvalidated Flop struct
-  defp cursor_dynamic([{_, _, _, %FieldInfo{extra: %{type: type}}} | _], _)
+  defp cursor_dynamic([{_, _, _, %FieldInfo{extra: %{type: type}}} | _], _, _)
        when type in [:compound, :alias, :custom] do
     raise ArgumentError, """
     cursor pagination is not supported for #{type} fields
@@ -502,21 +509,68 @@ defmodule Flop.Adapter.Ecto do
   end
 
   # The rows after the cursor are the ones that come after it in the first
-  # field, or tie with it there and come after it in the remaining fields. The
-  # direction is made explicit first, because NULL never matches a comparison
-  # and needs its own condition depending on where it sorts.
+  # field, or tie with it there and come after it in the remaining fields.
+  # NULL never matches a comparison, so it needs its own condition, which
+  # depends on where the direction sorts it.
   defp cursor_dynamic(
-         [{direction, _, cursor_value, _} = cursor_field | tail],
-         dialect
+         [{direction, name, cursor_value, field_info} = cursor_field | tail],
+         dialect,
+         primary_key
        ) do
     {field, value} = cursor_field_dynamics(cursor_field)
-    direction = Dialect.explicit_direction(dialect, direction)
-    rest = if tail != [], do: cursor_dynamic(tail, dialect)
+    rest = if tail != [], do: cursor_dynamic(tail, dialect, primary_key)
 
-    if is_nil(cursor_value),
-      do: after_null(direction, field, rest),
-      else: after_value(direction, field, value, rest)
+    cond do
+      is_nil(cursor_value) ->
+        dialect |> explicit_direction!(direction) |> after_null(field, rest)
+
+      primary_key?(name, field_info, primary_key) ->
+        compare_after(direction, field, value, rest)
+
+      true ->
+        dialect
+        |> explicit_direction!(direction)
+        |> after_value(field, value, rest)
+    end
   end
+
+  defp primary_key(nil), do: []
+
+  defp primary_key(module) do
+    if function_exported?(module, :__schema__, 1),
+      do: module.__schema__(:primary_key),
+      else: []
+  end
+
+  # A primary key cannot be NULL, so it needs no NULL check. This keeps the
+  # comparison usable as an index condition on PostgreSQL, which applies it
+  # as a filter when it is combined with IS NULL by OR.
+  defp primary_key?(name, %FieldInfo{extra: %{type: :normal}}, primary_key),
+    do: name in primary_key
+
+  defp primary_key?(_name, _field_info, _primary_key), do: false
+
+  defp explicit_direction!(%Dialect{adapter: nil}, direction)
+       when direction in [:asc, :desc] do
+    raise ArgumentError, """
+    cursor pagination with #{inspect(direction)} requires a repo
+
+    Where #{inspect(direction)} sorts NULL depends on the database, and the
+    cursor condition has to match it. Flop reads the database from the repo,
+    but no repo is configured.
+
+    Pass the repo as an option:
+
+        Flop.query(MyApp.Pet, flop, for: MyApp.Pet, repo: MyApp.Repo)
+
+    Or set it on a backend module or in the application environment. You can
+    also use a direction that places NULL explicitly, such as :asc_nulls_last
+    or :desc_nulls_first.
+    """
+  end
+
+  defp explicit_direction!(dialect, direction),
+    do: Dialect.explicit_direction(dialect, direction)
 
   defp cursor_field_dynamics(
          {_, _, cursor_value,
@@ -532,52 +586,52 @@ defmodule Flop.Adapter.Ecto do
   end
 
   defp after_null(direction, field, nil)
-       when direction in [:asc_nulls_first, :desc_nulls_first] do
+       when direction in @nulls_first_directions do
     dynamic(not is_nil(^field))
   end
 
   defp after_null(direction, field, rest)
-       when direction in [:asc_nulls_first, :desc_nulls_first] do
+       when direction in @nulls_first_directions do
     dynamic(not is_nil(^field) or (is_nil(^field) and ^rest))
   end
 
   defp after_null(direction, _field, nil)
-       when direction in [:asc_nulls_last, :desc_nulls_last] do
+       when direction in @nulls_last_directions do
     dynamic(false)
   end
 
   defp after_null(direction, field, rest)
-       when direction in [:asc_nulls_last, :desc_nulls_last] do
+       when direction in @nulls_last_directions do
     dynamic(is_nil(^field) and ^rest)
   end
 
   defp after_value(direction, field, value, rest)
-       when direction in [:asc_nulls_first, :desc_nulls_first] do
+       when direction in @nulls_first_directions do
     compare_after(direction, field, value, rest)
   end
 
   defp after_value(direction, field, value, rest)
-       when direction in [:asc_nulls_last, :desc_nulls_last] do
+       when direction in @nulls_last_directions do
     dynamic(is_nil(^field) or ^compare_after(direction, field, value, rest))
   end
 
   defp compare_after(direction, field, value, nil)
-       when direction in [:asc_nulls_first, :asc_nulls_last] do
+       when direction in @asc_directions do
     dynamic(^field > ^value)
   end
 
   defp compare_after(direction, field, value, nil)
-       when direction in [:desc_nulls_first, :desc_nulls_last] do
+       when direction in @desc_directions do
     dynamic(^field < ^value)
   end
 
   defp compare_after(direction, field, value, rest)
-       when direction in [:asc_nulls_first, :asc_nulls_last] do
+       when direction in @asc_directions do
     dynamic(^field >= ^value and (^field > ^value or ^rest))
   end
 
   defp compare_after(direction, field, value, rest)
-       when direction in [:desc_nulls_first, :desc_nulls_last] do
+       when direction in @desc_directions do
     dynamic(^field <= ^value and (^field < ^value or ^rest))
   end
 

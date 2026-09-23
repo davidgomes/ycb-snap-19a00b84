@@ -495,7 +495,10 @@ defmodule Flop do
   @typedoc """
   Options specific to the Ecto adapter.
 
-  - `:repo` - The Ecto Repo module used for database queries.
+  - `:repo` - The Ecto Repo module used for database queries. Functions that
+    only build a query, such as `Flop.query/3`, read the database from it, and
+    cursor pagination with the `:asc` and `:desc` directions raises without it,
+    because the database decides where they sort `NULL`.
   - `:query_opts` - Options passed to the `Ecto.Repo` query functions. Refer to
     the Ecto documentation for `c:Ecto.Repo.all/2`, `c:Ecto.Repo.aggregate/3`,
     and the ["Shared Options"](https://hexdocs.pm/ecto/Ecto.Repo.html#module-shared-options)
