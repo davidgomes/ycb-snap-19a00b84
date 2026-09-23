@@ -31,13 +31,28 @@ defmodule Flop.Adapter.Ecto.DialectTest do
   describe "new/1" do
     test "reads the features of a known adapter" do
       assert Dialect.new(PostgresRepo) ==
-               %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: true,
+                 nulls_ordering?: true,
+                 nulls_smallest?: false
+               }
 
       assert Dialect.new(MyXQLRepo) ==
-               %Dialect{arrays?: false, ilike?: false, nulls_ordering?: false}
+               %Dialect{
+                 arrays?: false,
+                 ilike?: false,
+                 nulls_ordering?: false,
+                 nulls_smallest?: true
+               }
 
       assert Dialect.new(SQLite3Repo) ==
-               %Dialect{arrays?: true, ilike?: false, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: false,
+                 nulls_ordering?: true,
+                 nulls_smallest?: true
+               }
     end
 
     test "returns the defaults for an unknown adapter" do
@@ -51,7 +66,38 @@ defmodule Flop.Adapter.Ecto.DialectTest do
 
     test "defaults to leaving the query unmodified" do
       assert %Dialect{} ==
-               %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: true,
+                 nulls_ordering?: true,
+                 nulls_smallest?: false
+               }
+    end
+  end
+
+  describe "nulls_first?/2" do
+    test "follows the explicit nulls directions on every adapter" do
+      for repo <- [PostgresRepo, MyXQLRepo, SQLite3Repo, nil] do
+        dialect = Dialect.new(repo)
+        assert Dialect.nulls_first?(dialect, :asc_nulls_first)
+        assert Dialect.nulls_first?(dialect, :desc_nulls_first)
+        refute Dialect.nulls_first?(dialect, :asc_nulls_last)
+        refute Dialect.nulls_first?(dialect, :desc_nulls_last)
+      end
+    end
+
+    test "sorts NULL as the largest value on PostgreSQL and by default" do
+      for repo <- [PostgresRepo, nil] do
+        refute Dialect.nulls_first?(Dialect.new(repo), :asc)
+        assert Dialect.nulls_first?(Dialect.new(repo), :desc)
+      end
+    end
+
+    test "sorts NULL as the smallest value on MySQL and SQLite" do
+      for repo <- [MyXQLRepo, SQLite3Repo] do
+        assert Dialect.nulls_first?(Dialect.new(repo), :asc)
+        refute Dialect.nulls_first?(Dialect.new(repo), :desc)
+      end
     end
   end
 
@@ -135,6 +181,49 @@ defmodule Flop.Adapter.Ecto.DialectTest do
       assert order_by_clause(MyXQLRepo, :desc_nulls_first) ==
                ~S|[desc: fragment("? IS NULL", p0.name), desc: p0.name]|
     end
+  end
+
+  describe "the query built for a cursor with NULL values" do
+    test "matches NULL after the cursor where the adapter sorts NULL last" do
+      assert cursor_where_clause(PostgresRepo, nil, :asc) ==
+               "is_nil(p0.name) and " <>
+                 "(p0.age > type(^5, p0.age) or is_nil(p0.age))"
+
+      assert cursor_where_clause(SQLite3Repo, nil, :desc) ==
+               "is_nil(p0.name) and " <>
+                 "(p0.age < type(^5, p0.age) or is_nil(p0.age))"
+    end
+
+    test "matches every value after the cursor where the adapter sorts NULL first" do
+      assert cursor_where_clause(SQLite3Repo, nil, :asc) ==
+               "not is_nil(p0.name) or p0.age > type(^5, p0.age)"
+
+      assert cursor_where_clause(PostgresRepo, nil, :desc) ==
+               "not is_nil(p0.name) or p0.age < type(^5, p0.age)"
+    end
+
+    test "leaves out the NULL checks where no NULL can come after the cursor" do
+      assert cursor_where_clause(SQLite3Repo, "Bo", :asc) ==
+               ~S|p0.name >= type(^"Bo", p0.name) and | <>
+                 ~S|(p0.name > type(^"Bo", p0.name) or p0.age > type(^5, p0.age))|
+    end
+  end
+
+  defp cursor_where_clause(repo, name, direction) do
+    flop = %Flop{
+      first: 2,
+      after: Flop.Cursor.encode(%{name: name, age: 5}),
+      order_by: [:name, :age],
+      order_directions: [direction, direction]
+    }
+
+    MyApp.Pet
+    |> Flop.query(flop, for: MyApp.Pet, repo: repo)
+    |> inspect()
+    |> String.split("where: ")
+    |> List.last()
+    |> String.split(", order_by:")
+    |> hd()
   end
 
   defp order_by_clause(repo, direction) do

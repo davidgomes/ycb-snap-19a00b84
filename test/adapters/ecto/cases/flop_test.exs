@@ -34,6 +34,30 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       default_limit: 35
   end
 
+  defp all_pages(query, %Flop{first: first} = flop, cursor, opts)
+       when is_integer(first) do
+    {:ok, {items, meta}} =
+      Flop.validate_and_run(query, %{flop | after: cursor}, opts)
+
+    if meta.has_next_page? do
+      items ++ all_pages(query, flop, meta.end_cursor, opts)
+    else
+      items
+    end
+  end
+
+  defp all_pages(query, %Flop{last: last} = flop, cursor, opts)
+       when is_integer(last) do
+    {:ok, {items, meta}} =
+      Flop.validate_and_run(query, %{flop | before: cursor}, opts)
+
+    if meta.has_previous_page? do
+      all_pages(query, flop, meta.start_cursor, opts) ++ items
+    else
+      items
+    end
+  end
+
   defp insert_custom_field_pets(ages) do
     Enum.map(ages, &Repo.insert!(%CustomFieldPet{age: &1}))
   end
@@ -2124,39 +2148,39 @@ defmodule Flop.Adapters.Ecto.FlopTest do
         )
     end
 
-    test "nil values for cursors are ignored when using for option" do
-      check all pets <- uniq_list_of_pets(length: 2..2),
+    property "paging includes rows with NULL values when using for option" do
+      check all pets <- uniq_list_of_pets(length: 1..25),
+                null_names <- list_of(boolean(), length: length(pets)),
+                null_owner_names <- list_of(boolean(), length: length(pets)),
                 cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}) do
+                directions <- order_directions(%Pet{}),
+                page_size <- integer(1..3) do
         checkin_checkout()
 
-        # set name fields to nil and insert
-        pets
-        |> Enum.map(&Map.update!(&1, :name, fn _ -> nil end))
-        |> Enum.each(&Repo.insert!(&1))
+        [pets, null_names, null_owner_names]
+        |> Enum.zip()
+        |> Enum.each(fn {pet, null_name?, null_owner_name?} ->
+          pet = if null_name?, do: %{pet | name: nil}, else: pet
+          pet = if null_owner_name?, do: put_in(pet.owner.name, nil), else: pet
+          Repo.insert!(pet)
+        end)
 
-        assert {:ok, {[_], %Meta{end_cursor: end_cursor}}} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   },
-                   for: Pet
-                 )
+        flop = %Flop{order_by: cursor_fields, order_directions: directions}
+        expected = Flop.all(pets_with_owners_query(), flop, for: Pet)
 
-        assert {:ok, _} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     after: end_cursor,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   },
-                   for: Pet
-                 )
+        assert all_pages(
+                 pets_with_owners_query(),
+                 %{flop | first: page_size},
+                 nil,
+                 for: Pet
+               ) == expected
+
+        assert all_pages(
+                 pets_with_owners_query(),
+                 %{flop | last: page_size},
+                 nil,
+                 for: Pet
+               ) == expected
       end
     end
 
@@ -2197,37 +2221,40 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                "cursor pagination is not supported for alias fields"
     end
 
-    test "nil values for cursors are ignored when not using for option" do
-      check all pets <- uniq_list_of_pets(length: 2..2),
-                directions <- order_directions(%Pet{}) do
+    property "paging includes rows with NULL values when not using for option" do
+      check all pets <- uniq_list_of_pets(length: 1..25),
+                null_names <- list_of(boolean(), length: length(pets)),
+                directions <- order_directions(%Pet{}),
+                page_size <- integer(1..3) do
         checkin_checkout()
-        cursor_fields = [:name, :age]
 
-        # set name fields to nil and insert
         pets
-        |> Enum.map(&Map.update!(&1, :name, fn _ -> nil end))
-        |> Enum.each(&Repo.insert!(&1))
+        |> Enum.zip(null_names)
+        |> Enum.each(fn {pet, null_name?} ->
+          pet = if null_name?, do: %{pet | name: nil}, else: pet
+          Repo.insert!(pet)
+        end)
 
-        assert {:ok, {[_], %Meta{end_cursor: end_cursor}}} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   }
-                 )
+        flop = %Flop{
+          order_by: [:name, :age],
+          order_directions: Enum.take(directions, 2)
+        }
 
-        assert {:ok, _} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     after: end_cursor,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   }
-                 )
+        expected = Flop.all(pets_with_owners_query(), flop)
+
+        assert all_pages(
+                 pets_with_owners_query(),
+                 %{flop | first: page_size},
+                 nil,
+                 []
+               ) == expected
+
+        assert all_pages(
+                 pets_with_owners_query(),
+                 %{flop | last: page_size},
+                 nil,
+                 []
+               ) == expected
       end
     end
 
