@@ -211,6 +211,64 @@ defmodule ObanDoctor.ObanDiscoveryTest do
       assert config.insert_trigger == false
     end
 
+    test "extracts engine module" do
+      tmp_dir = create_temp_project()
+
+      config_content = """
+      import Config
+
+      config :my_app, Oban,
+        engine: Oban.Pro.Engines.Smart,
+        queues: [default: 10]
+      """
+
+      write_config(tmp_dir, "config/config.exs", config_content)
+
+      assert [config] = ObanDiscovery.discover_oban_configs(tmp_dir)
+      assert config.engine == Oban.Pro.Engines.Smart
+    end
+
+    test "engine is nil when not configured" do
+      tmp_dir = create_temp_project()
+
+      config_content = """
+      import Config
+
+      config :my_app, Oban,
+        queues: [default: 10]
+      """
+
+      write_config(tmp_dir, "config/config.exs", config_content)
+
+      assert [config] = ObanDiscovery.discover_oban_configs(tmp_dir)
+      assert config.engine == nil
+    end
+
+    test "engine from earlier config is kept when later config omits it" do
+      tmp_dir = create_temp_project()
+
+      config_content = """
+      import Config
+
+      config :my_app, Oban,
+        engine: Oban.Pro.Engines.Smart,
+        queues: [default: 10]
+      """
+
+      runtime_content = """
+      import Config
+
+      config :my_app, Oban,
+        queues: [default: 20]
+      """
+
+      write_config(tmp_dir, "config/config.exs", config_content)
+      write_config(tmp_dir, "config/runtime.exs", runtime_content)
+
+      assert [config] = ObanDiscovery.discover_oban_configs(tmp_dir)
+      assert config.engine == Oban.Pro.Engines.Smart
+    end
+
     test "keeps different instances separate when merging" do
       tmp_dir = create_temp_project()
 
