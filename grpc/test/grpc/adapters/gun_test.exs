@@ -85,6 +85,31 @@ defmodule GRPC.Client.Adapters.GunTest do
                  ]
                )
     end
+
+    test "reuses the connection for the same channel name", %{port: port, credential: credential} do
+      channel = build(:channel, port: port, host: "localhost", cred: credential, ref: make_ref())
+
+      assert {:ok, first} = Gun.connect(channel, [])
+      assert {:ok, second} = Gun.connect(channel, [])
+
+      assert first.adapter_payload.conn_pid == second.adapter_payload.conn_pid
+    end
+
+    test "the connection stops when its Gun process goes away", %{
+      port: port,
+      credential: credential
+    } do
+      channel = build(:channel, port: port, host: "localhost", cred: credential)
+
+      {:ok, connected} = Gun.connect(channel, [])
+      %{conn_pid: conn_pid} = connected.adapter_payload
+      %{gun_pid: gun_pid} = :sys.get_state(conn_pid)
+      monitor_ref = Process.monitor(conn_pid)
+
+      Process.exit(gun_pid, :kill)
+
+      assert_receive {:DOWN, ^monitor_ref, :process, ^conn_pid, :normal}, 500
+    end
   end
 
   describe "disconnect/1" do
@@ -114,6 +139,22 @@ defmodule GRPC.Client.Adapters.GunTest do
       {:ok, disconnected_again} = Gun.disconnect(disconnected)
 
       assert %{conn_pid: nil} = disconnected_again.adapter_payload
+    end
+
+    test "connecting again with the same channel name opens a new connection", %{
+      port: port,
+      credential: credential
+    } do
+      channel = build(:channel, port: port, host: "localhost", cred: credential, ref: make_ref())
+
+      {:ok, connected} = Gun.connect(channel, [])
+      {:ok, _disconnected} = Gun.disconnect(connected)
+      {:ok, reconnected} = Gun.connect(channel, [])
+
+      assert reconnected.adapter_payload.conn_pid != connected.adapter_payload.conn_pid
+      assert Process.alive?(reconnected.adapter_payload.conn_pid)
+
+      {:ok, _} = Gun.disconnect(reconnected)
     end
   end
 end
