@@ -83,25 +83,38 @@
           <p>Total: <%= @occurrences[error.id] %></p>
         </td>
         <td class="px-4 py-4">
-          <.badge :if={error.status == :resolved} color={:green}>Resolved</.badge>
-          <.badge :if={error.status == :unresolved} color={:red}>Unresolved</.badge>
+          <div class="flex flex-wrap gap-2">
+            <.badge :if={error.status == :resolved} color={:green}>Resolved</.badge>
+            <.badge :if={error.status == :unresolved} color={:red}>Unresolved</.badge>
+            <.badge :if={error.muted} color={:gray}>Muted</.badge>
+          </div>
         </td>
         <td class="px-4 py-4 text-center">
-          <.button
-            :if={error.status == :unresolved}
-            phx-click="resolve"
-            phx-value-error_id={error.id}
-          >
-            Resolve
-          </.button>
+          <div class="flex flex-col gap-2">
+            <.button
+              :if={error.status == :unresolved}
+              phx-click="resolve"
+              phx-value-error_id={error.id}
+            >
+              Resolve
+            </.button>
 
-          <.button
-            :if={error.status == :resolved}
-            phx-click="unresolve"
-            phx-value-error_id={error.id}
-          >
-            Unresolve
-          </.button>
+            <.button
+              :if={error.status == :resolved}
+              phx-click="unresolve"
+              phx-value-error_id={error.id}
+            >
+              Unresolve
+            </.button>
+
+            <.button :if={!error.muted} phx-click="mute" phx-value-error_id={error.id}>
+              Mute
+            </.button>
+
+            <.button :if={error.muted} phx-click="unmute" phx-value-error_id={error.id}>
+              Unmute
+            </.button>
+          </div>
         </td>
       </tr>
     </tbody>
