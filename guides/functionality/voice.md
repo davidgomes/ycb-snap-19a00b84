@@ -240,3 +240,27 @@ the best for you.
 
 The `:crypto` module completely supports AES256 in GCM mode requiring no implementation in elixir. 
 Many CPUs have hardware acceleration specifically for AES. For these reasons, Nostrum defaults to `aes256_gcm`.
+
+## DAVE
+
+Discord requires voice connections to support the DAVE protocol (Discord Audio & Video End-to-End Encryption),
+which end-to-end encrypts every opus frame on top of the transport encryption described above.
+Group members exchange keys through a [Messaging Layer Security](https://www.rfc-editor.org/rfc/rfc9420.html)
+group negotiated over the voice websocket connection. See the [DAVE protocol whitepaper](https://daveprotocol.com/)
+for details.
+
+Nostrum implements DAVE with the [`dave`](https://hex.pm/packages/dave) library, which provides NIF bindings to the
+Rust crate [`davey`](https://github.com/Snazzah/davey). Like the transport encryption, it is invisible to the user:
+audio sent with `Nostrum.Voice.play/4` or `Nostrum.Voice.send_frames/2` is encrypted, and audio received with
+`Nostrum.Voice.listen/3` or `t:Nostrum.Consumer.voice_incoming_packet/0` events is decrypted automatically.
+Frames are sent without end-to-end encryption until the bot has joined the channel's MLS group, which happens
+shortly after the `t:Nostrum.Consumer.voice_ready/0` event. Incoming frames that can't be decrypted, such as those
+from a user whose SSRC isn't known yet, are returned as they were received.
+
+Precompiled NIFs are downloaded when `dave` is compiled, so a Rust toolchain isn't required on common platforms.
+If there is no precompiled NIF for your platform or you prefer to build it from source, add `rustler` to your
+dependencies and set the `FORCE_DAVE_BUILD` environment variable to `true` when compiling.
+
+```elixir
+{:rustler, "~> 0.37", optional: true, runtime: false}
+```
