@@ -23,7 +23,11 @@ defmodule Nostrum.Struct.VoiceWSState do
     :heartbeat_ack,
     :heartbeat_interval,
     :heartbeat_ref,
-    :bot_options
+    :bot_options,
+    :connected_user_ids,
+    :dave_session,
+    :dave_protocol_version,
+    :dave_pending_transitions
   ]
 
   @typedoc "The guild id that this voice websocket state applies to"
@@ -97,6 +101,31 @@ defmodule Nostrum.Struct.VoiceWSState do
   @typedoc "Time ref for the heartbeat"
   @type heartbeat_ref :: :timer.tref() | nil
 
+  @typedoc "User ids of the other clients connected to the voice channel"
+  @typedoc since: "0.11.0"
+  @type connected_user_ids :: MapSet.t(Nostrum.Struct.User.id())
+
+  @typedoc "The DAVE protocol session used for end-to-end encryption of audio frames"
+  @typedoc since: "0.11.0"
+  @type dave_session :: Dave.session()
+
+  @typedoc """
+  The DAVE protocol version in effect for the voice channel
+
+  A value of `0` means that audio frames are not end-to-end encrypted.
+  """
+  @typedoc since: "0.11.0"
+  @type dave_protocol_version :: non_neg_integer()
+
+  @typedoc """
+  DAVE protocol transitions that have been prepared but not yet executed
+
+  Maps each pending transition id to the protocol version that will be in
+  effect once the transition is executed.
+  """
+  @typedoc since: "0.11.0"
+  @type dave_pending_transitions :: %{non_neg_integer() => non_neg_integer()}
+
   @type t :: %__MODULE__{
           guild_id: guild_id,
           channel_id: channel_id,
@@ -117,6 +146,10 @@ defmodule Nostrum.Struct.VoiceWSState do
           heartbeat_ack: heartbeat_ack,
           heartbeat_interval: heartbeat_interval,
           heartbeat_ref: heartbeat_ref,
-          bot_options: Nostrum.Bot.bot_options()
+          bot_options: Nostrum.Bot.bot_options(),
+          connected_user_ids: connected_user_ids,
+          dave_session: dave_session,
+          dave_protocol_version: dave_protocol_version,
+          dave_pending_transitions: dave_pending_transitions
         }
 end

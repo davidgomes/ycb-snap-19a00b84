@@ -51,6 +51,7 @@ defmodule Nostrum.Voice do
   alias Nostrum.Struct.VoiceWSState
   alias Nostrum.Util
   alias Nostrum.Voice.Audio
+  alias Nostrum.Voice.E2EE
   alias Nostrum.Voice.Opus
   alias Nostrum.Voice.Ports
   alias Nostrum.Voice.Session
@@ -686,6 +687,8 @@ defmodule Nostrum.Voice do
   To extract an opus packet from an RTP packet, see `extract_opus_packet/1`.
 
   This function will block until the specified number of packets is received.
+  When the audio is end-to-end encrypted, received packets that cannot be decrypted
+  are discarded, so fewer than `num_packets` packets may be returned.
   """
   @doc since: "0.6.0"
   @spec listen(Guild.id(), pos_integer, raw_rtp :: false) :: [rtp_opus()] | {:error, String.t()}
@@ -694,7 +697,10 @@ defmodule Nostrum.Voice do
     voice = get_voice(guild_id)
 
     if VoiceState.ready_for_rtp?(voice) do
-      packets = Audio.get_unique_rtp_packets(voice, num_packets)
+      packets =
+        voice
+        |> Audio.get_unique_rtp_packets(num_packets)
+        |> e2ee_decrypt(voice)
 
       if raw_rtp do
         Enum.map(packets, fn {header, payload} -> header <> payload end)
@@ -709,6 +715,21 @@ defmodule Nostrum.Voice do
     else
       {:error, "Must be connected to voice channel to listen for incoming data."}
     end
+  end
+
+  defp e2ee_decrypt(packets, %VoiceState{dave_protocol_version: version})
+       when version in [nil, 0],
+       do: packets
+
+  defp e2ee_decrypt(packets, %VoiceState{session_pid: session_pid}) do
+    ws_state = Session.get_ws_state(session_pid)
+
+    Enum.flat_map(packets, fn {<<_::64, ssrc::integer-32>> = header, payload} ->
+      case E2EE.decrypt(ws_state, ssrc, Opus.strip_rtp_ext(payload)) do
+        :error -> []
+        opus -> [{header, opus}]
+      end
+    end)
   end
 
   @doc """
