@@ -13,6 +13,7 @@ defmodule PlugRailsCookieSessionStore.Mixfile do
   end
 
   defp deps do
-    [{:plug, "~> 0.9.0"}]
+    [{:cowboy, "~> 1.0"},
+     {:plug, "~> 0.9.0"}]
   end
 end
