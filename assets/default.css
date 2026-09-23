@@ -2617,7 +2617,7 @@
     @apply flex flex-wrap items-center gap-2;
   }
   .pc-data-table__selection-bar {
-    @apply invisible flex min-h-9 flex-wrap items-center gap-x-3 gap-y-2 bg-primary-50 px-3 py-1 text-sm opacity-0 dark:bg-primary-400/10;
+    @apply invisible flex min-h-9 flex-wrap items-center gap-x-3 gap-y-2 bg-primary-500/10 px-3 py-1 text-sm opacity-0 dark:bg-primary-400/15;
     border-radius: var(--pc-radius, 0.625rem);
   }
   .pc-data-table__toolbar--selecting > .pc-data-table__toolbar-main {
@@ -2659,8 +2659,10 @@
   .pc-data-table__select-td + .pc-table__td {
     @apply font-semibold;
   }
+  /* the bar's wash: a translucent primary-500 reads under a neutral
+     primary too, where primary-50 is indistinguishable from the stripes */
   .pc-data-table tbody .pc-table__tr:has(.pc-data-table__row-select:checked) {
-    @apply bg-primary-50/60 dark:bg-primary-400/10;
+    @apply bg-primary-500/10 dark:bg-primary-400/15;
   }
   .pc-data-table__scroll {
     @apply overflow-x-auto;
