@@ -84,6 +84,45 @@ defmodule Hexpm.EmailsTest do
     end
   end
 
+  describe "removal notices" do
+    test "include the reason and escape it in the html body" do
+      reason = "First <b>paragraph</b>.\n\nSecond paragraph."
+
+      emails = [
+        Emails.account_removed(build(:user), reason, []),
+        Emails.package_removed(build(:package, name: "cowboy"), [build(:user)], reason)
+      ]
+
+      for email <- emails do
+        assert email.text_body =~ reason
+
+        paragraphs =
+          email.html_body
+          |> Floki.parse_document!()
+          |> Floki.find("p")
+          |> Enum.map(&(&1 |> Floki.text() |> String.trim()))
+
+        assert "First <b>paragraph</b>." in paragraphs
+        assert "Second paragraph." in paragraphs
+        refute email.html_body =~ "<b>"
+        refute email.html_body =~ "&lt;a"
+        assert email.html_body =~ ~s(href="mailto:support@hex.pm")
+      end
+    end
+
+    test "account removal lists removed packages only when there are any" do
+      user = build(:user)
+
+      email = Emails.account_removed(user, "Spam.", ["bar", "foo"])
+      assert email.text_body =~ "have also been removed: bar, foo.\n\nIf you have any questions"
+      assert email.html_body =~ "have also been removed: bar, foo."
+
+      email = Emails.account_removed(user, "Spam.", [])
+      assert email.text_body =~ "cannot be registered again.\n\nIf you have any questions"
+      refute email.html_body =~ "have also been removed"
+    end
+  end
+
   describe "SSO security notifications" do
     setup do
       user = insert(:user)

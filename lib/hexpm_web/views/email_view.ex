@@ -40,6 +40,10 @@ defmodule HexpmWeb.EmailView do
       "If you have any problems don't hesitate to contact support at #{support_link(format)}."
     end
 
+    def removal_questions_notice(format) do
+      "If you have any questions or believe this was a mistake, please contact support at #{support_link(format)}."
+    end
+
     # Common labels for build tools
     def for_mix_label(), do: "For mix:"
     def for_rebar3_label(), do: "For rebar3:"
@@ -94,6 +98,28 @@ defmodule HexpmWeb.EmailView do
       |> Enum.map(&String.trim/1)
       |> Enum.reject(&(&1 == ""))
     end
+  end
+
+  defmodule AccountRemoved do
+    def title() do
+      "Your account has been removed"
+    end
+
+    def message(username) do
+      "The Hex.pm account \"#{username}\" has been removed by the Hex.pm team for the following reason:"
+    end
+
+    def username_retired() do
+      "The username has been retired and cannot be registered again."
+    end
+
+    def packages_removed(packages) do
+      "The following packages you were the sole owner of have also been removed: " <>
+        Enum.join(packages, ", ") <> "."
+    end
+
+    defdelegate reason_paragraphs(reason), to: Announcement, as: :paragraphs
+    defdelegate questions_notice(format), to: Common, as: :removal_questions_notice
   end
 
   defmodule BuildTools do
@@ -325,6 +351,19 @@ defmodule HexpmWeb.EmailView do
       gleam hex retire --package #{package} --version #{version} security --message "Not published by owners"
       """
     end
+  end
+
+  defmodule PackageRemoved do
+    def title() do
+      "Your package has been removed"
+    end
+
+    def message(package) do
+      "The package #{package} and all of its releases have been removed from Hex.pm by the Hex.pm team for the following reason:"
+    end
+
+    defdelegate reason_paragraphs(reason), to: Announcement, as: :paragraphs
+    defdelegate questions_notice(format), to: Common, as: :removal_questions_notice
   end
 
   defmodule ReportState do

@@ -1,0 +1,11 @@
+<%= AccountRemoved.title() %>
+
+<%= AccountRemoved.message(@username) %>
+
+<%= @reason %>
+
+<%= AccountRemoved.username_retired() %>
+<%= if @packages != [] do %>
+<%= AccountRemoved.packages_removed(@packages) %>
+<% end %>
+<%= AccountRemoved.questions_notice(:text) %>
