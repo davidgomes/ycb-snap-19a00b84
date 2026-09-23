@@ -1973,6 +1973,15 @@
   .pc-dropdown__menu-items-wrapper-placement--right {
     @apply left-0 origin-top-left;
   }
+  .pc-dropdown__menu-items-wrapper--up {
+    @apply bottom-full mt-0 mb-2;
+  }
+  .pc-dropdown__menu-items-wrapper--up.pc-dropdown__menu-items-wrapper-placement--left {
+    @apply origin-bottom-right;
+  }
+  .pc-dropdown__menu-items-wrapper--up.pc-dropdown__menu-items-wrapper-placement--right {
+    @apply origin-bottom-left;
+  }
   /* The one trigger chevron for the dropdown family - user menu,
      language select and friends share this so the colour can't drift. */
   /* THE decorative-chevron rule for the dropdown family (dropdown,

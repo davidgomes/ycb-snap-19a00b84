@@ -926,6 +926,45 @@ export const PetalColorScheme = {
   },
 };
 
+// Flips the dropdown panel above its trigger when there isn't room below.
+// The panel is shown/hidden via JS.toggle (inline display), so we watch it.
+export const PetalDropdown = {
+  mounted() {
+    this.wasOpen = false;
+    this.observer = new MutationObserver(() => this.check());
+    this.observer.observe(this.el, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+  },
+
+  updated() {
+    this.el.classList.toggle("pc-dropdown__menu-items-wrapper--up", !!this.up);
+  },
+
+  destroyed() {
+    if (this.observer) this.observer.disconnect();
+  },
+
+  check() {
+    const open = this.el.style.display !== "none";
+    if (open && !this.wasOpen) this.place();
+    this.wasOpen = open;
+  },
+
+  place() {
+    const cls = "pc-dropdown__menu-items-wrapper--up";
+    this.el.classList.remove(cls);
+    const anchor = this.el.parentElement.getBoundingClientRect();
+    const height = this.el.offsetHeight;
+    const gap = 8;
+    const below = window.innerHeight - anchor.bottom;
+    const above = anchor.top;
+    this.up = below < height + gap && above > below;
+    this.el.classList.toggle(cls, this.up);
+  },
+};
+
 export const PetalNumberTicker = {
   mounted() {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -5447,6 +5486,7 @@ export const PetalDataTable = {
 export default {
   PetalChart,
   PetalColorScheme,
+  PetalDropdown,
   PetalLocalTime,
   PetalCarousel,
   PetalToast,
