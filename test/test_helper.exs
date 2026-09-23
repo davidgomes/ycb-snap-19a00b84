@@ -9,7 +9,8 @@ Application.put_env(:prometheus, Prometheus.TestPlugPipelineInstrumenterCustomCo
   labels: [:method, :resp_length],
   duration_buckets: [10, 100],
   registry: :qwe,
-  duration_unit: :seconds)
+  duration_unit: :seconds
+)
 
 defmodule Prometheus.TestPlugPipelineInstrumenterCustomConfig do
   use Prometheus.PlugPipelineInstrumenter
@@ -27,14 +28,14 @@ Application.put_env(:prometheus, Prometheus.TestPlugExporterCustomConfig,
   format: :protobuf,
   path: "/metrics_qwe",
   registry: :qwe,
-  auth: {:basic, "qwe", "qwe"})
+  auth: {:basic, "qwe", "qwe"}
+)
 
 defmodule Prometheus.TestPlugExporterCustomConfig do
   use Prometheus.PlugExporter
 end
 
 defmodule Prometheus.VeryImportantPlug do
-
   import Plug.Conn
 
   def init(sleep) do
@@ -46,16 +47,17 @@ defmodule Prometheus.VeryImportantPlug do
       ["qwe", "qwe"] ->
         Process.sleep(sleep)
         put_private(conn, :vip_kind, :qwe)
+
       _ ->
         put_private(conn, :vip_kind, :other)
     end
   end
-
 end
 
 Application.put_env(:prometheus, Prometheus.VeryImportantPlugCounter,
   counter: :vip_only_counter,
-  labels: [:vip_kind])
+  labels: [:vip_kind]
+)
 
 defmodule Prometheus.VeryImportantPlugCounter do
   use Prometheus.PlugInstrumenter
@@ -72,7 +74,8 @@ Application.put_env(:prometheus, Prometheus.VeryImportantPlugHistogram,
   histogram: :vip_only_histogram_microseconds,
   labels: [:vip_kind],
   histogram_buckets: [100, 200],
-  registry: :qwe)
+  registry: :qwe
+)
 
 defmodule Prometheus.VeryImportantPlugHistogram do
   use Prometheus.PlugInstrumenter
@@ -87,7 +90,8 @@ end
 Application.put_env(:prometheus, Prometheus.VeryImportantPlugInstrumenter,
   counter: :vip_counter,
   histogram: :vip_histogram,
-  duration_unit: :seconds)
+  duration_unit: :seconds
+)
 
 defmodule Prometheus.VeryImportantPlugInstrumenter do
   use Prometheus.PlugInstrumenter
@@ -106,6 +110,7 @@ defmodule HelloWorldPlug do
 
   def call(conn, _opts) do
     Process.sleep(1000)
+
     conn
     |> put_resp_content_type("text/plain")
     |> send_resp(200, "Hello World!")
