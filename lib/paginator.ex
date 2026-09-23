@@ -71,7 +71,10 @@ defmodule Paginator do
     * `:before` - Fetch the records before this cursor.
     * `:cursor_fields` - The fields with sorting direction used to determine the
     cursor. In most cases, this should be the same fields as the ones used for sorting in the query.
-    When you use named bindings in your query they can also be provided.
+    When you use named bindings in your query they can also be provided. Supported sorting
+    directions are `:asc`, `:asc_nulls_first`, `:asc_nulls_last`, `:desc`, `:desc_nulls_first`
+    and `:desc_nulls_last`. Like PostgreSQL, `:asc` sorts `NULL` values last and `:desc` sorts
+    them first.
     * `:fetch_cursor_value_fun` function of arity 2 to lookup cursor values on returned records.
     Defaults to `Paginator.default_fetch_cursor_value/2`
     * `:include_total_count` - Set this to true to return the total number of
@@ -105,6 +108,12 @@ defmodule Paginator do
       query = from(p in Post, order_by: [asc: p.inserted_at, desc: p.id], select: p)
 
       Repo.paginate(query, cursor_fields: [inserted_at: :asc, id: :desc], limit: 50)
+
+  ## Example with sorting on nullable columns
+
+      query = from(p in Post, order_by: [desc_nulls_last: p.published_at, asc: p.id], select: p)
+
+      Repo.paginate(query, cursor_fields: [published_at: :desc_nulls_last, id: :asc], limit: 50)
 
   ## Example with sorting on columns in joined tables
 
