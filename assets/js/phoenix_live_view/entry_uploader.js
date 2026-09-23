@@ -20,6 +20,14 @@ export default class EntryUploader {
     this.uploadChannel.leave();
     this.errored = true;
     this.chunkTimer != null && clearTimeout(this.chunkTimer);
+    if (reason === "writer_error") {
+      // The server already recorded the writer failure and retained the entry,
+      // so keep it pending until cancelling it removes it from the DOM instead
+      // of reporting a second, generic entry error. A submit scheduled behind
+      // this upload would lock the form and hide the failure, so cancel it.
+      this.entry.view.cancelSubmit(this.entry.fileEl.form);
+      return;
+    }
     this.entry.error(reason);
   }
 
