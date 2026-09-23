@@ -62,6 +62,9 @@ However, a non-optimized version of `EctoJob` can be used on top of MySQL >=
 8.0.1. Prior version of MySQL is not supported because of the following feature:
 * `FOR UPDATE SKIP LOCKED`
 
+When running on MySQL, new jobs are picked up on the next `poll_interval` rather
+than immediately, and the `notify` option has no effect.
+
 ### Upgrading to version 3.0
 
 To upgrade your project to 3.0 version of `ecto_job` you must add a migration to update the pre-existent job queue tables:
