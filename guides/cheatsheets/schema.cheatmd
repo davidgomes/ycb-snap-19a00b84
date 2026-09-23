@@ -387,16 +387,21 @@ end
 
 ### Custom field functions
 
+`field_dynamic` is enough for filtering with the built-in operators. Flop
+compares the dynamic with the filter value. Add `filter` when the comparison
+itself has to be custom. If both are set, `filter` is used for filtering and
+`field_dynamic` for ordering.
+
 ```elixir
 defmodule CustomFields do
   import Ecto.Query
 
-  # for ordering
+  # for ordering and for filtering with the built-in operators
   def human_age(_opts) do
     dynamic([p], fragment("? * 7", p.age))
   end
 
-  # for filtering
+  # for filtering when the operator has to be applied manually
   def human_age_filter(q, %Flop.Filter{value: value, op: op}, _) do
     case Ecto.Type.cast(:integer, value) do
       {:ok, human_years} ->
