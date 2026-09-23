@@ -30,9 +30,9 @@ defmodule GRPC.Client.ReResolveTest do
   alias GRPC.Channel
   alias GRPC.Client.Connection
 
-  @resolve_interval 50
-  @wait @resolve_interval + 30
-  @wait_after_backoff @resolve_interval * 2 + 50
+  # Long enough for the periodic timer to never fire during a test, so
+  # resolution cycles only run when triggered through `tick_resolver/1`.
+  @resolve_interval 60_000
 
   setup do
     Mox.set_mox_global()
@@ -153,13 +153,16 @@ defmodule GRPC.Client.ReResolveTest do
 
     Connection.connect(
       "dns://my-service.local:50051",
-      [
-        adapter: adapter,
-        name: ref,
-        resolver: resolver,
-        resolve_interval: @resolve_interval,
-        min_resolve_interval: 0
-      ] ++ opts
+      Keyword.merge(
+        [
+          adapter: adapter,
+          name: ref,
+          resolver: resolver,
+          resolve_interval: @resolve_interval,
+          min_resolve_interval: 0
+        ],
+        opts
+      )
     )
   end
 
@@ -172,6 +175,31 @@ defmodule GRPC.Client.ReResolveTest do
     conn_state = get_state(ref)
     worker_pid = conn_state.resolver_state.worker_pid
     :sys.get_state(worker_pid)
+  end
+
+  # Fires the resolver's timer message by hand, then waits for the resolver
+  # to hand the result to the connection and for the connection to apply it.
+  defp tick_resolver(ref) do
+    worker_pid = get_state(ref).resolver_state.worker_pid
+    send(worker_pid, :resolve)
+    :sys.get_state(worker_pid)
+    get_state(ref)
+  end
+
+  defp await_state(ref, fun, attempts \\ 200) do
+    state = get_state(ref)
+
+    cond do
+      fun.(state) ->
+        state
+
+      attempts == 0 ->
+        flunk("connection state never matched: #{inspect(state)}")
+
+      true ->
+        Process.sleep(5)
+        await_state(ref, fun, attempts - 1)
+    end
   end
 
   describe "scale-up: new backends discovered" do
@@ -198,9 +226,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: new_addrs, service_config: nil}}
       end)
 
-      Process.sleep(@wait)
-
-      state = get_state(ctx.ref)
+      state = tick_resolver(ctx.ref)
       assert map_size(state.real_channels) == 2
       assert Map.has_key?(state.real_channels, "10.0.0.1:50051")
       assert Map.has_key?(state.real_channels, "10.0.0.2:50051")
@@ -229,9 +255,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: [%{address: "10.0.0.1", port: 50051}], service_config: nil}}
       end)
 
-      Process.sleep(@wait)
-
-      state = get_state(ctx.ref)
+      state = tick_resolver(ctx.ref)
       assert map_size(state.real_channels) == 1
       assert Map.has_key?(state.real_channels, "10.0.0.1:50051")
       refute Map.has_key?(state.real_channels, "10.0.0.2:50051")
@@ -254,9 +278,7 @@ defmodule GRPC.Client.ReResolveTest do
 
       state_before = get_state(ctx.ref)
 
-      Process.sleep(@wait)
-
-      state_after = get_state(ctx.ref)
+      state_after = tick_resolver(ctx.ref)
       assert state_before.real_channels == state_after.real_channels
 
       disconnect_and_wait(channel)
@@ -286,9 +308,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: new_addrs, service_config: nil}}
       end)
 
-      Process.sleep(@wait)
-
-      state = get_state(ctx.ref)
+      state = tick_resolver(ctx.ref)
       assert map_size(state.real_channels) == 2
       refute Map.has_key?(state.real_channels, "10.0.0.1:50051")
       refute Map.has_key?(state.real_channels, "10.0.0.2:50051")
@@ -314,9 +334,7 @@ defmodule GRPC.Client.ReResolveTest do
 
       stub(ctx.resolver, :resolve, fn _target -> {:error, :timeout} end)
 
-      Process.sleep(@wait)
-
-      state = get_state(ctx.ref)
+      state = tick_resolver(ctx.ref)
       assert map_size(state.real_channels) == 1
       assert Map.has_key?(state.real_channels, "10.0.0.1:50051")
 
@@ -339,8 +357,7 @@ defmodule GRPC.Client.ReResolveTest do
 
       stub(ctx.resolver, :resolve, fn _target -> {:error, :nxdomain} end)
 
-      Process.sleep(@wait)
-      assert map_size(get_state(ctx.ref).real_channels) == 1
+      assert map_size(tick_resolver(ctx.ref).real_channels) == 1
 
       stub(ctx.resolver, :resolve, fn _target ->
         {:ok,
@@ -353,8 +370,7 @@ defmodule GRPC.Client.ReResolveTest do
          }}
       end)
 
-      Process.sleep(@wait_after_backoff)
-      assert map_size(get_state(ctx.ref).real_channels) == 2
+      assert map_size(tick_resolver(ctx.ref).real_channels) == 2
 
       disconnect_and_wait(channel)
     end
@@ -378,9 +394,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: [], service_config: nil}}
       end)
 
-      Process.sleep(@wait)
-
-      state = get_state(ctx.ref)
+      state = tick_resolver(ctx.ref)
       assert map_size(state.real_channels) == 2
 
       disconnect_and_wait(channel)
@@ -404,8 +418,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: [], service_config: nil}}
       end)
 
-      Process.sleep(@wait)
-      assert map_size(get_state(ctx.ref).real_channels) == 1
+      assert map_size(tick_resolver(ctx.ref).real_channels) == 1
 
       stub(ctx.resolver, :resolve, fn _target ->
         {:ok,
@@ -418,8 +431,7 @@ defmodule GRPC.Client.ReResolveTest do
          }}
       end)
 
-      Process.sleep(@wait_after_backoff)
-      state = get_state(ctx.ref)
+      state = tick_resolver(ctx.ref)
       assert map_size(state.real_channels) == 2
       assert Map.has_key?(state.real_channels, "10.0.0.3:50051")
 
@@ -451,7 +463,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: new_addrs, service_config: nil}}
       end)
 
-      Process.sleep(@wait)
+      tick_resolver(ctx.ref)
 
       assert {:ok, picked} = Connection.pick_channel(channel)
       assert picked.host in ["10.0.0.1", "10.0.0.2"]
@@ -479,7 +491,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: [%{address: "10.0.0.9", port: 50051}], service_config: nil}}
       end)
 
-      Process.sleep(@wait)
+      tick_resolver(ctx.ref)
 
       {:ok, picked} = Connection.pick_channel(channel)
       assert picked.host == "10.0.0.9"
@@ -527,7 +539,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: small, service_config: nil}}
       end)
 
-      Process.sleep(@wait)
+      tick_resolver(ctx.ref)
 
       for _ <- 1..picker_count do
         assert_receive {:done, _, results}, 2_000
@@ -537,8 +549,6 @@ defmodule GRPC.Client.ReResolveTest do
                  "pick returned #{inspect(r)} — expected {:ok, %Channel{}}"
         end
       end
-
-      Process.sleep(@wait)
 
       hosts =
         for _ <- 1..20 do
@@ -606,7 +616,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: [%{address: "10.0.0.99", port: 50051}], service_config: nil}}
       end)
 
-      Process.sleep(@wait)
+      tick_resolver(ctx.ref)
 
       assert {:ok, picked} = Connection.pick_channel(channel)
       assert picked.host == "10.0.0.99"
@@ -617,6 +627,8 @@ defmodule GRPC.Client.ReResolveTest do
 
   describe "repeated re-resolution cycles" do
     test "timer fires on every interval tick, accumulating changes", ctx do
+      attach_telemetry([:grpc, :client, :resolve, :stop])
+
       {:ok, channel} =
         connect_with_resolver(
           ctx.ref,
@@ -625,8 +637,11 @@ defmodule GRPC.Client.ReResolveTest do
           [
             %{address: "10.0.0.1", port: 50051}
           ],
-          lb_policy: :round_robin
+          lb_policy: :round_robin,
+          resolve_interval: 10
         )
+
+      worker_pid = get_state(ctx.ref).resolver_state.worker_pid
 
       two_addrs = [
         %{address: "10.0.0.1", port: 50051},
@@ -637,7 +652,10 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: two_addrs, service_config: nil}}
       end)
 
-      Process.sleep(@wait)
+      assert_receive {:telemetry, [:grpc, :client, :resolve, :stop], _, %{address_count: 2}},
+                     1_000
+
+      :sys.get_state(worker_pid)
       assert map_size(get_state(ctx.ref).real_channels) == 2
 
       three_addrs = [
@@ -650,7 +668,10 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: three_addrs, service_config: nil}}
       end)
 
-      Process.sleep(@wait)
+      assert_receive {:telemetry, [:grpc, :client, :resolve, :stop], _, %{address_count: 3}},
+                     1_000
+
+      :sys.get_state(worker_pid)
       assert map_size(get_state(ctx.ref).real_channels) == 3
 
       disconnect_and_wait(channel)
@@ -665,8 +686,6 @@ defmodule GRPC.Client.ReResolveTest do
           name: ctx.ref,
           resolve_interval: 50
         )
-
-      Process.sleep(@wait)
 
       assert {:ok, _} = Connection.pick_channel(channel)
       assert is_nil(get_state(ctx.ref).resolver_state)
@@ -688,10 +707,12 @@ defmodule GRPC.Client.ReResolveTest do
           lb_policy: :round_robin
         )
 
+      worker_pid = get_state(ctx.ref).resolver_state.worker_pid
+      worker_ref = Process.monitor(worker_pid)
+
       Connection.disconnect(channel)
 
-      Process.sleep(@wait)
-
+      assert_receive {:DOWN, ^worker_ref, :process, ^worker_pid, _reason}
       assert {:error, :no_connection} = Connection.pick_channel(channel)
     end
   end
@@ -720,9 +741,7 @@ defmodule GRPC.Client.ReResolveTest do
          }}
       end)
 
-      Process.sleep(@wait)
-
-      state = get_state(ctx.ref)
+      state = tick_resolver(ctx.ref)
       assert map_size(state.real_channels) == 2
       assert {:ok, _} = Connection.pick_channel(channel)
 
@@ -753,9 +772,7 @@ defmodule GRPC.Client.ReResolveTest do
          }}
       end)
 
-      Process.sleep(@wait)
-
-      state = get_state(ctx.ref)
+      state = tick_resolver(ctx.ref)
       assert map_size(state.real_channels) == 1
       refute Map.has_key?(state.real_channels, "10.0.0.1:50051")
       assert Map.has_key?(state.real_channels, "10.0.0.1:50052")
@@ -779,11 +796,11 @@ defmodule GRPC.Client.ReResolveTest do
 
       stub(ctx.resolver, :resolve, fn _target -> {:error, :nxdomain} end)
 
-      Process.sleep(@wait)
+      tick_resolver(ctx.ref)
       resolver_state = get_resolver_state(ctx.ref)
       assert resolver_state.resolve_interval == @resolve_interval * 2
 
-      Process.sleep(resolver_state.resolve_interval + 50)
+      tick_resolver(ctx.ref)
       resolver_state = get_resolver_state(ctx.ref)
       assert resolver_state.resolve_interval == @resolve_interval * 4
 
@@ -804,7 +821,7 @@ defmodule GRPC.Client.ReResolveTest do
 
       stub(ctx.resolver, :resolve, fn _target -> {:error, :nxdomain} end)
 
-      Process.sleep(@wait)
+      tick_resolver(ctx.ref)
       resolver_state = get_resolver_state(ctx.ref)
       assert resolver_state.resolve_interval == @resolve_interval * 2
 
@@ -812,7 +829,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: [%{address: "10.0.0.1", port: 50051}], service_config: nil}}
       end)
 
-      Process.sleep(@wait_after_backoff)
+      tick_resolver(ctx.ref)
       resolver_state = get_resolver_state(ctx.ref)
       assert resolver_state.resolve_interval == @resolve_interval
 
@@ -840,13 +857,13 @@ defmodule GRPC.Client.ReResolveTest do
           lb_policy: :round_robin
         )
 
-      Process.sleep(@wait)
+      tick_resolver(ctx.ref)
       assert get_resolver_state(ctx.ref).resolve_interval == @resolve_interval * 2
 
-      Process.sleep(@resolve_interval * 2 + 50)
+      tick_resolver(ctx.ref)
       assert get_resolver_state(ctx.ref).resolve_interval == max
 
-      Process.sleep(max + 50)
+      tick_resolver(ctx.ref)
       assert get_resolver_state(ctx.ref).resolve_interval == max
 
       disconnect_and_wait(channel)
@@ -936,7 +953,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: new_addrs, service_config: nil}}
       end)
 
-      Process.sleep(@wait)
+      tick_resolver(ctx.ref)
 
       assert_received {:telemetry, [:grpc, :client, :resolve, :stop], measurements, metadata}
       assert is_integer(measurements.duration)
@@ -961,7 +978,7 @@ defmodule GRPC.Client.ReResolveTest do
 
       stub(ctx.resolver, :resolve, fn _target -> {:error, :timeout} end)
 
-      Process.sleep(@wait)
+      tick_resolver(ctx.ref)
 
       assert_received {:telemetry, [:grpc, :client, :resolve, :error], measurements, metadata}
       assert is_integer(measurements.duration)
@@ -988,7 +1005,7 @@ defmodule GRPC.Client.ReResolveTest do
         {:ok, %{addresses: [], service_config: nil}}
       end)
 
-      Process.sleep(@wait)
+      tick_resolver(ctx.ref)
 
       assert_received {:telemetry, [:grpc, :client, :resolve, :error], _measurements, metadata}
       assert metadata.reason == :empty_addresses
@@ -1041,7 +1058,7 @@ defmodule GRPC.Client.ReResolveTest do
          }}
       end)
 
-      Process.sleep(@wait)
+      tick_resolver(ctx.ref)
 
       assert {:ok, picked} = Connection.pick_channel(channel)
       assert picked.host == "10.0.0.1"
@@ -1085,7 +1102,7 @@ defmodule GRPC.Client.ReResolveTest do
          }}
       end)
 
-      Process.sleep(@wait)
+      tick_resolver(ctx.ref)
 
       assert {:error, :no_connection} = Connection.pick_channel(channel)
 
@@ -1145,10 +1162,8 @@ defmodule GRPC.Client.ReResolveTest do
       # Now make 10.0.0.2 reachable
       Agent.update(ctx.failing_hosts, fn _ -> [] end)
 
-      Process.sleep(@wait)
-
       # Both channels should now be healthy
-      state = get_state(ctx.ref)
+      state = tick_resolver(ctx.ref)
       assert match?({:connected, _}, Map.get(state.real_channels, "10.0.0.1:50051"))
       assert match?({:connected, _}, Map.get(state.real_channels, "10.0.0.2:50051"))
 
@@ -1169,17 +1184,26 @@ defmodule GRPC.Client.ReResolveTest do
           lb_policy: :round_robin
         )
 
-      # Simulate a resolver that takes long enough to overlap pick_channel
+      test_pid = self()
+
+      # Simulate a resolver that stays blocked while pick_channel runs
       stub(ctx.resolver, :resolve, fn _target ->
-        Process.sleep(200)
+        send(test_pid, {:resolving, self()})
+
+        receive do
+          :continue -> :ok
+        end
+
         {:ok, %{addresses: [%{address: "10.0.0.1", port: 50051}], service_config: nil}}
       end)
 
-      # Wait for re-resolve to fire (runs in DNSResolver process)
-      Process.sleep(@wait)
+      worker_pid = get_state(ctx.ref).resolver_state.worker_pid
+      send(worker_pid, :resolve)
+      assert_receive {:resolving, ^worker_pid}
 
       assert {:ok, _} = Connection.pick_channel(channel)
 
+      send(worker_pid, :continue)
       assert {:ok, _} = Connection.disconnect(channel)
     end
 
@@ -1259,8 +1283,7 @@ defmodule GRPC.Client.ReResolveTest do
         send(pid, :refresh)
       end
 
-      # Small sleep for messages to process
-      Process.sleep(50)
+      :sys.get_state(pid)
 
       assert Process.alive?(pid)
       assert {:ok, picked} = Connection.pick_channel(channel)
@@ -1300,7 +1323,7 @@ defmodule GRPC.Client.ReResolveTest do
       assert is_nil(state.resolver_state)
 
       Connection.resolve_now(channel)
-      Process.sleep(50)
+      get_state(ctx.ref)
 
       assert {:ok, _} = Connection.pick_channel(channel)
 
@@ -1324,14 +1347,14 @@ defmodule GRPC.Client.ReResolveTest do
       assert Process.alive?(original_pid)
 
       Process.exit(original_pid, :kill)
-      Process.sleep(100)
+
+      state =
+        await_state(ctx.ref, fn state ->
+          state.resolver_state != nil and state.resolver_state.worker_pid != original_pid
+        end)
 
       conn_pid = whereis_name(ctx.ref)
       assert Process.alive?(conn_pid)
-
-      state = get_state(ctx.ref)
-      assert state.resolver_state != nil
-      assert state.resolver_state.worker_pid != original_pid
       assert Process.alive?(state.resolver_state.worker_pid)
 
       assert {:ok, _} = Connection.pick_channel(channel)
@@ -1353,7 +1376,7 @@ defmodule GRPC.Client.ReResolveTest do
       stray_pid = spawn(fn -> :ok end)
       send(conn_pid, {:EXIT, stray_pid, :boom})
 
-      Process.sleep(50)
+      :sys.get_state(conn_pid)
       assert Process.alive?(conn_pid)
       assert {:ok, _} = Connection.pick_channel(channel)
 
