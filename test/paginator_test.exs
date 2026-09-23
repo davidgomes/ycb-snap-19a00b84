@@ -936,6 +936,67 @@ defmodule PaginatorTest do
            }
   end
 
+  describe "sorting on a nullable column" do
+    setup do
+      f1 = insert(:payment, status: "failed", amount: 1)
+      f2 = insert(:payment, status: "failed", amount: nil)
+      f3 = insert(:payment, status: "failed", amount: 3)
+      f4 = insert(:payment, status: "failed", amount: nil)
+      f5 = insert(:payment, status: "failed", amount: 5)
+
+      {:ok, failed_payments: {f1, f2, f3, f4, f5}}
+    end
+
+    for {order, expected} <- [
+          asc: [1, 3, 5, 2, 4],
+          asc_nulls_last: [1, 3, 5, 2, 4],
+          asc_nulls_first: [2, 4, 1, 3, 5],
+          desc: [2, 4, 5, 3, 1],
+          desc_nulls_first: [2, 4, 5, 3, 1],
+          desc_nulls_last: [5, 3, 1, 2, 4]
+        ] do
+      @order order
+      @expected expected
+
+      test "paginates forward and backward with #{order}", %{failed_payments: payments} do
+        expected = Enum.map(@expected, &elem(payments, &1 - 1).id)
+        query = failed_payments_by_amount(@order)
+        opts = [cursor_fields: [amount: @order, id: :asc], limit: 2]
+
+        assert paginate_all(query, opts, :after, nil) == expected
+
+        last_cursor =
+          Paginator.cursor_for_record(
+            Enum.find(Tuple.to_list(payments), &(&1.id == List.last(expected))),
+            amount: @order,
+            id: :asc
+          )
+
+        assert paginate_all(query, opts, :before, last_cursor) == Enum.drop(expected, -1)
+      end
+    end
+  end
+
+  defp paginate_all(query, opts, direction, cursor) do
+    page = Repo.paginate(query, opts ++ [{direction, cursor}])
+    ids = to_ids(page.entries)
+
+    case {direction, Map.fetch!(page.metadata, direction)} do
+      {_, nil} -> ids
+      {:after, next} -> ids ++ paginate_all(query, opts, :after, next)
+      {:before, next} -> paginate_all(query, opts, :before, next) ++ ids
+    end
+  end
+
+  defp failed_payments_by_amount(order) do
+    from(
+      p in Payment,
+      where: p.status == "failed",
+      order_by: [{^order, p.amount}, {:asc, p.id}],
+      select: p
+    )
+  end
+
   defp to_ids(entries), do: Enum.map(entries, & &1.id)
 
   defp create_customers_and_payments(_context) do

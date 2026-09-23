@@ -165,6 +165,9 @@ create index("posts", [:inserted_at, :id])
 definition, just add any unique column and extend your index accordingly.
 * You need to add `:order_by` clauses yourself before passing your query to `paginate/2`. In the future we might do that
 for you automatically based on the fields specified in `:cursor_fields`.
+* The sort order set per field in `:cursor_fields` (`:asc`, `:asc_nulls_first`, `:asc_nulls_last`, `:desc`,
+`:desc_nulls_first` or `:desc_nulls_last`) must match the one used in your `:order_by` clauses. `:asc` and `:desc`
+follow PostgreSQL defaults, i.e. `NULLS LAST` and `NULLS FIRST` respectively.
 * There is an outstanding issue where Postgrex fails to properly builds the query if it includes custom PostgreSQL types.
 * This library has only be tested with PostgreSQL.
 
