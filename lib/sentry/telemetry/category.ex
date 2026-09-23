@@ -186,4 +186,29 @@ defmodule Sentry.Telemetry.Category do
   def data_category(:transaction), do: "transaction"
   def data_category(:log), do: "log_item"
   def data_category(:metric), do: "trace_metric"
+
+  @doc """
+  Returns the Sentry byte-size data category for a given telemetry category, or `nil`
+  if the category has no byte-size counterpart.
+
+  Byte-size categories are used in client reports (to report the serialized size of
+  discarded items) and in rate limiting.
+
+  ## Examples
+
+      iex> Sentry.Telemetry.Category.byte_data_category(:log)
+      "log_byte"
+
+      iex> Sentry.Telemetry.Category.byte_data_category(:metric)
+      "trace_metric_byte"
+
+      iex> Sentry.Telemetry.Category.byte_data_category(:error)
+      nil
+
+  """
+  @doc since: "13.4.0"
+  @spec byte_data_category(t()) :: String.t() | nil
+  def byte_data_category(:log), do: "log_byte"
+  def byte_data_category(:metric), do: "trace_metric_byte"
+  def byte_data_category(category) when category in @categories, do: nil
 end

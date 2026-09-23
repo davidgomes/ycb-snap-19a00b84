@@ -139,6 +139,30 @@ defmodule Sentry.Envelope do
   def get_data_category(%MetricBatch{}), do: "trace_metric"
 
   @doc """
+  Returns the serialized size, in bytes, of a single log event or metric (or the sum
+  of the sizes of the items in a log or metric batch).
+
+  This is used to report `log_byte` and `trace_metric_byte` outcomes in client reports.
+  """
+  @spec item_byte_size(LogEvent.t() | Metric.t() | LogBatch.t() | MetricBatch.t()) ::
+          non_neg_integer()
+  def item_byte_size(%LogEvent{} = log_event), do: encoded_byte_size(LogEvent.to_map(log_event))
+  def item_byte_size(%Metric{} = metric), do: encoded_byte_size(Metric.to_map(metric))
+
+  def item_byte_size(%LogBatch{log_events: log_events}),
+    do: Enum.reduce(log_events, 0, &(item_byte_size(&1) + &2))
+
+  def item_byte_size(%MetricBatch{metrics: metrics}),
+    do: Enum.reduce(metrics, 0, &(item_byte_size(&1) + &2))
+
+  defp encoded_byte_size(map) do
+    case Sentry.JSON.encode(map, Config.json_library()) do
+      {:ok, encoded} -> byte_size(encoded)
+      {:error, _reason} -> 0
+    end
+  end
+
+  @doc """
   Returns the total number of payload items in the envelope.
 
   For log and metric envelopes, this counts individual items within the batch.

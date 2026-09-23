@@ -22,7 +22,7 @@ defmodule Sentry.Telemetry.Buffer do
 
   alias __MODULE__
 
-  alias Sentry.ClientReport
+  alias Sentry.{ClientReport, LogEvent, Metric}
   alias Sentry.Telemetry.Category
 
   @enforce_keys [:category, :capacity, :batch_size]
@@ -178,18 +178,26 @@ defmodule Sentry.Telemetry.Buffer do
 
   defp offer(%Buffer{size: size, capacity: capacity} = state, item)
        when size >= capacity do
-    {{:value, _dropped}, items} = :queue.out(state.items)
-
-    ClientReport.Sender.record_discarded_events(
-      :cache_overflow,
-      Category.data_category(state.category)
-    )
-
+    {{:value, dropped}, items} = :queue.out(state.items)
+    record_overflow(state.category, dropped)
     %{state | items: :queue.in(item, items)}
   end
 
   defp offer(%Buffer{} = state, item) do
     %{state | items: :queue.in(item, state.items), size: state.size + 1}
+  end
+
+  # Log events and metrics are also reported by their serialized size, which
+  # requires the dropped struct itself.
+  defp record_overflow(_category, %struct{} = dropped) when struct in [LogEvent, Metric] do
+    ClientReport.Sender.record_discarded_events(:cache_overflow, [dropped])
+  end
+
+  defp record_overflow(category, _dropped) do
+    ClientReport.Sender.record_discarded_events(
+      :cache_overflow,
+      Category.data_category(category)
+    )
   end
 
   defp poll_batch(state, count), do: poll_batch(state, count, [])

@@ -6,7 +6,19 @@ defmodule Sentry.ClientReport.Sender do
 
   use GenServer
 
-  alias Sentry.{Client, ClientReport, Config, Envelope, Transaction}
+  alias Sentry.{
+    Client,
+    ClientReport,
+    Config,
+    Envelope,
+    LogBatch,
+    LogEvent,
+    Metric,
+    MetricBatch,
+    Transaction
+  }
+
+  alias Sentry.Telemetry.Category
 
   @send_interval 30_000
 
@@ -39,6 +51,10 @@ defmodule Sentry.ClientReport.Sender do
                | Sentry.CheckIn.t()
                | ClientReport.t()
                | Sentry.Event.t()
+               | LogBatch.t()
+               | LogEvent.t()
+               | Metric.t()
+               | MetricBatch.t()
                | Sentry.Transaction.t()
   def record_discarded_events(reason, event_items, genserver)
       when is_list(event_items) do
@@ -65,8 +81,29 @@ defmodule Sentry.ClientReport.Sender do
     [{Envelope.get_data_category(transaction), 1}, {"span", span_count}]
   end
 
+  # Log events and metrics are reported both by count and by their serialized size.
+  # https://develop.sentry.dev/sdk/telemetry/client-reports/
+  defp data_categories(%LogBatch{log_events: log_events} = batch) do
+    byte_outcomes(:log, length(log_events), batch)
+  end
+
+  defp data_categories(%MetricBatch{metrics: metrics} = batch) do
+    byte_outcomes(:metric, length(metrics), batch)
+  end
+
+  defp data_categories(%LogEvent{} = log_event), do: byte_outcomes(:log, 1, log_event)
+  defp data_categories(%Metric{} = metric), do: byte_outcomes(:metric, 1, metric)
+
   defp data_categories(item) do
     [{Envelope.get_data_category(item), 1}]
+  end
+
+  defp byte_outcomes(category, count, item) do
+    [
+      {Category.data_category(category), count},
+      {Category.byte_data_category(category), Envelope.item_byte_size(item)}
+    ]
+    |> Enum.filter(fn {_category, quantity} -> quantity > 0 end)
   end
 
   ## Callbacks
