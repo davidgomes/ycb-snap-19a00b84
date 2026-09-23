@@ -101,7 +101,7 @@ Notable CWEs included are CWE-259: Use of Hard-coded Password, CWE-327: Broken o
 
 **Which of the following functions is performing password comparisons in the most secure way?**
 
-_Please uncomment the function call that you believe is correct._
+_Please uncomment the function call that you believe is correct in the graded cell below, then evaluate it to check your answer._
 
 ```elixir
 defmodule PasswordCompare do
@@ -119,11 +119,13 @@ defmodule PasswordCompare do
     end
   end
 end
+```
 
-# DO NOT CHANGE CODE ABOVE THIS LINE =========================
+<!-- livebook:{"attrs":{"module_id":"OWASP","question_id":1,"source":"# PasswordCompare.option_one(\"users_password\", md5_hash)\n# PasswordCompare.option_two(\"users_password\", bcrypt_salted_hash)"},"chunks":null,"kind":"Elixir.GradingClient.GradedCell","livebook_object":"smart_cell"} -->
 
-# PasswordCompare.option_one("users_password", md5_hash)
-# PasswordCompare.option_two("users_password", bcrypt_salted_hash)
+```elixir
+result = nil
+GradingClient.grade(result, "OWASP", 1)
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -246,17 +248,22 @@ Notable CWE included is CWE-1104: Use of Unmaintained Third-Party Components
 
 **Which of the outdated components currently installed is vulnerable?**
 
-_Please change the atom below to the name of the vulnerable package installed in this Livebook AND update the afflicted package._
+_Please change the atom in the graded cell below to the name of the vulnerable package installed in this Livebook AND update the afflicted package, then evaluate the graded cell to check your answer._
 
 _HINT: Installed dependencies can be found at the very top, it was the very first cell you ran._
 
-```elixir
-# CHANGE ME
-vulnerable_dependency = :vulnerable_dependency
+<!-- livebook:{"attrs":{"module_id":"OWASP","question_id":2,"source":"# CHANGE ME\nvulnerable_dependency = :vulnerable_dependency"},"chunks":null,"kind":"Elixir.GradingClient.GradedCell","livebook_object":"smart_cell"} -->
 
+```elixir
+result = vulnerable_dependency = :vulnerable_dependency
+GradingClient.grade(result, "OWASP", 2)
+```
+
+_Once you have updated the afflicted package and re-run the setup cell, use the cell below to confirm which version of it is now installed._
+
+```elixir
 # DO NOT CHANGE CODE BELOW THIS LINE ============================
-Application.spec(vulnerable_dependency)[:vsn] |> List.to_string() |> IO.puts()
-IO.puts(vulnerable_dependency)
+Application.spec(vulnerable_dependency, :vsn) |> to_string()
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
