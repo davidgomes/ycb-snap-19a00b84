@@ -113,13 +113,11 @@ defmodule ObanChore.StatusTest do
   end
 
   describe "chore count broadcasts" do
+    @oban ObanChore.StatusTest.Oban
+
     setup do
       start_supervised!(
-        {Oban,
-         name: ObanChore.StatusTest.Oban,
-         repo: MockRepo,
-         testing: :manual,
-         notifier: Oban.Notifiers.Isolated}
+        {Oban, name: @oban, repo: MockRepo, testing: :manual, notifier: Oban.Notifiers.Isolated}
       )
 
       Phoenix.PubSub.subscribe(ObanChore.TestPubSub, "oban_chore:counts")
@@ -130,7 +128,7 @@ defmodule ObanChore.StatusTest do
     test "broadcasts the number of active jobs for the chore" do
       MockRepo.stub(:aggregate, 2)
 
-      emit([:oban, :job, :start], %{job: job(9, "executing")}, oban_name: ObanChore.StatusTest.Oban)
+      emit([:oban, :job, :start], %{job: job(9, "executing")}, oban_name: @oban)
 
       assert_receive {:oban_chore_count, ObanChore.StatusTest.TestWorker, 2}
       assert_receive {:repo_aggregate, query}
@@ -141,7 +139,7 @@ defmodule ObanChore.StatusTest do
       MockRepo.stub(:aggregate, 2)
       jobs = [job(10, "available"), job(11, "available")]
 
-      emit([:oban, :job, :insert, :stop], %{jobs: jobs}, oban_name: ObanChore.StatusTest.Oban)
+      emit([:oban, :job, :insert, :stop], %{jobs: jobs}, oban_name: @oban)
 
       assert_receive {:oban_chore_count, ObanChore.StatusTest.TestWorker, 2}
       refute_receive {:oban_chore_count, _, _}
