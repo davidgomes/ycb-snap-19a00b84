@@ -1479,7 +1479,13 @@ export default class LiveSocket {
           PHX_LIVE_LINK,
         ) as HTMLAnchorElement | null;
         const type = target && target.getAttribute(PHX_LIVE_LINK);
-        if (!type || !this.isConnected() || !this.main || DOM.wantsNewTab(e)) {
+        if (
+          !type ||
+          e.defaultPrevented ||
+          !this.isConnected() ||
+          !this.main ||
+          DOM.wantsNewTab(e)
+        ) {
           return;
         }
 
