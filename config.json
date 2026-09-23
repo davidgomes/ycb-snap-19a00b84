@@ -2445,6 +2445,21 @@
         "difficulty": 6
       },
       {
+        "slug": "line-up",
+        "name": "Line Up",
+        "uuid": "f633a810-0323-496b-a728-e05f560fe393",
+        "practices": [
+          "cond"
+        ],
+        "prerequisites": [
+          "integers",
+          "strings",
+          "cond",
+          "lists"
+        ],
+        "difficulty": 2
+      },
+      {
         "slug": "list-ops",
         "name": "List Ops",
         "uuid": "86658a31-d401-401b-80df-2c4df35f9b15",
