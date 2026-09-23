@@ -13,6 +13,11 @@ defmodule Flop.Adapter.Ecto.Dialect do
   # and DESC, and the other two need `field IS NULL` as an extra sort key.
   @without_nulls_ordering [Ecto.Adapters.MyXQL]
 
+  # PostgreSQL treats NULL as larger than any value, so plain ASC puts NULLs
+  # last and plain DESC puts them first. MySQL and SQLite treat NULL as smaller
+  # than any value. Cursor predicates need to know which one applies.
+  @with_nulls_smallest [Ecto.Adapters.MyXQL, Ecto.Adapters.SQLite3]
+
   # Ecto's MyXQL adapter can store arrays in JSON columns, but it cannot build
   # array operations. Flop uses JSON_CONTAINS and JSON_LENGTH instead.
   @without_arrays [Ecto.Adapters.MyXQL]
@@ -24,10 +29,14 @@ defmodule Flop.Adapter.Ecto.Dialect do
   @type t :: %__MODULE__{
           arrays?: boolean,
           ilike?: boolean,
+          nulls_largest?: boolean,
           nulls_ordering?: boolean
         }
 
-  defstruct arrays?: true, ilike?: true, nulls_ordering?: true
+  defstruct arrays?: true,
+            ilike?: true,
+            nulls_largest?: true,
+            nulls_ordering?: true
 
   @nulls_ordering_fallback %{
     asc_nulls_first: {:native, :asc},
@@ -47,9 +56,29 @@ defmodule Flop.Adapter.Ecto.Dialect do
     %__MODULE__{
       arrays?: adapter not in @without_arrays,
       ilike?: adapter not in @without_ilike,
+      nulls_largest?: adapter not in @with_nulls_smallest,
       nulls_ordering?: adapter not in @without_nulls_ordering
     }
   end
+
+  @doc """
+  Returns whether rows with a `NULL` value come first when ordering in the given
+  direction.
+  """
+  @spec nulls_first?(t, atom) :: boolean
+  def nulls_first?(_dialect, direction)
+      when direction in [:asc_nulls_first, :desc_nulls_first],
+      do: true
+
+  def nulls_first?(_dialect, direction)
+      when direction in [:asc_nulls_last, :desc_nulls_last],
+      do: false
+
+  def nulls_first?(%__MODULE__{nulls_largest?: nulls_largest?}, :asc),
+    do: not nulls_largest?
+
+  def nulls_first?(%__MODULE__{nulls_largest?: nulls_largest?}, :desc),
+    do: nulls_largest?
 
   @doc """
   Dumps a filter value with the element type of an array field.

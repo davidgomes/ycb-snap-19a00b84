@@ -31,13 +31,28 @@ defmodule Flop.Adapter.Ecto.DialectTest do
   describe "new/1" do
     test "reads the features of a known adapter" do
       assert Dialect.new(PostgresRepo) ==
-               %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: true,
+                 nulls_largest?: true,
+                 nulls_ordering?: true
+               }
 
       assert Dialect.new(MyXQLRepo) ==
-               %Dialect{arrays?: false, ilike?: false, nulls_ordering?: false}
+               %Dialect{
+                 arrays?: false,
+                 ilike?: false,
+                 nulls_largest?: false,
+                 nulls_ordering?: false
+               }
 
       assert Dialect.new(SQLite3Repo) ==
-               %Dialect{arrays?: true, ilike?: false, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: false,
+                 nulls_largest?: false,
+                 nulls_ordering?: true
+               }
     end
 
     test "returns the defaults for an unknown adapter" do
@@ -51,8 +66,110 @@ defmodule Flop.Adapter.Ecto.DialectTest do
 
     test "defaults to leaving the query unmodified" do
       assert %Dialect{} ==
-               %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: true,
+                 nulls_largest?: true,
+                 nulls_ordering?: true
+               }
     end
+  end
+
+  describe "nulls_first?/2" do
+    test "follows the explicit nulls directions on every adapter" do
+      for repo <- [PostgresRepo, MyXQLRepo, SQLite3Repo, nil] do
+        dialect = Dialect.new(repo)
+        assert Dialect.nulls_first?(dialect, :asc_nulls_first)
+        assert Dialect.nulls_first?(dialect, :desc_nulls_first)
+        refute Dialect.nulls_first?(dialect, :asc_nulls_last)
+        refute Dialect.nulls_first?(dialect, :desc_nulls_last)
+      end
+    end
+
+    test "sorts NULLs as the largest value on PostgreSQL and by default" do
+      for repo <- [PostgresRepo, UnknownRepo, nil] do
+        refute Dialect.nulls_first?(Dialect.new(repo), :asc)
+        assert Dialect.nulls_first?(Dialect.new(repo), :desc)
+      end
+    end
+
+    test "sorts NULLs as the smallest value on MySQL and SQLite" do
+      for repo <- [MyXQLRepo, SQLite3Repo] do
+        assert Dialect.nulls_first?(Dialect.new(repo), :asc)
+        refute Dialect.nulls_first?(Dialect.new(repo), :desc)
+      end
+    end
+  end
+
+  describe "the query built for a cursor" do
+    test "compares a value where the NULLs come first" do
+      assert cursor_where_clause(PostgresRepo, :asc_nulls_first, "Ada") ==
+               ~S|p0.name > type(^"Ada", p0.name)|
+    end
+
+    test "adds the NULLs to a value where they come last" do
+      assert cursor_where_clause(PostgresRepo, :asc_nulls_last, "Ada") ==
+               ~S|p0.name > type(^"Ada", p0.name) or is_nil(p0.name)|
+    end
+
+    test "matches the values after NULL where the NULLs come first" do
+      assert cursor_where_clause(PostgresRepo, :asc_nulls_first, nil) ==
+               ~S|not is_nil(p0.name)|
+    end
+
+    test "matches no row after NULL where the NULLs come last" do
+      assert cursor_where_clause(PostgresRepo, :asc_nulls_last, nil) ==
+               "false"
+    end
+
+    test "places the NULLs by adapter for the plain directions" do
+      assert cursor_where_clause(PostgresRepo, :asc, nil) ==
+               cursor_where_clause(PostgresRepo, :asc_nulls_last, nil)
+
+      assert cursor_where_clause(SQLite3Repo, :asc, nil) ==
+               cursor_where_clause(SQLite3Repo, :asc_nulls_first, nil)
+
+      assert cursor_where_clause(MyXQLRepo, :desc, nil) ==
+               cursor_where_clause(MyXQLRepo, :desc_nulls_last, nil)
+    end
+
+    test "falls through to the next order field on NULL" do
+      assert cursor_where_clause(PostgresRepo, :asc_nulls_last, nil, 3) ==
+               ~S|is_nil(p0.name) and p0.age > type(^3, p0.age)|
+
+      assert cursor_where_clause(PostgresRepo, :asc_nulls_first, nil, 3) ==
+               ~S|not is_nil(p0.name) or p0.age > type(^3, p0.age)|
+    end
+  end
+
+  defp cursor_where_clause(repo, direction, name) do
+    where_clause_for_cursor(repo, [:name], [direction], %{name: name})
+  end
+
+  defp cursor_where_clause(repo, direction, name, age) do
+    where_clause_for_cursor(
+      repo,
+      [:name, :age],
+      [direction, :asc_nulls_first],
+      %{name: name, age: age}
+    )
+  end
+
+  defp where_clause_for_cursor(repo, order_by, directions, cursor) do
+    flop = %Flop{
+      first: 1,
+      after: Flop.Cursor.encode(cursor),
+      order_by: order_by,
+      order_directions: directions
+    }
+
+    MyApp.Pet
+    |> Flop.query(flop, for: MyApp.Pet, repo: repo)
+    |> inspect()
+    |> String.split("where: ")
+    |> List.last()
+    |> String.split(", order_by: ")
+    |> List.first()
   end
 
   describe "the query built for the case-insensitive operators" do

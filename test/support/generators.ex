@@ -66,6 +66,52 @@ defmodule Flop.Generators do
     end
   end
 
+  @doc """
+  Like `uniq_list_of_pets/1`, but sets some of the sortable fields to `nil`
+  and leaves some pets without an owner. At most one pet has no name, so that
+  the sortable fields still identify each pet.
+  """
+  def uniq_list_of_pets_with_nils(opts) do
+    gen all pets <- uniq_list_of_pets(opts),
+            count = length(pets),
+            nil_name_index <-
+              one_of([constant(nil), integer(0..(count - 1))]),
+            nils <- list_of(list_of(sometimes_true(), length: 4), length: count) do
+      pets
+      |> Enum.with_index()
+      |> Enum.zip(nils)
+      |> Enum.map(fn {{pet, index}, flags} ->
+        put_nils(pet, flags, index == nil_name_index)
+      end)
+    end
+  end
+
+  defp put_nils(
+         pet,
+         [nil_age?, no_owner?, nil_owner_name?, nil_owner_age?],
+         nil_name?
+       ) do
+    owner =
+      if not no_owner? do
+        %{
+          pet.owner
+          | name: if(not nil_owner_name?, do: pet.owner.name),
+            age: if(not nil_owner_age?, do: pet.owner.age)
+        }
+      end
+
+    %{
+      pet
+      | name: if(not nil_name?, do: pet.name),
+        age: if(not nil_age?, do: pet.age),
+        owner: owner
+    }
+  end
+
+  defp sometimes_true do
+    frequency([{3, constant(false)}, {1, constant(true)}])
+  end
+
   def uniq_list_of_owners(len) do
     gen all names <- uniq_list_of_strings(len),
             ages <- uniq_list_of(integer(1..500), length: len),
