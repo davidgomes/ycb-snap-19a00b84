@@ -103,27 +103,33 @@ Notable CWEs included are CWE-259: Use of Hard-coded Password, CWE-327: Broken o
 
 _Please uncomment the function call that you believe is correct._
 
+<!-- livebook:{"attrs":{"module_id":"OWASP","question_id":1,"source":"defmodule PasswordCompare do\n  def option_one(password, md5_hash) do\n    case :crypto.hash(:md5, password) == md5_hash do\n      true -> :entry_granted_op1\n      false -> :entry_denied_op1\n    end\n  end\n\n  def option_two(password, bcrypt_salted_hash) do\n    case Bcrypt.verify_pass(password, bcrypt_salted_hash) do\n      true -> :entry_granted_op2\n      false -> :entry_denied_op2\n    end\n  end\nend\n\n# DO NOT CHANGE CODE ABOVE THIS LINE =========================\n\n# PasswordCompare.option_one(\"users_password\", md5_hash)\n# PasswordCompare.option_two(\"users_password\", bcrypt_salted_hash)"},"kind":"Elixir.GradingClient.GradedCell","livebook_object":"smart_cell"} -->
+
 ```elixir
-defmodule PasswordCompare do
-  def option_one(password, md5_hash) do
-    case :crypto.hash(:md5, password) == md5_hash do
-      true -> :entry_granted_op1
-      false -> :entry_denied_op1
+result =
+  defmodule PasswordCompare do
+    def option_one(password, md5_hash) do
+      case :crypto.hash(:md5, password) == md5_hash do
+        true -> :entry_granted_op1
+        false -> :entry_denied_op1
+      end
+    end
+
+    def option_two(password, bcrypt_salted_hash) do
+      case Bcrypt.verify_pass(password, bcrypt_salted_hash) do
+        true -> :entry_granted_op2
+        false -> :entry_denied_op2
+      end
     end
   end
 
-  def option_two(password, bcrypt_salted_hash) do
-    case Bcrypt.verify_pass(password, bcrypt_salted_hash) do
-      true -> :entry_granted_op2
-      false -> :entry_denied_op2
-    end
-  end
+case GradingClient.check_answer(result, OWASP, 1) do
+  :correct ->
+    IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
+
+  {:incorrect, help_text} ->
+    IO.puts([IO.ANSI.red(), "Incorrect: ", IO.ANSI.reset(), help_text || ""])
 end
-
-# DO NOT CHANGE CODE ABOVE THIS LINE =========================
-
-# PasswordCompare.option_one("users_password", md5_hash)
-# PasswordCompare.option_two("users_password", bcrypt_salted_hash)
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -250,13 +256,25 @@ _Please change the atom below to the name of the vulnerable package installed in
 
 _HINT: Installed dependencies can be found at the very top, it was the very first cell you ran._
 
-```elixir
-# CHANGE ME
-vulnerable_dependency = :vulnerable_dependency
+<!-- livebook:{"attrs":{"module_id":"OWASP","question_id":2,"source":"# CHANGE ME\nvulnerable_dependency = :vulnerable_dependency\n\n# DO NOT CHANGE CODE BELOW THIS LINE ============================\nIO.inspect(Application.spec(vulnerable_dependency, :vsn), label: vulnerable_dependency)\nvulnerable_dependency"},"kind":"Elixir.GradingClient.GradedCell","livebook_object":"smart_cell"} -->
 
-# DO NOT CHANGE CODE BELOW THIS LINE ============================
-Application.spec(vulnerable_dependency)[:vsn] |> List.to_string() |> IO.puts()
-IO.puts(vulnerable_dependency)
+```elixir
+result =
+  (
+    vulnerable_dependency = :vulnerable_dependency
+
+    IO.inspect(Application.spec(vulnerable_dependency, :vsn), label: vulnerable_dependency)
+
+    vulnerable_dependency
+  )
+
+case GradingClient.check_answer(result, OWASP, 2) do
+  :correct ->
+    IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
+
+  {:incorrect, help_text} ->
+    IO.puts([IO.ANSI.red(), "Incorrect: ", IO.ANSI.reset(), help_text || ""])
+end
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
