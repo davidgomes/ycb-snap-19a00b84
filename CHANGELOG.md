@@ -11,11 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Codespell GitHub Action
 - CHANGELOG.md
+- Self-evaluating quiz questions in the OWASP module, using the grading client's Graded Cell
 
 ### Changed
 
 - Fixed various typos
 - Fixed README badges
+- Fixed the OWASP "Vulnerable and Outdated Components" quiz crashing before it was answered
 
 ## [0.8.0] - 2022-09-01
 
