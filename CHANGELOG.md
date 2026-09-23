@@ -3,6 +3,11 @@
 ## Master
 
 
+## 0.7.0
+* Fix Elixir 1.7 deprecation warnings
+* Refresh README formatting and examples
+* Add Ben Marx as a package maintainer
+
 ## 0.6.0
 * Extra configration that allows control of logging debug fields.
 * Allow built-in logging keys to be suppressed
