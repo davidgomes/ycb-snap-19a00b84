@@ -60,7 +60,7 @@ defmodule ObanEvents do
     - Just a module: `oban: MyApp.Oban` (uses all defaults)
     - Tuple with options: `oban: {MyApp.Oban, queue: :custom, max_attempts: 5, priority: 1, tags: ["myapp"]}`
 
-  Default Oban options:
+  Default Oban options (any other `Oban.Job.new/2` option can also be given):
   - `queue`: `:oban_events`
   - `max_attempts`: `3`
   - `priority`: `2` (0-3, lower is higher priority)
@@ -68,6 +68,7 @@ defmodule ObanEvents do
 
   Per-handler options (override globals):
   - Handlers can be atoms (use defaults) or tuples with options: `{Handler, oban: [priority: 0, max_attempts: 10, queue: :critical, tags: ["urgent"]]}`
+  - Any `Oban.Job.new/2` option can be given under `:oban`
 
   ## API
 
@@ -130,11 +131,14 @@ defmodule ObanEvents do
         module -> {module, []}
       end
 
-    # Extract Oban options with defaults
-    queue = Keyword.get(oban_opts, :queue, :oban_events)
-    max_attempts = Keyword.get(oban_opts, :max_attempts, 3)
-    priority = Keyword.get(oban_opts, :priority, 2)
-    tags = Keyword.get(oban_opts, :tags, [])
+    default_oban_opts = [
+      queue: :oban_events,
+      max_attempts: 3,
+      priority: 2,
+      tags: []
+    ]
+
+    global_oban_opts = Keyword.merge(default_oban_opts, oban_opts)
 
     quote do
       use ObanEvents.Registry
@@ -143,10 +147,7 @@ defmodule ObanEvents do
       @oban_instance unquote(oban_module)
 
       # Global Oban job defaults (can be overridden per-handler)
-      @oban_queue unquote(queue)
-      @oban_max_attempts unquote(max_attempts)
-      @oban_priority unquote(priority)
-      @oban_tags unquote(tags)
+      @oban_global_opts unquote(global_oban_opts)
 
       @before_compile ObanEvents
     end
@@ -226,16 +227,8 @@ defmodule ObanEvents do
                 module when is_atom(module) -> {module, []}
               end
 
-            # Extract oban-specific options (grouped under :oban key)
-            oban_opts = Keyword.get(handler_opts, :oban, [])
-
             # Merge per-handler oban options with global defaults
-            job_opts = [
-              queue: Keyword.get(oban_opts, :queue, @oban_queue),
-              max_attempts: Keyword.get(oban_opts, :max_attempts, @oban_max_attempts),
-              priority: Keyword.get(oban_opts, :priority, @oban_priority),
-              tags: Keyword.get(oban_opts, :tags, @oban_tags)
-            ]
+            job_opts = Keyword.merge(@oban_global_opts, Keyword.get(handler_opts, :oban, []))
 
             DispatchWorker.new(
               %{

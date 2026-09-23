@@ -220,6 +220,8 @@ defmodule MyApp.Events do
 end
 ```
 
+Any option accepted by `Oban.Job.new/2` can be given and is applied to every handler job.
+
 **Default Oban options:**
 - `queue`: `:oban_events`
 - `max_attempts`: `3`
@@ -247,11 +249,12 @@ Override global options for specific handlers using tuple syntax:
 
 **Supported per-handler options:**
 
-Oban job options (under `:oban` key):
+Any `Oban.Job.new/2` option can be passed under the `:oban` key, overriding the global value. Common options:
 - `queue` - Override queue (atom)
 - `max_attempts` - Override retry count (integer)
 - `priority` - Override priority (0-3, lower is higher)
 - `tags` - Override tags (list of strings)
+- `meta` - Additional job metadata (map)
 
 ## API
 
