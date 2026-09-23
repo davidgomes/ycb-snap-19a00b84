@@ -1506,8 +1506,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                    Flop.validate_and_run(Fruit, flop, for: Fruit)
 
         _ ->
-          assert {:error, meta} =
-                   Flop.validate_and_run(Fruit, flop, for: Fruit)
+          assert {:error, meta} = Flop.validate_and_run(Fruit, flop, for: Fruit)
 
           assert meta.errors == [filters: [[value: [{"is invalid", []}]]]]
       end
@@ -1566,8 +1565,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                    Flop.validate_and_run(Fruit, flop, for: Fruit)
 
         _ ->
-          assert {:error, meta} =
-                   Flop.validate_and_run(Fruit, flop, for: Fruit)
+          assert {:error, meta} = Flop.validate_and_run(Fruit, flop, for: Fruit)
 
           assert meta.errors == [filters: [[value: [{"is invalid", []}]]]]
       end
@@ -2124,39 +2122,44 @@ defmodule Flop.Adapters.Ecto.FlopTest do
         )
     end
 
-    test "nil values for cursors are ignored when using for option" do
-      check all pets <- uniq_list_of_pets(length: 2..2),
+    test "pages through rows whose order values are nil" do
+      check all pets <- uniq_list_of_pets(length: 2..8),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}) do
         checkin_checkout()
 
-        # set name fields to nil and insert
         pets
-        |> Enum.map(&Map.update!(&1, :name, fn _ -> nil end))
-        |> Enum.each(&Repo.insert!(&1))
+        |> Enum.with_index()
+        |> Enum.each(fn {pet, index} ->
+          pet =
+            cond do
+              index == 0 -> %{pet | age: nil, name: nil}
+              rem(index, 2) == 0 -> %{pet | name: nil}
+              true -> pet
+            end
 
-        assert {:ok, {[_], %Meta{end_cursor: end_cursor}}} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   },
-                   for: Pet
-                 )
+          Repo.insert!(pet)
+        end)
 
-        assert {:ok, _} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     after: end_cursor,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   },
-                   for: Pet
-                 )
+        query = pets_with_owners_query()
+        # Nulling names makes the sortable fields non-unique, so page by id too.
+        order_by = cursor_fields ++ [:id]
+        directions = directions ++ [:asc]
+
+        opts = [for: Pet, sortable: order_by]
+
+        expected =
+          Flop.all(
+            query,
+            %Flop{order_by: order_by, order_directions: directions},
+            opts
+          )
+
+        assert page_by_cursor(query, order_by, directions, :forward, opts) ==
+                 expected
+
+        assert page_by_cursor(query, order_by, directions, :backward, opts) ==
+                 expected
       end
     end
 
@@ -2197,38 +2200,39 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                "cursor pagination is not supported for alias fields"
     end
 
-    test "nil values for cursors are ignored when not using for option" do
-      check all pets <- uniq_list_of_pets(length: 2..2),
-                directions <- order_directions(%Pet{}) do
-        checkin_checkout()
-        cursor_fields = [:name, :age]
+    test "pages through null order values without a schema" do
+      insert(:pet, name: "Ada")
+      insert(:pet, name: nil)
+      insert(:pet, name: "Bo")
+      insert(:pet, name: nil)
 
-        # set name fields to nil and insert
-        pets
-        |> Enum.map(&Map.update!(&1, :name, fn _ -> nil end))
-        |> Enum.each(&Repo.insert!(&1))
+      order_by = [:name, :id]
+      directions = [:asc_nulls_last, :asc]
 
-        assert {:ok, {[_], %Meta{end_cursor: end_cursor}}} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   }
-                 )
+      expected =
+        Flop.all(Pet, %Flop{order_by: order_by, order_directions: directions})
 
-        assert {:ok, _} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     after: end_cursor,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   }
-                 )
-      end
+      assert page_by_cursor(Pet, order_by, directions, :forward) == expected
+      assert page_by_cursor(Pet, order_by, directions, :backward) == expected
+    end
+
+    test "pages through null join fields" do
+      insert(:pet, name: "a")
+      insert(:pet_with_owner, name: "b")
+      insert(:pet, name: "c")
+
+      order_by = [:owner_name, :name]
+      directions = [:asc_nulls_first, :asc]
+      query = pets_with_owners_query()
+      flop = %Flop{order_by: order_by, order_directions: directions}
+
+      expected = Flop.all(query, flop, for: Pet)
+
+      assert page_by_cursor(query, order_by, directions, :forward, for: Pet) ==
+               expected
+
+      assert page_by_cursor(query, order_by, directions, :backward, for: Pet) ==
+               expected
     end
 
     @tag :composite_type
@@ -2301,5 +2305,46 @@ defmodule Flop.Adapters.Ecto.FlopTest do
 
       assert Keyword.get(opts, :backend) == TestProviderNested
     end
+  end
+
+  defp page_by_cursor(query, order_by, directions, direction, opts \\ []) do
+    {limit_key, cursor_key} =
+      case direction do
+        :forward -> {:first, :after}
+        :backward -> {:last, :before}
+      end
+
+    rows =
+      Stream.unfold(nil, fn cursor ->
+        flop = %Flop{
+          order_by: order_by,
+          order_directions: directions,
+          first: nil,
+          last: nil,
+          after: nil,
+          before: nil
+        }
+
+        flop = Map.put(flop, limit_key, 1)
+        flop = if cursor, do: Map.put(flop, cursor_key, cursor), else: flop
+
+        case Flop.validate_and_run!(query, flop, opts) do
+          {[], _meta} ->
+            nil
+
+          {[row], meta} ->
+            next =
+              case direction do
+                :forward -> meta.end_cursor
+                :backward -> meta.start_cursor
+              end
+
+            {row, next}
+        end
+      end)
+
+    rows = Enum.take(rows, 50)
+
+    if direction == :backward, do: Enum.reverse(rows), else: rows
   end
 end

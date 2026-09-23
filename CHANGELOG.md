@@ -14,6 +14,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Support MySQL.
 - Support ordering and filtering by custom fields via a new `field_dynamic`
   option. Cursor pagination is not supported yet.
+- Support cursor pagination on nullable columns. The cursor comparison follows
+  the null placement of the order direction, including `:asc_nulls_first`,
+  `:asc_nulls_last`, `:desc_nulls_first` and `:desc_nulls_last`. Plain `:asc`
+  and `:desc` use the placement of the repo's adapter, and raise when no repo
+  can be resolved.
 
 ### Fixed
 
