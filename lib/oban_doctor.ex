@@ -23,8 +23,16 @@ defmodule ObanDoctor do
   ### Worker Checks
 
     * `MissingQueue` - Workers using queues not defined in Oban config
+    * `StateGroupUsage` - Workers using the `:all` unique state group, or an unknown group
+    * `UniquenessMissingStates` - Unique config missing states from the `:incomplete` group
+    * `UniqueWithoutKeys` - Unique on `:args` without explicit keys
+    * `NoMaxAttempts` - Workers using the default `max_attempts` (20)
 
-  More checks coming soon.
+  ## References
+
+  Named unique state groups (`:all`, `:incomplete`, `:scheduled`, `:successful`)
+  are documented in [Oban.Job.unique_states/1](https://hexdocs.pm/oban/Oban.Job.html#unique_states/1)
+  and the [Unique Jobs guide](https://hexdocs.pm/oban/unique_jobs.html).
   """
 
   alias ObanDoctor.WorkerDiscovery

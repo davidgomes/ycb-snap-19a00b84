@@ -1,29 +1,45 @@
 defmodule ObanDoctor.Check.Worker.StateGroupUsage do
   @moduledoc """
-  Checks for workers using the `:all` state group in unique configuration.
+  Checks unique `:states` against Oban's named state groups.
 
-  Using `states: :all` (or `states: [:all]`) in unique configuration is dangerous
-  because it includes `:completed` and `:discarded` states. This means once a job
-  completes or is discarded, you can never enqueue another job with the same
-  unique key.
+  Using `states: :all` (or a list that includes `:all`) is dangerous because the
+  group includes `:completed`, `:cancelled`, and `:discarded`. Once a job
+  reaches one of those states, another job with the same unique key cannot be
+  inserted until the old job is pruned.
+
+  Other named groups are intentional:
+
+    * `:incomplete` — unfinished jobs only, so completed work can be enqueued again
+    * `:successful` — unfinished jobs plus `:completed` (Oban's default)
+    * `:scheduled` — only scheduled jobs, for debouncing
+
+  A named group must be passed as an atom. `states: [:incomplete]` is rejected
+  by Oban because `:incomplete` is not a job state.
 
   ## Examples
 
-  Bad - prevents re-enqueueing forever:
+  Bad — blocks re-enqueue after completion, cancellation, and discard:
       unique: [fields: [:args], states: :all]
 
-  Good - allows re-enqueueing after completion:
-      unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+  Good — uniqueness while the job has not finished:
+      unique: [fields: [:args], states: :incomplete]
+
+  ## References
+
+    * [Oban.Job.unique_states/1](https://hexdocs.pm/oban/Oban.Job.html#unique_states/1)
+    * [Unique Jobs](https://hexdocs.pm/oban/unique_jobs.html)
   """
 
   use ObanDoctor.Check, category: :worker
+
+  alias ObanDoctor.UniqueStateGroups
 
   @impl true
   def id, do: :state_group_usage
 
   @impl true
   def description do
-    "Detects workers using :all state group in unique config (dangerous)"
+    "Detects workers using the :all unique state group, or an unknown group"
   end
 
   @impl true
@@ -34,32 +50,62 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsage do
     workers = Map.get(context, :workers, [])
 
     workers
-    |> Enum.filter(&uses_all_state_group?/1)
-    |> Enum.map(&build_issue/1)
+    |> Enum.map(&classify/1)
+    |> Enum.reject(&is_nil/1)
   end
 
-  defp uses_all_state_group?(%{unique: unique}) when is_list(unique) do
-    case Keyword.get(unique, :states) do
-      :all -> true
-      [:all] -> true
-      states when is_list(states) -> :all in states
-      _ -> false
+  defp classify(%{unique: unique} = worker) when is_list(unique) do
+    states = Keyword.get(unique, :states)
+
+    cond do
+      UniqueStateGroups.all_group?(states) ->
+        build_issue(worker, all_group_message(worker))
+
+      is_atom(states) and states != nil and not UniqueStateGroups.known?(states) ->
+        build_issue(worker, unknown_group_message(worker, states))
+
+      UniqueStateGroups.embedded_group?(states) ->
+        build_issue(worker, embedded_group_message(worker))
+
+      true ->
+        nil
     end
   end
 
-  defp uses_all_state_group?(_), do: false
+  defp classify(_worker), do: nil
 
-  defp build_issue(worker) do
+  defp all_group_message(worker) do
+    "Worker #{inspect(worker.module)} uses :all state group - jobs cannot be re-enqueued after completion. " <>
+      doc_reference()
+  end
+
+  defp unknown_group_message(worker, group) do
+    known = inspect(UniqueStateGroups.known_groups())
+
+    "Worker #{inspect(worker.module)} uses unknown unique state group #{inspect(group)}. " <>
+      "Expected one of #{known}. " <> doc_reference()
+  end
+
+  defp embedded_group_message(worker) do
+    "Worker #{inspect(worker.module)} lists a named state group inside :states. " <>
+      "Pass the group as an atom, for example states: :incomplete. " <> doc_reference()
+  end
+
+  defp doc_reference do
+    "See #{UniqueStateGroups.unique_states_doc()}"
+  end
+
+  defp build_issue(worker, message) do
     Issue.new(
       check: __MODULE__,
       severity: default_severity(),
-      message:
-        "Worker #{inspect(worker.module)} uses :all state group - jobs cannot be re-enqueued after completion",
+      message: message,
       file: worker.file,
       line: worker.line,
       meta: %{
         worker: worker.module,
-        unique_config: worker.unique
+        unique_config: worker.unique,
+        docs: UniqueStateGroups.doc_urls()
       }
     )
   end

@@ -25,9 +25,11 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       assert issue.severity == :warning
       assert issue.check == UniquenessMissingStates
       assert issue.message =~ "missing states"
+      assert :suspended in issue.meta.missing_states
       assert :available in issue.meta.missing_states
       assert :scheduled in issue.meta.missing_states
       assert :retryable in issue.meta.missing_states
+      assert issue.meta.docs.unique_states =~ "Oban.Job.html#unique_states"
     end
 
     test "returns no issues when worker has all recommended states" do
@@ -39,7 +41,7 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
           queue: :default,
           unique: [
             fields: [:args],
-            states: [:available, :scheduled, :executing, :retryable]
+            states: [:suspended, :available, :scheduled, :executing, :retryable]
           ],
           max_attempts: nil
         }
@@ -116,7 +118,10 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
           file: "lib/my_app/workers/almost_complete_worker.ex",
           line: 1,
           queue: :default,
-          unique: [fields: [:args], states: [:available, :scheduled, :executing]],
+          unique: [
+            fields: [:args],
+            states: [:suspended, :available, :scheduled, :executing]
+          ],
           max_attempts: nil
         }
       ]
@@ -128,6 +133,60 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       assert length(issues) == 1
       [issue] = issues
       assert issue.meta.missing_states == [:retryable]
+    end
+
+    test "flags an explicit list that omits :suspended" do
+      workers = [
+        %{
+          module: MyApp.Workers.LegacyWorker,
+          file: "lib/my_app/workers/legacy_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = UniquenessMissingStates.run(context)
+
+      assert length(issues) == 1
+      [issue] = issues
+      assert issue.meta.missing_states == [:suspended]
+      assert issue.message =~ "unique_states"
+    end
+
+    test "does not flag the :incomplete, :successful, or :scheduled groups" do
+      for states <- [:incomplete, :successful, :scheduled, [:scheduled]] do
+        workers = [
+          %{
+            module: MyApp.Workers.GroupedWorker,
+            file: "lib/my_app/workers/grouped_worker.ex",
+            line: 1,
+            queue: :default,
+            unique: [fields: [:args], states: states],
+            max_attempts: nil
+          }
+        ]
+
+        assert UniquenessMissingStates.run(%{workers: workers}) == []
+      end
+    end
+
+    test "expands :incomplete when it is written inside a state list" do
+      workers = [
+        %{
+          module: MyApp.Workers.EmbeddedGroupWorker,
+          file: "lib/my_app/workers/embedded_group_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: [:incomplete]],
+          max_attempts: nil
+        }
+      ]
+
+      assert UniquenessMissingStates.run(%{workers: workers}) == []
     end
   end
 
