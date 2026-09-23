@@ -332,11 +332,7 @@ defmodule ErrorTracker do
         where: [fingerprint: ^error.fingerprint],
         select: {e.status, e.muted}
 
-    {existing_status, muted} =
-      case Repo.one(status_and_muted_query) do
-        {existing_status, muted} -> {existing_status, muted}
-        nil -> {nil, false}
-      end
+    {existing_status, muted} = Repo.one(status_and_muted_query) || {nil, false}
 
     {:ok, {error, occurrence}} =
       Repo.transaction(fn ->
