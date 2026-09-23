@@ -9,29 +9,6 @@ defmodule GenQueue.ObanTest.Migration do
   def down, do: Oban.Migrations.down()
 end
 
-defmodule GenQueue.ObanTestHelpers do
-  alias GenQueue.ObanTest.Repo
-
-  def oban_opts(opts \\ []) do
-    Keyword.merge([repo: Repo, queues: [default: 10], poll_interval: 100], opts)
-  end
-
-  def stop_process(pid) do
-    try do
-      Process.flag(:trap_exit, true)
-      Process.exit(pid, :shutdown)
-
-      receive do
-        {:EXIT, _pid, _error} -> :ok
-      end
-    rescue
-      e in RuntimeError -> e
-    end
-
-    Process.flag(:trap_exit, false)
-  end
-end
-
 alias GenQueue.ObanTest.{Migration, Repo}
 
 Application.put_env(:gen_queue_oban, Repo,
