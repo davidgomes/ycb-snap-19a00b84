@@ -5,6 +5,14 @@ defmodule Flop.Adapter.Ecto.Operators do
 
   alias Flop.Adapter.Ecto.Dialect
 
+  defmacro build_dynamic(fragment, :field_dynamic, combinator) do
+    fragment = replace_field_with_dynamic(fragment)
+
+    quote do
+      build_dynamic(unquote(fragment), false, unquote(combinator))
+    end
+  end
+
   defmacro build_dynamic(fragment, binding?, _combinator = nil) do
     binding_arg = binding_arg(binding?)
 
@@ -48,6 +56,16 @@ defmodule Flop.Adapter.Ecto.Operators do
   def reduce_dynamic(:or, values, inner_func) do
     Enum.reduce(values, false, fn value, dynamic ->
       dynamic([r], ^dynamic or ^inner_func.(value))
+    end)
+  end
+
+  defp replace_field_with_dynamic(fragment) do
+    Macro.prewalk(fragment, fn
+      {:field, _, [{:r, _, _}, {:^, _, [{:var!, _, [{:field, _, _}]}]}]} ->
+        quote do: ^var!(field_dynamic)
+
+      other ->
+        other
     end)
   end
 

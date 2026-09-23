@@ -122,6 +122,26 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       end
     end
 
+    test "filters by a custom field with field_dynamic" do
+      insert_custom_field_pets([30, 10, nil, 20])
+
+      for {op, value, expected} <- [
+            {:==, 40, [20]},
+            {:>=, 40, [20, 30]},
+            {:<, 40, [10]},
+            {:in, [20, 60], [10, 30]},
+            {:empty, true, [nil]},
+            {:not_empty, true, [10, 20, 30]}
+          ] do
+        filter = %Flop.Filter{field: :age_score, op: op, value: value}
+
+        result =
+          Flop.all(CustomFieldPet, %Flop{filters: [filter]}, for: CustomFieldPet)
+
+        assert result |> Enum.map(& &1.age) |> Enum.sort() == expected
+      end
+    end
+
     # the nulls directions are the deterministic ones; plain :asc and :desc
     # place nulls differently depending on the database
     test "applies every nulls order direction to a custom field" do

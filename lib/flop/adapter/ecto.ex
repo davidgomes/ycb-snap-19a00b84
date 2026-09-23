@@ -268,13 +268,30 @@ defmodule Flop.Adapter.Ecto do
 
         apply(mod, fun, [query, filter, opts])
 
+      %FieldInfo{
+        extra: %{type: :custom, field_dynamic: {mod, fun, field_dynamic_opts}}
+      } = field_info ->
+        field_dynamic_opts =
+          opts
+          |> Keyword.get(:extra_opts, [])
+          |> Keyword.merge(field_dynamic_opts)
+
+        field_dynamic = apply(mod, fun, [field_dynamic_opts])
+        extra = Map.put(field_info.extra, :dynamic, field_dynamic)
+        field_info = %{field_info | extra: extra}
+
+        Query.where(
+          query,
+          ^build_op(schema_struct, field_info, filter, dialect(opts))
+        )
+
       # only reachable with an unvalidated Flop struct
       %FieldInfo{extra: %{type: :custom}} ->
         raise ArgumentError, """
-        filtering by a custom field requires a filter function
+        filtering by a custom field requires a filter or field_dynamic function
 
-        No filter function is configured for #{inspect(field)}, so it cannot be
-        used as a filter field.
+        Neither a filter nor a field_dynamic function is configured for
+        #{inspect(field)}, so it cannot be used as a filter field.
 
         Use Flop.validate/2 to turn this exception into a validation error.
         """
@@ -833,9 +850,29 @@ defmodule Flop.Adapter.Ecto do
     match_contains(dynamic([{^binding, r}], json_contains()), op)
   end
 
+  defp build_op(
+         _schema_struct,
+         %FieldInfo{extra: %{type: :custom, dynamic: field_dynamic}},
+         %Filter{op: op, value: value},
+         _dialect
+       )
+       when op in [:empty, :not_empty] do
+    match_empty(dynamic([r], is_nil(^field_dynamic)), op, value)
+  end
+
   # operators whose SQL does not depend on the adapter
   for op <- @operators, op not in [:empty, :not_empty | @ilike_operators] do
     {fragment, prelude, combinator} = op_config(op)
+
+    defp build_op(
+           _schema_struct,
+           %FieldInfo{extra: %{type: :custom, dynamic: field_dynamic}},
+           %Filter{op: unquote(op), value: value},
+           _dialect
+         ) do
+      unquote(prelude)
+      build_dynamic(unquote(fragment), :field_dynamic, unquote(combinator))
+    end
 
     defp build_op(
            _schema_struct,
@@ -861,6 +898,16 @@ defmodule Flop.Adapter.Ecto do
   # operators whose SQL depends on whether the Ecto adapter supports ilike
   for op <- @ilike_operators, ilike? <- [true, false] do
     {fragment, prelude, combinator} = op_config(op, ilike?)
+
+    defp build_op(
+           _schema_struct,
+           %FieldInfo{extra: %{type: :custom, dynamic: field_dynamic}},
+           %Filter{op: unquote(op), value: value},
+           %Dialect{ilike?: unquote(ilike?)}
+         ) do
+      unquote(prelude)
+      build_dynamic(unquote(fragment), :field_dynamic, unquote(combinator))
+    end
 
     defp build_op(
            _schema_struct,
