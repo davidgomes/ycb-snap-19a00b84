@@ -319,6 +319,49 @@ if Code.ensure_loaded?(Plug) do
       if token, do: {:ok, token}, else: :no_token_found
     end
 
+    @doc """
+    Resolves the `:secret` option of a verifying plug against the connection.
+
+    When `:secret` is a one argument function, it is called with `conn` and its
+    return value replaces the option. This lets the secret used to verify a
+    token be selected per request, for example from a tenant that an upstream
+    plug put in `conn.assigns`:
+
+    ```elixir
+    plug Guardian.Plug.VerifyHeader, secret: &MyAppWeb.Tenant.verifying_secret/1
+    ```
+
+    ```elixir
+    def verifying_secret(conn) do
+      case conn.assigns[:current_tenant] do
+        %{public_key: pem} -> JOSE.JWK.from_pem(pem)
+        _ -> nil
+      end
+    end
+    ```
+
+    The function may return anything the token module accepts as a secret.
+    Returning `nil` keeps `secret: nil` in the options, so verification fails
+    with `:secret_not_found` instead of falling back to the configured
+    `secret_key`.
+
+    Every other `:secret` value is returned untouched. In particular a
+    `{module, function, args}` tuple is not given the connection; it keeps its
+    `Guardian.Config.resolve_value/1` meaning. When `:secret` is absent the
+    options are returned as is.
+
+    Plug options set with the `plug` macro are usually initialized at compile
+    time and must be escapable, so use a remote capture (`&Mod.fun/1`) there
+    rather than an anonymous function.
+    """
+    @spec resolve_secret(Plug.Conn.t(), Keyword.t()) :: Keyword.t()
+    def resolve_secret(conn, opts) do
+      case Keyword.fetch(opts, :secret) do
+        {:ok, fun} when is_function(fun, 1) -> Keyword.put(opts, :secret, fun.(conn))
+        _ -> opts
+      end
+    end
+
     defp fetch_token_key(conn, opts) do
       conn
       |> Pipeline.fetch_key(opts)

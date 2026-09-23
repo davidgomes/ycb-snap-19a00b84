@@ -35,6 +35,30 @@ defmodule Guardian.Plug.VerifySessionTest do
     def resource_from_claims(%{"sub" => id}), do: {:ok, %{id: id}}
   end
 
+  defmodule TenantImpl do
+    @moduledoc false
+
+    use Guardian,
+      otp_app: :guardian,
+      token_module: Guardian.Token.Jwt,
+      issuer: "MyApp",
+      secret_key: "application-wide-secret"
+
+    def subject_for_token(%{id: id}, _claims), do: {:ok, id}
+    def resource_from_claims(%{"sub" => id}), do: {:ok, %{id: id}}
+  end
+
+  defmodule Tenants do
+    @moduledoc false
+
+    @secrets %{"acme" => "acme-secret", "globex" => "globex-secret"}
+
+    def verifying_secret(conn) do
+      send(self(), {:verifying_secret, conn.assigns[:tenant]})
+      Map.get(@secrets, conn.assigns[:tenant])
+    end
+  end
+
   @resource %{id: "bobby"}
 
   setup do
@@ -196,6 +220,93 @@ defmodule Guardian.Plug.VerifySessionTest do
 
     assert Guardian.Plug.current_token(conn, key: :admin) == token
     assert Guardian.Plug.current_claims(conn, key: :admin) == claims
+  end
+
+  describe "with a secret selected from the connection" do
+    setup do
+      {:ok, %{tenant_opts: [module: TenantImpl, error_handler: Handler, secret: &Tenants.verifying_secret/1]}}
+    end
+
+    test "verifies the token with the secret selected for the connection", ctx do
+      {:ok, token, claims} = TenantImpl.encode_and_sign(@resource, %{}, secret: "acme-secret")
+
+      conn =
+        :get
+        |> conn("/")
+        |> init_test_session(%{guardian_default_token: token})
+        |> Plug.Conn.assign(:tenant, "acme")
+        |> VerifySession.call(ctx.tenant_opts)
+
+      refute conn.status == 401
+      assert Guardian.Plug.current_token(conn) == token
+      assert Guardian.Plug.current_claims(conn) == claims
+      assert_received {:verifying_secret, "acme"}
+    end
+
+    test "rejects a token signed with another tenant's secret", ctx do
+      {:ok, token, _claims} = TenantImpl.encode_and_sign(@resource, %{}, secret: "globex-secret")
+
+      conn =
+        :get
+        |> conn("/")
+        |> init_test_session(%{guardian_default_token: token})
+        |> Plug.Conn.assign(:tenant, "acme")
+        |> VerifySession.call(ctx.tenant_opts)
+
+      assert conn.status == 401
+      assert conn.resp_body == inspect({:invalid_token, :invalid_token})
+      refute Guardian.Plug.current_token(conn)
+    end
+
+    test "rejects the token instead of falling back to the secret_key when no secret is selected", ctx do
+      {:ok, token, _claims} = TenantImpl.encode_and_sign(@resource)
+      assert {:ok, _claims} = TenantImpl.decode_and_verify(token)
+
+      conn =
+        :get
+        |> conn("/")
+        |> init_test_session(%{guardian_default_token: token})
+        |> Plug.Conn.assign(:tenant, "unknown")
+        |> VerifySession.call(ctx.tenant_opts)
+
+      assert conn.status == 401
+      assert conn.halted
+      assert conn.resp_body == inspect({:invalid_token, :secret_not_found})
+      refute Guardian.Plug.current_token(conn)
+    end
+
+    test "does not select a secret when there is no token in the session", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> init_test_session(%{})
+        |> Plug.Conn.assign(:tenant, "acme")
+        |> VerifySession.call(ctx.tenant_opts)
+
+      refute conn.status == 401
+      refute Guardian.Plug.current_token(conn)
+      refute_received {:verifying_secret, _}
+    end
+
+    test "selects the secret for the cookie with refresh_from_cookie" do
+      {:ok, refresh_token, _claims} =
+        TenantImpl.encode_and_sign(@resource, %{}, token_type: "refresh", secret: "acme-secret")
+
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_cookie("guardian_default_token", refresh_token)
+        |> init_test_session(%{})
+        |> Plug.Conn.assign(:tenant, "acme")
+        |> Pipeline.put_module(TenantImpl)
+        |> Pipeline.put_error_handler(Handler)
+        |> VerifySession.call(refresh_from_cookie: [secret: &Tenants.verifying_secret/1])
+
+      refute conn.halted
+      access_token = Guardian.Plug.current_token(conn)
+      assert {:ok, %{"typ" => "access"}} = TenantImpl.decode_and_verify(access_token, %{}, secret: "acme-secret")
+      assert Plug.Conn.get_session(conn, "guardian_default_token") == access_token
+    end
   end
 
   describe "with refresh_from_cookie option" do

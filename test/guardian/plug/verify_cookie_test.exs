@@ -37,6 +37,30 @@ defmodule Guardian.Plug.VerifyCookieTest do
     def resource_from_claims(%{"sub" => id}), do: {:ok, %{id: id}}
   end
 
+  defmodule TenantImpl do
+    @moduledoc false
+
+    use Guardian,
+      otp_app: :guardian,
+      token_module: Guardian.Token.Jwt,
+      issuer: "MyApp",
+      secret_key: "application-wide-secret"
+
+    def subject_for_token(%{id: id}, _claims), do: {:ok, id}
+    def resource_from_claims(%{"sub" => id}), do: {:ok, %{id: id}}
+  end
+
+  defmodule Tenants do
+    @moduledoc false
+
+    @secrets %{"acme" => "acme-secret", "globex" => "globex-secret"}
+
+    def verifying_secret(conn) do
+      send(self(), {:verifying_secret, conn.assigns[:tenant]})
+      Map.get(@secrets, conn.assigns[:tenant])
+    end
+  end
+
   @resource %{id: "bobby"}
 
   setup do
@@ -137,6 +161,76 @@ defmodule Guardian.Plug.VerifyCookieTest do
 
       assert new_c["typ"] == "access"
       refute new_t == ctx.token
+    end
+  end
+
+  describe "with a secret selected from the connection" do
+    setup %{conn: conn} do
+      conn =
+        conn
+        |> Pipeline.put_module(TenantImpl)
+        |> Pipeline.put_error_handler(Handler)
+
+      {:ok, %{conn: conn, tenant_opts: [secret: &Tenants.verifying_secret/1]}}
+    end
+
+    test "verifies the cookie and signs the exchanged token with the selected secret", ctx do
+      {:ok, refresh_token, _claims} =
+        TenantImpl.encode_and_sign(@resource, %{}, token_type: "refresh", secret: "acme-secret")
+
+      conn =
+        ctx.conn
+        |> assign(:tenant, "acme")
+        |> put_req_cookie("guardian_default_token", refresh_token)
+        |> VerifyCookie.call(ctx.tenant_opts)
+
+      refute conn.halted
+      access_token = Guardian.Plug.current_token(conn)
+      assert {:ok, %{"typ" => "access"}} = TenantImpl.decode_and_verify(access_token, %{}, secret: "acme-secret")
+      assert {:error, :invalid_token} = TenantImpl.decode_and_verify(access_token)
+      assert_received {:verifying_secret, "acme"}
+    end
+
+    test "rejects a cookie signed with another tenant's secret", ctx do
+      {:ok, refresh_token, _claims} =
+        TenantImpl.encode_and_sign(@resource, %{}, token_type: "refresh", secret: "globex-secret")
+
+      conn =
+        ctx.conn
+        |> assign(:tenant, "acme")
+        |> put_req_cookie("guardian_default_token", refresh_token)
+        |> VerifyCookie.call(ctx.tenant_opts)
+
+      assert conn.halted
+      assert {401, _, "{:invalid_token, :invalid_token}"} = sent_resp(conn)
+      refute Guardian.Plug.current_token(conn)
+    end
+
+    test "rejects the cookie instead of falling back to the secret_key when no secret is selected", ctx do
+      {:ok, refresh_token, _claims} = TenantImpl.encode_and_sign(@resource, %{}, token_type: "refresh")
+      assert {:ok, _claims} = TenantImpl.decode_and_verify(refresh_token)
+
+      conn =
+        ctx.conn
+        |> assign(:tenant, "unknown")
+        |> put_req_cookie("guardian_default_token", refresh_token)
+        |> VerifyCookie.call(ctx.tenant_opts)
+
+      assert conn.halted
+      assert {401, _, "{:invalid_token, :secret_not_found}"} = sent_resp(conn)
+      refute Guardian.Plug.current_token(conn)
+    end
+
+    test "does not select a secret when there is no cookie token", ctx do
+      conn =
+        ctx.conn
+        |> assign(:tenant, "acme")
+        |> fetch_cookies()
+        |> VerifyCookie.call(ctx.tenant_opts)
+
+      refute conn.halted
+      refute Guardian.Plug.current_token(conn)
+      refute_received {:verifying_secret, _}
     end
   end
 

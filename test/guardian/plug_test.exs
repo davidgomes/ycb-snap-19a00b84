@@ -727,4 +727,36 @@ defmodule Guardian.PlugTest do
       assert Keys.key_from_other(:plug_session) == nil
     end
   end
+
+  describe "resolve_secret/2" do
+    test "calls a one argument function with the connection and uses its result", ctx do
+      conn = assign(ctx.conn, :tenant_secret, "tenant-secret")
+      secret = fn conn -> conn.assigns.tenant_secret end
+
+      opts = Guardian.Plug.resolve_secret(conn, secret: secret, key: :tenant)
+
+      assert Keyword.get(opts, :secret) == "tenant-secret"
+      assert Keyword.get(opts, :key) == :tenant
+    end
+
+    test "keeps a nil result so verification fails closed", ctx do
+      opts = Guardian.Plug.resolve_secret(ctx.conn, secret: fn _conn -> nil end)
+      assert Keyword.fetch(opts, :secret) == {:ok, nil}
+    end
+
+    test "does not give the connection to an {m, f, a} secret", ctx do
+      opts = [secret: {Function, :identity, ["mfa-secret"]}]
+      assert Guardian.Plug.resolve_secret(ctx.conn, opts) == opts
+    end
+
+    test "leaves other secrets untouched", ctx do
+      opts = [secret: "static-secret"]
+      assert Guardian.Plug.resolve_secret(ctx.conn, opts) == opts
+    end
+
+    test "does not add a secret when none is given", ctx do
+      opts = Guardian.Plug.resolve_secret(ctx.conn, key: :tenant)
+      refute Keyword.has_key?(opts, :secret)
+    end
+  end
 end
