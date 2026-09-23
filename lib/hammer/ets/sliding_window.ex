@@ -98,7 +98,7 @@ defmodule Hammer.ETS.SlidingWindow do
   """
   @spec hit(
           table :: atom(),
-          key :: String.t(),
+          key :: Hammer.key(),
           scale :: pos_integer(),
           limit :: pos_integer()
         ) :: {:allow, non_neg_integer()} | {:deny, non_neg_integer()}
@@ -127,7 +127,7 @@ defmodule Hammer.ETS.SlidingWindow do
   @doc """
   Returns the count of requests for a given key
   """
-  @spec get(table :: atom(), key :: String.t(), scale :: pos_integer()) :: non_neg_integer()
+  @spec get(table :: atom(), key :: Hammer.key(), scale :: pos_integer()) :: non_neg_integer()
   def get(table, key, _scale) do
     now = now()
 
