@@ -370,11 +370,11 @@ defmodule Phoenix.LiveView.Upload do
   def generate_preflight_response(%Socket{} = socket, name, cid, refs) do
     %UploadConfig{} = conf = Map.fetch!(socket.assigns.uploads, name)
 
-    # don't send more than max_entries preflight responses
+    # entries exceeding max_entries are never preflighted
     refs =
-      for {entry, i} <- Enum.with_index(conf.entries),
+      for entry <- conf.entries,
           entry.ref in refs,
-          i < conf.max_entries && not entry.preflighted?,
+          not entry.preflighted? and not UploadConfig.excess_entry?(conf, entry),
           do: entry.ref
 
     client_meta = %{

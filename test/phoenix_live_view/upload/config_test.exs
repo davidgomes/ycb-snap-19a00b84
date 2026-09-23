@@ -333,6 +333,62 @@ defmodule Phoenix.LiveView.UploadConfigTest do
       assert avatar.errors == [{avatar.ref, :too_many_files}]
     end
 
+    test "retains entries over max_entries as invalid for auto uploads" do
+      socket =
+        LiveView.allow_upload(build_socket(), :avatar,
+          accept: :any,
+          max_entries: 2,
+          auto_upload: true
+        )
+
+      [%{"ref" => ref1}, %{"ref" => ref2}, %{"ref" => excess_ref}] =
+        entries = for _ <- 1..3, do: build_client_entry(:avatar)
+
+      assert {:ok, avatar} = UploadConfig.put_entries(socket.assigns.uploads.avatar, entries)
+
+      assert [
+               %UploadEntry{ref: ^ref1, valid?: true},
+               %UploadEntry{ref: ^ref2, valid?: true},
+               %UploadEntry{ref: ^excess_ref, valid?: false} = excess
+             ] = avatar.entries
+
+      assert UploadConfig.excess_entry?(avatar, excess)
+      assert UploadConfig.entry_pid(avatar, excess) == nil
+
+      assert {:error, :disallowed} =
+               UploadConfig.register_entry_upload(avatar, self(), excess_ref)
+
+      assert avatar.errors == [{avatar.ref, :too_many_files}]
+
+      # the excess entry keeps the error even when there is room again
+      avatar = avatar |> drop_entry(ref1) |> drop_entry(ref2)
+      assert avatar.errors == [{avatar.ref, :too_many_files}]
+
+      avatar = drop_entry(avatar, excess_ref)
+      assert avatar.errors == []
+    end
+
+    test "does not count cancelled entries towards max_entries for auto uploads" do
+      socket =
+        LiveView.allow_upload(build_socket(), :avatar,
+          accept: :any,
+          max_entries: 2,
+          auto_upload: true
+        )
+
+      [%{"ref" => cancelled_ref}, _] = entries = for _ <- 1..2, do: build_client_entry(:avatar)
+      assert {:ok, avatar} = UploadConfig.put_entries(socket.assigns.uploads.avatar, entries)
+
+      # cancelled entries with an upload in progress are kept until their upload channel exits
+      avatar = UploadConfig.update_entry(avatar, cancelled_ref, &%{&1 | cancelled?: true})
+
+      %{"ref" => ref} = entry = build_client_entry(:avatar)
+      assert {:ok, avatar} = UploadConfig.put_entries(avatar, [entry])
+      entry = UploadConfig.get_entry_by_ref(avatar, ref)
+      assert entry.valid?
+      refute UploadConfig.excess_entry?(avatar, entry)
+    end
+
     test "returns error when entry with greater than max_file_size provided" do
       socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any)
       entry = build_client_entry(:avatar, %{"size" => 8_000_001})

@@ -884,7 +884,9 @@ defmodule Phoenix.LiveView do
       For example, `[".jpeg"]`, `:any`, etc.
 
     * `:max_entries` - The maximum number of selected files to allow per
-      file input. Defaults to 1.
+      file input. Defaults to 1. When used with `:auto_upload`, files selected
+      beyond `:max_entries` are never uploaded and cause a `:too_many_files`
+      error until they are cancelled.
 
     * `:max_file_size` - The maximum file size in bytes to allow to be uploaded.
       Defaults 8MB. For example, `12_000_000`.

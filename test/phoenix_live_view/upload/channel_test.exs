@@ -619,6 +619,81 @@ defmodule Phoenix.LiveView.UploadChannelTest do
              max_entries: 1,
              chunk_size: 20,
              accept: :any,
+             auto_upload: true,
+             progress: :consume
+           ]
+      test "auto_upload never uploads entries over max_entries", %{lv: lv} do
+        avatar =
+          file_input(lv, "form", :avatar, [
+            %{name: "foo1.jpeg", content: "bytes"},
+            %{name: "foo2.jpeg", content: "bytes"}
+          ])
+
+        excess = Enum.find(avatar.entries, &(&1["name"] == "foo2.jpeg"))
+
+        assert lv
+               |> form("form", user: %{})
+               |> render_change(avatar) =~ "config_error::too_many_files"
+
+        assert render_upload(avatar, "foo1.jpeg") =~ "consumed:foo1.jpeg"
+        assert eventually(fn -> not (render(lv) =~ "#{@context}:foo1.jpeg") end)
+
+        # consuming the uploaded entry does not make room for the excess entry
+        html = render(lv)
+        assert html =~ "#{@context}:foo2.jpeg:0%"
+        assert html =~ "config_error::too_many_files"
+
+        assert {:ok, %{entries: entries}} = preflight_upload(%{avatar | entries: [excess]})
+        assert entries == %{}
+      end
+
+      @tag allow: [max_entries: 2, chunk_size: 20, accept: :any, auto_upload: true]
+      test "auto_upload clears too_many_files when the excess entry is cancelled", %{lv: lv} do
+        avatar = file_input(lv, "form", :avatar, build_entries(3))
+        %{"ref" => excess_ref} = Enum.find(avatar.entries, &(&1["name"] == "myfile3.jpeg"))
+
+        assert lv
+               |> form("form", user: %{})
+               |> render_change(avatar) =~ "config_error::too_many_files"
+
+        assert render_upload(avatar, "myfile1.jpeg") =~ "#{@context}:myfile1.jpeg:100%"
+
+        UploadLive.run(lv, fn socket ->
+          {:reply, :ok, LiveView.cancel_upload(socket, :avatar, excess_ref)}
+        end)
+
+        html = render(lv)
+        refute html =~ "myfile3.jpeg"
+        refute html =~ "too_many_files"
+        assert render_upload(avatar, "myfile2.jpeg") =~ "#{@context}:myfile2.jpeg:100%"
+      end
+
+      @tag allow: [max_entries: 1, chunk_size: 20, accept: :any, auto_upload: true]
+      test "auto_upload replaces an in progress entry for max_entries of 1", %{lv: lv} do
+        avatar =
+          file_input(lv, "form", :avatar, [
+            %{name: "foo1.jpeg", content: String.duplicate("0", 100)}
+          ])
+
+        assert lv
+               |> form("form", user: %{})
+               |> render_change(avatar) =~ "#{@context}:foo1.jpeg:0%"
+
+        assert render_upload(avatar, "foo1.jpeg", 20) =~ "#{@context}:foo1.jpeg:20%"
+
+        replacement = file_input(lv, "form", :avatar, [%{name: "foo2.jpeg", content: "bytes"}])
+
+        assert lv
+               |> form("form", user: %{})
+               |> render_change(replacement) =~ "#{@context}:foo2.jpeg:0%"
+
+        assert render_upload(replacement, "foo2.jpeg") =~ "#{@context}:foo2.jpeg:100%"
+      end
+
+      @tag allow: [
+             max_entries: 1,
+             chunk_size: 20,
+             accept: :any,
              max_file_size: 1,
              auto_upload: true
            ]

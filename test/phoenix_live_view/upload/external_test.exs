@@ -152,6 +152,52 @@ defmodule Phoenix.LiveView.UploadExternalTest do
   end
 
   @tag allow: [
+         max_entries: 2,
+         chunk_size: 20,
+         auto_upload: true,
+         accept: :any,
+         external: :preflight,
+         progress: :consume
+       ]
+  test "external auto upload never uploads entries over max_entries", %{lv: lv} do
+    avatar =
+      file_input(lv, "form", :avatar, [
+        %{name: "foo1.jpeg", content: String.duplicate("ok", 100)},
+        %{name: "foo2.jpeg", content: String.duplicate("ok", 100)},
+        %{name: "foo3.jpeg", content: String.duplicate("ok", 100)}
+      ])
+
+    %{"ref" => excess_ref} = excess = Enum.find(avatar.entries, &(&1["name"] == "foo3.jpeg"))
+
+    assert lv
+           |> form("form", user: %{})
+           |> render_change(avatar) =~ "config_error::too_many_files"
+
+    render_upload(avatar, "foo1.jpeg")
+    render_upload(avatar, "foo2.jpeg")
+    assert {:error, :not_allowed} = render_upload(avatar, "foo3.jpeg")
+
+    # consuming the uploaded entries does not make room for the excess entry
+    html = render(lv)
+    refute html =~ "lv:foo1.jpeg"
+    refute html =~ "lv:foo2.jpeg"
+    assert html =~ "lv:foo3.jpeg:0%"
+    assert html =~ "config_error::too_many_files"
+    assert html =~ "preflight:#{inspect_html_safe("foo2.jpeg")}"
+
+    assert {:ok, %{entries: entries}} = preflight_upload(%{avatar | entries: [excess]})
+    assert entries == %{}
+    refute render(lv) =~ "preflight:#{inspect_html_safe("foo3.jpeg")}"
+
+    # the error is cleared once the excess entry is cancelled
+    run(lv, fn socket ->
+      {:reply, :ok, LiveView.cancel_upload(socket, :avatar, excess_ref)}
+    end)
+
+    refute render(lv) =~ "too_many_files"
+  end
+
+  @tag allow: [
          max_entries: 1,
          max_file_size: 1,
          auto_upload: true,
