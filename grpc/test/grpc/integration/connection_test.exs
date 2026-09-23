@@ -5,7 +5,15 @@ defmodule GRPC.Integration.ConnectionTest do
     server = FeatureServer
     {:ok, _, port} = GRPC.Server.start(server, 0)
     point = %Routeguide.Point{latitude: 409_146_138, longitude: -746_188_906}
-    {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", adapter_opts: [retry_timeout: 10])
+
+    # The adapter's default retry_fun waits ~1s before the first reconnect attempt
+    retry_fun = fn retries, _opts -> %{retries: retries - 1, timeout: 10} end
+
+    {:ok, channel} =
+      GRPC.Stub.connect("localhost:#{port}",
+        adapter_opts: [retry_timeout: 10, retry_fun: retry_fun]
+      )
+
     assert {:ok, _} = channel |> Routeguide.RouteGuide.Stub.get_feature(point)
     :ok = GRPC.Server.stop(server)
     {:ok, _, _} = reconnect_server(server, port)
