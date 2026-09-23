@@ -99,6 +99,35 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       assert result == expected
     end
 
+    test "orders by custom fields" do
+      pets = insert_list(10, :pet)
+
+      expected =
+        Enum.sort(pets, fn a, b ->
+          length_a = String.length(a.name)
+          length_b = String.length(b.name)
+
+          length_a > length_b or (length_a == length_b and a.id >= b.id)
+        end)
+
+      result =
+        Flop.all(
+          Pet,
+          %Flop{
+            order_by: [:name_length, :id],
+            order_directions: [:desc, :desc]
+          },
+          for: Pet,
+          extra_opts: [other: :option]
+        )
+
+      assert result == expected
+
+      assert_received {:sort, :desc, opts}
+      assert opts[:source] == :name
+      assert opts[:other] == :option
+    end
+
     test "orders by compound fields" do
       pets = insert_list(20, :pet)
 

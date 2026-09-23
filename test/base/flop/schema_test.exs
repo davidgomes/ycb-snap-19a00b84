@@ -388,7 +388,7 @@ defmodule Flop.SchemaTest do
              )
   end
 
-  test "raises error if custom field is added to sortable list" do
+  test "raises error if a sortable custom field has no sorter" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Parsley do
@@ -407,6 +407,33 @@ defmodule Flop.SchemaTest do
         end
       end
 
-    assert error.message =~ "cannot sort by custom field"
+    assert error.message =~ "has no sorter"
+  end
+
+  test "derives a sortable custom field with a sorter" do
+    defmodule Sage do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [
+            sorter: {__MODULE__, :sort_by_date, []},
+            ecto_type: :utc_datetime
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+
+      def sort_by_date(query, direction, _opts),
+        do: Ecto.Query.order_by(query, [r], [{^direction, r.inserted_at}])
+    end
+
+    assert %Flop.FieldInfo{
+             extra: %{
+               type: :custom,
+               sorter: {Sage, :sort_by_date, []}
+             }
+           } = Flop.Schema.field_info(%Sage{}, :inserted_at)
   end
 end
