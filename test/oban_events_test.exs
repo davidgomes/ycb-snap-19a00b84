@@ -2,6 +2,7 @@ defmodule ObanEventsTest do
   use ExUnit.Case, async: true
 
   alias ObanEvents.DispatchWorker
+  alias ObanEvents.Event
 
   # Test handler module
   defmodule TestHandler do
@@ -9,7 +10,20 @@ defmodule ObanEventsTest do
     use ObanEvents.Handler
 
     @impl true
-    def handle_event(_event, _data), do: :ok
+    def handle_event(_event_name, _event), do: :ok
+  end
+
+  # Inline Oban testing runs jobs in the emitting process, so handled events
+  # can be sent back to the test.
+  defmodule RecordingHandler do
+    @moduledoc false
+    use ObanEvents.Handler
+
+    @impl true
+    def handle_event(event_name, event) do
+      send(self(), {:handled, event_name, event})
+      :ok
+    end
   end
 
   # Test event bus with handlers registered (uses defaults)
@@ -17,11 +31,12 @@ defmodule ObanEventsTest do
     @moduledoc false
     use ObanEvents
 
-    alias ObanEventsTest.TestHandler
+    alias ObanEventsTest.{RecordingHandler, TestHandler}
 
     @event_handlers %{
       investment_status_changed: [TestHandler],
       investment_created: [TestHandler],
+      investor_registered: [TestHandler, RecordingHandler],
       investment_cancelled: [],
       portfolio_company_added: [],
       portfolio_company_removed: [],
@@ -97,6 +112,75 @@ defmodule ObanEventsTest do
     test "requires data to be a map" do
       assert_raise FunctionClauseError, fn ->
         TestEventBus.emit(:event_name, "not a map")
+      end
+    end
+  end
+
+  describe "emit/3 metadata" do
+    test "shares one event_id across all handler jobs of an emit" do
+      assert {:ok, [job_one, job_two]} = TestEventBus.emit(:investor_registered, %{"id" => 1})
+
+      assert {:ok, _} = Ecto.UUID.cast(job_one.args["event_id"])
+      assert job_one.args["event_id"] == job_two.args["event_id"]
+    end
+
+    test "generates a new event_id for every emit" do
+      assert {:ok, [first]} = TestEventBus.emit(:investment_created, %{"id" => 1})
+      assert {:ok, [second]} = TestEventBus.emit(:investment_created, %{"id" => 1})
+
+      assert first.args["event_id"] != second.args["event_id"]
+    end
+
+    test "generates a unique idempotency_key for each handler job" do
+      assert {:ok, [job_one, job_two]} = TestEventBus.emit(:investor_registered, %{"id" => 1})
+
+      assert {:ok, _} = Ecto.UUID.cast(job_one.args["idempotency_key"])
+      assert {:ok, _} = Ecto.UUID.cast(job_two.args["idempotency_key"])
+      assert job_one.args["idempotency_key"] != job_two.args["idempotency_key"]
+    end
+
+    test "stores causation_id and correlation_id in the job args" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{"id" => 1},
+                 causation_id: "parent-event-id",
+                 correlation_id: "operation-id"
+               )
+
+      assert job.args["causation_id"] == "parent-event-id"
+      assert job.args["correlation_id"] == "operation-id"
+    end
+
+    test "defaults causation_id and correlation_id to nil" do
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{"id" => 1})
+
+      assert job.args["causation_id"] == nil
+      assert job.args["correlation_id"] == nil
+    end
+
+    test "delivers an Event with string-keyed data and metadata to handlers" do
+      assert {:ok, jobs} =
+               TestEventBus.emit(:investor_registered, %{investor_id: 42},
+                 causation_id: "parent-event-id",
+                 correlation_id: "operation-id"
+               )
+
+      recording_job =
+        Enum.find(jobs, &(&1.args["handler"] == Atom.to_string(RecordingHandler)))
+
+      assert_received {:handled, :investor_registered, %Event{} = event}
+
+      assert event == %Event{
+               data: %{"investor_id" => 42},
+               event_id: recording_job.args["event_id"],
+               idempotency_key: recording_job.args["idempotency_key"],
+               causation_id: "parent-event-id",
+               correlation_id: "operation-id"
+             }
+    end
+
+    test "raises ArgumentError for unknown options" do
+      assert_raise ArgumentError, ~r/unknown keys \[:trace_id\]/, fn ->
+        TestEventBus.emit(:investment_created, %{"id" => 1}, trace_id: "abc")
       end
     end
   end

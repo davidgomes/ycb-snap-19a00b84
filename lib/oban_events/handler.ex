@@ -12,16 +12,28 @@ defmodule ObanEvents.Handler do
       defmodule MyApp.UserHandler do
         use ObanEvents.Handler
 
+        alias ObanEvents.Event
+
         @impl true
-        def handle_event(:user_created, data) do
+        def handle_event(:user_created, %Event{data: data}) do
           %{"user_id" => user_id} = data
           # Process the event
           :ok
         end
 
         # Ignore other events
-        def handle_event(_event, _data), do: :ok
+        def handle_event(_event_name, _event), do: :ok
       end
+
+  ## Event Metadata
+
+  Handlers receive an `ObanEvents.Event` struct with these fields:
+
+  - `data` - The event data (map with string keys)
+  - `event_id` - Unique ID of the emit, shared by all its handlers
+  - `idempotency_key` - Unique ID of this handler's job, stable across retries
+  - `causation_id` - Optional `event_id` of the event that caused this one
+  - `correlation_id` - Optional ID grouping events of one business operation
 
   ## Return Values
 
@@ -38,29 +50,30 @@ defmodule ObanEvents.Handler do
   ## Best Practices
 
   1. Keep handlers focused on a single concern
-  2. Make handlers idempotent (safe to run multiple times)
+  2. Make handlers idempotent (safe to run multiple times), e.g. using `idempotency_key`
   3. Pattern match on specific events, ignore others
-  4. Log important actions for debugging
-  5. Return errors for retriable failures, :ok for non-retriable ones
+  4. Pass `event_id` as `causation_id` when emitting events from a handler
+  5. Log important actions for debugging
+  6. Return errors for retriable failures, :ok for non-retriable ones
   """
 
   @doc """
   Handle an event.
 
-  Receives the event name (atom) and event-specific data (map).
-  Should process the event and return an ok/error tuple.
+  Receives the event name (atom) and an `ObanEvents.Event` struct holding the
+  event data and metadata. Should process the event and return an ok/error tuple.
 
   ## Parameters
 
   - `event_name`: Atom representing the event (e.g., `:user_created`)
-  - `data`: Map containing event-specific data
+  - `event`: `ObanEvents.Event` struct with the event data and metadata
 
   ## Return Values
 
   - `:ok` | `{:ok, any()}` - Success
   - `{:error, any()}` - Failure (will trigger retry)
   """
-  @callback handle_event(event_name :: atom(), data :: map()) ::
+  @callback handle_event(event_name :: atom(), event :: ObanEvents.Event.t()) ::
               :ok | {:ok, any()} | {:error, any()}
 
   @doc false
