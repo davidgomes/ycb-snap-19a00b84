@@ -71,6 +71,17 @@ defmodule ObanChoreWeb.DashboardLive do
               >
                 New Execution
               </button>
+              <button
+                phx-click="select_tab"
+                phx-value-tab="history"
+                data-role="history-tab"
+                class={[
+                  "oc-tab-item",
+                  if(@selected_tab == :history, do: "oc-tab-item--active", else: "")
+                ]}
+              >
+                History
+              </button>
               <%= for job_id <- Map.get(@chore_jobs, @selected_chore_module, []), job = @jobs[job_id] do %>
                 <button
                   phx-click="select_tab"
@@ -96,6 +107,9 @@ defmodule ObanChoreWeb.DashboardLive do
                       :executing -> "background-color: var(--oc-blue-500);"
                       :available -> "background-color: var(--oc-gray-400);"
                       :scheduled -> "background-color: var(--oc-amber-400);"
+                      :retryable -> "background-color: var(--oc-amber-400);"
+                      :completed -> "background-color: var(--oc-emerald-500);"
+                      :discarded -> "background-color: var(--oc-rose-500);"
                       _ -> "background-color: var(--oc-gray-400);"
                     end
                   }></span>
@@ -113,6 +127,13 @@ defmodule ObanChoreWeb.DashboardLive do
                   selected={@selected_chore_module == chore_item.module and @selected_tab == :new}
                 />
               <% end %>
+
+              <.live_component
+                module={ObanChoreWeb.HistoryComponent}
+                id={"history-#{chore.module}"}
+                chore={chore}
+                selected={@selected_tab == :history}
+              />
 
               <%= for {module, job_ids} <- @chore_jobs, job_id <- job_ids, job = @jobs[job_id] do %>
                   <%= if @selected_chore_module == module do %>
@@ -227,6 +248,11 @@ defmodule ObanChoreWeb.DashboardLive do
   end
 
   @impl true
+  def handle_event("select_tab", %{"tab" => "history"}, socket) do
+    {:noreply, assign(socket, selected_tab: :history)}
+  end
+
+  @impl true
   def handle_event("select_tab", %{"tab" => "job_" <> id_str}, socket) do
     id = String.to_integer(id_str)
     {:noreply, assign(socket, selected_tab: {:job, id})}
@@ -249,28 +275,23 @@ defmodule ObanChoreWeb.DashboardLive do
     allowed_modules = Enum.map(socket.assigns.chores, & &1.module)
 
     if worker_module in allowed_modules do
-      pubsub = ObanChore.pubsub_server()
-
-      if connected?(socket) do
-        Phoenix.PubSub.subscribe(pubsub, "oban_chore:logs:#{job.id}")
-        Phoenix.PubSub.subscribe(pubsub, "oban_chore:status:#{job.id}")
-      end
-
       job = %{
         job
         | state: if(is_binary(job.state), do: String.to_existing_atom(job.state), else: job.state)
       }
 
-      new_jobs = Map.put(socket.assigns.jobs, job.id, job)
+      {:noreply, track_job(socket, job, worker_module)}
+    else
+      {:noreply, socket}
+    end
+  end
 
-      new_chore_jobs =
-        Map.update(socket.assigns.chore_jobs, worker_module, [job.id], fn job_ids ->
-          if job.id in job_ids, do: job_ids, else: [job.id | job_ids]
-        end)
+  @impl true
+  def handle_info({:open_history_job, job, worker_module}, socket) do
+    allowed_modules = Enum.map(socket.assigns.chores, & &1.module)
 
-      {:noreply,
-       socket
-       |> assign(jobs: new_jobs, chore_jobs: new_chore_jobs, selected_tab: {:job, job.id})}
+    if worker_module in allowed_modules do
+      {:noreply, track_job(socket, job, worker_module)}
     else
       {:noreply, socket}
     end
@@ -300,6 +321,23 @@ defmodule ObanChoreWeb.DashboardLive do
   @impl true
   def handle_info(:tick, socket) do
     {:noreply, assign(socket, now: DateTime.utc_now())}
+  end
+
+  defp track_job(socket, job, worker_module) do
+    if connected?(socket) and not Map.has_key?(socket.assigns.jobs, job.id) do
+      pubsub = ObanChore.pubsub_server()
+      Phoenix.PubSub.subscribe(pubsub, "oban_chore:logs:#{job.id}")
+      Phoenix.PubSub.subscribe(pubsub, "oban_chore:status:#{job.id}")
+    end
+
+    new_jobs = Map.put(socket.assigns.jobs, job.id, job)
+
+    new_chore_jobs =
+      Map.update(socket.assigns.chore_jobs, worker_module, [job.id], fn job_ids ->
+        if job.id in job_ids, do: job_ids, else: [job.id | job_ids]
+      end)
+
+    assign(socket, jobs: new_jobs, chore_jobs: new_chore_jobs, selected_tab: {:job, job.id})
   end
 
   defp fetch_counts(chores) do

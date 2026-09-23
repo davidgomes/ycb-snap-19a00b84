@@ -1,6 +1,7 @@
 defmodule ObanChoreWeb.JobComponent do
   @moduledoc false
   use Phoenix.LiveComponent
+  import ObanChoreWeb.CoreComponents
 
   @impl true
   def render(assigns) do
@@ -11,9 +12,7 @@ defmodule ObanChoreWeb.JobComponent do
           <div class="oc-job-header">
             <h3 class="oc-text-sm" style="font-weight: 600; color: var(--oc-gray-900);">Arguments</h3>
             <div class="oc-flex oc-items-center oc-gap-2">
-              <span class="oc-badge" style={state_style(@job.state)}>
-                <%= String.capitalize(to_string(@job.state)) %>
-              </span>
+              <.state_badge state={@job.state} />
               <span class="oc-text-xs oc-text-gray-500 oc-font-mono">ID: <%= @job.id %></span>
             </div>
           </div>
@@ -33,6 +32,21 @@ defmodule ObanChoreWeb.JobComponent do
           </div>
         </div>
 
+        <%= if @job.errors != [] do %>
+          <div style="display: flex; flex-direction: column; gap: 1rem;" data-role="job-errors">
+            <h3 class="oc-text-sm" style="font-weight: 600; color: var(--oc-gray-900); padding-left: 0.25rem;">Errors</h3>
+
+            <div class="oc-log-container" style="min-height: 0;">
+              <%= for error <- @job.errors do %>
+                <div class="oc-log-line">
+                  <span class="oc-log-prompt">#<%= error["attempt"] %></span>
+                  <span class="oc-log-content" style="white-space: pre-wrap;"><%= error["error"] %></span>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        <% end %>
+
         <div style="display: flex; flex-direction: column; gap: 1rem;">
           <h3 class="oc-text-sm" style="font-weight: 600; color: var(--oc-gray-900); padding-left: 0.25rem;">Execution Logs</h3>
 
@@ -41,10 +55,13 @@ defmodule ObanChoreWeb.JobComponent do
             if(@logs == [], do: "oc-flex oc-items-center oc-justify-center oc-text-gray-500", else: "")
           ]} style={if(@logs == [], do: "font-style: italic;", else: "")}>
             <%= if @logs == [] do %>
-              <%= if @job.state == :executing do %>
-                Waiting for logs...
-              <% else %>
-                No logs yet.
+              <%= cond do %>
+                <% @job.state == :executing -> %>
+                  Waiting for logs...
+                <% @job.state in [:available, :scheduled] -> %>
+                  No logs yet.
+                <% true -> %>
+                  No logs were captured for this run.
               <% end %>
             <% else %>
               <div style="display: flex; flex-direction: column-reverse; gap: 0.25rem;">
@@ -82,28 +99,6 @@ defmodule ObanChoreWeb.JobComponent do
        |> assign(logs: [])}
     else
       {:ok, assign(socket, assigns)}
-    end
-  end
-
-  defp state_style(state) do
-    case state do
-      :executing ->
-        "background-color: var(--oc-blue-50); color: var(--oc-blue-700); box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.1);"
-
-      :available ->
-        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
-
-      :scheduled ->
-        "background-color: var(--oc-amber-50); color: var(--oc-amber-800); box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.2);"
-
-      :completed ->
-        "background-color: var(--oc-emerald-50); color: var(--oc-emerald-800); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.2);"
-
-      :discarded ->
-        "background-color: var(--oc-rose-50); color: var(--oc-rose-900); box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.1);"
-
-      _ ->
-        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
     end
   end
 end

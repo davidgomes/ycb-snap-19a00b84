@@ -131,6 +131,38 @@ defmodule ObanChoreWeb.CoreComponents do
   end
 
   @doc """
+  Renders a badge for an Oban job state.
+  """
+  attr(:state, :atom, required: true)
+
+  def state_badge(assigns) do
+    ~H"""
+    <span class="oc-badge" style={state_style(@state)}>
+      <%= String.capitalize(to_string(@state)) %>
+    </span>
+    """
+  end
+
+  defp state_style(state) do
+    case state do
+      :executing ->
+        "background-color: var(--oc-blue-50); color: var(--oc-blue-700); box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.1);"
+
+      state when state in [:scheduled, :retryable] ->
+        "background-color: var(--oc-amber-50); color: var(--oc-amber-800); box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.2);"
+
+      :completed ->
+        "background-color: var(--oc-emerald-50); color: var(--oc-emerald-800); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.2);"
+
+      :discarded ->
+        "background-color: var(--oc-rose-50); color: var(--oc-rose-900); box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.1);"
+
+      _ ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+    end
+  end
+
+  @doc """
   Renders a warning banner for duplicate chore execution.
   """
   attr(:on_dismiss, :string, required: true)
@@ -415,6 +447,17 @@ defmodule ObanChoreWeb.CoreComponents do
         min = div(rem(diff, 3600), 60)
         "#{hours}h #{min}m"
     end
+  end
+
+  @doc """
+  Formats a job timestamp as an absolute UTC time, or a dash when missing.
+  """
+  def format_datetime(nil), do: "—"
+
+  def format_datetime(datetime) do
+    datetime
+    |> to_datetime()
+    |> Calendar.strftime("%Y-%m-%d %H:%M:%S UTC")
   end
 
   defp to_datetime(%DateTime{} = dt), do: dt
