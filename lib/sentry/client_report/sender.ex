@@ -6,7 +6,17 @@ defmodule Sentry.ClientReport.Sender do
 
   use GenServer
 
-  alias Sentry.{Client, ClientReport, Config, Envelope, Transaction}
+  alias Sentry.{
+    Client,
+    ClientReport,
+    Config,
+    Envelope,
+    LogBatch,
+    LogEvent,
+    Metric,
+    MetricBatch,
+    Transaction
+  }
 
   @send_interval 30_000
 
@@ -39,6 +49,10 @@ defmodule Sentry.ClientReport.Sender do
                | Sentry.CheckIn.t()
                | ClientReport.t()
                | Sentry.Event.t()
+               | LogBatch.t()
+               | LogEvent.t()
+               | Metric.t()
+               | MetricBatch.t()
                | Sentry.Transaction.t()
   def record_discarded_events(reason, event_items, genserver)
       when is_list(event_items) do
@@ -46,7 +60,7 @@ defmodule Sentry.ClientReport.Sender do
     # https://develop.sentry.dev/sdk/client-reports/
     if Enum.member?(@client_report_reasons, reason) do
       Enum.each(event_items, fn item ->
-        for {category, quantity} <- data_categories(item) do
+        for {category, quantity} <- data_categories(item), quantity > 0 do
           GenServer.cast(genserver, {:record_discarded_events, reason, category, quantity})
         end
       end)
@@ -65,8 +79,30 @@ defmodule Sentry.ClientReport.Sender do
     [{Envelope.get_data_category(transaction), 1}, {"span", span_count}]
   end
 
+  # Logs and metrics are reported both by count and by their serialized size.
+  # https://develop.sentry.dev/sdk/telemetry/client-reports/
+  defp data_categories(%LogBatch{log_events: log_events}) do
+    [{"log_item", length(log_events)}, {"log_byte", total_byte_size(log_events)}]
+  end
+
+  defp data_categories(%MetricBatch{metrics: metrics}) do
+    [{"trace_metric", length(metrics)}, {"trace_metric_byte", total_byte_size(metrics)}]
+  end
+
+  defp data_categories(%LogEvent{} = log_event) do
+    [{"log_item", 1}, {"log_byte", Envelope.item_byte_size(log_event)}]
+  end
+
+  defp data_categories(%Metric{} = metric) do
+    [{"trace_metric", 1}, {"trace_metric_byte", Envelope.item_byte_size(metric)}]
+  end
+
   defp data_categories(item) do
     [{Envelope.get_data_category(item), 1}]
+  end
+
+  defp total_byte_size(items) do
+    Enum.reduce(items, 0, &(Envelope.item_byte_size(&1) + &2))
   end
 
   ## Callbacks

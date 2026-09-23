@@ -4,7 +4,17 @@ defmodule Sentry.TransportTest do
   import Sentry.TestHelpers
   import ExUnit.CaptureLog
 
-  alias Sentry.{ClientError, Envelope, Event, FinchClient, HackneyClient, Transport}
+  alias Sentry.{
+    ClientError,
+    ClientReport,
+    Envelope,
+    Event,
+    FinchClient,
+    HackneyClient,
+    LogEvent,
+    Metric,
+    Transport
+  }
 
   describe "encode_and_post_envelope/2" do
     setup do
@@ -392,6 +402,57 @@ defmodule Sentry.TransportTest do
 
       # Other categories should not be rate-limited
       refute Transport.RateLimiter.rate_limited?("session")
+    end
+
+    test "drops log envelopes before sending when log_byte is rate limited" do
+      Transport.RateLimiter.update_rate_limits("60:log_byte:organization")
+
+      log_events =
+        for body <- ["one", "two"] do
+          %LogEvent{level: :info, body: body, timestamp: 1_588_601_261.535_386}
+        end
+
+      envelope = Envelope.from_log_events(log_events)
+      :sys.replace_state(ClientReport.Sender, fn _state -> %{} end)
+
+      capture_log(fn ->
+        assert {:error, %ClientError{reason: :rate_limited}} =
+                 Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
+      end)
+
+      assert :sys.get_state(ClientReport.Sender) == %{
+               {:ratelimit_backoff, "log_item"} => 2,
+               {:ratelimit_backoff, "log_byte"} =>
+                 log_events |> Enum.map(&Envelope.item_byte_size/1) |> Enum.sum()
+             }
+    end
+
+    test "records trace_metric_byte outcomes when Sentry replies with 429 to a metric envelope",
+         %{bypass: bypass} do
+      metrics =
+        for name <- ["a", "b", "c"] do
+          %Metric{type: :counter, name: name, value: 1, timestamp: 1_588_601_261.535_386}
+        end
+
+      envelope = Envelope.from_metric_events(metrics)
+      :sys.replace_state(ClientReport.Sender, fn _state -> %{} end)
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("retry-after", "1")
+        |> Plug.Conn.resp(429, ~s<{}>)
+      end)
+
+      capture_log(fn ->
+        assert {:error, %ClientError{reason: :rate_limited}} =
+                 Transport.encode_and_post_envelope(envelope, HackneyClient, _retries = [])
+      end)
+
+      assert :sys.get_state(ClientReport.Sender) == %{
+               {:ratelimit_backoff, "trace_metric"} => 3,
+               {:ratelimit_backoff, "trace_metric_byte"} =>
+                 metrics |> Enum.map(&Envelope.item_byte_size/1) |> Enum.sum()
+             }
     end
   end
 

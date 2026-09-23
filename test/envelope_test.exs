@@ -336,4 +336,46 @@ defmodule Sentry.EnvelopeTest do
       assert Envelope.get_data_category(metric_batch) == "trace_metric"
     end
   end
+
+  describe "item_byte_size/1" do
+    test "returns the serialized size of a log event" do
+      log_event = %LogEvent{
+        timestamp: 1_588_601_261.535_386,
+        level: :info,
+        body: "test log",
+        attributes: %{"user_id" => 42}
+      }
+
+      expected = log_event |> LogEvent.to_map() |> encode_json!() |> byte_size()
+
+      assert Envelope.item_byte_size(log_event) == expected
+      assert expected > 0
+    end
+
+    test "returns the serialized size of a metric" do
+      metric = %Metric{
+        type: :counter,
+        name: "test.counter",
+        value: 1,
+        timestamp: 1_588_601_261.535_386
+      }
+
+      expected = metric |> Metric.to_map() |> encode_json!() |> byte_size()
+
+      assert Envelope.item_byte_size(metric) == expected
+      assert expected > 0
+    end
+
+    test "grows with the size of the payload" do
+      small = %LogEvent{timestamp: 1_588_601_261.535_386, level: :info, body: "a"}
+      large = %LogEvent{small | body: String.duplicate("a", 1000)}
+
+      assert Envelope.item_byte_size(large) - Envelope.item_byte_size(small) == 999
+    end
+  end
+
+  defp encode_json!(map) do
+    {:ok, encoded} = Sentry.JSON.encode(map, Sentry.Config.json_library())
+    encoded
+  end
 end
