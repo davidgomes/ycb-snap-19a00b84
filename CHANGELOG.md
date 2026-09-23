@@ -17,6 +17,27 @@
   patch that removes an open dialog fires no close event at all, so
   `destroyed()` releases it too, guarded on `open` so tearing down a
   closed palette cannot strip a lock another overlay owns.
+- **Dropdown panels flip upward when the viewport leaves no room
+  below.** The panel always opened downward - `dropdown` is LiveView.JS
+  and CSS, so nothing ever measured it - and a trigger near the bottom
+  of the screen (the avatar menu pinned to the foot of a sidebar is the
+  classic) dropped its menu straight off the viewport, with nothing to
+  scroll to and Sign out out of reach. A new `PetalDropdown` hook rides
+  the panel, which already carries the id `JS.toggle` targets, and sets
+  `data-flip` when the panel doesn't fit below and there is more room
+  above - the combobox's rule and attribute. Both now go through one
+  `flipDecision` helper, so the rule can't drift between them. The hook
+  watches the inline `display` LiveView.JS writes rather than
+  `phx:show-start`, which LiveView fires before the panel is displayed;
+  the observer lands after the write and before the frame paints, so
+  the menu never flashes on the wrong side first. The side is
+  re-measured on scroll (nested scrollers included) and resize while
+  the menu is open, and the transform origin flips with the panel so it
+  still scales out of the trigger. Covers everything built on
+  `dropdown`: `user_dropdown_menu`, `language_select` and the
+  `color_scheme_switch` dropdown variant. Register the bundled hooks
+  (see the README) to get it - without them the panel opens downward as
+  before.
 
 ### 4.14.0 - 2026-08-11
 
