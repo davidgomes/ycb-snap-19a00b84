@@ -11,6 +11,8 @@ A lightweight, persistent event bus for Elixir applications built on top of [Oba
 - 📊 **Observable** - Track event processing via Oban Web UI
 - ✅ **Type-safe** - Compile-time validation of events
 - 🎯 **Decoupled** - Event emitters don't know about handlers
+- 🏷️ **Metadata** - Events carry an ID, emission time, and custom metadata
+- 🧪 **Testable** - Helpers for testing handlers and asserting on emitted events
 
 ## Installation
 
