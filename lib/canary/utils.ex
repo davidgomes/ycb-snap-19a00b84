@@ -107,6 +107,52 @@ defmodule Canary.Utils do
   end
 
   @doc """
+  Get the assigns key of the current user (subject) used for authorization.
+
+      iex> Canary.Utils.get_current_user_name(current_user: :current_member)
+      :current_member
+  """
+  @spec get_current_user_name(Keyword.t()) :: atom
+  def get_current_user_name(opts) do
+    opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
+  end
+
+  @doc """
+  Get the resource name used as the assigns key.
+
+      iex> Canary.Utils.get_resource_name(model: Some.Project.BlogPost)
+      :blog_post
+
+      iex> Canary.Utils.get_resource_name(model: Some.Project.BlogPost, as: :post)
+      :post
+  """
+  @spec get_resource_name(Keyword.t()) :: atom
+  def get_resource_name(opts) do
+    case opts[:as] do
+      nil ->
+        opts[:model]
+        |> Module.split()
+        |> List.last()
+        |> Macro.underscore()
+        |> String.to_atom()
+
+      as ->
+        as
+    end
+  end
+
+  @doc """
+  Get the list of actions that authorize against the model module instead of a loaded resource.
+
+      iex> Canary.Utils.non_id_actions(non_id_actions: [:find_by_name])
+      [:index, :new, :create, :find_by_name]
+  """
+  @spec non_id_actions(Keyword.t()) :: [atom]
+  def non_id_actions(opts) do
+    Enum.concat([:index, :new, :create], List.wrap(opts[:non_id_actions]))
+  end
+
+  @doc """
   Apply the error handler to the connection or socket
   """
   @spec apply_error_handler(Plug.Conn.t() , atom, Keyword.t()) :: Plug.Conn.t()

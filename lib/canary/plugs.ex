@@ -148,6 +148,7 @@ defmodule Canary.Plugs do
 
   * `:only` - Specifies which actions to authorize
   * `:except` - Specifies which actions for which to skip authorization
+  * `:current_user` - Specifies the key in the conn assigns to get the current user
   * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
 
   Examples:
@@ -173,10 +174,7 @@ defmodule Canary.Plugs do
   defp do_authorize_controller(conn, opts) do
     controller = conn.assigns[:canary_controller] || conn.private[:phoenix_controller]
 
-    current_user_name =
-      opts[:current_user] ||
-        Application.get_env(:canary, :current_user, :current_user)
-
+    current_user_name = get_current_user_name(opts)
     current_user = Map.fetch!(conn.assigns, current_user_name)
     action = get_action(conn)
 
@@ -268,19 +266,12 @@ defmodule Canary.Plugs do
   end
 
   defp do_authorize_resource(conn, opts) do
-    current_user_name =
-      opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
-
+    current_user_name = get_current_user_name(opts)
     current_user = Map.fetch!(conn.assigns, current_user_name)
     action = get_action(conn)
     is_persisted = persisted?(opts)
 
-    non_id_actions =
-      if opts[:non_id_actions] do
-        Enum.concat([:index, :new, :create], opts[:non_id_actions])
-      else
-        [:index, :new, :create]
-      end
+    non_id_actions = non_id_actions(opts)
 
     resource =
       cond do
@@ -341,6 +332,7 @@ defmodule Canary.Plugs do
   plug :load_and_authorize_resource, model: Post, id_name: "slug", id_field: "slug", only: [:show], persisted: true
   ```
   """
+  @spec load_and_authorize_resource(Plug.Conn.t(), Plug.opts()) :: Plug.Conn.t()
   def load_and_authorize_resource(conn, opts) do
     action = get_action(conn)
 
@@ -432,23 +424,10 @@ defmodule Canary.Plugs do
   end
 
   defp get_resource_name(conn, opts) do
-    case opts[:as] do
-      nil ->
-        opts[:model]
-        |> Module.split()
-        |> List.last()
-        |> Macro.underscore()
-        |> pluralize_if_needed(conn, opts)
-        |> String.to_atom()
+    name = get_resource_name(opts)
 
-      as ->
-        as
-    end
-  end
-
-  defp pluralize_if_needed(name, conn, opts) do
-    if get_action(conn) in [:index] and not persisted?(opts) do
-      name <> "s"
+    if is_nil(opts[:as]) and get_action(conn) in [:index] and not persisted?(opts) do
+      String.to_atom("#{name}s")
     else
       name
     end
@@ -467,12 +446,7 @@ defmodule Canary.Plugs do
   defp handle_not_found(conn, opts) do
     action = get_action(conn)
 
-    non_id_actions =
-      if opts[:non_id_actions] do
-        Enum.concat([:index, :new, :create], opts[:non_id_actions])
-      else
-        [:index, :new, :create]
-      end
+    non_id_actions = non_id_actions(opts)
 
     is_required = required?(opts)
     resource_name = Map.get(conn.assigns, get_resource_name(conn, opts))

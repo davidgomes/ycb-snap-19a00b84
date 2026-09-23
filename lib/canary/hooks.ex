@@ -444,8 +444,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     # Perform the authorization check
     defp check_authorization(%Socket{} = socket, action, opts) do
-      current_user_name =
-        opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
+      current_user_name = get_current_user_name(opts)
 
       current_user = Map.fetch(socket.assigns, current_user_name)
       resource = fetch_resoruce_or_model(socket, opts)
@@ -495,20 +494,6 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
         apply_error_handler(socket, :not_found_handler, opts)
       else
         {:cont, socket}
-      end
-    end
-
-    defp get_resource_name(opts) do
-      case opts[:as] do
-        nil ->
-          opts[:model]
-          |> Module.split()
-          |> List.last()
-          |> Macro.underscore()
-          |> String.to_atom()
-
-        as ->
-          as
       end
     end
 
