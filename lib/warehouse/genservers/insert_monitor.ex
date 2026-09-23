@@ -6,6 +6,7 @@ defmodule Warehouse.GenServers.InsertMonitor do
 
   import Ecto.Query
 
+  alias Warehouse.AdditiveMap
   alias Warehouse.Clients.Assembly
   alias Warehouse.Repo
   alias Warehouse.Schemas.Component
@@ -144,11 +145,17 @@ defmodule Warehouse.GenServers.InsertMonitor do
     |> Repo.all()
   end
 
+  # Assembly only streams components that have demand, so every component
+  # missing from the response gets its demand reset to 0.
   defp update_demands() do
-    Assembly.request_component_demands()
-    |> Stream.map(fn %{component_id: id, demand_quantity: demand} -> [id, demand] end)
-    |> Stream.each(&apply(Warehouse.Component, :update_component_demand, &1))
-    |> Stream.run()
+    demands =
+      Enum.reduce(Assembly.request_component_demands(), %{}, fn %{component_id: id, demand_quantity: demand}, acc ->
+        AdditiveMap.add(acc, id, demand)
+      end)
+
+    Enum.each(Warehouse.Component.list_components(), fn %{id: id} ->
+      Warehouse.Component.update_component_demand(id, AdditiveMap.get(demands, id))
+    end)
   end
 
   defp wrap_supervisor_start({:ok, _child}, acc), do: acc + 1

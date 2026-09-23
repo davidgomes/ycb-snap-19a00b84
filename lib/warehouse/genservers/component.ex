@@ -107,12 +107,15 @@ defmodule Warehouse.GenServers.Component do
 
   defp events_module(), do: Application.get_env(:warehouse, :events)
 
+  # Assembly only streams components that have demand, so a component missing
+  # from the response has a demand of 0.
   defp update_demands(component_id) do
-    Assembly.request_component_demands()
-    |> Stream.filter(fn %{component_id: id} -> to_string(id) == to_string(component_id) end)
-    |> Stream.each(fn %{component_id: id, demand_quantity: demand} ->
-      Component.update_component_demand(id, demand)
-    end)
-    |> Stream.run()
+    demand =
+      Assembly.request_component_demands()
+      |> Stream.filter(fn %{component_id: id} -> to_string(id) == to_string(component_id) end)
+      |> Stream.map(fn %{demand_quantity: demand} -> demand end)
+      |> Enum.sum()
+
+    Component.update_component_demand(component_id, demand)
   end
 end
