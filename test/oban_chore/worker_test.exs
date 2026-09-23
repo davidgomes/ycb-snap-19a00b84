@@ -48,6 +48,112 @@ defmodule ObanChore.WorkerTest do
     def perform(_), do: :ok
   end
 
+  defmodule UnnamedWorker do
+    use ObanChore.Worker, fields: [note: [type: :string, label: "Note"]]
+
+    @impl Oban.Worker
+    def perform(_), do: :ok
+  end
+
+  defmodule UniqueWorker do
+    use ObanChore.Worker,
+      name: "Unique Chore",
+      queue: :operational,
+      max_attempts: 5,
+      unique: [period: 60],
+      fields: [user_id: [type: :integer, required: true]]
+
+    @impl Oban.Worker
+    def perform(_), do: :ok
+  end
+
+  defmodule TemporalWorker do
+    use ObanChore.Worker,
+      fields: [
+        on: [type: :date],
+        at: [type: :time],
+        run_at: [type: :utc_datetime],
+        ratio: [type: :float]
+      ]
+
+    @impl Oban.Worker
+    def perform(_), do: :ok
+  end
+
+  test "exposes the chore metadata in __chore_info__" do
+    assert MyTestChore.__chore_info__() == %{
+             module: MyTestChore,
+             name: "My Test Chore",
+             description: nil,
+             fields: [
+               user_id: [type: :integer, required: true],
+               age: [type: :integer]
+             ],
+             unique: false
+           }
+  end
+
+  test "defaults the chore name to the module name" do
+    assert UnnamedWorker.__chore_info__().name == "ObanChore.WorkerTest.UnnamedWorker"
+  end
+
+  test "flags workers that define their own unique options" do
+    assert UniqueWorker.__chore_info__().unique
+    refute MyTestChore.__chore_info__().unique
+  end
+
+  test "passes standard Oban options through to Oban.Worker" do
+    opts = UniqueWorker.__opts__()
+
+    assert opts[:queue] == :operational
+    assert opts[:max_attempts] == 5
+    assert opts[:unique] == [period: 60]
+    refute Keyword.has_key?(opts, :fields)
+    refute Keyword.has_key?(opts, :name)
+
+    changeset = UniqueWorker.new(%{user_id: 1})
+    assert changeset.changes.worker == "ObanChore.WorkerTest.UniqueWorker"
+    assert changeset.changes.queue == "operational"
+    assert changeset.changes.args == %{user_id: 1}
+  end
+
+  test "casts date, time, datetime and float fields" do
+    changeset =
+      TemporalWorker.changeset(%{
+        "on" => "2024-05-01",
+        "at" => "13:45:00",
+        "run_at" => "2024-05-01T13:45:00Z",
+        "ratio" => "0.5"
+      })
+
+    assert changeset.valid?
+    assert changeset.changes.on == ~D[2024-05-01]
+    assert changeset.changes.at == ~T[13:45:00]
+    assert changeset.changes.run_at == ~U[2024-05-01 13:45:00Z]
+    assert changeset.changes.ratio == 0.5
+  end
+
+  test "ignores params that are not declared as fields" do
+    changeset = MyTestChore.changeset(%{"user_id" => "1", "unexpected" => "value"})
+
+    assert changeset.valid?
+    assert changeset.changes == %{user_id: 1}
+  end
+
+  test "reports cast errors on required fields without a blank error" do
+    changeset = MyTestChore.changeset(%{"user_id" => "not-a-number"})
+
+    refute changeset.valid?
+    assert errors_on(changeset).user_id == ["is invalid"]
+  end
+
+  test "changeset/0 validates required fields against empty params" do
+    changeset = MyTestChore.changeset()
+
+    refute changeset.valid?
+    assert errors_on(changeset) == %{user_id: ["can't be blank"]}
+  end
+
   test "captures description in __chore_info__" do
     info = DescriptiveWorker.__chore_info__()
     assert info.description == "This chore has a helpful description."
