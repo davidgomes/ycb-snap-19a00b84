@@ -37,7 +37,7 @@ defmodule OffBroadway.Kafka.ShowtimeHandler do
     {:ok, broadway_pid} = Broadway.start_link(broadway_module, broadway_config)
 
     state = %{
-      producer: Broadway.Server.producer_names(broadway_pid) |> List.first()
+      producer: Broadway.producer_names(broadway_pid) |> List.first()
     }
 
     {:ok, state}
