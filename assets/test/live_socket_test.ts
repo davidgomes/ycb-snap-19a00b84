@@ -726,3 +726,144 @@ describe("liveSocket.js()", () => {
     liveSocket.pushHistoryPatch = originalPushHistoryPatch;
   });
 });
+
+describe("phx:before-navigate", () => {
+  let liveSocket, events, pushLinkPatch, preventNavigation;
+  // other sockets in this file also bind window listeners, so we
+  // invoke the handlers bound by our socket directly
+  const bindNavHandlers = () => {
+    const handlers: Record<string, (e: Event) => void> = {};
+    const addEventListener = jest
+      .spyOn(window, "addEventListener")
+      .mockImplementation((type, handler) => {
+        handlers[type] = handler as (e: Event) => void;
+      });
+    liveSocket.bindNav();
+    addEventListener.mockRestore();
+    return handlers;
+  };
+  const listener = (e) => {
+    events.push(e.detail);
+    if (preventNavigation) {
+      e.preventDefault();
+    }
+  };
+
+  beforeEach(() => {
+    events = [];
+    preventNavigation = false;
+    pushLinkPatch = jest.fn();
+    window.history.replaceState(null, "", "/");
+    window.addEventListener("phx:before-navigate", listener);
+    liveSocket = new LiveSocket("/live", Socket);
+    liveSocket.isConnected = () => true;
+    liveSocket.main = { id: "main", isMain: () => true, pushLinkPatch };
+    liveSocket.replaceMain = jest.fn();
+  });
+
+  afterEach(() => {
+    window.removeEventListener("phx:before-navigate", listener);
+    jest.restoreAllMocks();
+  });
+
+  test("is dispatched before patching", () => {
+    const e = new CustomEvent("phx:exec");
+    expect(liveSocket.pushHistoryPatch(e, "/patched", "push", null)).toBe(true);
+    expect(events).toEqual([
+      {
+        href: "http://localhost/patched",
+        patch: true,
+        pop: false,
+        direction: "forward",
+      },
+    ]);
+    expect(pushLinkPatch).toHaveBeenCalled();
+  });
+
+  test("cancels patching when prevented", () => {
+    preventNavigation = true;
+    const e = new CustomEvent("phx:exec");
+    expect(liveSocket.pushHistoryPatch(e, "/patched", "push", null)).toBe(
+      false,
+    );
+    expect(events).toHaveLength(1);
+    expect(pushLinkPatch).not.toHaveBeenCalled();
+  });
+
+  test("cancels redirect when prevented", () => {
+    preventNavigation = true;
+    const e = new CustomEvent("phx:exec");
+    expect(liveSocket.historyRedirect(e, "/other", "push", null, null)).toBe(
+      false,
+    );
+    expect(events).toEqual([
+      {
+        href: "http://localhost/other",
+        patch: false,
+        pop: false,
+        direction: "forward",
+      },
+    ]);
+    expect(liveSocket.replaceMain).not.toHaveBeenCalled();
+  });
+
+  test("does not cancel server initiated redirects", () => {
+    preventNavigation = true;
+    const e = new CustomEvent("phx:server-navigate");
+    expect(liveSocket.historyRedirect(e, "/other", "push", null, null)).toBe(
+      true,
+    );
+    expect(events).toEqual([]);
+    expect(liveSocket.replaceMain).toHaveBeenCalled();
+  });
+
+  test("skips phx-click on live links when prevented", () => {
+    preventNavigation = true;
+    liveSocket.requestDOMUpdate = (cb) => cb();
+    liveSocket.execJS = jest.fn();
+    const { click } = bindNavHandlers();
+    const link = document.createElement("a");
+    link.href = "/patched";
+    link.setAttribute("data-phx-link", "patch");
+    link.setAttribute("data-phx-link-state", "push");
+    link.setAttribute("phx-click", "clicked");
+    document.body.appendChild(link);
+
+    link.addEventListener("click", click);
+    link.click();
+
+    expect(events).toHaveLength(1);
+    expect(pushLinkPatch).not.toHaveBeenCalled();
+    expect(liveSocket.execJS).not.toHaveBeenCalled();
+    link.remove();
+  });
+
+  test("restores the history position when popstate is prevented", () => {
+    preventNavigation = true;
+    const go = jest.spyOn(window.history, "go").mockImplementation(() => {});
+    liveSocket.requestDOMUpdate = jest.fn();
+    liveSocket.currentHistoryPosition = 2;
+    const { popstate } = bindNavHandlers();
+
+    const state = { type: "patch", id: "main", position: 1 };
+    window.history.pushState(state, "", "/previous");
+    popstate(new PopStateEvent("popstate", { state }));
+
+    expect(events).toEqual([
+      {
+        href: "http://localhost/previous",
+        patch: true,
+        pop: true,
+        direction: "backward",
+      },
+    ]);
+    expect(go).toHaveBeenCalledWith(1);
+    expect(liveSocket.currentHistoryPosition).toBe(2);
+    expect(liveSocket.requestDOMUpdate).not.toHaveBeenCalled();
+
+    // the popstate caused by restoring the position is ignored
+    window.history.replaceState(null, "", "/");
+    popstate(new PopStateEvent("popstate", { state: null }));
+    expect(events).toHaveLength(1);
+  });
+});

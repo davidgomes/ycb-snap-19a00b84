@@ -1424,6 +1424,7 @@ export default class LiveSocket {
     window.addEventListener(
       "popstate",
       (event) => {
+        const prevLocation = this.currentLocation;
         if (!this.registerNewLocation(window.location)) {
           return;
         }
@@ -1433,6 +1434,19 @@ export default class LiveSocket {
         // Compare positions to determine direction
         const isForward = position > this.currentHistoryPosition;
         const navType = isForward ? type : backType || type;
+
+        if (
+          !this.beforeNavigate({
+            href,
+            patch: navType === "patch",
+            pop: true,
+            direction: isForward ? "forward" : "backward",
+          })
+        ) {
+          this.currentLocation = prevLocation;
+          this.restoreHistoryPosition(position || 0, prevLocation.href);
+          return;
+        }
 
         // Update current position
         this.currentHistoryPosition = position || 0;
@@ -1502,14 +1516,18 @@ export default class LiveSocket {
         }
 
         this.requestDOMUpdate(() => {
+          let navigated: boolean;
           if (type === "patch") {
-            this.pushHistoryPatch(e, href, linkState, target);
+            navigated = this.pushHistoryPatch(e, href, linkState, target);
           } else if (type === "redirect") {
-            this.historyRedirect(e, href, linkState, null, target);
+            navigated = this.historyRedirect(e, href, linkState, null, target);
           } else {
             throw new Error(
               `expected ${PHX_LIVE_LINK} to be "patch" or "redirect", got: ${type}`,
             );
+          }
+          if (!navigated) {
+            return;
           }
           const phxClick = target.getAttribute(this.binding("click"));
           if (phxClick) {
@@ -1548,10 +1566,73 @@ export default class LiveSocket {
     return callback ? callback(done) : done;
   }
 
+  /**
+   * Dispatches the cancelable `phx:before-navigate` event on window.
+   * Returns `false` if a listener called `preventDefault()`.
+   *
+   * @internal
+   */
+  beforeNavigate(detail: {
+    href: string;
+    patch: boolean;
+    pop: boolean;
+    direction: "forward" | "backward";
+  }): boolean {
+    return DOM.dispatchEvent(window, "phx:before-navigate", {
+      detail: {
+        ...detail,
+        href: new URL(detail.href, window.location.href).href,
+      },
+    });
+  }
+
+  /**
+   * Moves the browser back to the history entry we were on before a
+   * cancelled popstate navigation.
+   *
+   * @internal
+   */
+  restoreHistoryPosition(poppedPosition: number, prevHref: string) {
+    const delta = this.currentHistoryPosition - poppedPosition;
+    if (delta !== 0) {
+      // the resulting popstate is ignored, as the location matches currentLocation
+      history.go(delta);
+    } else {
+      // we cannot tell where the popped entry is relative to ours,
+      // so we push the previous location again instead
+      this.currentHistoryPosition++;
+      this.sessionStorage.setItem(
+        PHX_LV_HISTORY_POSITION,
+        this.currentHistoryPosition.toString(),
+      );
+      Browser.pushState(
+        "push",
+        {
+          type: "redirect",
+          id: this.main?.id,
+          scroll: window.scrollY,
+          position: this.currentHistoryPosition,
+        },
+        prevHref,
+      );
+    }
+  }
+
   /** @internal */
-  pushHistoryPatch(e, href, linkState, targetEl) {
+  pushHistoryPatch(e, href, linkState, targetEl): boolean {
+    if (
+      !this.beforeNavigate({
+        href,
+        patch: true,
+        pop: false,
+        direction: "forward",
+      })
+    ) {
+      return false;
+    }
     if (!this.isConnected() || !(this.main && this.main.isMain())) {
-      return Browser.redirect(href);
+      Browser.redirect(href);
+      return true;
     }
 
     this.withPageLoading({ to: href, kind: "patch" }, (done) => {
@@ -1560,6 +1641,7 @@ export default class LiveSocket {
         done();
       });
     });
+    return true;
   }
 
   /** @internal */
@@ -1601,13 +1683,26 @@ export default class LiveSocket {
     linkState: "replace" | "push",
     flash: string | null,
     targetEl?: Element | null,
-  ) {
+  ): boolean {
+    // server initiated navigation (push_navigate) cannot be cancelled
+    if (
+      e.type !== "phx:server-navigate" &&
+      !this.beforeNavigate({
+        href,
+        patch: false,
+        pop: false,
+        direction: "forward",
+      })
+    ) {
+      return false;
+    }
     const clickLoading = targetEl && e.isTrusted && e.type !== "popstate";
     if (clickLoading) {
       targetEl.classList.add("phx-click-loading");
     }
     if (!this.isConnected() || !(this.main && this.main.isMain())) {
-      return Browser.redirect(href, flash);
+      Browser.redirect(href, flash);
+      return true;
     }
 
     // convert to full href if only path prefix
@@ -1656,6 +1751,7 @@ export default class LiveSocket {
         done();
       });
     });
+    return true;
   }
 
   /** @internal */

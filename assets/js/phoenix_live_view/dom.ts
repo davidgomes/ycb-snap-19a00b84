@@ -552,7 +552,11 @@ const DOM = {
     return null;
   },
 
-  dispatchEvent(target, name, opts: { bubbles?: boolean; detail?: any } = {}) {
+  dispatchEvent(
+    target,
+    name,
+    opts: { bubbles?: boolean; detail?: any } = {},
+  ): boolean {
     let defaultBubble = true;
     const isUploadTarget =
       target.nodeName === "INPUT" && target.type === "file";
@@ -569,7 +573,7 @@ const DOM = {
       name === "click"
         ? new MouseEvent("click", eventOpts)
         : new CustomEvent(name, eventOpts);
-    target.dispatchEvent(event);
+    return target.dispatchEvent(event);
   },
 
   cloneNode(node, html) {
