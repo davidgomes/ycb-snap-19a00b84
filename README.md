@@ -140,6 +140,38 @@ cursor_before = metadata.before
 IO.puts "total count: #{metadata.total_count}"
 ```
 
+### Sorting on expressions
+
+A cursor field can be an expression given as a `{name, expression}` tuple, where
+`expression` is a function of arity 0 returning an `Ecto.Query.dynamic/2` expression. It
+should be the same expression the query is ordered by. The cursor stores the value of the
+expression under `name`, which is read from each returned record with
+`:fetch_cursor_value_fun` (by default, the `name` key of the record):
+
+```elixir
+# Post defines `field :rank, :float, virtual: true`
+query =
+  from(
+    p in Post,
+    select_merge: %{rank: fragment("ts_rank(?, plainto_tsquery(?))", p.document, ^search)},
+    order_by: [
+      desc: fragment("ts_rank(?, plainto_tsquery(?))", p.document, ^search),
+      desc: p.id
+    ]
+  )
+
+rank = fn ->
+  dynamic([p], fragment("ts_rank(?, plainto_tsquery(?))", p.document, ^search))
+end
+
+%{entries: entries, metadata: metadata}
+  = Repo.paginate(
+    query,
+    cursor_fields: [{{:rank, rank}, :desc}, id: :desc],
+    limit: 50
+  )
+```
+
 ## Security Considerations
 
 `Repo.paginate/4` will throw an `ArgumentError` should it detect an executable term in the cursor parameters passed to it (`before`, `after`).

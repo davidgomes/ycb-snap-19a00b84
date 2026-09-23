@@ -71,7 +71,8 @@ defmodule Paginator do
     * `:before` - Fetch the records before this cursor.
     * `:cursor_fields` - The fields with sorting direction used to determine the
     cursor. In most cases, this should be the same fields as the ones used for sorting in the query.
-    When you use named bindings in your query they can also be provided.
+    When you use named bindings in your query they can also be provided. Expressions can be
+    provided as `{name, expression}` tuples, see the example with sorting on an expression.
     * `:fetch_cursor_value_fun` function of arity 2 to lookup cursor values on returned records.
     Defaults to `Paginator.default_fetch_cursor_value/2`
     * `:include_total_count` - Set this to true to return the total number of
@@ -166,6 +167,36 @@ defmodule Paginator do
         limit: 50
       )
 
+  ## Example with sorting on an expression
+
+  A cursor field can be an expression given as a `{name, expression}` tuple, where
+  `expression` is a function of arity 0 returning an `Ecto.Query.dynamic/2`
+  expression. The expression is used to fetch the records after or before the
+  cursor, so it should be the same expression the query is ordered by.
+
+  The cursor stores the value of the expression under `name`, which is read from the
+  returned records with `:fetch_cursor_value_fun`. By default this reads the `name`
+  key, so selecting the expression into a virtual field of the same name is enough.
+
+      # Post defines `field :rank, :float, virtual: true`
+      query =
+        from(
+          p in Post,
+          select_merge: %{rank: fragment("ts_rank(?, plainto_tsquery(?))", p.document, ^search)},
+          order_by: [
+            desc: fragment("ts_rank(?, plainto_tsquery(?))", p.document, ^search),
+            desc: p.id
+          ]
+        )
+
+      rank = fn ->
+        dynamic([p], fragment("ts_rank(?, plainto_tsquery(?))", p.document, ^search))
+      end
+
+      Repo.paginate(query, cursor_fields: [{{:rank, rank}, :desc}, id: :desc], limit: 50)
+
+  Unlike schema fields, expressions have no Ecto type to cast the cursor value with,
+  so the value is sent to the database as is.
   """
   @callback paginate(queryable :: Ecto.Query.t(), opts :: Keyword.t(), repo_opts :: Keyword.t()) ::
               Paginator.Page.t()
