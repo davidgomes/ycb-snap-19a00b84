@@ -135,7 +135,7 @@ defmodule Ecto.Integration.InlineSQLTest do
                "SELECT '\\\\' = '\\\\' FROM system.one AS f0"
 
       assert one(from fragment("system.one"), select: "'" == ^"'") ==
-               "SELECT '''' = '''' FROM system.one AS f0"
+               ~S|SELECT '\'' = '\'' FROM system.one AS f0|
     end
 
     # https://clickhouse.com/docs/en/sql-reference/data-types/date
@@ -313,7 +313,7 @@ defmodule Ecto.Integration.InlineSQLTest do
                "SELECT CAST('601d74e4-a8d3-4b6e-8365-eddb4c893327' AS UUID) = '601d74e4-a8d3-4b6e-8365-eddb4c893327' FROM system.one AS f0"
 
       assert one(from fragment("system.one"), select: ^uuid_raw == ^uuid_raw) ==
-               "SELECT '`\x1Dt\xE4\xA8\xD3Kn\x83e\xED\xDBL\x893''' = '`\x1Dt\xE4\xA8\xD3Kn\x83e\xED\xDBL\x893''' FROM system.one AS f0"
+               "SELECT '`\x1Dt\xE4\xA8\xD3Kn\x83e\xED\xDBL\x893\\'' = '`\x1Dt\xE4\xA8\xD3Kn\x83e\xED\xDBL\x893\\'' FROM system.one AS f0"
     end
 
     test "with ipv4" do

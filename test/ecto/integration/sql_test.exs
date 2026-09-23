@@ -59,19 +59,72 @@ defmodule Ecto.Integration.SQLTest do
 
   test "quoted strings and identifiers cannot break out into ClickHouse syntax" do
     string = ~S|value' FROM numbers(10) -- \ $tag$body$tag$ /* comment */|
-    result = TestRepo.query!(["SELECT ", Connection.quote_name(string, ?')])
+    result = TestRepo.query!(["SELECT ", Connection.quote_string(string)])
 
     assert result.rows == [[string]]
 
-    for {quoter, name} <- [
-          {?\", ~S|alias" FROM numbers(10) -- \ $tag$body$tag$ /* comment */|},
-          {?`, ~S|alias` FROM numbers(10) -- \ $tag$body$tag$ /* comment */|}
-        ] do
-      result = TestRepo.query!(["SELECT 1 AS ", Connection.quote_name(name, quoter)])
+    name = ~S|alias" FROM numbers(10) -- \ $tag$body$tag$ /* comment */|
+    result = TestRepo.query!(["SELECT 1 AS ", Connection.quote_name(name)])
 
-      assert result.columns == [name]
-      assert result.rows == [[1]]
+    assert result.columns == [name]
+    assert result.rows == [[1]]
+  end
+
+  test "bound, inline, and constant strings round-trip" do
+    strings = [
+      "'",
+      "''",
+      "\\",
+      "\\'",
+      "\\\\'",
+      "\"",
+      "\\\"",
+      "`",
+      "tab\tnewline\n",
+      ~S|value' FROM numbers(10) -- \ $tag$body$tag$ /* comment */|
+    ]
+
+    for string <- strings do
+      bound = from f in fragment("system.one"), select: fragment("?", ^string)
+      assert TestRepo.all(bound) == [string]
+      assert TestRepo.query!(TestRepo.to_inline_sql(:all, bound)).rows == [[string]]
+
+      constant = from f in fragment("system.one"), select: fragment("?", constant(^string))
+      assert TestRepo.all(constant) == [string]
     end
+  end
+
+  test "quoted table, column, and alias names round-trip" do
+    table = ~S|table" FROM numbers(10) -- \ ' `|
+    column = :"column\" FROM numbers(10) -- \\ ' `"
+
+    TestRepo.query!([
+      "CREATE TABLE ",
+      Connection.quote_name(table),
+      " (",
+      Connection.quote_name(column),
+      " String) ENGINE = Memory"
+    ])
+
+    on_exit(fn -> TestRepo.query!(["DROP TABLE ", Connection.quote_name(table)]) end)
+
+    assert {1, nil} =
+             TestRepo.insert_all(table, [[{column, ~S|it's \ "quoted"|}]],
+               types: [{column, :string}]
+             )
+
+    query =
+      from t in table,
+        where: field(t, ^column) == ~S|it's \ "quoted"|,
+        select: selected_as(field(t, ^column), :"alias\" FROM numbers(10) -- \\ ' `")
+
+    assert TestRepo.all(query) == [~S|it's \ "quoted"|]
+
+    {sql, params} = TestRepo.to_sql(:all, query)
+    result = TestRepo.query!(sql, params)
+
+    assert result.columns == [~S|alias" FROM numbers(10) -- \ ' `|]
+    assert result.rows == [[~S|it's \ "quoted"|]]
   end
 
   test "disconnect_all/2" do
