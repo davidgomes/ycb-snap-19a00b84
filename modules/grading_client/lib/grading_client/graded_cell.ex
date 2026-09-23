@@ -67,13 +67,14 @@ defmodule GradingClient.GradedCell do
       |> hd()
       |> String.trim_leading("#")
       |> String.split(":", parts: 2)
+      |> Enum.map(&String.trim/1)
       |> case do
         [module_id, question_id] -> {module_id, question_id}
         [module_id] -> {module_id, ""}
       end
 
-    with {:module, {:ok, module_id}} <- {:module, Map.fetch(modules, String.trim(module_id))},
-         {:question, {question_id, ""}} <- {:question, Integer.parse(String.trim(question_id))} do
+    with {:module, {:ok, module_id}} <- {:module, Map.fetch(modules, module_id)},
+         {:question, {question_id, ""}} <- {:question, Integer.parse(question_id)} do
       {:ok, module_id, question_id}
     else
       {:module, _} -> {:error, "invalid module id: #{module_id}"}
