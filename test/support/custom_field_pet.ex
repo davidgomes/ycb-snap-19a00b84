@@ -9,7 +9,12 @@ defmodule MyApp.CustomFieldPet do
 
   @derive {
     Flop.Schema,
-    filterable: [],
+    filterable: [
+      :age_score,
+      :owner_age_score,
+      :upper_name,
+      :age_score_with_filter
+    ],
     sortable: [:age_score, :owner_age_score],
     adapter_opts: [
       custom_fields: [
@@ -23,6 +28,15 @@ defmodule MyApp.CustomFieldPet do
           field_dynamic: {__MODULE__, :owner_age_score_dynamic, []},
           bindings: [:owner],
           ecto_type: :integer
+        ],
+        upper_name: [
+          field_dynamic: {__MODULE__, :upper_name_dynamic, []},
+          ecto_type: :string
+        ],
+        age_score_with_filter: [
+          filter: {__MODULE__, :age_score_filter, []},
+          field_dynamic: {__MODULE__, :age_score_dynamic, [factor: 2]},
+          ecto_type: :integer
         ]
       ]
     ]
@@ -30,6 +44,7 @@ defmodule MyApp.CustomFieldPet do
 
   schema "pets" do
     field :age, :integer
+    field :name, :string
     belongs_to :owner, Owner
   end
 
@@ -44,5 +59,14 @@ defmodule MyApp.CustomFieldPet do
 
   def owner_age_score_dynamic(_opts) do
     dynamic([owner: owner], owner.age)
+  end
+
+  def upper_name_dynamic(_opts) do
+    dynamic([pet], fragment("upper(?)", pet.name))
+  end
+
+  def age_score_filter(query, %Flop.Filter{} = filter, opts) do
+    send(Keyword.fetch!(opts, :test_pid), {:age_score_filter, filter})
+    query
   end
 end
