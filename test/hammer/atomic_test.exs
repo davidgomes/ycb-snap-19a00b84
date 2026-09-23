@@ -76,4 +76,18 @@ defmodule Hammer.AtomicTest do
       assert RateAtomicLimit.get(key, scale) == count
     end
   end
+
+  describe "non-string keys" do
+    test "accepts any term as a key" do
+      scale = :timer.minutes(10)
+      limit = 2
+
+      for key <- [:atom_key, {:user, 42}, 123, [1, 2, 3], %{id: 1}] do
+        assert {:allow, 1} = RateAtomicLimit.hit(key, scale, limit)
+        assert {:allow, 2} = RateAtomicLimit.hit(key, scale, limit)
+        assert {:deny, _retry_after} = RateAtomicLimit.hit(key, scale, limit)
+        assert RateAtomicLimit.get(key, scale) == 3
+      end
+    end
+  end
 end
