@@ -134,11 +134,6 @@ defmodule Phx.New.Generator do
             @rules_files["elixir.md"],
             "\n<!-- phoenix:elixir-end -->"
           ],
-          [
-            "<!-- phoenix:phoenix-start -->\n",
-            @rules_files["phoenix.md"],
-            "\n<!-- phoenix:phoenix-end -->"
-          ],
           project.binding[:ecto] &&
             [
               "<!-- phoenix:ecto-start -->\n",
