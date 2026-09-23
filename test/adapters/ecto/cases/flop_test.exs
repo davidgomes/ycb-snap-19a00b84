@@ -2124,39 +2124,29 @@ defmodule Flop.Adapters.Ecto.FlopTest do
         )
     end
 
-    test "nil values for cursors are ignored when using for option" do
-      check all pets <- uniq_list_of_pets(length: 2..2),
-                cursor_fields <- cursor_fields(%Pet{}),
-                directions <- order_directions(%Pet{}) do
+    property "pages over nullable fields in both directions" do
+      check all pets <- uniq_list_of_pets(length: 1..25),
+                ages <- nullable_list(integer(1..3), length(pets)),
+                owner_ages <- nullable_list(integer(1..3), length(pets)),
+                directions <- list_of(order_direction(), length: 3),
+                page_size <- integer(1..4) do
         checkin_checkout()
 
-        # set name fields to nil and insert
-        pets
-        |> Enum.map(&Map.update!(&1, :name, fn _ -> nil end))
-        |> Enum.each(&Repo.insert!(&1))
+        [pets, ages, owner_ages]
+        |> Enum.zip()
+        |> Enum.each(fn {pet, age, owner_age} ->
+          Repo.insert!(%{pet | age: age, owner: %{pet.owner | age: owner_age}})
+        end)
 
-        assert {:ok, {[_], %Meta{end_cursor: end_cursor}}} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   },
-                   for: Pet
-                 )
+        flop = %Flop{
+          order_by: [:age, :owner_age, :name],
+          order_directions: directions
+        }
 
-        assert {:ok, _} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     after: end_cursor,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   },
-                   for: Pet
-                 )
+        expected = Flop.all(pets_with_owners_query(), flop, for: Pet)
+
+        assert page_forward(flop, page_size, for: Pet) == expected
+        assert page_backward(flop, page_size, for: Pet) == expected
       end
     end
 
@@ -2197,37 +2187,22 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                "cursor pagination is not supported for alias fields"
     end
 
-    test "nil values for cursors are ignored when not using for option" do
-      check all pets <- uniq_list_of_pets(length: 2..2),
-                directions <- order_directions(%Pet{}) do
+    property "pages over nullable fields without the for option" do
+      check all pets <- uniq_list_of_pets(length: 1..25),
+                ages <- nullable_list(integer(1..3), length(pets)),
+                directions <- list_of(order_direction(), length: 2),
+                page_size <- integer(1..4) do
         checkin_checkout()
-        cursor_fields = [:name, :age]
 
-        # set name fields to nil and insert
-        pets
-        |> Enum.map(&Map.update!(&1, :name, fn _ -> nil end))
-        |> Enum.each(&Repo.insert!(&1))
+        [pets, ages]
+        |> Enum.zip()
+        |> Enum.each(fn {pet, age} -> Repo.insert!(%{pet | age: age}) end)
 
-        assert {:ok, {[_], %Meta{end_cursor: end_cursor}}} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   }
-                 )
+        flop = %Flop{order_by: [:age, :name], order_directions: directions}
+        expected = Flop.all(pets_with_owners_query(), flop)
 
-        assert {:ok, _} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     after: end_cursor,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   }
-                 )
+        assert page_forward(flop, page_size, []) == expected
+        assert page_backward(flop, page_size, []) == expected
       end
     end
 
@@ -2255,6 +2230,47 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                  for: MyApp.WalkingDistances
                )
     end
+  end
+
+  defp nullable_list(generator, length) do
+    list_of(one_of([constant(nil), generator]), length: length)
+  end
+
+  defp order_direction do
+    member_of([
+      :asc,
+      :asc_nulls_first,
+      :asc_nulls_last,
+      :desc,
+      :desc_nulls_first,
+      :desc_nulls_last
+    ])
+  end
+
+  defp page_forward(flop, page_size, opts, cursor \\ nil) do
+    {:ok, {items, meta}} =
+      Flop.validate_and_run(
+        pets_with_owners_query(),
+        %{flop | first: page_size, after: cursor},
+        opts
+      )
+
+    if meta.has_next_page?,
+      do: items ++ page_forward(flop, page_size, opts, meta.end_cursor),
+      else: items
+  end
+
+  defp page_backward(flop, page_size, opts, cursor \\ nil) do
+    {:ok, {items, meta}} =
+      Flop.validate_and_run(
+        pets_with_owners_query(),
+        %{flop | last: page_size, before: cursor},
+        opts
+      )
+
+    if meta.has_previous_page?,
+      do: page_backward(flop, page_size, opts, meta.start_cursor) ++ items,
+      else: items
   end
 
   describe "__using__/1" do
