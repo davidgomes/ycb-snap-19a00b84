@@ -2593,7 +2593,53 @@
     @apply min-w-0 max-w-full;
   }
   .pc-data-table__toolbar {
-    @apply mb-3 flex flex-wrap items-center gap-2;
+    @apply mb-3 flex flex-wrap items-center gap-2 rounded-lg transition-[background-color,box-shadow] duration-150;
+  }
+  /* the toolbar morphs into the selection bar in place: a spread shadow
+     tints past the edges so the swap causes no layout shift */
+  .pc-data-table__toolbar--selecting {
+    --pc-dt-selection-bg: var(--color-primary-50);
+    background-color: var(--pc-dt-selection-bg);
+    box-shadow: 0 0 0 0.375rem var(--pc-dt-selection-bg);
+  }
+  .dark .pc-data-table__toolbar--selecting {
+    --pc-dt-selection-bg: color-mix(in oklab, var(--color-primary-400) 10%, transparent);
+  }
+  .pc-data-table__toolbar-main {
+    @apply contents;
+  }
+  .pc-data-table__toolbar-main[hidden] {
+    @apply hidden;
+  }
+  .pc-data-table__selection-count {
+    @apply text-sm font-medium text-primary-700 tabular-nums dark:text-primary-300;
+  }
+  /* the idle live region stays in the a11y tree (so the first count is
+     announced), out of the flex flow */
+  .pc-data-table__selection-count--idle {
+    @apply sr-only;
+  }
+  .pc-data-table__bulk-actions {
+    @apply ml-auto flex flex-wrap items-center gap-2;
+  }
+  .pc-data-table__select-th.pc-data-table__select-th,
+  .pc-data-table__select-td.pc-data-table__select-td {
+    @apply w-px pr-0;
+  }
+  .pc-data-table__select {
+    @apply block;
+  }
+  .pc-data-table__select:indeterminate {
+    @apply bg-primary-600 border-primary-600;
+    background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23fff' xmlns='http://www.w3.org/2000/svg'%3e%3crect x='4' y='7' width='8' height='2' rx='1'/%3e%3c/svg%3e");
+  }
+  /* the checkbox column takes the first-col slot; the first data column keeps its weight */
+  .pc-data-table__select-td + .pc-table__td {
+    @apply font-semibold;
+  }
+  /* :has tracks the checkbox itself, so the tint lands on click, before the round-trip */
+  .pc-data-table tbody .pc-table__tr:has(.pc-data-table__select:checked) {
+    @apply bg-primary-50/60 dark:bg-primary-400/10;
   }
   .pc-data-table__scroll {
     @apply overflow-x-auto;

@@ -363,6 +363,189 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "pc-data-table__actions"
   end
 
+  describe "row selection" do
+    @keyed [%{id: 1, name: "Amy"}, %{id: 2, name: "Bea"}]
+
+    defp header_checkbox(html) do
+      [box] = Regex.run(~r/<input[^>]*data-pc-dt-select-all[^>]*>/, html)
+      box
+    end
+
+    defp row_checkboxes(html) do
+      ~r/<input[^>]*aria-label="Select row"[^>]*>/ |> Regex.scan(html) |> List.flatten()
+    end
+
+    defp push_value(tag) do
+      [json] = Regex.run(~r/phx-click="([^"]*)"/, tag, capture: :all_but_first)
+      [["push", %{"value" => value}]] = json |> String.replace("&quot;", "\"") |> Jason.decode!()
+      value
+    end
+
+    test "off by default: no checkbox column, no selection bar" do
+      assigns = base(%{rows: @keyed})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path}>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      refute html =~ "pc-data-table__select"
+      refute html =~ "pc-data-table__selection-count"
+    end
+
+    test "the header is tri-state over the visible page" do
+      assigns = base(%{rows: @keyed})
+
+      render = fn selected ->
+        assigns = Map.put(assigns, :selected, selected)
+
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          path={@path}
+          on_select="select"
+          selected={@selected}
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+        |> header_checkbox()
+      end
+
+      none = render.([])
+      refute none =~ " checked"
+      refute none =~ "data-indeterminate"
+      assert push_value(none) == %{"op" => "select", "ids" => [1, 2], "checked" => true}
+
+      # an off-page key doesn't count toward the page's state
+      some = render.([2, 99])
+      refute some =~ " checked"
+      assert some =~ "data-indeterminate"
+      assert push_value(some) == %{"op" => "select", "ids" => [1, 2], "checked" => true}
+
+      all = render.([1, 2])
+      assert all =~ " checked"
+      refute all =~ "data-indeterminate"
+      assert push_value(all) == %{"op" => "select", "ids" => [1, 2], "checked" => false}
+      assert all =~ ~s(aria-label="Select all rows on this page")
+    end
+
+    test "row checkboxes reflect the selection and push their own key" do
+      assigns = base(%{rows: @keyed})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          on_change="table"
+          on_select="select"
+          selected={[2]}
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert [amy, bea] = row_checkboxes(html)
+      refute amy =~ " checked"
+      assert bea =~ " checked"
+      assert push_value(amy) == %{"op" => "select", "ids" => [1], "checked" => true}
+      assert push_value(bea) == %{"op" => "select", "ids" => [2], "checked" => false}
+      # the select-all tri-state needs the hook, even in event mode
+      assert html =~ ~s(phx-hook="PetalDataTable")
+    end
+
+    test "row_key picks the selection key" do
+      assigns = base(%{rows: [%{sku: "a-1", name: "Amy"}]})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} on_select="select" row_key={& &1.sku}>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert [box] = row_checkboxes(html)
+      assert push_value(box)["ids"] == ["a-1"]
+    end
+
+    test "while rows are selected the toolbar morphs into the selection bar" do
+      assigns = base(%{rows: @keyed})
+
+      idle =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} searchable on_select="select">
+          <:col :let={row} field={:name}>{row.name}</:col>
+          <:bulk_action :let={ids}><button type="button">Refund {length(ids)}</button></:bulk_action>
+        </.data_table>
+        """)
+
+      refute idle =~ "pc-data-table__toolbar--selecting"
+      refute idle =~ "Clear selection"
+      refute idle =~ "Refund"
+      assert idle =~ ~s(role="status")
+      assert idle =~ "pc-data-table__selection-count--idle"
+      refute idle =~ ~r/pc-data-table__toolbar-main"[^>]*hidden/
+
+      selecting =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          path={@path}
+          searchable
+          on_select="select"
+          selected={[1, 2, 7]}
+          selected_label="ausgewählt"
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+          <:bulk_action :let={ids}><button type="button">Refund {length(ids)}</button></:bulk_action>
+        </.data_table>
+        """)
+
+      assert selecting =~ "pc-data-table__toolbar--selecting"
+      # the count spans pages; the bulk slot receives every selected key
+      assert selecting =~ "3 ausgewählt"
+      assert selecting =~ "Refund 3"
+      assert selecting =~ ~s(&quot;op&quot;:&quot;clear_selection&quot;)
+      # the regular toolbar is hidden, not removed: the search input stays
+      # in the DOM for the hook's link-mode URLs
+      assert selecting =~ ~r/pc-data-table__toolbar-main"[^>]*hidden/
+      assert selecting =~ "data-pc-dt-search"
+    end
+
+    test "loading and empty pages disable the header and drop row checkboxes" do
+      assigns = base(%{rows: @keyed, state: %State{total: 74, page_size: 3}})
+
+      loading =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} on_select="select" loading>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert row_checkboxes(loading) == []
+      assert header_checkbox(loading) =~ " disabled"
+
+      assigns = base(%{rows: [], state: %State{total: 0}})
+
+      empty =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} on_select="select">
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert header_checkbox(empty) =~ " disabled"
+    end
+  end
+
   test "raises without either wiring mode" do
     assigns = base(%{path: nil})
 
