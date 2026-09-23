@@ -932,6 +932,19 @@
         "difficulty": 2
       },
       {
+        "slug": "prism",
+        "name": "Prism",
+        "uuid": "feda59de-491d-4458-a854-d6fae20a2251",
+        "practices": [],
+        "prerequisites": [
+          "maps",
+          "floating-point-numbers",
+          "enum",
+          "recursion"
+        ],
+        "difficulty": 4
+      },
+      {
         "slug": "pig-latin",
         "name": "Pig Latin",
         "uuid": "3aa45a2b-d3bc-4763-b11d-5d41a1cf505c",
