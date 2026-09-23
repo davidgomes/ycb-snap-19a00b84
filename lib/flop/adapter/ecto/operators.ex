@@ -5,8 +5,12 @@ defmodule Flop.Adapter.Ecto.Operators do
 
   alias Flop.Adapter.Ecto.Dialect
 
+  # The second argument is `true` for a named binding, `false` for the root
+  # binding, or `:field_dynamic` to replace the field with the dynamic
+  # expression bound to `field_dynamic`.
   defmacro build_dynamic(fragment, binding?, _combinator = nil) do
     binding_arg = binding_arg(binding?)
+    fragment = maybe_use_field_dynamic(fragment, binding?)
 
     quote do
       dynamic(unquote(binding_arg), unquote(fragment))
@@ -15,6 +19,7 @@ defmodule Flop.Adapter.Ecto.Operators do
 
   defmacro build_dynamic(fragment, binding?, :and) do
     binding_arg = binding_arg(binding?)
+    fragment = maybe_use_field_dynamic(fragment, binding?)
 
     quote do
       filter_condition =
@@ -28,6 +33,7 @@ defmodule Flop.Adapter.Ecto.Operators do
 
   defmacro build_dynamic(fragment, binding?, :or) do
     binding_arg = binding_arg(binding?)
+    fragment = maybe_use_field_dynamic(fragment, binding?)
 
     quote do
       filter_condition =
@@ -57,11 +63,23 @@ defmodule Flop.Adapter.Ecto.Operators do
     end
   end
 
-  defp binding_arg(false) do
+  defp binding_arg(binding?) when binding? in [false, :field_dynamic] do
     quote do
       [r]
     end
   end
+
+  defp maybe_use_field_dynamic(fragment, :field_dynamic) do
+    Macro.prewalk(fragment, fn
+      {:field, _, [{:r, _, _}, {:^, _, [{:var!, _, [{:field, _, _}]}]}]} ->
+        quote do: ^var!(field_dynamic)
+
+      node ->
+        node
+    end)
+  end
+
+  defp maybe_use_field_dynamic(fragment, _binding?), do: fragment
 
   # The second argument says whether the repo adapter supports ILIKE. If it
   # doesn't, ILIKE is replaced with LIKE. See Flop.Adapter.Ecto.Dialect.

@@ -378,12 +378,15 @@ defprotocol Flop.Schema do
   `{mod :: module, function :: atom, opts :: keyword}`.
 
   - `filter` is called to filter by the field. It receives the Ecto query, the
-    Flop filter and an options keyword list, and returns the updated query. A
-    custom field needs it to be filterable.
+    Flop filter and an options keyword list, and returns the updated query.
   - `field_dynamic` is called to order by the field. It receives an options
     keyword list and returns an `Ecto.Query.dynamic_expr`, which Flop applies
     the order direction to. It receives neither the query nor the direction. A
-    custom field needs it to be sortable.
+    custom field needs it to be sortable. If no `filter` function is set, Flop
+    also uses the expression to filter by the field with the regular filter
+    operators.
+
+  A custom field needs at least one of the two callbacks to be filterable.
 
   If runtime options are necessary (like the timezone of the request or the user
   ID of the current user), use the `extra_opts` option when calling Flop
@@ -556,7 +559,8 @@ defprotocol Flop.Schema do
 
   - `:filterable` (required) - A list of fields that can be used in filters.
     Supports fields from the Ecto schema, join fields, compound fields and
-    custom fields. Alias fields are not supported.
+    custom fields that configure `:filter` or `:field_dynamic`. Alias fields are
+    not supported.
   - `:sortable` (required) - A list of fields that can be used for sorting.
     Supports fields from the Ecto schema, join fields, compound fields, alias
     fields, and custom fields that configure `:field_dynamic`.
@@ -624,11 +628,14 @@ defprotocol Flop.Schema do
   - `:filter` - A module/function/options tuple referencing a custom filter
     function. The function must take the Ecto query, the `Flop.Filter` struct,
     and the options from the tuple as arguments, and return the updated query.
-    Required if the field is filterable.
+    If the field is filterable, either this option or `:field_dynamic` is
+    required.
   - `:field_dynamic` - A module/function/options tuple referencing a function
     that returns the field expression as an `Ecto.Query.dynamic_expr`. The
     function takes the options from the tuple as its only argument. Flop applies
     the order direction to the expression. Required if the field is sortable.
+    If no `:filter` function is set, Flop also applies filters to the
+    expression, using the same operators as for regular fields.
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator
     and value validation is based on this option.
   - `:bindings` - If either callback requires certain named bindings to be
