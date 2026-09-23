@@ -1,0 +1,29 @@
+<h1 style="color: #030913; font-size: 24px; line-height: 32px; font-weight: 600; margin: 0 0 24px 0; text-align: center;">
+  <%= AccountRemoved.title() %>
+</h1>
+
+<p style="color: #304254; font-size: 16px; line-height: 24px; margin: 0 0 16px 0;">
+  <%= AccountRemoved.message(@username) %>
+</p>
+
+<%= for paragraph <- Announcement.paragraphs(@reason) do %>
+  <p style="color: #304254; font-size: 16px; line-height: 24px; margin: 0 0 16px 16px; padding-left: 12px; border-left: 3px solid #d7dde4;">
+    <%= paragraph %>
+  </p>
+<% end %>
+
+<%= if @packages != [] do %>
+  <p style="color: #304254; font-size: 16px; line-height: 24px; margin: 0 0 8px 0;">
+    <%= AccountRemoved.packages_intro() %>
+  </p>
+
+  <ul style="color: #304254; font-size: 16px; line-height: 24px; margin: 0 0 16px 0;">
+    <%= for package <- @packages do %>
+      <li><%= package %></li>
+    <% end %>
+  </ul>
+<% end %>
+
+<p style="color: #304254; font-size: 16px; line-height: 24px; margin: 0 0 16px 0;">
+  <%= raw(AccountRemoved.questions_notice(:html)) %>
+</p>
