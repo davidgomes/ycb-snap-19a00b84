@@ -4,7 +4,7 @@ defmodule CommonMacros do
   defmacro resources([do: body]) do 
     name = :"#{inspect make_ref()}"
     quote do
-      defmodule unquote(name) do
+      {:module, mod, _, _} = defmodule unquote(name) do
         use Ewebmachine.Builder.Resources
         plug :resource_match
         plug Ewebmachine.Plug.Run
@@ -14,7 +14,7 @@ defmodule CommonMacros do
           (conn |> send_resp(404,"") |> halt)
         unquote(body)
       end
-      unquote(name)
+      mod
     end 
   end
 end
@@ -55,7 +55,7 @@ defmodule EwebmachineTest do
   test "Simple resource builder with XML and path match param" do
     app = resources do
       resource "/hello/:name" do %{name: name} after 
-        content_types_provided do: ['application/xml': :to_xml]
+        content_types_provided do: ["application/xml": :to_xml]
         defh to_xml, do: "<Person><name>#{state.name}</name></Person>"
       end
     end

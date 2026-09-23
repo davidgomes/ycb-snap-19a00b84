@@ -142,13 +142,11 @@ defmodule Ewebmachine.Builder.Handlers do
   end
 
   for resource_fun_name<-@resource_fun_names do
-    Module.eval_quoted(Ewebmachine.Builder.Handlers, quote do
-      @doc "see `Ewebmachine.Handlers.#{unquote(resource_fun_name)}/2`"
-      defmacro unquote(resource_fun_name)(do_block) do
-        name = unquote(resource_fun_name)
-        handler_quote(name,do_block[:do])
-      end
-    end)
+    @doc "see `Ewebmachine.Handlers.#{resource_fun_name}/2`"
+    defmacro unquote(resource_fun_name)(do_block) do
+      name = unquote(resource_fun_name)
+      handler_quote(name,do_block[:do])
+    end
   end
 
   @doc false
