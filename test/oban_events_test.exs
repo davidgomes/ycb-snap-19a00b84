@@ -12,6 +12,14 @@ defmodule ObanEventsTest do
     def handle_event(_event, _data), do: :ok
   end
 
+  defmodule OtherHandler do
+    @moduledoc false
+    use ObanEvents.Handler
+
+    @impl true
+    def handle_event(_event, _data), do: :ok
+  end
+
   # Test event bus with handlers registered (uses defaults)
   defmodule TestEventBus do
     @moduledoc false
@@ -40,6 +48,15 @@ defmodule ObanEventsTest do
 
     @event_handlers %{
       test_event: [ObanEventsTest.TestHandler]
+    }
+  end
+
+  defmodule MultiHandlerEventBus do
+    @moduledoc false
+    use ObanEvents
+
+    @event_handlers %{
+      multi_event: [ObanEventsTest.TestHandler, ObanEventsTest.OtherHandler]
     }
   end
 
@@ -97,6 +114,48 @@ defmodule ObanEventsTest do
     test "requires data to be a map" do
       assert_raise FunctionClauseError, fn ->
         TestEventBus.emit(:event_name, "not a map")
+      end
+    end
+  end
+
+  describe "emit/3 metadata" do
+    test "generates event_id and idempotency_key with nil causation and correlation" do
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{"test" => "data"})
+
+      assert {:ok, _} = Ecto.UUID.cast(job.args["event_id"])
+      assert {:ok, _} = Ecto.UUID.cast(job.args["idempotency_key"])
+      assert job.args["causation_id"] == nil
+      assert job.args["correlation_id"] == nil
+    end
+
+    test "shares event_id across handlers but gives each job its own idempotency_key" do
+      assert {:ok, [job_one, job_two]} = MultiHandlerEventBus.emit(:multi_event, %{})
+
+      assert job_one.args["event_id"] == job_two.args["event_id"]
+      assert job_one.args["idempotency_key"] != job_two.args["idempotency_key"]
+    end
+
+    test "generates a new event_id per emit" do
+      assert {:ok, [first]} = TestEventBus.emit(:investment_created, %{})
+      assert {:ok, [second]} = TestEventBus.emit(:investment_created, %{})
+
+      assert first.args["event_id"] != second.args["event_id"]
+    end
+
+    test "stores causation_id and correlation_id when provided" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{},
+                 causation_id: "parent-event-id",
+                 correlation_id: "correlation-id"
+               )
+
+      assert job.args["causation_id"] == "parent-event-id"
+      assert job.args["correlation_id"] == "correlation-id"
+    end
+
+    test "raises ArgumentError for unknown options" do
+      assert_raise ArgumentError, fn ->
+        TestEventBus.emit(:investment_created, %{}, unknown: "value")
       end
     end
   end

@@ -5,7 +5,7 @@ defmodule ObanEvents.DispatchWorker do
   This worker:
   1. Receives an event name, handler module, and data from the job args
   2. Converts strings back to atoms safely
-  3. Calls the handler's `handle_event/2` callback
+  3. Calls the handler's `handle_event/2` callback with an `ObanEvents.Event`
   4. Logs success/failure for observability
 
   ## Job Arguments
@@ -13,6 +13,12 @@ defmodule ObanEvents.DispatchWorker do
   - `event`: String representation of the event name
   - `handler`: String representation of the handler module
   - `data`: Map of event-specific data
+  - `event_id`: Identifier shared by all jobs of the same emit
+  - `idempotency_key`: Identifier unique to this job
+  - `causation_id`: Optional `event_id` of the parent event
+  - `correlation_id`: Optional business operation identifier
+
+  Metadata keys are optional so jobs enqueued before they existed still run.
 
   ## Configuration
 
@@ -23,25 +29,44 @@ defmodule ObanEvents.DispatchWorker do
   ## Observability
 
   All event processing is logged at INFO level for successful processing
-  and ERROR level for failures. Check Oban Web UI for job history.
+  and ERROR level for failures. `event_id`, `causation_id`, and `correlation_id`
+  are set as Logger metadata. Check Oban Web UI for job history.
   """
 
   use Oban.Worker
+
+  alias ObanEvents.Event
 
   require Logger
 
   @impl Oban.Worker
   def perform(%Oban.Job{
-        args: %{"event" => event_name_string, "handler" => handler_module_string, "data" => data}
+        args:
+          %{"event" => event_name_string, "handler" => handler_module_string, "data" => data} =
+            args
       }) do
     # Safely convert strings back to atoms
     # These atoms should already exist since they were created during emit
     event = String.to_existing_atom(event_name_string)
     handler = String.to_existing_atom(handler_module_string)
 
+    event_struct = %Event{
+      data: data,
+      event_id: args["event_id"],
+      idempotency_key: args["idempotency_key"],
+      causation_id: args["causation_id"],
+      correlation_id: args["correlation_id"]
+    }
+
+    Logger.metadata(
+      event_id: event_struct.event_id,
+      causation_id: event_struct.causation_id,
+      correlation_id: event_struct.correlation_id
+    )
+
     Logger.info("Processing event: #{event} with handler: #{inspect(handler)}")
 
-    case handler.handle_event(event, data) do
+    case handler.handle_event(event, event_struct) do
       :ok ->
         Logger.info("Event processed successfully: #{event} by #{inspect(handler)}")
         :ok
