@@ -143,11 +143,11 @@ defmodule ClassicPerfBroadway do
       name: __MODULE__,
       producer: [
         module: {OffBroadway.Kafka.Producer, kafka_config},
-        stages: 1
+        concurrency: 1
       ],
       processors: [
         default: [
-          stages: Keyword.get(opts, :processor_stages, 1)
+          concurrency: Keyword.get(opts, :processor_stages, 1)
         ]
       ],
       context: %{
@@ -184,7 +184,7 @@ defmodule PerPartitionBroadway do
       name: :"broadway_per_partition_#{topic}_#{partition}",
       processors: [
         default: [
-          stages: Keyword.get(opts, :processor_stages, 1)
+          concurrency: Keyword.get(opts, :processor_stages, 1)
         ]
       ],
       context: %{
