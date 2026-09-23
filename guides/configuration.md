@@ -76,7 +76,8 @@ A list of file path patterns to exclude from analysis. Any file whose path conta
     # Config checks
     insert_trigger_enabled: [enabled: true],
     missing_pruner: [enabled: true],
-    no_reindexer: [enabled: true, severity: :info]
+    no_reindexer: [enabled: true, severity: :info],
+    smart_engine_not_configured: [enabled: true]
   ],
 
   excluded_workers: [

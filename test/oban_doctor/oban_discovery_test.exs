@@ -128,6 +128,25 @@ defmodule ObanDoctor.ObanDiscoveryTest do
       [config] = configs
 
       assert config.insert_trigger == nil
+      assert config.engine == nil
+    end
+
+    test "extracts the configured engine module" do
+      tmp_dir = create_temp_project()
+
+      config_content = """
+      import Config
+
+      config :my_app, Oban,
+        engine: Oban.Pro.Engines.Smart,
+        queues: [default: 10]
+      """
+
+      write_config(tmp_dir, "config/config.exs", config_content)
+
+      [config] = ObanDiscovery.discover_oban_configs(tmp_dir)
+
+      assert config.engine == Oban.Pro.Engines.Smart
     end
 
     test "returns empty list when no config files exist" do
