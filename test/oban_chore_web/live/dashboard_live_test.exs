@@ -278,6 +278,131 @@ defmodule ObanChoreWeb.DashboardLiveTest do
     end
   end
 
+  describe "history" do
+    defp insert_finished_job!(worker, args, state, changes) do
+      now = DateTime.utc_now()
+
+      worker.new(args)
+      |> Ecto.Changeset.change(
+        Keyword.merge(
+          [state: state, attempt: 1, attempted_at: DateTime.add(now, -2, :second)],
+          changes
+        )
+      )
+      |> ObanChore.TestRepo.insert!()
+    end
+
+    defp select_history(view, chore_module) do
+      view
+      |> element("button[data-role=chore-select][data-chore-module=\"#{chore_module}\"]")
+      |> render_click()
+
+      view |> element("button[data-role=history-tab]") |> render_click()
+    end
+
+    test "shows an empty state when the chore has no previous runs" do
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+
+      html = select_history(view, to_string(DashboardTestChore))
+
+      assert has_element?(view, "[data-role=history-empty]")
+      assert html =~ "No previous runs for this chore yet."
+    end
+
+    test "lists finished runs for the selected chore only" do
+      now = DateTime.utc_now()
+
+      completed =
+        insert_finished_job!(DashboardTestChore, %{username: "done"}, "completed",
+          completed_at: now
+        )
+
+      discarded =
+        insert_finished_job!(DashboardTestChore, %{username: "broken"}, "discarded",
+          discarded_at: now,
+          errors: [%{attempt: 1, at: now, error: "** (RuntimeError) boom"}]
+        )
+
+      {:ok, active} = Oban.insert(DashboardTestChore.new(%{username: "active"}))
+
+      other =
+        insert_finished_job!(DashboardUniqueChore, %{username: "other"}, "completed",
+          completed_at: now
+        )
+
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+      select_history(view, to_string(DashboardTestChore))
+
+      assert has_element?(view, ~s([data-role="history-row"][data-job-id="#{completed.id}"]))
+      assert has_element?(view, ~s([data-role="history-row"][data-job-id="#{discarded.id}"]))
+      refute has_element?(view, ~s([data-role="history-row"][data-job-id="#{active.id}"]))
+      refute has_element?(view, ~s([data-role="history-row"][data-job-id="#{other.id}"]))
+
+      refute has_element?(view, ~s([data-role="history-details"][data-job-id="#{discarded.id}"]))
+
+      html =
+        view
+        |> element(~s([data-role="history-row"][data-job-id="#{discarded.id}"]))
+        |> render_click()
+
+      assert has_element?(view, ~s([data-role="history-details"][data-job-id="#{discarded.id}"]))
+      assert has_element?(view, "[data-role=history-error]")
+      assert html =~ "boom"
+      assert html =~ "broken"
+    end
+
+    test "loads more runs on demand" do
+      now = DateTime.utc_now()
+
+      jobs =
+        for i <- 1..21 do
+          insert_finished_job!(DashboardTestChore, %{username: "user_#{i}"}, "completed",
+            completed_at: now
+          )
+        end
+
+      oldest = List.first(jobs)
+
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+      select_history(view, to_string(DashboardTestChore))
+
+      refute has_element?(view, ~s([data-role="history-row"][data-job-id="#{oldest.id}"]))
+
+      view |> element("button[data-role=history-load-more]") |> render_click()
+
+      assert has_element?(view, ~s([data-role="history-row"][data-job-id="#{oldest.id}"]))
+      refute has_element?(view, "button[data-role=history-load-more]")
+    end
+
+    test "adds runs that finish while the history tab is open" do
+      chore_module = to_string(DashboardTestChore)
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+
+      view
+      |> element("button[data-role=chore-select][data-chore-module=\"#{chore_module}\"]")
+      |> render_click()
+
+      view
+      |> form("[id=\"form-#{chore_module}\"]", args: %{username: "live_user", admin: "false"})
+      |> render_submit()
+
+      assert [job] = ObanChore.TestRepo.all(Oban.Job)
+
+      view |> element("button[data-role=history-tab]") |> render_click()
+      refute has_element?(view, ~s([data-role="history-row"][data-job-id="#{job.id}"]))
+
+      Phoenix.PubSub.broadcast(
+        ObanChore.EndpointPubSub,
+        "oban_chore:status:#{job.id}",
+        {:oban_chore_state, job.id, :completed}
+      )
+
+      # send_update is delivered asynchronously, so give the view one extra round-trip.
+      _ = render(view)
+      assert has_element?(view, ~s([data-role="history-row"][data-job-id="#{job.id}"]))
+    end
+  end
+
   describe "auth" do
     test "filters chores by module whitelist" do
       conn = build_conn()

@@ -417,6 +417,61 @@ defmodule ObanChoreWeb.CoreComponents do
     end
   end
 
+  @doc """
+  Returns the inline style used to render a job state badge.
+  """
+  def job_state_style(state) do
+    case state do
+      :executing ->
+        "background-color: var(--oc-blue-50); color: var(--oc-blue-700); box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.1);"
+
+      :available ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+
+      state when state in [:scheduled, :retryable] ->
+        "background-color: var(--oc-amber-50); color: var(--oc-amber-800); box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.2);"
+
+      :completed ->
+        "background-color: var(--oc-emerald-50); color: var(--oc-emerald-800); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.2);"
+
+      :discarded ->
+        "background-color: var(--oc-rose-50); color: var(--oc-rose-900); box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.1);"
+
+      _ ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+    end
+  end
+
+  @doc """
+  Formats a datetime as `YYYY-MM-DD HH:MM:SS UTC`, or `"—"` when missing.
+  """
+  def format_datetime(nil), do: "—"
+
+  def format_datetime(value) do
+    value
+    |> to_datetime()
+    |> DateTime.truncate(:second)
+    |> Calendar.strftime("%Y-%m-%d %H:%M:%S UTC")
+  end
+
+  @doc """
+  Formats the elapsed time between two datetimes, or `"—"` when either is missing.
+  """
+  def format_duration(nil, _finished_at), do: "—"
+  def format_duration(_started_at, nil), do: "—"
+
+  def format_duration(started_at, finished_at) do
+    ms = DateTime.diff(to_datetime(finished_at), to_datetime(started_at), :millisecond)
+
+    cond do
+      ms < 0 -> "—"
+      ms < 1000 -> "#{ms}ms"
+      ms < 60_000 -> "#{Float.round(ms / 1000, 1)}s"
+      ms < 3_600_000 -> "#{div(ms, 60_000)}m #{rem(div(ms, 1000), 60)}s"
+      true -> "#{div(ms, 3_600_000)}h #{rem(div(ms, 60_000), 60)}m"
+    end
+  end
+
   defp to_datetime(%DateTime{} = dt), do: dt
   defp to_datetime(%NaiveDateTime{} = ndt), do: DateTime.from_naive!(ndt, "Etc/UTC")
   defp to_datetime(nil), do: DateTime.utc_now()

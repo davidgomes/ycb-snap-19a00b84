@@ -260,6 +260,17 @@
   background-color: var(--oc-brand-hover);
 }
 
+.oc-btn-secondary {
+  background-color: var(--oc-white);
+  color: var(--oc-gray-900);
+  border: 1px solid var(--oc-gray-300);
+  padding: 0.375rem 0.75rem;
+}
+
+.oc-btn-secondary:hover {
+  background-color: var(--oc-gray-50);
+}
+
 /* Forms */
 .oc-form-group {
   margin-bottom: 1rem;
@@ -534,6 +545,90 @@ textarea.oc-input {
 
 .oc-log-content {
   word-break: break-all;
+}
+
+/* History */
+.oc-history-empty {
+  padding: 2rem 1.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-style: italic;
+  color: var(--oc-gray-500);
+}
+
+.oc-history-row {
+  display: grid;
+  grid-template-columns: 6rem 7rem 1fr 6rem 5rem;
+  gap: 1rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  color: var(--oc-gray-700);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--oc-gray-100);
+  cursor: pointer;
+}
+
+.oc-history-row:hover,
+.oc-history-row--expanded {
+  background-color: var(--oc-gray-50);
+}
+
+.oc-history-row--header {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--oc-gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: default;
+}
+
+.oc-history-row--header:hover {
+  background: transparent;
+}
+
+.oc-history-details {
+  border-bottom: 1px solid var(--oc-gray-100);
+}
+
+.oc-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  margin: 0;
+  padding: 0 1.5rem 1rem;
+  font-size: 0.875rem;
+  color: var(--oc-gray-700);
+}
+
+.oc-history-meta dd {
+  margin: 0.25rem 0 0;
+}
+
+.oc-history-error {
+  padding: 0 1.5rem 1rem;
+}
+
+.oc-history-error pre {
+  margin: 0.25rem 0 0;
+  padding: 0.75rem;
+  max-height: 16rem;
+  overflow: auto;
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--oc-rose-900);
+  background-color: var(--oc-rose-50);
+  border-radius: 0.375rem;
+}
+
+.oc-history-footer {
+  display: flex;
+  justify-content: center;
+  padding: 1rem 1.5rem;
 }
 
 /* Transitions */
