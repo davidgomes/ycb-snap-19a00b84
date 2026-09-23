@@ -8,18 +8,40 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   Missing states means duplicate jobs could be enqueued when existing jobs are
   in the missing state.
 
+  Named state groups are expanded to the states they cover before comparing.
+  `:incomplete` and `:successful` (Oban's default) include every recommended state.
+  `:scheduled` only covers scheduled jobs and is reported. It's meant for debouncing,
+  so exclude the worker if that's intentional. `:all` is left to `StateGroupUsage`.
+
   ## Examples
 
   Bad - only checks available state:
       unique: [fields: [:args], states: [:available]]
 
+  Bad - the `:scheduled` group only checks scheduled state:
+      unique: [fields: [:args], states: :scheduled]
+
+  Good - named group covering all non-final states:
+      unique: [fields: [:args], states: :incomplete]
+
   Good - includes all non-final states:
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  ## References
+
+    * [Unique Jobs guide](https://hexdocs.pm/oban/unique_jobs.html)
+    * [`Oban.Job.unique_states/1`](https://hexdocs.pm/oban/Oban.Job.html#unique_states/1)
   """
 
   use ObanDoctor.Check, category: :worker
 
   @recommended_states [:available, :scheduled, :executing, :retryable]
+
+  @state_groups %{
+    incomplete: [:suspended, :available, :scheduled, :executing, :retryable],
+    scheduled: [:scheduled],
+    successful: [:suspended, :available, :scheduled, :executing, :retryable, :completed]
+  }
 
   @impl true
   def id, do: :uniqueness_missing_states
@@ -55,7 +77,7 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
     if uses_all_group?(states) do
       false
     else
-      state_list = normalize_states(states)
+      state_list = expand_states(states)
       missing = @recommended_states -- state_list
       not Enum.empty?(missing)
     end
@@ -66,12 +88,13 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   defp uses_all_group?(states) when is_list(states), do: :all in states
   defp uses_all_group?(_), do: false
 
-  defp normalize_states(states) when is_list(states), do: states
-  defp normalize_states(_), do: []
+  defp expand_states(states) when is_list(states), do: states
+  defp expand_states(group) when is_atom(group), do: Map.get(@state_groups, group, [])
+  defp expand_states(_), do: []
 
   defp build_issue(worker) do
     states = Keyword.get(worker.unique, :states, [])
-    missing = @recommended_states -- normalize_states(states)
+    missing = @recommended_states -- expand_states(states)
 
     Issue.new(
       check: __MODULE__,
