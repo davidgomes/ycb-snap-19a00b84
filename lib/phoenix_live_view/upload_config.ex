@@ -63,6 +63,7 @@ defmodule Phoenix.LiveView.UploadConfig do
 
   @unregistered :unregistered
   @invalid :invalid
+  @failed :failed
 
   @too_many_files :too_many_files
 
@@ -111,7 +112,7 @@ defmodule Phoenix.LiveView.UploadConfig do
           max_entries: pos_integer(),
           max_file_size: pos_integer(),
           entries: list(),
-          entry_refs_to_pids: %{String.t() => pid() | :unregistered | :done},
+          entry_refs_to_pids: %{String.t() => pid() | :unregistered | :invalid | :failed},
           entry_refs_to_metas: %{String.t() => map()},
           accept: list() | :any,
           acceptable_types: MapSet.t(),
@@ -340,7 +341,7 @@ defmodule Phoenix.LiveView.UploadConfig do
   def entry_pid(%UploadConfig{} = conf, %UploadEntry{} = entry) do
     case Map.fetch(conf.entry_refs_to_pids, entry.ref) do
       {:ok, pid} when is_pid(pid) -> pid
-      {:ok, status} when status in [@unregistered, @invalid] -> nil
+      {:ok, status} when status in [@unregistered, @invalid, @failed] -> nil
     end
   end
 
@@ -367,9 +368,35 @@ defmodule Phoenix.LiveView.UploadConfig do
 
   @doc false
   def unregister_completed_entry(%UploadConfig{} = conf, entry_ref) do
-    %UploadEntry{} = entry = get_entry_by_ref(conf, entry_ref)
+    case get_entry_by_ref(conf, entry_ref) do
+      # A writer failure keeps the entry until it is explicitly cancelled.
+      %UploadEntry{} = entry ->
+        if entry_failed?(conf, entry_ref) do
+          conf
+        else
+          drop_entry(conf, entry)
+        end
 
-    drop_entry(conf, entry)
+      nil ->
+        conf
+    end
+  end
+
+  @doc false
+  def entry_failed?(%UploadConfig{} = conf, entry_ref) do
+    Map.get(conf.entry_refs_to_pids, entry_ref) == @failed
+  end
+
+  @doc false
+  def fail_entry(%UploadConfig{} = conf, entry_ref, reason) do
+    conf =
+      if {entry_ref, reason} in conf.errors do
+        conf
+      else
+        put_error(conf, entry_ref, reason)
+      end
+
+    %{conf | entry_refs_to_pids: Map.put(conf.entry_refs_to_pids, entry_ref, @failed)}
   end
 
   @doc false
@@ -401,6 +428,9 @@ defmodule Phoenix.LiveView.UploadConfig do
 
       {:ok, existing_pid} when is_pid(existing_pid) ->
         {:error, :already_registered}
+
+      {:ok, @failed} ->
+        {:error, :disallowed}
 
       :error ->
         {:error, :disallowed}

@@ -74,9 +74,20 @@ defmodule Phoenix.LiveView.Upload do
 
     case UploadConfig.get_entry_by_ref(upload_config, entry_ref) do
       %UploadEntry{} = entry ->
-        upload_config
-        |> UploadConfig.cancel_entry(entry)
-        |> update_uploads(socket)
+        failed? = UploadConfig.entry_failed?(upload_config, entry_ref)
+
+        socket =
+          upload_config
+          |> UploadConfig.cancel_entry(entry)
+          |> update_uploads(socket)
+
+        # A failed entry has no channel left to exit and drop the name, so
+        # cancelling the last one must release it for a later allow_upload.
+        if failed? and uploaded_entries(socket, name) == {[], []} do
+          Phoenix.LiveView.Channel.release_upload_name(name)
+        end
+
+        socket
 
       _ ->
         raise ArgumentError, "no entry in upload \"#{inspect(name)}\" with ref \"#{entry_ref}\""
@@ -175,6 +186,13 @@ defmodule Phoenix.LiveView.Upload do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  @doc false
+  def fail_entry(%Socket{} = socket, %UploadConfig{} = conf, entry_ref, reason) do
+    conf
+    |> UploadConfig.fail_entry(entry_ref, reason)
+    |> update_uploads(socket)
   end
 
   @doc """

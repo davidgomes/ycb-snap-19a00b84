@@ -20,6 +20,12 @@ export default class EntryUploader {
     this.uploadChannel.leave();
     this.errored = true;
     this.chunkTimer != null && clearTimeout(this.chunkTimer);
+    // The server already retained the entry as {:writer_failure, reason}.
+    // The generic path would push a second error and clear the input, which
+    // drops the entry from the DOM before the user cancels it.
+    if (reason === "writer_error") {
+      return;
+    }
     this.entry.error(reason);
   }
 
