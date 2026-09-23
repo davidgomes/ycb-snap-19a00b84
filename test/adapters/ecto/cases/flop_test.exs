@@ -2091,6 +2091,50 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       end
     end
 
+    property "paging forward includes rows with nil values in order fields" do
+      check all pets <- uniq_list_of_pets_with_nils(length: 1..25),
+                cursor_fields <- cursor_fields(%Pet{}),
+                directions <- order_directions(%Pet{}),
+                first <- integer(1..4) do
+        checkin_checkout()
+        Enum.each(pets, &Repo.insert!(&1))
+
+        flop = %Flop{order_by: cursor_fields, order_directions: directions}
+        pets = Flop.all(pets_with_owners_query(), flop, for: Pet)
+
+        assert walk_pages(%{flop | first: first}, :next) == pets
+      end
+    end
+
+    property "paging backward includes rows with nil values in order fields" do
+      check all pets <- uniq_list_of_pets_with_nils(length: 1..25),
+                cursor_fields <- cursor_fields(%Pet{}),
+                directions <- order_directions(%Pet{}),
+                last <- integer(1..4) do
+        checkin_checkout()
+        Enum.each(pets, &Repo.insert!(&1))
+
+        flop = %Flop{order_by: cursor_fields, order_directions: directions}
+        pets = Flop.all(pets_with_owners_query(), flop, for: Pet)
+
+        assert walk_pages(%{flop | last: last}, :previous) == pets
+      end
+    end
+
+    test "paging without the for option includes rows with nil values" do
+      for {name, age} <- [{"Ada", 3}, {"Ada", 5}, {"Bo", 1}, {"Cy", nil}] do
+        insert(:pet, name: name, age: age)
+      end
+
+      for direction <- [:asc, :asc_nulls_first, :desc_nulls_last] do
+        flop = %Flop{order_by: [:age, :name], order_directions: [direction]}
+        pets = Flop.all(Pet, flop)
+
+        assert length(pets) == 4
+        assert walk_pages(%{flop | first: 1}, :next, Pet, []) == pets
+      end
+    end
+
     test "cursor value function can be overridden" do
       insert_list(4, :pet)
       query = select(Pet, [p], {p, %{other: :data}})
@@ -2124,7 +2168,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
         )
     end
 
-    test "nil values for cursors are ignored when using for option" do
+    test "accepts nil cursor values when using for option" do
       check all pets <- uniq_list_of_pets(length: 2..2),
                 cursor_fields <- cursor_fields(%Pet{}),
                 directions <- order_directions(%Pet{}) do
@@ -2197,7 +2241,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                "cursor pagination is not supported for alias fields"
     end
 
-    test "nil values for cursors are ignored when not using for option" do
+    test "accepts nil cursor values when not using for option" do
       check all pets <- uniq_list_of_pets(length: 2..2),
                 directions <- order_directions(%Pet{}) do
         checkin_checkout()
@@ -2254,6 +2298,37 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                  %Flop{first: 1, after: end_cursor, order_by: [:trip]},
                  for: MyApp.WalkingDistances
                )
+    end
+  end
+
+  # Follows the cursors until there is no page left in the given direction and
+  # returns the rows of all pages in order.
+  defp walk_pages(
+         flop,
+         direction,
+         query \\ pets_with_owners_query(),
+         opts \\ [for: Pet],
+         pages_left \\ 100
+       )
+
+  defp walk_pages(_, _, _, _, 0), do: flunk("cursor pagination did not end")
+
+  defp walk_pages(flop, direction, query, opts, pages_left) do
+    {:ok, {rows, meta}} = Flop.validate_and_run(query, flop, opts)
+
+    case direction do
+      :next when meta.has_next_page? ->
+        next_flop = Flop.to_next_cursor(meta)
+        rows ++ walk_pages(next_flop, direction, query, opts, pages_left - 1)
+
+      :previous when meta.has_previous_page? ->
+        previous_flop = Flop.to_previous_cursor(meta)
+
+        walk_pages(previous_flop, direction, query, opts, pages_left - 1) ++
+          rows
+
+      _ ->
+        rows
     end
   end
 
