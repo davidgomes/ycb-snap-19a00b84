@@ -615,6 +615,48 @@ defmodule Phoenix.LiveView.UploadChannelTest do
         assert {:error, :not_allowed} = render_upload(avatar, "foo2.jpeg")
       end
 
+      @tag allow: [max_entries: 1, chunk_size: 20, accept: :any, auto_upload: true]
+      test "auto_upload never uploads entries beyond max_entries", %{lv: lv} do
+        avatar =
+          file_input(lv, "form", :avatar, [
+            %{name: "foo1.jpeg", content: "bytes"},
+            %{name: "foo2.jpeg", content: "bytes"}
+          ])
+
+        assert lv
+               |> form("form", user: %{})
+               |> render_change(avatar) =~ "config_error::too_many_files"
+
+        assert render_upload(avatar, "foo1.jpeg") =~ "foo1.jpeg:100%"
+        assert {:error, :not_allowed} = render_upload(avatar, "foo2.jpeg")
+
+        UploadLive.run(lv, fn socket ->
+          {[entry], [_excess]} = LiveView.uploaded_entries(socket, :avatar)
+          LiveView.consume_uploaded_entry(socket, entry, fn _ -> {:ok, entry.client_name} end)
+          {:reply, :ok, socket}
+        end)
+
+        assert eventually(fn -> not (render(lv) =~ "foo1.jpeg") end)
+
+        html = render(lv)
+        assert html =~ "#{@context}:foo2.jpeg:0%"
+        assert html =~ "config_error::too_many_files"
+
+        # the client preflights the remaining entry again, for example on submit
+        [_, %{"ref" => excess_ref} = excess_entry] = avatar.entries
+        assert {:ok, %{entries: entries}} = preflight_upload(%{avatar | entries: [excess_entry]})
+        assert entries == %{}
+        assert render(lv) =~ "config_error::too_many_files"
+
+        UploadLive.run(lv, fn socket ->
+          {:reply, :ok, LiveView.cancel_upload(socket, :avatar, excess_ref)}
+        end)
+
+        assert UploadLive.run(lv, fn socket ->
+                 {:reply, socket.assigns.uploads.avatar.errors, socket}
+               end) == []
+      end
+
       @tag allow: [
              max_entries: 1,
              chunk_size: 20,

@@ -65,6 +65,8 @@ defmodule Phoenix.LiveView.UploadConfig do
   @invalid :invalid
   # Writer failures retain their entry until it is explicitly cancelled or replaced.
   @failed :failed
+  # Auto upload entries beyond :max_entries are retained, but never uploaded.
+  @excess :excess
 
   @too_many_files :too_many_files
 
@@ -113,7 +115,9 @@ defmodule Phoenix.LiveView.UploadConfig do
           max_entries: pos_integer(),
           max_file_size: pos_integer(),
           entries: list(),
-          entry_refs_to_pids: %{String.t() => pid() | :unregistered | :invalid | :failed},
+          entry_refs_to_pids: %{
+            String.t() => pid() | :unregistered | :invalid | :failed | :excess
+          },
           entry_refs_to_metas: %{String.t() => map()},
           accept: list() | :any,
           acceptable_types: MapSet.t(),
@@ -342,7 +346,7 @@ defmodule Phoenix.LiveView.UploadConfig do
   def entry_pid(%UploadConfig{} = conf, %UploadEntry{} = entry) do
     case Map.fetch(conf.entry_refs_to_pids, entry.ref) do
       {:ok, pid} when is_pid(pid) -> pid
-      {:ok, status} when status in [@unregistered, @invalid, @failed] -> nil
+      {:ok, status} when status in [@unregistered, @invalid, @failed, @excess] -> nil
     end
   end
 
@@ -408,6 +412,17 @@ defmodule Phoenix.LiveView.UploadConfig do
   end
 
   @doc false
+  def mark_excess(%UploadConfig{} = conf, refs) do
+    new_entries =
+      for %UploadEntry{} = entry <- conf.entries do
+        if entry.ref in refs, do: %{entry | valid?: false, preflighted?: true}, else: entry
+      end
+
+    new_pids = Enum.reduce(refs, conf.entry_refs_to_pids, &Map.put(&2, &1, @excess))
+    %{conf | entries: new_entries, entry_refs_to_pids: new_pids}
+  end
+
+  @doc false
   def register_entry_upload(%UploadConfig{} = conf, channel_pid, entry_ref)
       when is_pid(channel_pid) do
     case Map.fetch(conf.entry_refs_to_pids, entry_ref) do
@@ -422,7 +437,7 @@ defmodule Phoenix.LiveView.UploadConfig do
         {:error, :already_registered}
 
       # the entry is retained, but it may no longer be uploaded to
-      {:ok, status} when status in [@invalid, @failed] ->
+      {:ok, status} when status in [@invalid, @failed, @excess] ->
         {:error, :disallowed}
 
       :error ->
@@ -581,8 +596,8 @@ defmodule Phoenix.LiveView.UploadConfig do
     conf
   end
 
-  defp too_many_files?(%UploadConfig{entries: entries, max_entries: max}) do
-    length(entries) > max
+  defp too_many_files?(%UploadConfig{entries: entries, max_entries: max} = conf) do
+    length(entries) > max or @excess in Map.values(conf.entry_refs_to_pids)
   end
 
   defp cast_and_validate_entry(%UploadConfig{} = conf, %{"ref" => ref} = client_entry) do

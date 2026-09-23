@@ -370,12 +370,23 @@ defmodule Phoenix.LiveView.Upload do
   def generate_preflight_response(%Socket{} = socket, name, cid, refs) do
     %UploadConfig{} = conf = Map.fetch!(socket.assigns.uploads, name)
 
-    # don't send more than max_entries preflight responses
-    refs =
-      for {entry, i} <- Enum.with_index(conf.entries),
-          entry.ref in refs,
-          i < conf.max_entries && not entry.preflighted?,
-          do: entry.ref
+    # don't send more than max_entries preflight responses, cancelled entries
+    # are dropped once their upload channel exits, so they don't take a slot
+    {allowed, excess} =
+      conf.entries
+      |> Enum.reject(& &1.cancelled?)
+      |> Enum.with_index()
+      |> Enum.filter(fn {entry, _i} -> entry.ref in refs and not entry.preflighted? end)
+      |> Enum.split_with(fn {_entry, i} -> i < conf.max_entries end)
+
+    refs = for {entry, _i} <- allowed, do: entry.ref
+
+    # auto uploads reject the excess entries, otherwise they would be uploaded
+    # as soon as the entries before them are consumed or cancelled
+    conf =
+      if conf.auto_upload?,
+        do: UploadConfig.mark_excess(conf, for({entry, _i} <- excess, do: entry.ref)),
+        else: conf
 
     client_meta = %{
       max_file_size: conf.max_file_size,

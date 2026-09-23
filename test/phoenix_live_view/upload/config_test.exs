@@ -468,6 +468,33 @@ defmodule Phoenix.LiveView.UploadConfigTest do
     end
   end
 
+  describe "mark_excess/2" do
+    test "retains excess entries with :too_many_files until they are dropped" do
+      socket =
+        LiveView.allow_upload(build_socket(), :avatar, accept: :any, auto_upload: true)
+
+      [first, excess] = entries = [build_client_entry(:avatar), build_client_entry(:avatar)]
+      assert {:ok, avatar} = UploadConfig.put_entries(socket.assigns.uploads.avatar, entries)
+      assert avatar.errors == [{avatar.ref, :too_many_files}]
+
+      avatar = UploadConfig.mark_excess(avatar, [excess["ref"]])
+
+      assert %UploadEntry{valid?: false, preflighted?: true} =
+               UploadConfig.get_entry_by_ref(avatar, excess["ref"])
+
+      assert {:error, :disallowed} =
+               UploadConfig.register_entry_upload(avatar, self(), excess["ref"])
+
+      avatar = drop_entry(avatar, first["ref"])
+      assert avatar.errors == [{avatar.ref, :too_many_files}]
+      assert {:ok, avatar} = UploadConfig.put_entries(avatar, [excess])
+      assert avatar.errors == [{avatar.ref, :too_many_files}]
+
+      avatar = drop_entry(avatar, excess["ref"])
+      assert avatar.errors == []
+    end
+  end
+
   test "supports binary upload name" do
     assert LiveView.allow_upload(build_socket(), "avatar", accept: ~w(image/png .jpeg))
   end
