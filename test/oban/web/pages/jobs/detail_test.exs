@@ -62,6 +62,70 @@ defmodule Oban.Web.Pages.Jobs.DetailTest do
     end)
   end
 
+  describe "awaitable signals" do
+    test "omitting the signal section for jobs without signals", %{live: live} do
+      job = insert_job!([ref: 1], state: "available", worker: WorkerA)
+
+      open_state(live, "available")
+      open_details(live, job)
+
+      refute has_element?(live, "#job-signal")
+    end
+
+    test "displaying the deadline for jobs awaiting a signal", %{live: live} do
+      wait_until = System.system_time(:millisecond) + :timer.hours(1)
+
+      job =
+        insert_job!([ref: 1],
+          state: "scheduled",
+          worker: WorkerA,
+          meta: %{wait_until: wait_until}
+        )
+
+      open_state(live, "scheduled")
+      open_details(live, job)
+
+      assert has_element?(live, "#job-signal", "Awaiting Signal")
+      assert has_element?(live, "#job-signal", "Deadline")
+      refute has_element?(live, "#copy-signal")
+    end
+
+    test "displaying jobs awaiting a signal without a deadline", %{live: live} do
+      job =
+        insert_job!([ref: 1],
+          state: "scheduled",
+          worker: WorkerA,
+          meta: %{wait_until: "infinity"}
+        )
+
+      open_state(live, "scheduled")
+      open_details(live, job)
+
+      assert has_element?(live, "#job-signal", "No deadline")
+    end
+
+    test "displaying the decoded payload for received signals", %{live: live} do
+      signal =
+        %{decision: "approved"}
+        |> :erlang.term_to_binary()
+        |> Base.encode64(padding: false)
+
+      job =
+        insert_job!([ref: 1],
+          state: "available",
+          worker: WorkerA,
+          meta: %{signal: signal}
+        )
+
+      open_state(live, "available")
+      open_details(live, job)
+
+      assert has_element?(live, "#job-signal", "Received Signal")
+      assert has_element?(live, "#job-signal", ~s(decision: "approved"))
+      assert has_element?(live, "#copy-signal")
+    end
+  end
+
   describe "editing jobs" do
     test "edit form is visible for editable jobs", %{live: live} do
       job = insert_job!([ref: 1], state: "available", worker: WorkerA)
