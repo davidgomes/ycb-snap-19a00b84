@@ -185,6 +185,21 @@ defmodule Phoenix.LiveView.UploadChannelTest do
     Process.unlink(channel_pid)
   end
 
+  defp eventually(func, attempts \\ 50)
+
+  defp eventually(func, 0) do
+    func.()
+  end
+
+  defp eventually(func, attempts) do
+    if func.() do
+      true
+    else
+      Process.sleep(10)
+      eventually(func, attempts - 1)
+    end
+  end
+
   def consume(%LiveView.UploadEntry{} = entry, socket) do
     socket =
       cond do
@@ -613,6 +628,93 @@ defmodule Phoenix.LiveView.UploadChannelTest do
 
         assert render_upload(avatar, "foo1.jpeg") =~ "foo1.jpeg:100%"
         assert {:error, :not_allowed} = render_upload(avatar, "foo2.jpeg")
+      end
+
+      @tag allow: [
+             max_entries: 1,
+             chunk_size: 20,
+             accept: :any,
+             auto_upload: true,
+             max_entries_mode: :total,
+             progress: :consume
+           ]
+      test "consumed auto uploads count towards max_entries", %{lv: lv} do
+        first = file_input(lv, "form", :avatar, [%{name: "first.jpeg", content: "first"}])
+        assert render_upload(first, "first.jpeg") =~ "consumed:first.jpeg"
+
+        assert eventually(fn ->
+                 UploadLive.run(lv, fn socket ->
+                   conf = socket.assigns.uploads.avatar
+                   {:reply, conf.consumed_entries == 1 && conf.entries == [], socket}
+                 end)
+               end)
+
+        second = file_input(lv, "form", :avatar, [%{name: "second.jpeg", content: "second"}])
+
+        assert lv
+               |> form("form", user: %{})
+               |> render_change(second) =~ "config_error::too_many_files"
+
+        assert {:error, :not_allowed} = render_upload(second, "second.jpeg")
+      end
+
+      @tag allow: [
+             max_entries: 1,
+             chunk_size: 20,
+             accept: :any,
+             auto_upload: true,
+             progress: :consume
+           ]
+      test "consumed auto uploads free max_entries capacity by default", %{lv: lv} do
+        first = file_input(lv, "form", :avatar, [%{name: "first.jpeg", content: "first"}])
+        assert render_upload(first, "first.jpeg") =~ "consumed:first.jpeg"
+
+        assert eventually(fn ->
+                 UploadLive.run(lv, fn socket ->
+                   conf = socket.assigns.uploads.avatar
+                   {:reply, conf.consumed_entries == 0 && conf.entries == [], socket}
+                 end)
+               end)
+
+        second = file_input(lv, "form", :avatar, [%{name: "second.jpeg", content: "second"}])
+        assert render_upload(second, "second.jpeg") =~ "consumed:second.jpeg"
+      end
+
+      @tag allow: [
+             max_entries: 1,
+             chunk_size: 20,
+             accept: :any,
+             auto_upload: true,
+             max_entries_mode: :total,
+             progress: :consume
+           ]
+      test "allow_upload starts a new max_entries budget after consumption", %{lv: lv} do
+        first = file_input(lv, "form", :avatar, [%{name: "first.jpeg", content: "first"}])
+        assert render_upload(first, "first.jpeg") =~ "consumed:first.jpeg"
+
+        assert eventually(fn ->
+                 UploadLive.run(lv, fn socket ->
+                   conf = socket.assigns.uploads.avatar
+                   {:reply, conf.consumed_entries == 1 && conf.entries == [], socket}
+                 end)
+               end)
+
+        UploadLive.run(lv, fn socket ->
+          socket =
+            LiveView.allow_upload(socket, :avatar,
+              max_entries: 1,
+              chunk_size: 20,
+              accept: :any,
+              auto_upload: true,
+              max_entries_mode: :total,
+              progress: fn :avatar, entry, socket -> __MODULE__.consume(entry, socket) end
+            )
+
+          {:reply, :ok, socket}
+        end)
+
+        second = file_input(lv, "form", :avatar, [%{name: "second.jpeg", content: "second"}])
+        assert render_upload(second, "second.jpeg") =~ "consumed:second.jpeg"
       end
 
       @tag allow: [
