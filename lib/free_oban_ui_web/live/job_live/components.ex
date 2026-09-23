@@ -39,7 +39,9 @@ defmodule FreeObanUiWeb.JobLive.Components do
   end
 
   def absolute_time(nil), do: "-"
-  def absolute_time(%DateTime{} = datetime), do: Calendar.strftime(datetime, "%Y-%m-%d %H:%M:%S UTC")
+
+  def absolute_time(%DateTime{} = datetime),
+    do: Calendar.strftime(datetime, "%Y-%m-%d %H:%M:%S UTC")
 
   @doc """
   The most relevant timestamp for a job in its current state.
