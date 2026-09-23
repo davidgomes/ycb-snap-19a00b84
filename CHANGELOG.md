@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add `:before_clean` option to the ETS and Atomic backends, invoked with the algorithm and the expired entries before they are deleted (#140)
+
 ## 7.2.0 - 2026-02-03
 
 - Fix race condition in `TokenBucket` and `LeakyBucket` atomics backends by using compare-and-swap (CAS) with packed 64-bit values (#169)

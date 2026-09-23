@@ -15,6 +15,19 @@ defmodule Hammer.Atomic do
 
   - `:token_bucket` - Token bucket rate limiting
     Flexible rate limiting with bursting capability. See [Hammer.Atomic.TokenBucket](Hammer.Atomic.TokenBucket.html) for more details.
+
+  An optional `:before_clean` callback can be passed to `start_link/1` to inspect
+  expired entries before they are deleted, for example to emit usage telemetry:
+
+      MyApp.RateLimit.start_link(
+        clean_period: :timer.minutes(1),
+        key_older_than: :timer.hours(24),
+        before_clean: fn algorithm, entries ->
+          Enum.each(entries, fn entry ->
+            MyApp.Telemetry.emit_expired(algorithm, entry)
+          end)
+        end
+      )
   """
 
   use GenServer
@@ -23,6 +36,7 @@ defmodule Hammer.Atomic do
   @type start_option ::
           {:clean_period, pos_integer()}
           | {:key_older_than, pos_integer()}
+          | {:before_clean, Hammer.CleanUtils.before_clean()}
           | GenServer.option()
 
   @type config :: %{
@@ -30,7 +44,8 @@ defmodule Hammer.Atomic do
           table_opts: list(),
           clean_period: pos_integer(),
           key_older_than: pos_integer(),
-          algorithm: module()
+          algorithm_module: module(),
+          before_clean: Hammer.CleanUtils.before_clean() | nil
         }
 
   # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
@@ -129,6 +144,10 @@ defmodule Hammer.Atomic do
   Options:
   - `:clean_period` - How often to run cleanup (ms). Default 1 minute.
   - `:key_older_than` - Max age for entries (ms). Default 24 hours.
+  - `:before_clean` - Optional callback invoked with expired entries before deletion.
+    Accepts a function `(algorithm :: atom(), entries :: [map()]) -> any()` or an MFA tuple
+    `{module, function, extra_args}`. Each entry is a map with `:key`, `:value`, and `:expired_at` (ms).
+    If the callback raises, entries are still deleted and a warning is logged.
   """
   @spec start_link([start_option]) :: GenServer.on_start()
   def start_link(opts) do
@@ -138,6 +157,7 @@ defmodule Hammer.Atomic do
     {table, opts} = Keyword.pop!(opts, :table)
     {algorithm_module, opts} = Keyword.pop!(opts, :algorithm_module)
     {key_older_than, opts} = Keyword.pop(opts, :key_older_than, :timer.hours(24))
+    {before_clean, opts} = Keyword.pop(opts, :before_clean)
 
     case opts do
       [] ->
@@ -154,7 +174,8 @@ defmodule Hammer.Atomic do
       table_opts: algorithm_module.ets_opts(),
       clean_period: clean_period,
       key_older_than: key_older_than,
-      algorithm_module: algorithm_module
+      algorithm_module: algorithm_module,
+      before_clean: before_clean
     }
 
     GenServer.start_link(__MODULE__, config, gen_opts)
@@ -196,20 +217,22 @@ defmodule Hammer.Atomic do
   defp clean_fix_window(config) do
     now = now()
 
-    :ets.foldl(
-      fn {_key, atomic} = term, deleted ->
-        expires_at = :atomics.get(atomic, 2)
+    expired =
+      :ets.foldl(
+        fn {_key, atomic} = term, acc ->
+          expires_at = :atomics.get(atomic, 2)
 
-        if now - expires_at > config.key_older_than do
-          :ets.delete_object(config.table, term)
-          deleted + 1
-        else
-          deleted
-        end
-      end,
-      0,
-      config.table
-    )
+          if now - expires_at > config.key_older_than do
+            [term | acc]
+          else
+            acc
+          end
+        end,
+        [],
+        config.table
+      )
+
+    delete_expired(config, expired)
   end
 
   # TokenBucket and LeakyBucket store last_update in seconds in slot 2
@@ -217,21 +240,43 @@ defmodule Hammer.Atomic do
     now = System.system_time(:second)
     older_than = now - div(config.key_older_than, 1000)
 
-    :ets.foldl(
-      fn {_key, atomic} = term, deleted ->
-        last_update = :atomics.get(atomic, 2)
+    expired =
+      :ets.foldl(
+        fn {_key, atomic} = term, acc ->
+          last_update = :atomics.get(atomic, 2)
 
-        if last_update < older_than do
-          :ets.delete_object(config.table, term)
-          deleted + 1
-        else
-          deleted
-        end
-      end,
-      0,
-      config.table
-    )
+          if last_update < older_than do
+            [term | acc]
+          else
+            acc
+          end
+        end,
+        [],
+        config.table
+      )
+
+    delete_expired(config, expired)
   end
+
+  defp delete_expired(
+         %{before_clean: callback, algorithm_module: algorithm_module} = config,
+         expired
+       )
+       when callback != nil and expired != [] do
+    entries =
+      Enum.map(expired, fn {key, atomic} -> algorithm_module.normalize_entry(key, atomic) end)
+
+    Hammer.CleanUtils.invoke_before_clean(callback, algorithm_name(algorithm_module), entries)
+    Hammer.CleanUtils.delete_expired(config.table, expired)
+  end
+
+  defp delete_expired(config, expired) do
+    Hammer.CleanUtils.delete_expired(config.table, expired)
+  end
+
+  defp algorithm_name(Hammer.Atomic.FixWindow), do: :fix_window
+  defp algorithm_name(Hammer.Atomic.TokenBucket), do: :token_bucket
+  defp algorithm_name(Hammer.Atomic.LeakyBucket), do: :leaky_bucket
 
   defp schedule(clean_period) do
     Process.send_after(self(), :clean, clean_period)

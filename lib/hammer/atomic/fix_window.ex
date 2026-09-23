@@ -185,4 +185,11 @@ defmodule Hammer.Atomic.FixWindow do
       [] -> 0
     end
   end
+
+  @doc false
+  @spec normalize_entry(key :: term(), atomic :: :atomics.atomics_ref()) ::
+          Hammer.CleanUtils.entry()
+  def normalize_entry(key, atomic) do
+    %{key: key, value: :atomics.get(atomic, 1), expired_at: :atomics.get(atomic, 2)}
+  end
 end
