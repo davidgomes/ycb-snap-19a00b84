@@ -111,7 +111,8 @@ defmodule Phoenix.LiveView.Channel do
   def handle_info({:DOWN, _, :process, pid, reason} = msg, %{socket: socket} = state) do
     case Map.fetch(state.upload_pids, pid) do
       {:ok, {ref, entry_ref, cid}} ->
-        if reason in [:normal, {:shutdown, :closed}] do
+        # :shutdown is the exit reason of an upload channel whose join failed (writer init error)
+        if reason in [:normal, :shutdown, {:shutdown, :closed}] do
           new_state =
             state
             |> drop_upload_pid(pid)
@@ -179,33 +180,8 @@ defmodule Phoenix.LiveView.Channel do
       write_socket(state, cid, msg.ref, fn socket, _ ->
         %{"ref" => ref, "entry_ref" => entry_ref, "progress" => progress} = msg.payload
         new_socket = Upload.update_progress(socket, ref, entry_ref, progress)
-        upload_conf = Upload.get_upload_by_ref!(new_socket, ref)
-        entry = UploadConfig.get_entry_by_ref(upload_conf, entry_ref)
-
-        if event = entry && upload_conf.progress_event do
-          case event.(upload_conf.name, entry, new_socket) do
-            {:noreply, %Socket{} = new_socket} ->
-              new_socket =
-                if new_socket.redirected do
-                  flash = Utils.changed_flash(new_socket)
-                  send(new_socket.root_pid, {@prefix, :redirect, new_socket.redirected, flash})
-                  %{new_socket | redirected: nil}
-                else
-                  new_socket
-                end
-
-              {new_socket, {:ok, {msg.ref, %{}}, state}}
-
-            other ->
-              raise ArgumentError, """
-              expected #{inspect(upload_conf.name)} upload progress #{inspect(event)} to return {:noreply, Socket.t()} got:
-
-                  #{inspect(other)}
-              """
-          end
-        else
-          {new_socket, {:ok, {msg.ref, %{}}, state}}
-        end
+        new_socket = maybe_call_progress_event(new_socket, ref, entry_ref)
+        {new_socket, {:ok, {msg.ref, %{}}, state}}
       end)
 
     {:noreply, new_state}
@@ -302,17 +278,18 @@ defmodule Phoenix.LiveView.Channel do
       %{^channel_pid => {ref, entry_ref, cid}} ->
         new_state =
           write_socket(state, cid, nil, fn socket, _ ->
-            upload_config = Upload.get_upload_by_ref!(socket, ref)
+            case Upload.fetch_upload_by_ref(socket, ref) do
+              {:ok, conf} ->
+                new_socket =
+                  socket
+                  |> Upload.fail_upload_entry(conf, entry_ref, {:writer_failure, reason})
+                  |> maybe_call_progress_event(ref, entry_ref)
 
-            new_socket =
-              Upload.put_upload_error(
-                socket,
-                upload_config.name,
-                entry_ref,
-                {:writer_failure, reason}
-              )
+                {new_socket, {:ok, nil, state}}
 
-            {new_socket, {:ok, nil, state}}
+              :error ->
+                {socket, :error}
+            end
           end)
 
         {:noreply, new_state}
@@ -737,18 +714,55 @@ defmodule Phoenix.LiveView.Channel do
     end
   end
 
+  defp maybe_call_progress_event(socket, ref, entry_ref) do
+    upload_conf = Upload.get_upload_by_ref!(socket, ref)
+    entry = UploadConfig.get_entry_by_ref(upload_conf, entry_ref)
+
+    if event = entry && upload_conf.progress_event do
+      case event.(upload_conf.name, entry, socket) do
+        {:noreply, %Socket{} = new_socket} ->
+          if new_socket.redirected do
+            flash = Utils.changed_flash(new_socket)
+            send(new_socket.root_pid, {@prefix, :redirect, new_socket.redirected, flash})
+            %{new_socket | redirected: nil}
+          else
+            new_socket
+          end
+
+        other ->
+          raise ArgumentError, """
+          expected #{inspect(upload_conf.name)} upload progress #{inspect(event)} to return {:noreply, Socket.t()} got:
+
+              #{inspect(other)}
+          """
+      end
+    else
+      socket
+    end
+  end
+
   defp unregister_upload(state, ref, entry_ref, cid) do
     write_socket(state, cid, nil, fn socket, _ ->
-      conf = Upload.get_upload_by_ref!(socket, ref)
+      case Upload.fetch_upload_by_ref(socket, ref) do
+        {:ok, conf} ->
+          new_state =
+            if only_failed_entries?(conf, entry_ref),
+              do: drop_upload_name(state, conf.name),
+              else: state
 
-      new_state =
-        case conf.entries do
-          [_] -> drop_upload_name(state, conf.name)
-          _ -> state
-        end
+          {Upload.unregister_completed_entry_upload(socket, conf, entry_ref),
+           {:ok, nil, new_state}}
 
-      {Upload.unregister_completed_entry_upload(socket, conf, entry_ref), {:ok, nil, new_state}}
+        # the upload was disallowed while its channel was shutting down
+        :error ->
+          {socket, {:ok, nil, drop_upload_name_by_ref(state, ref, cid)}}
+      end
     end)
+  end
+
+  defp only_failed_entries?(conf, except_ref) do
+    failed_refs = for {ref, {:writer_failure, _}} <- conf.errors, do: ref
+    Enum.all?(conf.entries, &(&1.ref == except_ref or &1.ref in failed_refs))
   end
 
   defp put_upload_pid(state, pid, ref, entry_ref, cid) when is_pid(pid) do
@@ -763,6 +777,11 @@ defmodule Phoenix.LiveView.Channel do
   defp drop_upload_name(state, name) do
     {_, new_state} = pop_in(state.upload_names[name])
     new_state
+  end
+
+  defp drop_upload_name_by_ref(state, ref, cid) do
+    new_names = Map.reject(state.upload_names, fn {_name, val} -> val == {ref, cid} end)
+    %{state | upload_names: new_names}
   end
 
   defp inner_component_handle_event(component_socket, _component, "lv:clear-flash", val) do
@@ -1551,8 +1570,9 @@ defmodule Phoenix.LiveView.Channel do
             writer: writer!(socket, conf.name, entry, conf.writer)
           }
 
-          GenServer.reply(from, {:ok, reply})
+          # monitor before replying, as the channel may exit right away if its writer fails to init
           new_state = put_upload_pid(state, pid, ref, entry_ref, cid)
+          GenServer.reply(from, {:ok, reply})
           {new_socket, {:ok, nil, new_state}}
 
         {:error, reason} ->
