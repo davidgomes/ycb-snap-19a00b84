@@ -50,6 +50,28 @@ defmodule Paginator.ConfigTest do
 
       assert config.cursor_fields == [{{:payments, :id}, :asc}]
     end
+
+    test "applies column with nulls direction tuples mixed with column fields" do
+      config =
+        Config.new(
+          cursor_fields: [
+            {:charged_at, :asc_nulls_first},
+            {:amount, :asc_nulls_last},
+            {:status, :desc_nulls_first},
+            {{:payments, :description}, :desc_nulls_last},
+            :id
+          ],
+          sort_direction: :desc_nulls_last
+        )
+
+      assert config.cursor_fields == [
+               {:charged_at, :asc_nulls_first},
+               {:amount, :asc_nulls_last},
+               {:status, :desc_nulls_first},
+               {{:payments, :description}, :desc_nulls_last},
+               {:id, :desc_nulls_last}
+             ]
+    end
   end
 
   describe "Config.new/2 applies min/max limit" do
@@ -158,6 +180,16 @@ defmodule Paginator.ConfigTest do
               {:person, :first_name} => "Test 121",
               {:person, :last_name} => "Test"
             })
+        )
+
+      Config.validate!(config)
+    end
+
+    test "ok when after cursor matches cursor_fields with nulls directions" do
+      config =
+        Config.new(
+          cursor_fields: [{:date, :desc_nulls_last}, {:id, :asc_nulls_first}],
+          after: complex_after()
         )
 
       Config.validate!(config)

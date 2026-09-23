@@ -716,6 +716,130 @@ defmodule PaginatorTest do
     end
   end
 
+  describe "paginate a collection of payments with nil values, sorting by charged_at" do
+    setup :create_payments_without_charged_at
+
+    for order <- [
+          :asc,
+          :asc_nulls_first,
+          :asc_nulls_last,
+          :desc,
+          :desc_nulls_first,
+          :desc_nulls_last
+        ] do
+      test "paginates forward and backward through all records sorted #{order}", %{
+        nil_payments: {n1, n2, n3}
+      } do
+        order = unquote(order)
+        query = payments_by_charged_at(order)
+        opts = [cursor_fields: [charged_at: order, id: order], limit: 2]
+
+        sorted_ids = query |> Repo.all() |> to_ids()
+        assert length(sorted_ids) == 15
+
+        nil_ids =
+          if order in [:asc_nulls_first, :desc, :desc_nulls_first],
+            do: Enum.take(sorted_ids, 3),
+            else: Enum.take(sorted_ids, -3)
+
+        assert Enum.sort(nil_ids) == to_ids([n1, n2, n3])
+
+        forward_pages = paginate_forward(query, opts)
+        assert forward_pages |> Enum.flat_map(& &1.entries) |> to_ids() == sorted_ids
+
+        last_page = List.last(forward_pages)
+        backward_pages = paginate_backward(query, opts, last_page.metadata.before)
+
+        assert (backward_pages ++ [last_page]) |> Enum.flat_map(& &1.entries) |> to_ids() ==
+                 sorted_ids
+      end
+    end
+
+    test "sorts asc_nulls_first with after cursor on a nil value", %{
+      payments: {_p1, _p2, _p3, _p4, p5, _p6, _p7, _p8, _p9, _p10, _p11, _p12},
+      nil_payments: {n1, n2, n3}
+    } do
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_charged_at(:asc_nulls_first)
+        |> Repo.paginate(
+          cursor_fields: [charged_at: :asc_nulls_first, id: :asc_nulls_first],
+          after: encode_cursor(%{charged_at: nil, id: n1.id}),
+          limit: 3
+        )
+
+      assert to_ids(entries) == to_ids([n2, n3, p5])
+
+      assert metadata == %Metadata{
+               after: encode_cursor(%{charged_at: p5.charged_at, id: p5.id}),
+               before: encode_cursor(%{charged_at: nil, id: n2.id}),
+               limit: 3
+             }
+    end
+
+    test "sorts desc_nulls_last with before cursor on a nil value", %{
+      payments: {_p1, _p2, _p3, p4, p5, _p6, _p7, _p8, _p9, _p10, _p11, _p12},
+      nil_payments: {_n1, n2, n3}
+    } do
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_charged_at(:desc_nulls_last)
+        |> Repo.paginate(
+          cursor_fields: [charged_at: :desc_nulls_last, id: :desc_nulls_last],
+          before: encode_cursor(%{charged_at: nil, id: n2.id}),
+          limit: 3
+        )
+
+      assert to_ids(entries) == to_ids([p4, p5, n3])
+
+      assert metadata == %Metadata{
+               after: encode_cursor(%{charged_at: nil, id: n3.id}),
+               before: encode_cursor(%{charged_at: p4.charged_at, id: p4.id}),
+               limit: 3
+             }
+    end
+
+    test "sorts ascending with after cursor on the last non-nil value", %{
+      payments: {_p1, _p2, _p3, _p4, _p5, _p6, _p7, _p8, _p9, _p10, p11, _p12},
+      nil_payments: {n1, n2, n3}
+    } do
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_charged_at(:asc)
+        |> Repo.paginate(
+          cursor_fields: [charged_at: :asc, id: :asc],
+          after: encode_cursor(%{charged_at: p11.charged_at, id: p11.id}),
+          limit: 3
+        )
+
+      assert to_ids(entries) == to_ids([n1, n2, n3])
+
+      assert metadata == %Metadata{
+               after: nil,
+               before: encode_cursor(%{charged_at: nil, id: n1.id}),
+               limit: 3
+             }
+    end
+
+    test "sorts descending with before cursor on the first non-nil value", %{
+      payments: {_p1, _p2, _p3, _p4, _p5, _p6, _p7, _p8, _p9, _p10, p11, _p12},
+      nil_payments: {n1, n2, n3}
+    } do
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_charged_at(:desc)
+        |> Repo.paginate(
+          cursor_fields: [charged_at: :desc, id: :desc],
+          before: encode_cursor(%{charged_at: p11.charged_at, id: p11.id}),
+          limit: 3
+        )
+
+      assert to_ids(entries) == to_ids([n3, n2, n1])
+
+      assert metadata == %Metadata{
+               after: encode_cursor(%{charged_at: nil, id: n1.id}),
+               before: nil,
+               limit: 3
+             }
+    end
+  end
+
   test "applies a default limit if none is provided", %{
     payments: {p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12}
   } do
@@ -966,6 +1090,32 @@ defmodule PaginatorTest do
      customers: {c1, c2, c3},
      addresses: {a1, a2, a3},
      payments: {p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12}}
+  end
+
+  defp create_payments_without_charged_at(_context) do
+    n1 = insert(:payment, charged_at: nil)
+    n2 = insert(:payment, charged_at: nil)
+    n3 = insert(:payment, charged_at: nil)
+
+    {:ok, nil_payments: {n1, n2, n3}}
+  end
+
+  defp paginate_forward(query, opts, after_cursor \\ nil) do
+    page = Repo.paginate(query, opts ++ [after: after_cursor])
+
+    case page.metadata.after do
+      nil -> [page]
+      cursor -> [page | paginate_forward(query, opts, cursor)]
+    end
+  end
+
+  defp paginate_backward(query, opts, before_cursor) do
+    page = Repo.paginate(query, opts ++ [before: before_cursor])
+
+    case page.metadata.before do
+      nil -> [page]
+      cursor -> paginate_backward(query, opts, cursor) ++ [page]
+    end
   end
 
   defp payments_by_status(status, direction \\ :asc) do
