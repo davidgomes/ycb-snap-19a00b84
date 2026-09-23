@@ -411,7 +411,9 @@ defmodule PetalComponents.DataTableTest do
     end
 
     test "the header is tri-state for the page, stamped for the hook" do
-      root = fn doc -> doc |> LazyHTML.query("#t") |> LazyHTML.attribute("data-page-selection") end
+      root = fn doc ->
+        doc |> LazyHTML.query("#t") |> LazyHTML.attribute("data-page-selection")
+      end
 
       none = selectable(%State{total: 3})
       assert root.(none) == ["none"]
@@ -470,7 +472,10 @@ defmodule PetalComponents.DataTableTest do
 
       all = selectable(%State{total: 74, selected: :all})
       assert all |> LazyHTML.query(".pc-data-table__select-all") |> Enum.count() == 0
-      assert LazyHTML.text(LazyHTML.query(all, ".pc-data-table__selection-count")) =~ "74 selected"
+
+      assert LazyHTML.text(LazyHTML.query(all, ".pc-data-table__selection-count")) =~
+               "74 selected"
+
       assert checked_count(all, ".pc-data-table__row-select") == 3
 
       # unchecking a row narrows :all to the page, so rows carry the page ids
@@ -486,7 +491,10 @@ defmodule PetalComponents.DataTableTest do
     end
 
     test "row_key keys rows by any function" do
-      assigns = %{rows: [%{sku: "A-1"}, %{sku: "B-2"}], state: %State{total: 2, selected: ["B-2"]}}
+      assigns = %{
+        rows: [%{sku: "A-1"}, %{sku: "B-2"}],
+        state: %State{total: 2, selected: ["B-2"]}
+      }
 
       html =
         rendered_to_string(~H"""

@@ -344,6 +344,7 @@ defmodule PetalComponents.DataTable.StateTest do
 
       assert State.put_search(all, "amy").selected == []
       assert State.put_filter(all, :name, :contains, "a").selected == []
+
       assert State.clear_filters(%{all | filters: [%{field: :name, op: :eq, value: "a"}]}).selected ==
                []
 
