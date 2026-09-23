@@ -29,10 +29,16 @@ defmodule Flop.ValidationTest do
 
     @derive {Flop.Schema,
              filterable: [],
-             sortable: [:name, :full_name, :thing_count],
+             sortable: [:name, :full_name, :thing_count, :name_length],
              adapter_opts: [
                compound_fields: [full_name: [:family_name, :given_name]],
-               alias_fields: [:thing_count]
+               alias_fields: [:thing_count],
+               custom_fields: [
+                 name_length: [
+                   field_dynamic: {__MODULE__, :name_length, []},
+                   ecto_type: :integer
+                 ]
+               ]
              ]}
 
     schema "things" do
@@ -764,12 +770,18 @@ defmodule Flop.ValidationTest do
       assert {:error, changeset} = validate(params, for: Thing)
 
       assert errors_on(changeset)[:order_by] == [
-               "cursor pagination is not supported for compound and alias fields"
+               "cursor pagination is not supported for compound, alias and custom fields"
              ]
     end
 
     test "rejects an alias field as cursor order field" do
       params = %{first: 2, after: @cursor, order_by: [:thing_count]}
+      assert {:error, changeset} = validate(params, for: Thing)
+      assert errors_on(changeset)[:order_by] != nil
+    end
+
+    test "rejects a custom field as cursor order field" do
+      params = %{first: 2, after: @cursor, order_by: [:name_length]}
       assert {:error, changeset} = validate(params, for: Thing)
       assert errors_on(changeset)[:order_by] != nil
     end
@@ -804,17 +816,17 @@ defmodule Flop.ValidationTest do
     end
 
     test "allows them for offset pagination" do
-      params = %{limit: 2, offset: 0, order_by: [:full_name, :thing_count]}
+      order_by = [:full_name, :thing_count, :name_length]
+      params = %{limit: 2, offset: 0, order_by: order_by}
 
-      assert {:ok, %Flop{order_by: [:full_name, :thing_count]}} =
-               validate(params, for: Thing)
+      assert {:ok, %Flop{order_by: ^order_by}} = validate(params, for: Thing)
     end
 
     test "allows them for page pagination" do
-      params = %{page: 1, page_size: 2, order_by: [:full_name, :thing_count]}
+      order_by = [:full_name, :thing_count, :name_length]
+      params = %{page: 1, page_size: 2, order_by: order_by}
 
-      assert {:ok, %Flop{order_by: [:full_name, :thing_count]}} =
-               validate(params, for: Thing)
+      assert {:ok, %Flop{order_by: ^order_by}} = validate(params, for: Thing)
     end
 
     test "allows normal fields for cursor pagination" do

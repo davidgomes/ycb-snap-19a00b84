@@ -3,6 +3,7 @@ defmodule MyApp.Owner do
   Defines an Ecto schema for testing.
   """
   use Ecto.Schema
+  import Ecto.Query
 
   alias MyApp.Pet
 
@@ -14,7 +15,7 @@ defmodule MyApp.Owner do
       :pet_mood_as_enum,
       :pet_mood_as_parameterized_type
     ],
-    sortable: [:name, :age],
+    sortable: [:name, :age, :age_difference],
     join_fields: [
       pet_age: [
         binding: :pets,
@@ -40,6 +41,12 @@ defmodule MyApp.Owner do
     ],
     compound_fields: [age_and_pet_age: [:age, :pet_age]],
     alias_fields: [:pet_count],
+    custom_fields: [
+      age_difference: [
+        field_dynamic: {__MODULE__, :difference_dynamic, [source: :age]},
+        ecto_type: :integer
+      ]
+    ],
     default_pagination_type: :page
   }
 
@@ -53,5 +60,11 @@ defmodule MyApp.Owner do
     field :extra, {:map, :string}
 
     has_many :pets, Pet
+  end
+
+  def difference_dynamic(opts) do
+    source = Keyword.fetch!(opts, :source)
+    value = Keyword.fetch!(opts, :value)
+    dynamic([o], fragment("abs(? - ?)", field(o, ^source), ^value))
   end
 end

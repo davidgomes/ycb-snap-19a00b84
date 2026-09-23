@@ -170,6 +170,52 @@ defmodule Flop.Adapters.Ecto.FlopTest do
              ) == Enum.reverse(expected)
     end
 
+    test "orders by custom fields" do
+      owners = Enum.map([1, 3, 6, 10, 15], &insert(:owner, age: &1))
+      opts = [for: Owner, extra_opts: [value: 5]]
+      expected = owners |> Enum.sort_by(&abs(&1.age - 5)) |> Enum.map(& &1.id)
+
+      flop = Flop.validate!(%{order_by: [:age_difference]}, opts)
+      assert Owner |> Flop.all(flop, opts) |> Enum.map(& &1.id) == expected
+
+      flop =
+        Flop.validate!(
+          %{order_by: [:age_difference], order_directions: [:desc]},
+          opts
+        )
+
+      assert Owner |> Flop.all(flop, opts) |> Enum.map(& &1.id) ==
+               Enum.reverse(expected)
+    end
+
+    test "orders by custom fields with nulls first or last" do
+      nil_owner = insert(:owner, age: nil)
+      owners = Enum.map([3, 6, 10], &insert(:owner, age: &1))
+      opts = [for: Owner, extra_opts: [value: 5]]
+      asc = owners |> Enum.sort_by(&abs(&1.age - 5)) |> Enum.map(& &1.id)
+      desc = Enum.reverse(asc)
+
+      for {direction, expected} <- [
+            asc_nulls_first: [nil_owner.id | asc],
+            asc_nulls_last: asc ++ [nil_owner.id],
+            desc_nulls_first: [nil_owner.id | desc],
+            desc_nulls_last: desc ++ [nil_owner.id]
+          ] do
+        flop = %Flop{order_by: [:age_difference], order_directions: [direction]}
+        assert Owner |> Flop.all(flop, opts) |> Enum.map(& &1.id) == expected
+      end
+    end
+
+    test "raises if custom field without field_dynamic function is used" do
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.query(Pet, %Flop{order_by: [:reverse_name]}, for: Pet)
+        end
+
+      assert error.message =~ "cannot order by custom field"
+      assert error.message =~ ":reverse_name"
+    end
+
     test "warns if query passed to Flop already included ordering" do
       query = from p in Pet, order_by: :species
 
@@ -279,6 +325,20 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       assert error.message =~ "operator :== is not supported for compound"
       assert error.message =~ ":full_name"
       assert error.message =~ ":like"
+    end
+
+    test "raises if custom field without filter function is used" do
+      flop = %Flop{
+        filters: [%Filter{field: :age_difference, op: :==, value: 1}]
+      }
+
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.filter(Owner, flop, for: Owner)
+        end
+
+      assert error.message =~ "cannot filter by custom field"
+      assert error.message =~ ":age_difference"
     end
 
     property "applies inequality filter" do
@@ -1977,6 +2037,22 @@ defmodule Flop.Adapters.Ecto.FlopTest do
 
       assert error.message =~
                "cursor pagination is not supported for alias fields"
+    end
+
+    test "raises if custom field is used" do
+      insert(:owner)
+      opts = [for: Owner, extra_opts: [value: 5]]
+      flop = %Flop{first: 1, order_by: [:age_difference, :id]}
+
+      assert {_, %Meta{end_cursor: end_cursor}} = Flop.run(Owner, flop, opts)
+
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.run(Owner, %{flop | after: end_cursor}, opts)
+        end
+
+      assert error.message =~
+               "cursor pagination is not supported for custom fields"
     end
 
     test "nil values for cursors are ignored when not using for option" do
