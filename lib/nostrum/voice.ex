@@ -51,6 +51,7 @@ defmodule Nostrum.Voice do
   alias Nostrum.Struct.VoiceWSState
   alias Nostrum.Util
   alias Nostrum.Voice.Audio
+  alias Nostrum.Voice.Crypto
   alias Nostrum.Voice.Opus
   alias Nostrum.Voice.Ports
   alias Nostrum.Voice.Session
@@ -686,6 +687,10 @@ defmodule Nostrum.Voice do
   To extract an opus packet from an RTP packet, see `extract_opus_packet/1`.
 
   This function will block until the specified number of packets is received.
+
+  When the voice channel is end-to-end encrypted, packets that can't be decrypted,
+  such as those from a user whose SSRC isn't known yet, are discarded, so fewer
+  than `num_packets` packets may be returned.
   """
   @doc since: "0.6.0"
   @spec listen(Guild.id(), pos_integer, raw_rtp :: false) :: [rtp_opus()] | {:error, String.t()}
@@ -696,15 +701,15 @@ defmodule Nostrum.Voice do
     if VoiceState.ready_for_rtp?(voice) do
       packets = Audio.get_unique_rtp_packets(voice, num_packets)
 
-      if raw_rtp do
-        Enum.map(packets, fn {header, payload} -> header <> payload end)
-      else
-        # credo:disable-for-next-line Credo.Check.Refactor.Nesting
-        Enum.map(packets, fn {header, payload} ->
-          <<_::16, seq::integer-16, time::integer-32, ssrc::integer-32>> = header
-          opus = Opus.strip_rtp_ext(payload)
-          {{seq, time, ssrc}, opus}
-        end)
+      # Fetched after receiving so it includes the speakers of the received packets
+      ssrc_map =
+        if voice.dave_session, do: Session.get_ws_state(voice.session_pid).ssrc_map, else: %{}
+
+      for {header, payload} <- packets,
+          <<_::16, seq::integer-16, time::integer-32, ssrc::integer-32>> = header,
+          opus = Opus.strip_rtp_ext(payload),
+          {:ok, opus} <- [Crypto.dave_decrypt(voice.dave_session, ssrc_map[ssrc], opus)] do
+        if raw_rtp, do: header <> opus, else: {{seq, time, ssrc}, opus}
       end
     else
       {:error, "Must be connected to voice channel to listen for incoming data."}

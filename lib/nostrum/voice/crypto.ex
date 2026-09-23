@@ -6,9 +6,14 @@ defmodule Nostrum.Voice.Crypto do
   - `Nostrum.Voice.Crypto.Aes`
   - `Nostrum.Voice.Crypto.Chacha`
   - `Nostrum.Voice.Crypto.Salsa`
+
+  When the voice gateway negotiates the DAVE protocol, opus frames are additionally
+  end-to-end encrypted with the `Dave` library before transport encryption is applied.
   """
 
+  alias Nostrum.Struct.User
   alias Nostrum.Struct.VoiceState
+  alias Nostrum.Struct.VoiceWSState
   alias Nostrum.Util
   alias Nostrum.Voice.Audio
   alias Nostrum.Voice.Crypto.Aes
@@ -50,6 +55,41 @@ defmodule Nostrum.Voice.Crypto do
     else
       Logger.debug("Configured voice encryption mode #{mode} unavailable. Using fallback.")
       @fallback_mode
+    end
+  end
+
+  @doc false
+  @spec active_dave_session(VoiceWSState.t()) :: Dave.session() | nil
+  def active_dave_session(%VoiceWSState{dave_protocol_version: version, dave_session: session})
+      when version > 0,
+      do: session
+
+  def active_dave_session(%VoiceWSState{}), do: nil
+
+  @doc false
+  @spec dave_encrypt(Dave.session() | nil, binary()) :: binary()
+  def dave_encrypt(nil, frame), do: frame
+
+  # Until we've joined the MLS group the session can't encrypt, so the frame
+  # is sent with transport encryption only
+  def dave_encrypt(session, frame) do
+    case Dave.encrypt(session, :audio, :opus, frame) do
+      :error -> frame
+      encrypted -> encrypted
+    end
+  end
+
+  @doc false
+  @spec dave_decrypt(Dave.session() | nil, User.id() | nil, binary()) :: {:ok, binary()} | :error
+  def dave_decrypt(nil, _user_id, frame), do: {:ok, frame}
+
+  # Frames are encrypted with per-sender keys, so the sender must be known to decrypt
+  def dave_decrypt(_session, nil, _frame), do: :error
+
+  def dave_decrypt(session, user_id, frame) do
+    case Dave.decrypt(session, user_id, :audio, frame) do
+      :error -> :error
+      decrypted -> {:ok, decrypted}
     end
   end
 

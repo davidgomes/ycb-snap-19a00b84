@@ -141,7 +141,7 @@ defmodule Nostrum.Voice.Audio do
             v.udp_socket,
             v.ip |> ip_to_tuple(),
             v.port,
-            Crypto.encrypt(v, f)
+            Crypto.encrypt(v, Crypto.dave_encrypt(v.dave_session, f))
           )
 
         %{

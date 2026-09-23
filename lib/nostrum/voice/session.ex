@@ -72,6 +72,7 @@ defmodule Nostrum.Voice.Session do
       guild_id: voice.guild_id,
       channel_id: voice.channel_id,
       ssrc_map: Map.new(),
+      connected_users: MapSet.new(),
       session: voice.session,
       token: voice.token,
       gateway: voice.gateway,
@@ -79,7 +80,10 @@ defmodule Nostrum.Voice.Session do
       stream: stream,
       last_heartbeat_ack: DateTime.utc_now(),
       heartbeat_ack: true,
-      bot_options: bot_options
+      bot_options: bot_options,
+      dave_protocol_version: 0,
+      dave_pending_transitions: Map.new(),
+      dave_downgraded: false
     }
 
     Logger.debug(fn -> "Voice Websocket connection up on worker #{inspect(worker)}" end)
@@ -104,19 +108,17 @@ defmodule Nostrum.Voice.Session do
   end
 
   def handle_info({:gun_ws, _worker, stream, {:text, frame}}, state) do
-    from_handle =
-      frame
-      |> Jason.decode!()
-      |> Event.handle(state)
+    frame
+    |> Jason.decode!()
+    |> handle_payload(stream, state)
+  end
 
-    case from_handle do
-      {new_state, reply} ->
-        :ok = :gun.ws_send(state.conn, stream, {:text, reply})
-        {:noreply, new_state}
+  # Binary messages from the voice gateway are a sequence number and opcode followed by the payload
+  def handle_info({:gun_ws, _worker, stream, {:binary, frame}}, state) do
+    <<seq::16, opcode::8, payload::binary>> = frame
 
-      new_state ->
-        {:noreply, new_state}
-    end
+    %{"seq" => seq, "op" => opcode, "d" => payload}
+    |> handle_payload(stream, state)
   end
 
   def handle_info({:gun_ws, _conn, _stream, :close}, state) do
@@ -162,8 +164,16 @@ defmodule Nostrum.Voice.Session do
         payload = Crypto.decrypt(state, data)
         <<_::16, seq::integer-16, time::integer-32, ssrc::integer-32>> = header
         opus = Opus.strip_rtp_ext(payload)
-        incoming_packet = Payload.voice_incoming_packet({{seq, time, ssrc}, opus})
-        Dispatch.handle(incoming_packet, state)
+        dave_session = Crypto.active_dave_session(state)
+
+        case Crypto.dave_decrypt(dave_session, Map.get(state.ssrc_map, ssrc), opus) do
+          {:ok, opus} ->
+            incoming_packet = Payload.voice_incoming_packet({{seq, time, ssrc}, opus})
+            Dispatch.handle(incoming_packet, state)
+
+          :error ->
+            Logger.debug(fn -> "Unable to decrypt E2EE voice packet from SSRC #{ssrc}" end)
+        end
     end
 
     {:noreply, state}
@@ -188,7 +198,7 @@ defmodule Nostrum.Voice.Session do
         :heartbeat
       ])
 
-    :ok = :gun.ws_send(state.conn, state.stream, {:text, Payload.heartbeat_payload(state)})
+    :ok = :gun.ws_send(state.conn, state.stream, Payload.heartbeat_payload(state))
 
     {:noreply,
      %{state | heartbeat_ref: ref, heartbeat_ack: false, last_heartbeat_send: DateTime.utc_now()}}
@@ -210,7 +220,7 @@ defmodule Nostrum.Voice.Session do
 
     Dispatch.handle(speaking_update, state)
 
-    :ok = :gun.ws_send(state.conn, state.stream, {:text, payload})
+    :ok = :gun.ws_send(state.conn, state.stream, payload)
     {:noreply, state}
   end
 
@@ -245,5 +255,19 @@ defmodule Nostrum.Voice.Session do
         _ -> Voice.restart_session(voice)
       end
     end)
+  end
+
+  defp handle_payload(payload, stream, state) do
+    case Event.handle(payload, state) do
+      {new_state, []} ->
+        {:noreply, new_state}
+
+      {new_state, frames} ->
+        :ok = :gun.ws_send(state.conn, stream, frames)
+        {:noreply, new_state}
+
+      new_state ->
+        {:noreply, new_state}
+    end
   end
 end

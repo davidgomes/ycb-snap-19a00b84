@@ -7,6 +7,7 @@ defmodule Nostrum.Struct.VoiceWSState do
     :guild_id,
     :channel_id,
     :ssrc_map,
+    :connected_users,
     :session,
     :token,
     :secret_key,
@@ -23,7 +24,11 @@ defmodule Nostrum.Struct.VoiceWSState do
     :heartbeat_ack,
     :heartbeat_interval,
     :heartbeat_ref,
-    :bot_options
+    :bot_options,
+    :dave_session,
+    :dave_protocol_version,
+    :dave_pending_transitions,
+    :dave_downgraded
   ]
 
   @typedoc "The guild id that this voice websocket state applies to"
@@ -41,6 +46,10 @@ defmodule Nostrum.Struct.VoiceWSState do
   """
   @typedoc since: "0.6.0"
   @type ssrc_map :: %{integer() => Nostrum.Struct.User.id()}
+
+  @typedoc "The ids of the other users connected to the voice channel"
+  @typedoc since: "0.11.0"
+  @type connected_users :: MapSet.t(Nostrum.Struct.User.id())
 
   @typedoc "The session id"
   @type session :: String.t()
@@ -97,10 +106,27 @@ defmodule Nostrum.Struct.VoiceWSState do
   @typedoc "Time ref for the heartbeat"
   @type heartbeat_ref :: :timer.tref() | nil
 
+  @typedoc "DAVE (end-to-end encryption) session, created once the voice gateway negotiates DAVE"
+  @typedoc since: "0.11.0"
+  @type dave_session :: Dave.session() | nil
+
+  @typedoc "DAVE protocol version currently in effect, `0` meaning transport encryption only"
+  @typedoc since: "0.11.0"
+  @type dave_protocol_version :: non_neg_integer()
+
+  @typedoc "Announced DAVE transitions awaiting execution, mapping transition id to protocol version"
+  @typedoc since: "0.11.0"
+  @type dave_pending_transitions :: %{non_neg_integer() => non_neg_integer()}
+
+  @typedoc "Whether the call was downgraded from DAVE to transport encryption only"
+  @typedoc since: "0.11.0"
+  @type dave_downgraded :: boolean()
+
   @type t :: %__MODULE__{
           guild_id: guild_id,
           channel_id: channel_id,
           ssrc_map: ssrc_map,
+          connected_users: connected_users,
           session: session,
           token: token,
           secret_key: secret_key,
@@ -117,6 +143,10 @@ defmodule Nostrum.Struct.VoiceWSState do
           heartbeat_ack: heartbeat_ack,
           heartbeat_interval: heartbeat_interval,
           heartbeat_ref: heartbeat_ref,
-          bot_options: Nostrum.Bot.bot_options()
+          bot_options: Nostrum.Bot.bot_options(),
+          dave_session: dave_session,
+          dave_protocol_version: dave_protocol_version,
+          dave_pending_transitions: dave_pending_transitions,
+          dave_downgraded: dave_downgraded
         }
 end
