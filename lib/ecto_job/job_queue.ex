@@ -283,13 +283,26 @@ defmodule EctoJob.JobQueue do
   """
   @spec reserve_available_jobs(repo, schema, integer, DateTime.t(), integer) :: {integer, [job]}
   def reserve_available_jobs(repo, schema, demand, now = %DateTime{}, timeout_ms) do
+    updates = [state: "RESERVED", expires: reservation_expiry(now, timeout_ms), updated_at: now]
+    do_reserve_available_jobs(repo.__adapter__(), repo, schema, demand, updates)
+  end
+
+  defp do_reserve_available_jobs(Ecto.Adapters.Postgres, repo, schema, demand, updates) do
     schema
     |> Query.with_cte("available_jobs", as: ^available_jobs(schema, demand))
     |> Query.join(:inner, [job], a in "available_jobs", on: job.id == a.id)
     |> Query.select([job], job)
-    |> repo.update_all(
-      set: [state: "RESERVED", expires: reservation_expiry(now, timeout_ms), updated_at: now]
-    )
+    |> repo.update_all(set: updates)
+  end
+
+  defp do_reserve_available_jobs(_adapter, repo, schema, demand, updates) do
+    {:ok, result} =
+      repo.transaction(fn ->
+        ids = schema |> available_jobs(demand) |> repo.all() |> Enum.map(& &1.id)
+        update_jobs_by_ids(repo, schema, ids, updates)
+      end)
+
+    result
   end
 
   @doc """
@@ -336,21 +349,20 @@ defmodule EctoJob.JobQueue do
           {:ok, job} | {:error, :expired}
   def update_job_in_progress(repo, job = %schema{}, now, timeout_ms) do
     {count, results} =
-      repo.update_all(
+      update_all_returning(
+        repo,
+        schema,
         Query.from(
           j in schema,
           where: j.id == ^job.id,
           where: j.attempt == ^job.attempt,
           where: j.state == "RESERVED",
-          where: j.expires >= ^now,
-          select: j
+          where: j.expires >= ^now
         ),
-        set: [
-          attempt: job.attempt + 1,
-          state: "IN_PROGRESS",
-          expires: increase_time(now, job.attempt + 1, timeout_ms),
-          updated_at: now
-        ]
+        attempt: job.attempt + 1,
+        state: "IN_PROGRESS",
+        expires: increase_time(now, job.attempt + 1, timeout_ms),
+        updated_at: now
       )
 
     case {count, results} do
@@ -376,15 +388,16 @@ defmodule EctoJob.JobQueue do
       end
 
     {count, results} =
-      repo.update_all(
+      update_all_returning(
+        repo,
+        schema,
         Query.from(
           j in schema,
           where: j.id == ^job.id,
           where: j.state == "IN_PROGRESS",
-          where: j.attempt == ^job.attempt,
-          select: j
+          where: j.attempt == ^job.attempt
         ),
-        set: updates
+        updates
       )
 
     case {count, results} do
@@ -426,6 +439,51 @@ defmodule EctoJob.JobQueue do
     |> Changeset.optimistic_lock(:attempt)
   end
 
+  # Runs `update_all` and returns the updated jobs.
+  # Adapters without `UPDATE ... RETURNING` support (MySQL) lock the matching rows,
+  # update them by id and read them back within a single transaction.
+  @spec update_all_returning(repo, schema, Ecto.Query.t(), Keyword.t()) :: {integer, [job]}
+  defp update_all_returning(repo, schema, query, updates) do
+    case repo.__adapter__() do
+      Ecto.Adapters.Postgres ->
+        query
+        |> Query.select([j], j)
+        |> repo.update_all(set: updates)
+
+      _ ->
+        {:ok, result} =
+          repo.transaction(fn ->
+            ids =
+              query
+              |> Query.select([j], j.id)
+              |> Query.lock("FOR UPDATE")
+              |> repo.all()
+
+            update_jobs_by_ids(repo, schema, ids, updates)
+          end)
+
+        result
+    end
+  end
+
+  @spec update_jobs_by_ids(repo, schema, [integer], Keyword.t()) :: {integer, [job]}
+  defp update_jobs_by_ids(_repo, _schema, [], _updates), do: {0, []}
+
+  defp update_jobs_by_ids(repo, schema, ids, updates) do
+    {count, _} = repo.update_all(Query.from(j in schema, where: j.id in ^ids), set: updates)
+
+    jobs =
+      repo.all(
+        Query.from(
+          j in schema,
+          where: j.id in ^ids,
+          order_by: [asc: j.priority, asc: j.schedule, asc: j.id]
+        )
+      )
+
+    {count, jobs}
+  end
+
   defp advance_seconds(seconds, start_time) do
     start_time
     |> DateTime.to_unix()
@@ -454,8 +512,11 @@ defmodule EctoJob.JobQueue do
 
   @spec do_notify_failed(repo(), job(), binary()) :: :ok
   defp do_notify_failed(repo, _job = %queue{notify: payload}, event) do
-    topic = queue.__schema__(:source) <> "." <> event
-    repo.query("SELECT pg_notify($1, $2)", [topic, payload])
+    if repo.__adapter__() == Ecto.Adapters.Postgres do
+      topic = queue.__schema__(:source) <> "." <> event
+      repo.query("SELECT pg_notify($1, $2)", [topic, payload])
+    end
+
     :ok
   end
 end
