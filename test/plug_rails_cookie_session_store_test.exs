@@ -17,12 +17,14 @@ defmodule PlugRailsCookieSessionStoreTest do
   @encrypted_opts Plug.Session.init(@default_opts)
 
   defmodule CustomSerializer do
-    def encode(%{foo: "bar"}), do: {:ok, "encoded session"}
+    def encode(%{"foo" => "bar"}), do: {:ok, "encoded session"}
+    def encode(%{"foo" => :bar}), do: {:ok, "encoded session with atom value"}
     def encode(%{foo: :bar}), do: {:ok, "another encoded session"}
     def encode(%{}), do: {:ok, ""}
     def encode(_), do: :error
 
-    def decode("encoded session"), do: {:ok, %{foo: "bar"}}
+    def decode("encoded session"), do: {:ok, %{"foo" => "bar"}}
+    def decode("encoded session with atom value"), do: {:ok, %{"foo" => :bar}}
     def decode("another encoded session"), do: {:ok, %{foo: :bar}}
     def decode(nil), do: {:ok, nil}
     def decode(_), do: :error
@@ -179,6 +181,35 @@ defmodule PlugRailsCookieSessionStoreTest do
     cookie = CookieStore.put(conn, nil, %{foo: :bar}, @custom_serializer_opts.store_config)
     assert is_binary(cookie)
     assert CookieStore.get(conn, cookie, @custom_serializer_opts.store_config) == {nil, %{foo: :bar}}
+  end
+
+  ## Rails compatibility
+
+  defmodule RailsJSONSerializer do
+    def encode(_), do: :error
+
+    def decode(~s({"session_id":"abc123","foo":"bar"})),
+      do: {:ok, %{"session_id" => "abc123", "foo" => "bar"}}
+    def decode(_), do: :error
+  end
+
+  # Encrypted cookie as produced by Rails 4 and Rails 5 (< 5.2, or 5.2 with
+  # use_authenticated_cookie_encryption = false) for the session
+  # {"session_id" => "abc123", "foo" => "bar"} with a JSON cookie serializer.
+  @rails_cookie "VXJUZTJEZ3FvVmxyeHRucUx2THBuaGdWRmhwaUgwUVZuZ1RISUp4Z0lFZ0xMaXFHdDMxa1dKdjhSR2RYaVhUNC0tQUFFQ0F3UUZCZ2NJQ1FvTERBME9Edz09--065f228486bf7d9d4f647a44554398420792c75d"
+
+  test "decrypts session cookies created by Rails 4 and Rails 5" do
+    opts = [store: CookieStore,
+            key: "_rails_app_session",
+            encryption_salt: "encrypted cookie",
+            signing_salt: "signed encrypted cookie",
+            key_iterations: 1000,
+            key_length: 64,
+            key_digest: :sha,
+            serializer: RailsJSONSerializer]
+    conn = %{secret_key_base: @secret}
+    assert CookieStore.get(conn, @rails_cookie, CookieStore.init(opts)) ==
+      {nil, %{"session_id" => "abc123", "foo" => "bar"}}
   end
 
   test "gets and sets custom serialized session cookie" do
