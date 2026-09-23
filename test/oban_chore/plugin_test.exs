@@ -22,18 +22,45 @@ defmodule ObanChore.PluginTest do
   end
 
   test "can limit discovery to a specific otp_app" do
-    # :oban_chore app should have some modules.
-    # We don't necessarily expect TestChore to be found because it's defined in the test
-    # and not in the .app modules list, but we can verify the GenServer starts and runs discovery.
+    # Chores in test/support are compiled into the :oban_chore app, while TestChore is
+    # defined in this test file and isn't part of the app's modules list.
     {:ok, pid} = ObanChore.Plugin.start_link(otp_app: :oban_chore, pubsub_server: TestPubSub)
 
     # Wait for handle_continue to finish
     _ = :sys.get_state(pid)
 
-    chores = ObanChore.Plugin.get_chores()
-    assert is_list(chores)
+    modules = Enum.map(ObanChore.Plugin.get_chores(), & &1.module)
+    assert ObanChore.Test.Chores.Greeter in modules
+    assert ObanChore.Test.Chores.Parked in modules
+    refute TestChore in modules
 
     GenServer.stop(pid)
+  end
+
+  test "uses the :chores list instead of discovering chores" do
+    {:ok, pid} = ObanChore.Plugin.start_link(chores: [TestChore], pubsub_server: TestPubSub)
+
+    # Wait for handle_continue to finish
+    _ = :sys.get_state(pid)
+
+    assert [%{module: TestChore, name: "Plugin Test Chore", unique: false}] =
+             ObanChore.Plugin.get_chores()
+
+    GenServer.stop(pid)
+  end
+
+  test "validate/1 checks the :chores option" do
+    assert ObanChore.Plugin.validate(chores: [TestChore], pubsub_server: TestPubSub) == :ok
+    assert ObanChore.Plugin.validate(chores: [], pubsub_server: TestPubSub) == :ok
+
+    assert {:error, "chores must be a list of modules"} =
+             ObanChore.Plugin.validate(chores: TestChore, pubsub_server: TestPubSub)
+
+    assert {:error, message} =
+             ObanChore.Plugin.validate(chores: [TestChore, String], pubsub_server: TestPubSub)
+
+    assert message =~ "String"
+    refute message =~ "TestChore"
   end
 
   test "validate/1 checks for correct format" do
