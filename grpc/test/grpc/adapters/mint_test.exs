@@ -52,9 +52,7 @@ defmodule GRPC.Client.Adapters.MintTest do
       channel = build(:channel, adapter: Mint, port: port, host: "localhost")
 
       assert {:ok, result} = Mint.connect(channel, [])
-      # wait for settings to be pushed
-      Process.sleep(50)
-      state = :sys.get_state(result.adapter_payload.conn_pid)
+      state = await_settings_ack(result.adapter_payload.conn_pid)
 
       assert %{initial_window_size: 8_000_000, max_frame_size: 8_000_000} =
                Map.get(state.conn, :client_settings)
@@ -71,9 +69,7 @@ defmodule GRPC.Client.Adapters.MintTest do
                  ]
                )
 
-      # wait for settings to be pushed
-      Process.sleep(50)
-      state = :sys.get_state(result.adapter_payload.conn_pid)
+      state = await_settings_ack(result.adapter_payload.conn_pid)
 
       assert %{initial_window_size: 50_000, max_frame_size: 50_000} =
                Map.get(state.conn, :client_settings)
@@ -152,5 +148,13 @@ defmodule GRPC.Client.Adapters.MintTest do
 
       assert state.retry == 0
     end
+  end
+
+  # Mint only applies client settings once the server acknowledges them.
+  defp await_settings_ack(conn_pid) do
+    wait_until(fn ->
+      state = :sys.get_state(conn_pid)
+      :queue.is_empty(state.conn.client_settings_queue) && state
+    end)
   end
 end

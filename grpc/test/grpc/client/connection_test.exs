@@ -346,8 +346,8 @@ defmodule GRPC.Client.ConnectionTest do
           interceptors: [CountingInterceptor]
         )
 
-      assert_receive :interceptor_init
-      refute_receive :interceptor_init, 100
+      assert_received :interceptor_init
+      refute_received :interceptor_init
 
       Connection.disconnect(channel)
     end
