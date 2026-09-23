@@ -176,6 +176,18 @@ defmodule SpiderMan do
     end)
   end
 
+  @doc "fetch spider's throughput infos of each component, easy to show on livebook"
+  @spec throughput_stats(spider) :: [map]
+  def throughput_stats(spider) do
+    spider |> Engine.get_state() |> Map.fetch!(:stats_tid) |> SpiderMan.Stats.get_stats()
+  end
+
+  @doc "fetch spider's throughput infos as a formatted string"
+  @spec format_throughput_stats(spider) :: String.t()
+  def format_throughput_stats(spider) do
+    spider |> Engine.get_state() |> Map.fetch!(:stats_tid) |> SpiderMan.Stats.format_stats()
+  end
+
   @spec components :: [component]
   def components, do: [:downloader, :spider, :item_processor]
 
