@@ -192,6 +192,13 @@ defmodule ObanChoreWeb.DashboardLive do
     {:noreply, assign(socket, selected_tab: {:job, id})}
   end
 
+  # Flash set inside a LiveComponent is only copied to the parent on navigation,
+  # so ChoreComponent forwards its messages here.
+  @impl true
+  def handle_info({:put_flash, kind, message}, socket) do
+    {:noreply, put_flash(socket, kind, message)}
+  end
+
   @impl true
   def handle_info({:oban_chore_count, worker_module, count}, socket) do
     new_counts = Map.put(socket.assigns.counts, worker_module, count)
