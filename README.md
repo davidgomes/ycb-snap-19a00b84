@@ -185,6 +185,22 @@ Once scheduled, the dashboard displays a **live remaining time countdown** (e.g.
 
 ---
 
+## 📜 Execution History
+
+Each chore has a **History** tab listing its 20 most recent finished executions (completed, cancelled, or discarded), newest first. For every job it shows the final state, the arguments it ran with, the attempts used, when it finished, and the last error for cancelled or discarded jobs. The list refreshes automatically while the tab is open.
+
+The same data is available programmatically:
+
+```elixir
+ObanChore.list_job_history(MyApp.Chores.UserBackfill)
+```
+
+> [!NOTE]
+> Since logs are ephemeral, they are not part of the history.
+
+
+---
+
 ## 🛠️ Field Configuration
 
 ### Supported Types
@@ -251,6 +267,7 @@ end
 * 🛠️ **Zero-Boilerplate Internal Tooling:** Stop building custom HTML forms and controllers for one-off admin tasks. Define your argument schema once in the backend, and let ObanChore generate the UI.
 * 📡 **Live Execution Streaming:** Leveraging Phoenix PubSub and Telemetry, ObanChore streams logs and status updates from the background process directly back to the user's browser in real-time.
 * 🕒 **Future Scheduling & Real-time Countdown:** Delay chore runs using convenient time presets or custom minute inputs, accompanied by a dynamic real-time countdown.
+* 📜 **Execution History:** Review the recent finished runs of each chore, with their arguments, final state, and last error.
 * 🔐 **Operational Safety:** 
     * **Idempotency Check:** Automatically detects if a job with the same arguments is already running.
     * **Unique Execution Toggle:** Manually enforce single-job execution via the dashboard UI. (you can override this from the job definition)
