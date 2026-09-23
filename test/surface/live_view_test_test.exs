@@ -34,7 +34,10 @@ defmodule Surface.LiveViewTestTest.PassingCatalogueAllAndExceptTests do
 end
 
 defmodule Surface.LiveViewTestTest do
-  use Surface.ConnCase, async: true
+  # Defining ExUnit modules inside a running test is rejected once the async
+  # suite has started (Elixir >= 1.17). Keep this file synchronous so the
+  # catalogue_test warning examples can still be compiled on the fly.
+  use Surface.ConnCase, async: false
 
   describe "catalogue_test" do
     test "passing a module (subject)" do
