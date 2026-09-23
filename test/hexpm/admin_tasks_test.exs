@@ -112,11 +112,11 @@ defmodule Hexpm.AdminTasksTest do
       assert :ok = AdminTasks.remove_user(user.username, reason: "Publishing spam packages.")
 
       assert_email_sent(fn email ->
+        refute email.text_body =~ "have also been removed"
         assert email.to == [{user.username, User.email(user, :primary)}]
         assert email.subject == "Hex.pm - Your account has been removed"
         assert email.text_body =~ "Publishing spam packages."
         assert email.html_body =~ "Publishing spam packages."
-        refute email.text_body =~ "have also been removed"
       end)
     end
 
