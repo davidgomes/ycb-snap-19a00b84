@@ -294,6 +294,123 @@ defmodule PetalComponents.DataTable.StateTest do
     end
   end
 
+  describe "selection" do
+    test "toggle_selected/3 adds and removes ids as strings, in pick order" do
+      state =
+        %State{}
+        |> State.toggle_selected(3)
+        |> State.toggle_selected("7")
+        |> State.toggle_selected(1)
+
+      assert state.selected == ["3", "7", "1"]
+      assert State.selected?(state, 3)
+      assert State.selected?(state, "7")
+      refute State.selected?(state, 2)
+      assert State.toggle_selected(state, "7").selected == ["3", "1"]
+    end
+
+    test "toggle_page/2 selects the page, then deselects it once fully picked" do
+      state = %State{selected: ["9", "1"]}
+
+      picked = State.toggle_page(state, ["1", "2", "3"])
+      assert picked.selected == ["9", "1", "2", "3"]
+
+      # every page id selected: the header click clears the page, and only
+      # the page - another page's pick survives
+      assert State.toggle_page(picked, ["1", "2", "3"]).selected == ["9"]
+    end
+
+    test "select_all/1 needs a known, non-zero total" do
+      assert State.select_all(%State{total: 74}).selected == :all
+      assert State.select_all(%State{total: nil}).selected == []
+      assert State.select_all(%State{total: 0}).selected == []
+    end
+
+    test "under :all, a row uncheck narrows to the rest of the page and the header clears" do
+      state = %State{total: 74, selected: :all}
+
+      assert State.selected?(state, "anything")
+      assert State.toggle_selected(state, "2", ["1", "2", "3"]).selected == ["1", "3"]
+      assert State.toggle_page(state, ["1", "2", "3"]).selected == []
+    end
+
+    test "selection_count/1 counts ids, or the total under :all" do
+      assert State.selection_count(%State{selected: ["1", "2"]}) == 2
+      assert State.selection_count(%State{total: 74, selected: :all}) == 74
+    end
+
+    test "a query change drops :all; ids, sorts and pages keep the selection" do
+      all = %State{total: 74, selected: :all}
+
+      assert State.put_search(all, "amy").selected == []
+      assert State.put_filter(all, :name, :contains, "a").selected == []
+      assert State.clear_filters(%{all | filters: [%{field: :name, op: :eq, value: "a"}]}).selected ==
+               []
+
+      # an unchanged query is no requery
+      assert State.put_search(%{all | search: "amy"}, " amy ").selected == :all
+      assert State.clear_filters(all).selected == :all
+      assert State.toggle_sort(all, :name).selected == :all
+
+      ids = %State{selected: ["1"]}
+      assert State.put_search(ids, "amy").selected == ["1"]
+      assert State.put_filter(ids, :name, :contains, "a").selected == ["1"]
+    end
+
+    test "handle_op/3 speaks the selection grammar" do
+      state = %State{total: 74}
+
+      selected = State.handle_op(state, %{"op" => "select", "id" => "4"}, @opts)
+      assert selected.selected == ["4"]
+
+      page = State.handle_op(selected, %{"op" => "select_page", "ids" => ["4", "5"]}, @opts)
+      assert page.selected == ["4", "5"]
+
+      all = State.handle_op(page, %{"op" => "select_all"}, @opts)
+      assert all.selected == :all
+
+      narrowed =
+        State.handle_op(all, %{"op" => "select", "id" => "5", "ids" => ["4", "5"]}, @opts)
+
+      assert narrowed.selected == ["4"]
+      assert State.handle_op(narrowed, %{"op" => "clear_selection"}, @opts).selected == []
+    end
+
+    test "hostile id payloads are dropped, never crash" do
+      state = %State{selected: ["1"]}
+
+      assert State.handle_op(state, %{"op" => "select", "id" => %{"x" => 1}}, @opts) == state
+      assert State.handle_op(state, %{"op" => "select", "id" => ["1", "2"]}, @opts) == state
+      assert State.handle_op(state, %{"op" => "select", "id" => ""}, @opts) == state
+
+      page =
+        State.handle_op(
+          state,
+          %{"op" => "select_page", "ids" => ["2", nil, %{}, ["3"], 4, "2"]},
+          @opts
+        )
+
+      assert page.selected == ["1", "2", "4"]
+    end
+
+    test "selection never round-trips through params" do
+      assert State.to_params(%State{selected: ["1"]}) == %{}
+      assert State.from_params(%{"selected" => ["1"]}, fields: @fields).selected == []
+    end
+
+    test "carry_selection/2 keeps ids always and :all only under the same query" do
+      fresh = State.from_params(%{"page" => "2"}, fields: @fields)
+
+      assert State.carry_selection(fresh, nil) == fresh
+      assert State.carry_selection(fresh, %State{selected: ["1"]}).selected == ["1"]
+      assert State.carry_selection(fresh, %State{selected: :all}).selected == :all
+
+      searched = State.from_params(%{"search" => "amy"}, fields: @fields)
+      assert State.carry_selection(searched, %State{selected: :all}).selected == []
+      assert State.carry_selection(searched, %State{selected: ["1"]}).selected == ["1"]
+    end
+  end
+
   describe "total_pages/1" do
     test "nil total means unknown" do
       assert State.total_pages(%State{total: nil}) == nil

@@ -264,6 +264,46 @@ describe("PetalDataTable", () => {
     expect(wrap.style.display).toBe("none");
   });
 
+  it("mirrors the page selection onto the header checkbox's indeterminate", () => {
+    const el = document.createElement("div");
+    el.dataset.pageSelection = "some";
+    el.innerHTML = `
+      <table><thead><tr><th>
+        <input type="checkbox" data-pc-dt-select-page />
+      </th></tr></thead></table>
+    `;
+    document.body.appendChild(el);
+    const hook = Object.create(hooks.PetalDataTable);
+    hook.el = el;
+    hook.mounted();
+    mounted.push(hook);
+
+    const box = el.querySelector("[data-pc-dt-select-page]");
+    expect(box.indeterminate).toBe(true);
+
+    // a click clears indeterminate natively; the server's next verdict
+    // arrives as a root patch, and updated() re-syncs from it
+    el.dataset.pageSelection = "all";
+    box.checked = true;
+    hook.updated();
+    expect(box.indeterminate).toBe(false);
+    expect(box.checked).toBe(true);
+
+    el.dataset.pageSelection = "some";
+    hook.updated();
+    expect(box.indeterminate).toBe(true);
+
+    el.dataset.pageSelection = "none";
+    hook.updated();
+    expect(box.indeterminate).toBe(false);
+  });
+
+  it("updated() is a no-op without a selectable header", () => {
+    const { hook, el } = mount({ navTemplate: "/orders?search=:term" });
+    expect(() => hook.updated()).not.toThrow();
+    expect(el.querySelector("[data-pc-dt-select-page]")).toBeNull();
+  });
+
   it("destroyed cancels a pending search patch", () => {
     const { hook, el, patched } = mount({
       navTemplate: "/orders?search=:term",
