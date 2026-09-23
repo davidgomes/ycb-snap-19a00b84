@@ -720,6 +720,19 @@
         "difficulty": 1
       },
       {
+        "slug": "line-up",
+        "name": "Line Up",
+        "uuid": "a9799b62-cc1b-4270-a63d-a57ed26c0180",
+        "practices": [],
+        "prerequisites": [
+          "strings",
+          "integers",
+          "guards",
+          "multiple-clause-functions"
+        ],
+        "difficulty": 1
+      },
+      {
         "slug": "two-fer",
         "name": "Two Fer",
         "uuid": "6a130540-1b84-4147-8e6f-776dbf750489",
