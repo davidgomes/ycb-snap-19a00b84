@@ -146,6 +146,83 @@ test("popstate", async ({ page }) => {
   expect(networkEvents).toEqual([]);
 });
 
+test("live navigation can be cancelled with phx:before-navigate", async ({
+  page,
+}) => {
+  await page.goto("/navigation/a");
+  await syncLV(page);
+  await page.evaluate(() => {
+    window.beforeNavigateEvents = [];
+    window.cancelNavigation = true;
+    window.addEventListener("phx:before-navigate", (e) => {
+      window.beforeNavigateEvents.push(e.detail);
+      if (window.cancelNavigation) {
+        e.preventDefault();
+      }
+    });
+  });
+  const length = await page.evaluate(() => window.history.length);
+  networkEvents = [];
+
+  await page.getByRole("link", { name: "Patch this LiveView" }).click();
+  await page.getByRole("link", { name: "LiveView B" }).click();
+  await syncLV(page);
+  await expect(page).toHaveURL("/navigation/a");
+  await expect(
+    page.getByRole("heading", { name: "This is page A" }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => window.history.length)).toEqual(length);
+  expect(await page.evaluate(() => window.beforeNavigateEvents)).toEqual([
+    {
+      href: expect.stringContaining("/navigation/a?param="),
+      patch: true,
+      pop: false,
+      direction: "forward",
+    },
+    {
+      href: "http://localhost:4004/navigation/b",
+      patch: false,
+      pop: false,
+      direction: "forward",
+    },
+  ]);
+
+  await page.evaluate(() => (window.cancelNavigation = false));
+  await page.getByRole("link", { name: "LiveView B" }).click();
+  await syncLV(page);
+  await expect(page).toHaveURL("/navigation/b");
+
+  // cancelling a back navigation restores the current history entry
+  await page.evaluate(() => {
+    window.beforeNavigateEvents = [];
+    window.cancelNavigation = true;
+  });
+  await page.goBack();
+  await expect(page).toHaveURL("/navigation/b");
+  await syncLV(page);
+  await expect(
+    page.getByRole("heading", { name: "This is page B" }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => window.beforeNavigateEvents)).toEqual([
+    {
+      href: "http://localhost:4004/navigation/a",
+      patch: false,
+      pop: true,
+      direction: "backward",
+    },
+  ]);
+
+  await page.evaluate(() => (window.cancelNavigation = false));
+  await page.goBack();
+  await syncLV(page);
+  await expect(page).toHaveURL("/navigation/a");
+  await expect(
+    page.getByRole("heading", { name: "This is page A" }),
+  ).toBeVisible();
+
+  expect(networkEvents).toEqual([]);
+});
+
 test("patch with replace replaces history", async ({ page }) => {
   await page.goto("/navigation/a");
   await syncLV(page);

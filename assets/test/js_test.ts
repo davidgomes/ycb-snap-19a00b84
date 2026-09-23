@@ -241,6 +241,66 @@ describe("JS", () => {
       view.liveSocket.historyRedirect = originalHistoryRedirect;
       view.liveSocket.pushHistoryPatch = originalPushHistoryPatch;
     });
+
+    test("navigate and patch can be cancelled via phx:before-navigate", () => {
+      const originalHistoryRedirect = view.liveSocket.historyRedirect;
+      const originalPushHistoryPatch = view.liveSocket.pushHistoryPatch;
+      view.liveSocket.historyRedirect = jest.fn();
+      view.liveSocket.pushHistoryPatch = jest.fn();
+      const details: any[] = [];
+      const cancel = (e) => {
+        details.push(e.detail);
+        e.preventDefault();
+      };
+      window.addEventListener("phx:before-navigate", cancel);
+
+      js.navigate("/navigate-url");
+      js.patch("/patch-url");
+
+      window.removeEventListener("phx:before-navigate", cancel);
+      expect(view.liveSocket.historyRedirect).not.toHaveBeenCalled();
+      expect(view.liveSocket.pushHistoryPatch).not.toHaveBeenCalled();
+      expect(details).toEqual([
+        {
+          href: "/navigate-url",
+          patch: false,
+          pop: false,
+          direction: "forward",
+        },
+        { href: "/patch-url", patch: true, pop: false, direction: "forward" },
+      ]);
+
+      view.liveSocket.historyRedirect = originalHistoryRedirect;
+      view.liveSocket.pushHistoryPatch = originalPushHistoryPatch;
+    });
+  });
+
+  describe("exec_navigate and exec_patch", () => {
+    test("can be cancelled via phx:before-navigate", () => {
+      const view = setupView(`
+      <a id="nav" phx-click='[["navigate", {"href": "/navigate-url"}]]'></a>
+      <a id="patch" phx-click='[["patch", {"href": "/patch-url"}]]'></a>
+      `);
+      const nav = document.querySelector("#nav")!;
+      const patch = document.querySelector("#patch")!;
+      view.liveSocket.historyRedirect = jest.fn();
+      view.liveSocket.pushHistoryPatch = jest.fn();
+      const cancel = (e) => e.preventDefault();
+
+      window.addEventListener("phx:before-navigate", cancel);
+      JS.exec(event, "click", nav.getAttribute("phx-click"), view, nav);
+      JS.exec(event, "click", patch.getAttribute("phx-click"), view, patch);
+      window.removeEventListener("phx:before-navigate", cancel);
+
+      expect(view.liveSocket.historyRedirect).not.toHaveBeenCalled();
+      expect(view.liveSocket.pushHistoryPatch).not.toHaveBeenCalled();
+
+      JS.exec(event, "click", nav.getAttribute("phx-click"), view, nav);
+      JS.exec(event, "click", patch.getAttribute("phx-click"), view, patch);
+
+      expect(view.liveSocket.historyRedirect).toHaveBeenCalledTimes(1);
+      expect(view.liveSocket.pushHistoryPatch).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("exec_toggle", () => {
