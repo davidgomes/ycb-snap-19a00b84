@@ -10,8 +10,232 @@ defmodule PetalComponents.DataTableTest do
     %{name: "Bea", email: "bea@x.com", amount: 40}
   ]
 
+  @id_rows [
+    %{id: 1, name: "Amy"},
+    %{id: 2, name: "Bea"}
+  ]
+
   defp base(assigns \\ %{}) do
     Map.merge(%{rows: @rows, state: %State{total: 74}, path: "/orders"}, assigns)
+  end
+
+  defp query(html, selector), do: html |> parse_html() |> LazyHTML.query(selector)
+
+  defp attrs(html, selector, name), do: html |> query(selector) |> LazyHTML.attribute(name)
+
+  # JS.push commands render as JSON - decode each to its event + value
+  defp pushes(html, selector) do
+    html
+    |> attrs(selector, "phx-click")
+    |> Enum.map(fn js ->
+      [["push", push]] = Jason.decode!(js)
+      Map.take(push, ["event", "value"])
+    end)
+  end
+
+  defp select_page_box(html), do: query(html, "th input[data-pc-dt-select-page]")
+
+  describe "selectable" do
+    test "the header checkbox is tri-state for the visible page" do
+      assigns = base(%{rows: @id_rows})
+
+      render = fn selected ->
+        assigns = Map.put(assigns, :state, %State{total: 2, selected: MapSet.new(selected)})
+
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+      end
+
+      none = render.([]) |> select_page_box()
+      assert LazyHTML.attribute(none, "checked") == []
+      assert LazyHTML.attribute(none, "data-indeterminate") == []
+
+      # a pick on another page doesn't reach this page's header
+      assert render.([99]) |> select_page_box() |> LazyHTML.attribute("data-indeterminate") == []
+
+      some = render.([2]) |> select_page_box()
+      assert LazyHTML.attribute(some, "checked") == []
+      assert [_] = LazyHTML.attribute(some, "data-indeterminate")
+
+      all = render.([1, 2]) |> select_page_box()
+      assert [_] = LazyHTML.attribute(all, "checked")
+      assert LazyHTML.attribute(all, "data-indeterminate") == []
+    end
+
+    test "row checkboxes reflect the selection and push typed ids through on_change" do
+      assigns = base(%{rows: @id_rows, state: %State{total: 2, selected: MapSet.new([1])}})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert html =~ ~s(phx-hook="PetalDataTable")
+      refute html =~ "data-nav-template"
+
+      boxes = query(html, "td input.pc-data-table__select-row")
+      assert Enum.count(boxes) == 2
+      assert html |> query("td input.pc-data-table__select-row[checked]") |> Enum.count() == 1
+
+      assert pushes(html, "td input.pc-data-table__select-row") == [
+               %{"event" => "table", "value" => %{"op" => "select", "id" => 1}},
+               %{"event" => "table", "value" => %{"op" => "select", "id" => 2}}
+             ]
+
+      assert pushes(html, "th input[data-pc-dt-select-page]") == [
+               %{"event" => "table", "value" => %{"op" => "select_page", "ids" => [1, 2]}}
+             ]
+    end
+
+    test "the toolbar morphs into the selection bar while rows are selected" do
+      assigns = base(%{rows: @id_rows, state: %State{total: 2}})
+
+      resting =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable searchable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+          <:bulk_action :let={ids}><button type="button">Delete {length(ids)}</button></:bulk_action>
+        </.data_table>
+        """)
+
+      assert attrs(resting, ".pc-data-table__toolbar--selectable", "hidden") == []
+      refute resting =~ "pc-data-table__selection"
+      refute resting =~ "Delete"
+
+      assigns = base(%{rows: @id_rows, state: %State{total: 2, selected: MapSet.new([1, 2])}})
+
+      selecting =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable searchable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+          <:bulk_action :let={ids}><button type="button">Delete {length(ids)}</button></:bulk_action>
+        </.data_table>
+        """)
+
+      # the controls stay in the DOM, hidden - the search term survives the morph
+      assert [_] = attrs(selecting, ".pc-data-table__toolbar--selectable", "hidden")
+      assert selecting =~ ~s(name="term")
+
+      bar = query(selecting, ".pc-data-table__selection")
+      assert LazyHTML.text(query(bar, ".pc-data-table__selection-count")) == "2 selected"
+      assert LazyHTML.text(query(bar, ".pc-data-table__bulk-actions")) =~ "Delete 2"
+
+      assert attrs(bar, ".pc-data-table__selection-clear", "phx-value-op") == ["clear_selection"]
+      assert attrs(bar, ".pc-data-table__selection-clear", "phx-click") == ["table"]
+
+      # the count is announced through a live region that outlives the bar
+      assert LazyHTML.text(query(selecting, "span.sr-only[aria-live=polite]")) == "2 selected"
+      assert [_] = resting |> query("span.sr-only[aria-live=polite]") |> Enum.to_list()
+    end
+
+    test "a selectable table always renders its toolbar, even with nothing else in it" do
+      assigns = base(%{rows: @id_rows})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert html =~ "pc-data-table__toolbar--selectable"
+    end
+
+    test "link mode needs on_select and pushes selection through it" do
+      assigns = base(%{rows: @id_rows})
+
+      assert_raise ArgumentError, ~r/on_select/, fn ->
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+      end
+
+      assigns = base(%{rows: @id_rows, state: %State{total: 2, selected: MapSet.new([2])}})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} on_select="select" selectable>
+          <:col :let={row} field={:name} sortable>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert html =~ ~s(phx-hook="PetalDataTable")
+      # sorting still patches URLs; selection alone needs no nav template
+      assert html =~ "order_by=name"
+      refute html =~ "data-nav-template"
+
+      assert [%{"event" => "select"}, %{"event" => "select"}] =
+               pushes(html, "td input.pc-data-table__select-row")
+
+      assert attrs(html, ".pc-data-table__selection-clear", "phx-click") == ["select"]
+    end
+
+    test "row_id keys the selection by a custom id and targets components" do
+      assigns =
+        base(%{
+          rows: [%{uuid: "a-1", name: "Amy"}],
+          state: %State{total: 1, selected: MapSet.new(["a-1"])}
+        })
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          on_change="table"
+          target="#orders"
+          row_id={& &1.uuid}
+          selectable
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert [_] = attrs(html, "th input[data-pc-dt-select-page]", "checked")
+
+      [[["push", push]]] =
+        html |> attrs("td input.pc-data-table__select-row", "phx-click") |> Enum.map(&Jason.decode!/1)
+
+      assert push["value"] == %{"op" => "select", "id" => "a-1"}
+      assert push["target"] == "#orders"
+    end
+
+    test "loading renders no row checkboxes and disables the header" do
+      assigns = base(%{rows: @id_rows})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable loading>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      refute html =~ "pc-data-table__select-row"
+      assert [_] = attrs(html, "th input[data-pc-dt-select-page]", "disabled")
+      assert attrs(html, "th input[data-pc-dt-select-page]", "phx-click") == []
+    end
+
+    test "an empty page disables the header and the empty row spans the checkbox column" do
+      assigns = base(%{rows: [], state: %State{total: 0}})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert [_] = attrs(html, "th input[data-pc-dt-select-page]", "disabled")
+      assert html =~ ~s(colspan="2")
+    end
   end
 
   test "searchable event mode: a phx-change form posts the search op with debounce" do

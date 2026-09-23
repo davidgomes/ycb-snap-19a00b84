@@ -52,6 +52,30 @@
   `min-w-0 max-w-full` so flex/grid parents can't size it to the
   table's min-content; footer children shrink and wrap. Wide tables
   scroll inside `pc-data-table__scroll`, never the page.
+- **`<.data_table>` row selection (4.12 data table, milestone 3).**
+  `selectable` adds a leading checkbox column keyed by `row_id`
+  (defaults to `row.id`) and the new `State.selected` set. The header
+  checkbox is tri-state for the visible page - checked, empty, or mixed
+  while part of the page is picked (painted server-side from a
+  `data-indeterminate` stamp, mirrored onto the DOM property by the
+  `PetalDataTable` hook so assistive tech hears "mixed") - and a click
+  selects the page, or deselects it once all of it is selected. While
+  anything is selected the toolbar morphs in place into the selection
+  bar: the count ("3 selected", announced through a polite live
+  region), a clear button and `:bulk_action` slots whose `:let`
+  receives the selected ids. Both bars share one min height and a
+  selectable table always renders its toolbar, so the first pick never
+  shifts rows under the pointer. Selection is UI state, not URL state:
+  it never round-trips through `to_params`, survives sorts, pages and
+  filters until cleared, and rides the op grammar in both wiring modes
+  (`select` / `select_page` / `clear_selection` through `on_change`,
+  or the new `on_select` in link mode). `State.handle_op/3` speaks the
+  new ops (integer or string ids only), backed by `toggle_selection/2`,
+  `toggle_page_selection/2` and `clear_selection/1`. Selected rows
+  carry a primary tint.
+- **`table` `:col` accepts `header`** - custom header content rendered
+  in place of the label, how the data table draws its select-all
+  checkbox.
 - **`table` `on_sort` accepts a 1-arity function** of the sort key -
   per-column events/JS, how the data table patches sort URLs.
 - **`pagination` event mode grows up**: `event` accepts a custom event

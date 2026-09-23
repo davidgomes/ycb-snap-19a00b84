@@ -4659,6 +4659,11 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+    this.syncIndeterminate();
+  },
+
+  updated() {
+    this.syncIndeterminate();
   },
 
   destroyed() {
@@ -4666,6 +4671,15 @@ export const PetalDataTable = {
     this.el.removeEventListener("input", this.onInput);
     this.el.removeEventListener("change", this.onChange);
     this.el.removeEventListener("submit", this.onSubmit);
+  },
+
+  // The select-all header's mixed state is a DOM property no attribute
+  // can express: the server stamps data-indeterminate (which also paints
+  // the dash in CSS) and this mirrors it so assistive tech hears "mixed".
+  syncIndeterminate() {
+    this.el.querySelectorAll("[data-pc-dt-select-page]").forEach((box) => {
+      box.indeterminate = box.hasAttribute("data-indeterminate");
+    });
   },
 
   committedFilters() {

@@ -2694,6 +2694,74 @@
   .pc-data-table__filter-clear-icon.pc-data-table__filter-clear-icon {
     @apply w-4! h-4!;
   }
+  /* Selection. The toolbar morphs into the selection bar in place: both
+     share one min height, and a selectable table always renders its
+     toolbar, so picking the first row never shifts the rows under the
+     pointer. */
+  .pc-data-table__toolbar[hidden] {
+    @apply hidden;
+  }
+  .pc-data-table__toolbar--selectable,
+  .pc-data-table__selection {
+    @apply min-h-9;
+  }
+  .pc-data-table__selection {
+    @apply gap-3 bg-primary-50 px-1.5 text-primary-900 dark:bg-primary-400/10 dark:text-primary-100;
+    border-radius: min(var(--pc-radius, 0.625rem), 1rem);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pc-data-table__selection {
+      animation: pc-data-table-morph 0.15s ease-out;
+    }
+  }
+  @keyframes pc-data-table-morph {
+    from {
+      opacity: 0;
+      transform: translateY(0.25rem);
+    }
+  }
+  .pc-data-table__selection-clear {
+    @apply inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-primary-700 hover:bg-primary-100 dark:text-primary-300 dark:hover:bg-primary-400/15;
+  }
+  /* Doubled selector + !important: icon sizing contract (see pagination chevrons). */
+  .pc-data-table__selection-clear-icon.pc-data-table__selection-clear-icon {
+    @apply w-4! h-4!;
+  }
+  .pc-data-table__selection-count {
+    @apply text-sm font-medium tabular-nums;
+  }
+  .pc-data-table__bulk-actions {
+    @apply ml-auto flex flex-wrap items-center gap-2;
+  }
+  /* the checkbox column hugs its box; out-specifies the table's per-variant cell padding */
+  .pc-data-table .pc-table__th.pc-data-table__select-th,
+  .pc-data-table .pc-table__td.pc-data-table__select-cell {
+    @apply w-px pr-0;
+  }
+  .pc-data-table__select-page,
+  .pc-data-table__select-row {
+    @apply block;
+  }
+  /* the first-column emphasis stays on the first DATA column */
+  .pc-data-table__select-cell + .pc-table__td {
+    @apply font-semibold;
+  }
+  /* the mixed header paints from the server stamp, no JS needed to look
+     right - like the tick, override the dash image via --pc-checkbox-dash */
+  .pc-data-table__select-page[data-indeterminate] {
+    @apply border-primary-600 bg-primary-600;
+    background-image: var(
+      --pc-checkbox-dash,
+      url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3e%3cpath stroke='%23fff' stroke-linecap='round' stroke-width='2' d='M4 8h8'/%3e%3c/svg%3e")
+    );
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+  }
+  /* :has keeps the tint in step with the box, optimistic clicks included */
+  .pc-data-table tbody .pc-table__tr:has(.pc-data-table__select-row:checked) {
+    @apply bg-primary-50/70 dark:bg-primary-400/10;
+  }
 
   /* Avatars - sizes */
 

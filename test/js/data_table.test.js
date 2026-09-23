@@ -8,7 +8,7 @@ import hooks from "../../assets/js/petal_components.js";
 
 const mounted = [];
 
-function mountBase({ navTemplate, debounce } = {}) {
+function mountBase({ navTemplate, debounce, extraHtml = "" } = {}) {
   const el = document.createElement("div");
   el.id = "dt";
   el.className = "pc-data-table";
@@ -21,6 +21,7 @@ function mountBase({ navTemplate, debounce } = {}) {
       <option value="10" selected>10</option>
       <option value="20">20</option>
     </select>
+    ${extraHtml}
   `;
   document.body.appendChild(el);
 
@@ -262,6 +263,24 @@ describe("PetalDataTable", () => {
     expect(e.defaultPrevented).toBe(false);
     expect(patched).toEqual([]);
     expect(wrap.style.display).toBe("none");
+  });
+
+  it("mirrors the select-all header's data-indeterminate stamp onto the property", () => {
+    const { hook, el } = mountBase({
+      extraHtml: `<input type="checkbox" data-pc-dt-select-page data-indeterminate />`,
+    });
+    const box = el.querySelector("[data-pc-dt-select-page]");
+    expect(box.indeterminate).toBe(true);
+
+    // a server patch (the page became fully selected) drops the stamp
+    box.removeAttribute("data-indeterminate");
+    box.setAttribute("checked", "");
+    hook.updated();
+    expect(box.indeterminate).toBe(false);
+
+    box.setAttribute("data-indeterminate", "");
+    hook.updated();
+    expect(box.indeterminate).toBe(true);
   });
 
   it("destroyed cancels a pending search patch", () => {
