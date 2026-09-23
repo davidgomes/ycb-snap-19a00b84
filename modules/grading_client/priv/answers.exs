@@ -14,11 +14,18 @@ end
 owasp_questions = [
   %{
     question_id: 1,
-    answer: "A",
-    help_text: "A"
+    answer: :entry_granted_op2,
+    help_text:
+      "Revisit the Prevention list for Cryptographic Failures: which of these hashing algorithms is deprecated, and which one is salted with a delay factor?"
+  },
+  %{
+    question_id: 2,
+    answer: :plug,
+    help_text:
+      "Take a closer look at the version requirements in the setup cell at the top of this Livebook. One of them pins a package to a long-outdated release line with published security advisories."
   }
 ]
 
 List.flatten([
-  to_answers.(OWASP, owasp_questions)
+  to_answers.("OWASP", owasp_questions)
 ])

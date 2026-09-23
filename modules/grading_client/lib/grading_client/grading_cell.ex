@@ -7,12 +7,19 @@ defmodule GradingClient.GradedCell do
   def init(attrs, ctx) do
     source = attrs["source"] || ""
 
-    {:ok, assign(ctx, source: source), editor: [source: source, language: "elixir"]}
+    ctx =
+      assign(ctx,
+        source: source,
+        module_id: attrs["module_id"],
+        question_id: attrs["question_id"]
+      )
+
+    {:ok, ctx, editor: [source: source, language: "elixir"]}
   end
 
   @impl true
   def handle_connect(ctx) do
-    {:ok, %{}, ctx}
+    {:ok, %{module_id: ctx.assigns.module_id, question_id: ctx.assigns.question_id}, ctx}
   end
 
   @impl true
@@ -22,25 +29,25 @@ defmodule GradingClient.GradedCell do
 
   @impl true
   def to_attrs(ctx) do
-    %{"source" => ctx.assigns.source}
+    %{
+      "source" => ctx.assigns.source,
+      "module_id" => ctx.assigns.module_id,
+      "question_id" => ctx.assigns.question_id
+    }
   end
 
   @impl true
   def to_source(attrs) do
-    try do
-      source = Code.string_to_quoted!(attrs["source"])
-
-      ast =
+    case Code.string_to_quoted(attrs["source"]) do
+      {:ok, answer} ->
         quote do
-          result = unquote(source)
-
-          GradingServer.Answers.check(module_id, question_id, result)
+          result = unquote(answer)
+          GradingClient.grade(result, unquote(attrs["module_id"]), unquote(attrs["question_id"]))
         end
+        |> Kino.SmartCell.quoted_to_string()
 
-      Kino.SmartCell.quoted_to_string(ast)
-    rescue
-      error ->
-        IO.inspect(error)
+      # Keep invalid code as-is, so evaluating the cell reports the syntax error
+      {:error, _} ->
         attrs["source"]
     end
   end
@@ -50,11 +57,17 @@ defmodule GradingClient.GradedCell do
     export function init(ctx, payload) {
       ctx.importCSS("main.css");
 
-      root.innerHTML = `
+      ctx.root.innerHTML = `
         <div class="app">
-          Graded Cell
+          <span class="title">Graded Cell</span>
+          <span class="question"></span>
         </div>
       `;
+
+      if (payload.module_id !== null && payload.question_id !== null) {
+        ctx.root.querySelector(".question").textContent =
+          `${payload.module_id} - Question ${payload.question_id}`;
+      }
     }
     """
   end
@@ -66,6 +79,11 @@ defmodule GradingClient.GradedCell do
       border: solid 1px #cad5e0;
       border-radius: 0.5rem 0.5rem 0 0;
       border-bottom: none;
+    }
+
+    .question {
+      margin-left: 8px;
+      color: #61758a;
     }
     """
   end

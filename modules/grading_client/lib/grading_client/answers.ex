@@ -31,7 +31,7 @@ defmodule GradingClient.Answers do
   @doc """
   Checks if the given answer is correct.
   """
-  @spec check(integer(), integer(), String.t()) :: :correct | {:incorrect, String.t()}
+  @spec check(term(), term(), term()) :: :correct | {:incorrect, String.t() | nil}
   def check(module_id, question_id, answer) do
     GenServer.call(__MODULE__, {:check, module_id, question_id, answer})
   end
