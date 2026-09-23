@@ -159,9 +159,12 @@ end
 The `event_id` of the event that caused this emit. Use it to build audit trails and answer "why did this happen?":
 
 ```
-user_registered          (event_id: "01933b7e-1111-...", causation_id: nil)
-└─> welcome_email_requested (event_id: "01933b7e-2222-...", causation_id: "01933b7e-1111-...")
-    └─> email_delivered     (event_id: "01933b7e-3333-...", causation_id: "01933b7e-2222-...")
+user_registered
+  event_id: "01933b7e-1111-...", causation_id: nil
+└─> welcome_email_requested
+      event_id: "01933b7e-2222-...", causation_id: "01933b7e-1111-..."
+    └─> email_delivered
+          event_id: "01933b7e-3333-...", causation_id: "01933b7e-2222-..."
 ```
 
 ### `correlation_id` - Business Operation Grouping (Optional)
