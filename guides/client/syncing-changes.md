@@ -221,6 +221,36 @@ A lower level `phx:navigate` event is also triggered any time the browser's URL 
   - `"patch"` - the boolean flag indicating this was a patch navigation.
   - `"pop"` - the boolean flag indication this was a navigation via `popstate`
     from a user navigation forward or back in history.
+  - `"direction"` - the direction of the navigation, either `"forward"` or
+    `"backward"`.
 
 For navigation-aware logic, prefer `phx:navigate` over hook callbacks like `updated()`,
 as hooks may fire before `window.location` is updated.
+
+### Cancelling navigation
+
+Before LiveView performs client-side live navigation from `<.link navigate={...}>`,
+`<.link patch={...}>`, or the user navigating forward or back in history, a cancelable
+`phx:before-navigate` event is dispatched on window. Its `info.detail` contains the same
+information as the `phx:navigate` event. Calling `event.preventDefault()` synchronously
+cancels the navigation:
+
+```javascript
+window.addEventListener("phx:before-navigate", event => {
+  if (hasUnsavedChanges() && !confirm("Discard unsaved changes?")) {
+    event.preventDefault()
+  }
+})
+```
+
+When a forward or back navigation is cancelled, the browser has already changed the
+URL, so LiveView goes back to the previous history entry.
+
+The event is only dispatched for navigation initiated in the browser by live links or
+history navigation. It is not dispatched for `Phoenix.LiveView.JS.navigate/1`,
+`Phoenix.LiveView.JS.patch/1`, their client-side `liveSocket.js()` equivalents, server-side
+`push_navigate` and `push_patch`, redirects, regular links, form submits, or page unloads.
+This means that you can cancel a navigation, ask for confirmation asynchronously, and then
+continue it with `liveSocket.js().navigate(event.detail.href)` (or `patch` if
+`event.detail.patch` is `true`). To guard page unloads, use the browser's
+[`beforeunload`](https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event) event.
