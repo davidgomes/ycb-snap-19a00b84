@@ -702,6 +702,7 @@ defmodule Nostrum.Voice do
       packets = Audio.get_unique_rtp_packets(voice, num_packets)
 
       if raw_rtp do
+        # credo:disable-for-next-line Credo.Check.Refactor.Nesting
         Enum.map(packets, fn {header, payload} -> header <> payload end)
       else
         packets_to_rtp_opus(packets, voice)

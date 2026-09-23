@@ -8,6 +8,7 @@ defmodule Nostrum.Voice.Audio do
   alias Nostrum.Util
   alias Nostrum.Voice
   alias Nostrum.Voice.Crypto
+  alias Nostrum.Voice.Crypto.Dave
   alias Nostrum.Voice.Opus
   alias Nostrum.Voice.Ports
 
@@ -141,7 +142,7 @@ defmodule Nostrum.Voice.Audio do
             v.udp_socket,
             v.ip |> ip_to_tuple(),
             v.port,
-            Crypto.encrypt(v, Crypto.Dave.encrypt(v, f))
+            Crypto.encrypt(v, Dave.encrypt(v, f))
           )
 
         %{
