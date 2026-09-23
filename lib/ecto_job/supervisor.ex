@@ -2,8 +2,8 @@ defmodule EctoJob.Supervisor do
   @moduledoc """
   Job Queue supervisor that can be started with client applications.
 
-  The `EctoJob.Supervisor` will start the required processes to listen for postgres job notifications,
-  GenStage producer and ConsumerSupervisor to process the jobs.
+  The `EctoJob.Supervisor` will start the required processes to listen for postgres job notifications
+  (when the repo uses `Ecto.Adapters.Postgres`), GenStage producer and ConsumerSupervisor to process the jobs.
 
   ## Example:
 
@@ -45,11 +45,10 @@ defmodule EctoJob.Supervisor do
         }
       ) do
     supervisor_name = String.to_atom("#{schema}.Supervisor")
-    notifier_name = String.to_atom("#{schema}.Notifier")
     producer_name = String.to_atom("#{schema}.Producer")
+    {notifier_name, notifier_children} = notifier(repo, schema)
 
     children = [
-      worker(Postgrex.Notifications, [repo.config() ++ [name: notifier_name]]),
       worker(Producer, [
         [
           name: producer_name,
@@ -67,6 +66,20 @@ defmodule EctoJob.Supervisor do
       ])
     ]
 
-    Supervisor.start_link(children, strategy: :rest_for_one, name: supervisor_name)
+    Supervisor.start_link(notifier_children ++ children,
+      strategy: :rest_for_one,
+      name: supervisor_name
+    )
+  end
+
+  # New job notifications rely on Postgres LISTEN/NOTIFY, other adapters only poll for jobs.
+  @spec notifier(module, module) :: {atom | nil, [Supervisor.Spec.spec()]}
+  defp notifier(repo, schema) do
+    if repo.__adapter__() == Ecto.Adapters.Postgres do
+      notifier_name = String.to_atom("#{schema}.Notifier")
+      {notifier_name, [worker(Postgrex.Notifications, [repo.config() ++ [name: notifier_name]])]}
+    else
+      {nil, []}
+    end
   end
 end
