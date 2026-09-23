@@ -65,6 +65,66 @@ defmodule Oban.Web.Jobs.DetailComponentTest do
     assert html =~ "ARGS REDACTED"
   end
 
+  describe "awaitable signals" do
+    test "rendering a received signal with a decoded payload" do
+      encoded = encode_term(%{decision: "approved"})
+      job = %Oban.Job{id: 1, worker: "MyApp.Worker", args: %{}, meta: %{"signal" => encoded}}
+
+      html = render_component(Component, assigns(job), router: Router)
+
+      assert html =~ "icon-signal"
+      assert html =~ "Received Signal"
+      assert html =~ ~s|decision: &quot;approved&quot;|
+      refute html =~ encoded
+    end
+
+    test "rendering the awaiting state with a deadline" do
+      wait_until = System.system_time(:millisecond) + :timer.minutes(30)
+      job = %Oban.Job{
+        id: 1,
+        worker: "MyApp.Worker",
+        args: %{},
+        meta: %{"wait_until" => wait_until}
+      }
+
+      html = render_component(Component, assigns(job), router: Router)
+
+      assert html =~ "icon-signal"
+      assert html =~ "Awaiting Signal"
+      assert html =~ "Deadline"
+    end
+
+    test "rendering the awaiting state without a deadline" do
+      job = %Oban.Job{
+        id: 1,
+        worker: "MyApp.Worker",
+        args: %{},
+        meta: %{"wait_until" => "infinity"}
+      }
+
+      html = render_component(Component, assigns(job), router: Router)
+
+      assert html =~ "Awaiting Signal"
+      assert html =~ "No deadline"
+    end
+
+    test "omitting the signal section when no signal is present" do
+      job = %Oban.Job{id: 1, worker: "MyApp.Worker", args: %{}, meta: %{}}
+
+      html = render_component(Component, assigns(job), router: Router)
+
+      refute html =~ "icon-signal"
+      refute html =~ "Received Signal"
+      refute html =~ "Awaiting Signal"
+    end
+  end
+
+  defp encode_term(term) do
+    term
+    |> :erlang.term_to_binary()
+    |> Base.encode64(padding: false)
+  end
+
   defp assigns(job, opts \\ []) do
     os_time = System.system_time(:second)
 
