@@ -65,8 +65,27 @@ defmodule Sentry.ClientReport.Sender do
     [{Envelope.get_data_category(transaction), 1}, {"span", span_count}]
   end
 
+  defp data_categories(%Sentry.LogBatch{log_events: log_events}) do
+    items = Enum.map(log_events, &Sentry.LogEvent.to_map/1)
+    [{"log_item", length(items)}, {"log_byte", encoded_byte_size(items)}]
+  end
+
+  defp data_categories(%Sentry.MetricBatch{metrics: metrics}) do
+    items = Enum.map(metrics, &Sentry.Metric.to_map/1)
+    [{"trace_metric", length(items)}, {"trace_metric_byte", encoded_byte_size(items)}]
+  end
+
   defp data_categories(item) do
     [{Envelope.get_data_category(item), 1}]
+  end
+
+  defp encoded_byte_size(items) do
+    Enum.reduce(items, 0, fn item, acc ->
+      case Sentry.JSON.encode(item, Config.json_library()) do
+        {:ok, encoded} -> acc + IO.iodata_length(encoded)
+        {:error, _reason} -> acc
+      end
+    end)
   end
 
   ## Callbacks
