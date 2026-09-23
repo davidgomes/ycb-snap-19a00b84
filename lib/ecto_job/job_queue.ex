@@ -221,7 +221,9 @@ defmodule EctoJob.JobQueue do
   @spec activate_scheduled_jobs(repo, schema, DateTime.t()) :: integer
   def activate_scheduled_jobs(repo, schema, now = %DateTime{}) do
     {count, _} =
-      repo.update_all(
+      update_jobs(
+        repo,
+        schema,
         Query.from(
           job in schema,
           where: job.state in ["SCHEDULED", "RETRY"],
@@ -241,7 +243,9 @@ defmodule EctoJob.JobQueue do
   @spec activate_expired_jobs(repo, schema, DateTime.t()) :: integer
   def activate_expired_jobs(repo, schema, now = %DateTime{}) do
     {count, _} =
-      repo.update_all(
+      update_jobs(
+        repo,
+        schema,
         Query.from(
           job in schema,
           where: job.state in ["RESERVED", "IN_PROGRESS"],
@@ -262,7 +266,9 @@ defmodule EctoJob.JobQueue do
   @spec fail_expired_jobs_at_max_attempts(repo, schema, DateTime.t()) :: integer
   def fail_expired_jobs_at_max_attempts(repo, schema, now = %DateTime{}) do
     {count, _} =
-      repo.update_all(
+      update_jobs(
+        repo,
+        schema,
         Query.from(
           job in schema,
           where: job.state in ["IN_PROGRESS"],
@@ -456,6 +462,32 @@ defmodule EctoJob.JobQueue do
     job
     |> Changeset.change()
     |> Changeset.optimistic_lock(:attempt)
+  end
+
+  # Updates all jobs matched by `query`, like `c:Ecto.Repo.update_all/3`.
+  @spec update_jobs(repo, schema, Ecto.Query.t(), set: Keyword.t()) :: {integer, nil | [term]}
+  defp update_jobs(repo, schema, query, opts) do
+    do_update_jobs(repo.__adapter__(), repo, schema, query, opts)
+  end
+
+  defp do_update_jobs(Ecto.Adapters.Postgres, repo, _schema, query, opts) do
+    repo.update_all(query, opts)
+  end
+
+  # An InnoDB (MySQL) UPDATE locks every row it scans, which deadlocks with concurrent job
+  # updates and deletes. Jobs locked by another transaction are skipped until the next poll.
+  defp do_update_jobs(_adapter, repo, schema, query, opts) do
+    {:ok, result} =
+      repo.transaction(fn ->
+        ids = query |> Query.select([j], j.id) |> Query.lock("FOR UPDATE SKIP LOCKED") |> repo.all()
+
+        case ids do
+          [] -> {0, nil}
+          ids -> repo.update_all(Query.from(j in schema, where: j.id in ^ids), opts)
+        end
+      end)
+
+    result
   end
 
   # Applies `updates` to the given job when matched by `query`.
