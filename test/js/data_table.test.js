@@ -264,6 +264,21 @@ describe("PetalDataTable", () => {
     expect(wrap.style.display).toBe("none");
   });
 
+  it("mirrors the header checkbox indeterminate property from the data attr", () => {
+    const { hook, el } = mount({ navTemplate: "/orders?search=:term" });
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.dataset.pcDtIndeterminate = "true";
+    el.appendChild(box);
+
+    hook.syncIndeterminate();
+    expect(box.indeterminate).toBe(true);
+
+    box.dataset.pcDtIndeterminate = "false";
+    hook.updated();
+    expect(box.indeterminate).toBe(false);
+  });
+
   it("destroyed cancels a pending search patch", () => {
     const { hook, el, patched } = mount({
       navTemplate: "/orders?search=:term",

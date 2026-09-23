@@ -160,7 +160,9 @@ defmodule PetalComponents.DataTable.State do
   (page_size), `filter` (field, filter_op, value/value2/values), and
   `clear_filters`. Unknown ops and non-whitelisted fields leave the
   state unchanged; like `from_params/2`, no atoms are ever created
-  from input.
+  from input. Selection ops (`select`, `select_all`, `clear_selection`)
+  are UI state and are ignored here on purpose - handle them in your
+  own clauses before calling this.
 
   A `filter` op's value normalizes by editor shape: a `values` list
   posts as-is (the select editor's `:in`), `between` pairs

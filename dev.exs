@@ -748,6 +748,7 @@ defmodule Dev.PlaygroundLive do
        combo: %{disabled: false, chosen: nil},
        rich: %{labels: ~w(feat bug imp des), team: ~w(amelia jonah)},
        dt: PetalComponents.DataTable.State |> struct(page_size: 5) |> run_dt(),
+       dt_selected: [],
        radio: %{
          style: "cards",
          variant: "outline",
@@ -1438,9 +1439,35 @@ defmodule Dev.PlaygroundLive do
   def handle_event("pg_combo_change", %{"pg_city" => value}, socket),
     do: {:noreply, update(socket, :combo, &%{&1 | chosen: value})}
 
+  # selection is UI state, outside State.handle_op. ids stay strings -
+  # the event posts strings, and mixing in integers makes membership miss
+  def handle_event("pg_table", %{"op" => "select", "id" => id}, socket) do
+    {:noreply,
+     update(socket, :dt_selected, fn sel ->
+       if id in sel, do: List.delete(sel, id), else: sel ++ [id]
+     end)}
+  end
+
+  def handle_event("pg_table", %{"op" => "select_all"}, socket) do
+    {_state, rows} = socket.assigns.dt
+    page_ids = Enum.map(rows, &to_string(&1.id))
+    sel = socket.assigns.dt_selected
+
+    selected =
+      if page_ids != [] and Enum.all?(page_ids, &(&1 in sel)),
+        do: sel -- page_ids,
+        else: Enum.uniq(sel ++ page_ids)
+
+    {:noreply, assign(socket, :dt_selected, selected)}
+  end
+
+  def handle_event("pg_table", %{"op" => "clear_selection"}, socket),
+    do: {:noreply, assign(socket, :dt_selected, [])}
+
   # the data table's event-mode op grammar: State.handle_op speaks all of
   # it (sort/page/search/page_size/filter/clear_filters), so the whole
-  # backend is one call plus a re-run through the free engine
+  # backend is one call plus a re-run through the free engine. Selection
+  # ops are handled above and never reach this clause.
   def handle_event("pg_table", params, socket) do
     alias PetalComponents.DataTable.State
     {state, _rows} = socket.assigns.dt
@@ -7308,7 +7335,8 @@ defmodule Dev.PlaygroundLive do
         Sortable, paged and filter-aware, driven by one State struct. This live demo runs
         EVENT mode: every interaction pushes a single op-grammar event, the handler applies it
         with State helpers and re-runs the free in-memory engine. Link mode does the same
-        through patch URLs - state you can curl.
+        through patch URLs - state you can curl. Selecting rows morphs the toolbar into a
+        count and bulk actions; that selection stays in the LiveView assign and never in the URL.
       </p>
 
       <div class="border border-gray-200 dark:border-gray-400/20 rounded-xl p-6">
@@ -7320,6 +7348,8 @@ defmodule Dev.PlaygroundLive do
           on_change="pg_table"
           striped
           searchable
+          selectable
+          selected={@dt_selected}
           page_size_options={[5, 10, 20]}
         >
           <:col :let={row} field={:name} sortable>{row.name}</:col>
@@ -7346,6 +7376,11 @@ defmodule Dev.PlaygroundLive do
           <:col :let={row} field={:amount} sortable align="right" filterable="number">
             ${row.amount}
           </:col>
+          <:bulk_action :let={ids}>
+            <.button type="button" size="sm" variant="soft" color="danger">
+              Archive {length(ids)}
+            </.button>
+          </:bulk_action>
         </.data_table>
       </div>
 
@@ -7354,7 +7389,7 @@ defmodule Dev.PlaygroundLive do
           ex <-
             examples_for(
               PetalComponents.Showcase.DataTable,
-              ~w(basic loading empty)a
+              ~w(basic loading empty selection)a
             )
         }
         class="mt-10"
