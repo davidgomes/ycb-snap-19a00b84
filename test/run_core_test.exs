@@ -55,7 +55,7 @@ defmodule EwebmachineTest do
   test "Simple resource builder with XML and path match param" do
     app = resources do
       resource "/hello/:name" do %{name: name} after 
-        content_types_provided do: ['application/xml': :to_xml]
+        content_types_provided do: ["application/xml": :to_xml]
         defh to_xml, do: "<Person><name>#{state.name}</name></Person>"
       end
     end
