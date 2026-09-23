@@ -14,7 +14,6 @@ defmodule Surface.MixProject do
       start_permanent: Mix.env() == :prod,
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
-      preferred_cli_env: [docs: :docs],
       # Docs
       name: "Surface",
       source_url: @source_url,
@@ -22,6 +21,10 @@ defmodule Surface.MixProject do
       docs: docs(),
       package: package()
     ]
+  end
+
+  def cli do
+    [preferred_envs: [docs: :docs]]
   end
 
   # Run "mix help compile.app" to learn about applications.
