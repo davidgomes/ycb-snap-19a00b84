@@ -5444,6 +5444,127 @@ export const PetalDataTable = {
   },
 };
 
+// Page-anchored dropdown. Open/close stays with LiveView.JS (toggle,
+// click-away, Escape); this hook only decides which side of the trigger
+// the panel occupies. Open downward by default; flip above when the
+// viewport has no room below AND more room above. When neither side fits
+// the whole panel, the winning side's space caps the menu so items scroll
+// inside the viewport instead of painting past it.
+// Measured with flip and cap cleared so natural height decides.
+export const PetalDropdown = {
+  mounted() {
+    this.panel = this.el;
+    this.listening = false;
+    this.wasOpen = false;
+    this.trigger = this.findTrigger();
+    this.onReposition = () => {
+      if (this.isOpen()) this.position();
+    };
+    this.observer = new MutationObserver(() => this.sync());
+    this.observer.observe(this.panel, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+    // JS.show can win the race against the hook on a fast tap
+    this.wasOpen = this.isOpen();
+    if (this.wasOpen) {
+      this.position();
+      this.listen();
+    }
+  },
+
+  updated() {
+    // a patch re-renders the panel from the server, which drops the flip
+    // attribute and the inline cap this hook owns. Visibility may be
+    // unchanged, so sync() would treat it as a no-op and leave the menu
+    // on the wrong side.
+    this.trigger = this.findTrigger();
+    if (this.isOpen()) {
+      this.wasOpen = true;
+      this.position();
+      this.listen();
+    } else {
+      this.sync();
+    }
+  },
+
+  destroyed() {
+    this.observer?.disconnect();
+    this.unlisten();
+  },
+
+  findTrigger() {
+    return this.el.previousElementSibling?.querySelector("button") || null;
+  },
+
+  isOpen() {
+    return this.panel.style.display !== "none";
+  },
+
+  // Style writes from position() re-enter the observer. Visibility is the
+  // only change that matters; a cap or a flip on an already-open panel is
+  // this hook talking to itself.
+  sync() {
+    const open = this.isOpen();
+    if (open === this.wasOpen) return;
+    this.wasOpen = open;
+    if (open) {
+      this.position();
+      this.listen();
+    } else {
+      this.clearGeometry();
+      this.unlisten();
+    }
+  },
+
+  listen() {
+    if (this.listening) return;
+    this.listening = true;
+    window.addEventListener("scroll", this.onReposition, true);
+    window.addEventListener("resize", this.onReposition);
+  },
+
+  unlisten() {
+    if (!this.listening) return;
+    this.listening = false;
+    window.removeEventListener("scroll", this.onReposition, true);
+    window.removeEventListener("resize", this.onReposition);
+  },
+
+  clearGeometry() {
+    this.panel.removeAttribute("data-flip");
+    this.panel.style.maxHeight = "";
+    this.panel.style.overflowY = "";
+  },
+
+  position() {
+    if (!this.isOpen()) return;
+    const trigger = this.trigger;
+    if (!trigger) return;
+
+    this.panel.removeAttribute("data-flip");
+    this.panel.style.maxHeight = "";
+    this.panel.style.overflowY = "";
+
+    const rect = trigger.getBoundingClientRect();
+    const panelH = this.panel.offsetHeight;
+    // jsdom and a not-yet-rendered panel report no box
+    if (!panelH || (!rect.top && !rect.bottom)) return;
+
+    const gap = 8;
+    const below = window.innerHeight - rect.bottom - gap;
+    const above = rect.top - gap;
+    const flip = panelH > below && above > below;
+    if (flip) this.panel.setAttribute("data-flip", "");
+
+    const room = flip ? above : below;
+    if (panelH > room) {
+      this.panel.style.maxHeight = `${Math.max(room, 0)}px`;
+      this.panel.style.overflowY = "auto";
+    }
+  },
+};
+
 export default {
   PetalChart,
   PetalColorScheme,
@@ -5473,5 +5594,6 @@ export default {
   PetalNavMenu,
   PetalCommandDialog,
   PetalComboBox,
+  PetalDropdown,
   PetalDataTable,
 };

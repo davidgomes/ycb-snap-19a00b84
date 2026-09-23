@@ -3,6 +3,18 @@
 
 #### Fixed
 
+- **Dropdown menus flip above the trigger when the viewport leaves no
+  room below.** A menu anchored at the bottom of a form opened downward
+  and painted off-screen. `PetalDropdown` measures on open (and again on
+  scroll or resize while the menu is open) and sets `data-flip` when the
+  panel is taller than the space below the trigger and the space above
+  is larger. CSS then anchors the panel to the top of the trigger, with
+  the scale origin moved to the bottom edge so the existing transition
+  still grows out of the button. When neither side can hold the whole
+  menu, the roomier side's space caps the panel and the items scroll.
+  Closing clears the flip so the next open measures fresh. Open, close,
+  click-away and Escape stay on LiveView.JS.
+
 - **`command_dialog` now locks background scroll while the palette is
   open.** A native modal `<dialog>` hands you the top layer, the focus
   trap and Escape, but it does not stop the page underneath from

@@ -1973,6 +1973,17 @@
   .pc-dropdown__menu-items-wrapper-placement--right {
     @apply left-0 origin-top-left;
   }
+  /* flipped: no room below the trigger and more room above - the hook
+     measures on open and on scroll/resize while open */
+  .pc-dropdown__menu-items-wrapper[data-flip] {
+    @apply top-auto bottom-full mt-0 mb-2;
+  }
+  .pc-dropdown__menu-items-wrapper-placement--left[data-flip] {
+    @apply origin-bottom-right;
+  }
+  .pc-dropdown__menu-items-wrapper-placement--right[data-flip] {
+    @apply origin-bottom-left;
+  }
   /* The one trigger chevron for the dropdown family - user menu,
      language select and friends share this so the colour can't drift. */
   /* THE decorative-chevron rule for the dropdown family (dropdown,
