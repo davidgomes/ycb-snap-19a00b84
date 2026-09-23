@@ -53,7 +53,8 @@ defmodule Hexpm.Repository.Policies do
   # `PolicyBuilder`) but is always stored so toggling visibility keeps its
   # rules. The source is the submitted tabs, or the policy's existing tabs when
   # the caller did not resubmit them; tabs are matched by repository name so
-  # their id and rules survive.
+  # their id and rules survive. A submitted tab without overrides has had all of
+  # them removed, since the form sends no override fields in that case.
   defp put_repositories(params, org_name, existing) do
     source =
       case params["repositories"] do
@@ -72,10 +73,16 @@ defmodule Hexpm.Repository.Policies do
   end
 
   defp submitted_repositories(nil), do: []
-  defp submitted_repositories(list) when is_list(list), do: list
+
+  defp submitted_repositories(list) when is_list(list) do
+    Enum.map(list, &Map.put_new(&1, "overrides", []))
+  end
 
   defp submitted_repositories(map) when is_map(map) do
-    map |> Enum.sort_by(fn {key, _value} -> key end) |> Enum.map(fn {_key, value} -> value end)
+    map
+    |> Enum.sort_by(fn {key, _value} -> key end)
+    |> Enum.map(fn {_key, value} -> value end)
+    |> submitted_repositories()
   end
 
   defp tab_to_params(repository_policy) do
