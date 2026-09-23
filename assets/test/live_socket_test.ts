@@ -447,6 +447,93 @@ describe("LiveSocket", () => {
     expect(getItemCalls).toEqual(2);
   });
 
+  test("phx:before-navigate can cancel client live navigation", () => {
+    liveSocket = new LiveSocket("/live", Socket);
+    liveSocket.connect();
+    liveSocket.socket.isConnected = () => true;
+
+    const link = document.createElement("a");
+    link.setAttribute("data-phx-link", "redirect");
+    link.setAttribute("data-phx-link-state", "push");
+    link.setAttribute("phx-click", "track");
+    link.href = "/other";
+    link.textContent = "Other";
+    document.body.appendChild(link);
+
+    const historyRedirect = jest
+      .spyOn(liveSocket, "historyRedirect")
+      .mockImplementation(() => {});
+    const pushHistoryPatch = jest
+      .spyOn(liveSocket, "pushHistoryPatch")
+      .mockImplementation(() => {});
+    const execJS = jest
+      .spyOn(liveSocket, "execJS")
+      .mockImplementation(() => {});
+    const beforeNavigate: any[] = [];
+    const navigated: any[] = [];
+    let preventNavigation = true;
+    const beforeListener = (event: Event) => {
+      beforeNavigate.push((event as CustomEvent).detail);
+      if (preventNavigation) {
+        event.preventDefault();
+      }
+    };
+    const navigateListener = (event: Event) => {
+      navigated.push((event as CustomEvent).detail);
+    };
+    window.addEventListener("phx:before-navigate", beforeListener);
+    window.addEventListener("phx:navigate", navigateListener);
+
+    const patch = document.createElement("a");
+    try {
+      link.click();
+
+      expect(beforeNavigate).toEqual([
+        {
+          href: link.href,
+          patch: false,
+          pop: false,
+          direction: "forward",
+        },
+      ]);
+      expect(navigated).toEqual([]);
+      expect(historyRedirect).not.toHaveBeenCalled();
+      expect(pushHistoryPatch).not.toHaveBeenCalled();
+      expect(execJS).toHaveBeenCalledWith(link, "track", "click");
+
+      preventNavigation = false;
+      beforeNavigate.length = 0;
+      execJS.mockClear();
+
+      patch.setAttribute("data-phx-link", "patch");
+      patch.setAttribute("data-phx-link-state", "replace");
+      patch.href = "/patched";
+      document.body.appendChild(patch);
+      patch.click();
+
+      expect(beforeNavigate).toEqual([
+        {
+          href: patch.href,
+          patch: true,
+          pop: false,
+          direction: "forward",
+        },
+      ]);
+      expect(pushHistoryPatch).toHaveBeenCalledWith(
+        expect.any(Event),
+        patch.href,
+        "replace",
+        patch,
+      );
+    } finally {
+      window.removeEventListener("phx:before-navigate", beforeListener);
+      window.removeEventListener("phx:navigate", navigateListener);
+      link.remove();
+      patch.remove();
+      liveSocket.disconnect();
+    }
+  });
+
   describe("execJS", () => {
     let view, liveSocket;
 
