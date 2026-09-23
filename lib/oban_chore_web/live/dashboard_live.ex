@@ -26,6 +26,7 @@ defmodule ObanChoreWeb.DashboardLive do
             <button
               phx-click="select_chore"
               phx-value-module={to_string(chore.module)}
+              data-chore-nav={inspect(chore.module)}
               class={[
                 "oc-nav-item",
                 if(@selected_chore_module == chore.module,
@@ -73,6 +74,8 @@ defmodule ObanChoreWeb.DashboardLive do
                 <button
                   phx-click="select_tab"
                   phx-value-tab={"job_#{job.id}"}
+                  data-job-tab={job.id}
+                  data-state={job.state}
                   class={[
                     "oc-tab-item",
                     if(@selected_tab == {:job, job.id}, do: "oc-tab-item--active", else: "")
