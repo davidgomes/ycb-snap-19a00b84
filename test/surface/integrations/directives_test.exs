@@ -889,6 +889,67 @@ defmodule Surface.DirectivesTest do
       assert js_attribute(doc, "div > button", "phx-click") == [["push", %{"event" => "ok"}]]
     end
 
+    test "translate form recovery and viewport events" do
+      html =
+        render_surface do
+          ~F"""
+          <form :on-auto-recover="recover"></form>
+          <ul :on-viewport-top="prev_page" :on-viewport-bottom="next_page"></ul>
+          """
+        end
+
+      doc = parse_document!(html)
+
+      assert attribute(doc, "form", "phx-auto-recover") == ["recover"]
+      assert attribute(doc, "ul", "phx-viewport-top") == ["prev_page"]
+      assert attribute(doc, "ul", "phx-viewport-bottom") == ["next_page"]
+    end
+
+    test "translate DOM patching and lifecycle events" do
+      html =
+        render_surface do
+          ~F"""
+          <div
+            :on-mounted={JS.push("mounted")}
+            :on-remove={JS.push("removed")}
+            :on-connected={JS.push("connected")}
+            :on-disconnected={JS.push("disconnected")}
+          />
+          """
+        end
+
+      doc = parse_document!(html)
+
+      assert js_attribute(doc, "phx-mounted") == [["push", %{"event" => "mounted"}]]
+      assert js_attribute(doc, "phx-remove") == [["push", %{"event" => "removed"}]]
+      assert js_attribute(doc, "phx-connected") == [["push", %{"event" => "connected"}]]
+      assert js_attribute(doc, "phx-disconnected") == [["push", %{"event" => "disconnected"}]]
+    end
+
+    defmodule LiveComponentUsingNewEvents do
+      use Surface.LiveComponent
+
+      def render(assigns) do
+        ~F"""
+        <ul :on-viewport-bottom="next_page" :on-mounted={JS.push("mounted")}></ul>
+        """
+      end
+    end
+
+    test "set the target of new events to @myself if it's a live_component" do
+      html =
+        render_surface do
+          ~F"""
+          <LiveComponentUsingNewEvents id="123"/>
+          """
+        end
+
+      doc = parse_document!(html)
+
+      assert js_attribute(doc, "phx-viewport-bottom") == [["push", %{"event" => "next_page", "target" => 1}]]
+      assert js_attribute(doc, "phx-mounted") == [["push", %{"event" => "mounted", "target" => 1}]]
+    end
+
     test "do not translate invalid events" do
       html =
         render_surface do
