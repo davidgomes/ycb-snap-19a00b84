@@ -594,4 +594,89 @@ defmodule Hexpm.Repository.ReleaseTest do
              |> Hexpm.Repo.all()
              |> Release.latest_version(only_stable: true, with_docs: true)
   end
+
+  test "semver_sort_key orders releases by SemVer precedence" do
+    package = insert(:package)
+    long = String.duplicate("9", 300)
+    long_versions = ["1.0.0-#{long}", "1.0.0-1#{String.duplicate("0", 300)}", "#{long}.0.0"]
+
+    versions = ~w(
+      0.0.1 0.0.2 0.1.0 0.9.0 0.10.0 1.0.0-0 1.0.0-2 1.0.0-10 1.0.0-0a 1.0.0-A
+      1.0.0-a 1.0.0-alpha 1.0.0-alpha-1 1.0.0-alpha.1 1.0.0-alpha.1.0 1.0.0-alpha.beta
+      1.0.0-alpha0 1.0.0-beta 1.0.0-beta.2 1.0.0-beta.11 1.0.0-rc.1 1.0.0 1.0.1-rc.1+build-1
+      1.0.1 2.0.0 9.0.0 10.0.0 123456789012345678901234567890.0.0
+    ) ++ long_versions
+
+    for version <- Enum.shuffle(versions) do
+      insert(:release, package: package, version: version)
+    end
+
+    keyed =
+      from(r in Release,
+        where: r.package_id == ^package.id,
+        order_by: r.semver_sort_key,
+        select: r.version
+      )
+      |> Hexpm.Repo.all()
+
+    assert keyed == versions |> Enum.map(&Version.parse!/1) |> Enum.sort(Version)
+  end
+
+  test "stable and semver_sort_key follow version changes" do
+    package = insert(:package)
+    release = insert(:release, package: package, version: "1.0.0-rc.1")
+
+    stored = fn ->
+      from(r in Release, where: r.id == ^release.id, select: {r.stable, r.semver_sort_key})
+      |> Hexpm.Repo.one!()
+    end
+
+    assert {false, rc_key} = stored.()
+
+    release
+    |> Ecto.Changeset.change(version: Version.parse!("1.0.0+build.1"))
+    |> Hexpm.Repo.update!()
+
+    assert {true, stable_key} = stored.()
+    assert stable_key > rc_key
+  end
+
+  test "latest/2 selects the same release as latest_version/2" do
+    package = insert(:package)
+
+    for {version, has_docs} <- [
+          {"0.0.1", true},
+          {"0.0.2", false},
+          {"0.0.3-dev.0.1", true},
+          {"0.0.10-rc.1", false}
+        ] do
+      insert(:release,
+        package: package,
+        version: version,
+        has_docs: has_docs,
+        meta: build(:release_metadata, app: package.name)
+      )
+    end
+
+    prerelease_package = insert(:package)
+
+    for version <- ["1.0.0-rc.1", "1.0.0-rc.2"] do
+      insert(:release, package: prerelease_package, version: version)
+    end
+
+    for opts <- [
+          [only_stable: false],
+          [only_stable: true],
+          [only_stable: true, unstable_fallback: true],
+          [only_stable: false, with_docs: true],
+          [only_stable: true, with_docs: true],
+          [only_stable: true, unstable_fallback: true, with_docs: true]
+        ],
+        subject <- [package, prerelease_package] do
+      expected = Release.all(subject) |> Hexpm.Repo.all() |> Release.latest_version(opts)
+      latest = Release.all(subject) |> Release.latest(opts) |> Hexpm.Repo.one()
+
+      assert (latest && latest.id) == (expected && expected.id), inspect(opts)
+    end
+  end
 end

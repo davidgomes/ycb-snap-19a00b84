@@ -163,6 +163,35 @@ defmodule Hexpm.Repository.ReleasesTest do
                unstable_fallback: true
              ) == Version.parse!("1.0.0-rc.2")
     end
+
+    test "honors only_stable and with_docs" do
+      package = insert(:package)
+      insert(:release, package: package, version: "0.9.0", has_docs: true)
+      insert(:release, package: package, version: "0.10.0")
+      insert(:release, package: package, version: "1.0.0-rc.1", has_docs: true)
+
+      assert Releases.latest_version("hexpm", package.name, only_stable: false) ==
+               Version.parse!("1.0.0-rc.1")
+
+      assert Releases.latest_version("hexpm", package.name, only_stable: true) ==
+               Version.parse!("0.10.0")
+
+      assert Releases.latest_version("hexpm", package.name, only_stable: true, with_docs: true) ==
+               Version.parse!("0.9.0")
+
+      prerelease_package = insert(:package)
+      insert(:release, package: prerelease_package, version: "1.0.0-rc.1")
+
+      assert Releases.latest_version("hexpm", prerelease_package.name, only_stable: true) == nil
+    end
+
+    test "returns nil for unknown packages and repositories" do
+      package = insert(:package)
+      insert(:release, package: package, version: "1.0.0")
+
+      assert Releases.latest_version("hexpm", "unknown", only_stable: false) == nil
+      assert Releases.latest_version("unknown", package.name, only_stable: false) == nil
+    end
   end
 
   describe "publish/7" do
