@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Enhancement
+
+* Verify plugs accept a `:secret` option given as a 1-arity function, which is
+  called with the connection to select the verifying secret per request.
+
 ## v2.4.1
 
 ### Security

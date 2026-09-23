@@ -299,6 +299,18 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
+    @doc """
+    Resolves a `:secret` option given as a 1-arity function by calling it with
+    the connection, so the verifying secret can be selected per request.
+    """
+    @spec put_secret_from_conn(Keyword.t(), Plug.Conn.t()) :: Keyword.t()
+    def put_secret_from_conn(opts, conn) do
+      case Keyword.get(opts, :secret) do
+        fun when is_function(fun, 1) -> Keyword.put(opts, :secret, fun.(conn))
+        _ -> opts
+      end
+    end
+
     @spec maybe_halt(Plug.Conn.t(), Keyword.t()) :: Plug.Conn.t()
     def maybe_halt(conn, opts \\ []) do
       if Keyword.get(opts, :halt, true) do
