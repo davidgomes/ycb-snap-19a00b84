@@ -64,6 +64,7 @@ defmodule Oban.Web.Jobs.DetailComponent do
           <Core.status_badge :if={@job.meta["chunk"]} icon="user_group" label="Chunk" />
           <Core.status_badge :if={@job.meta["chain"]} icon="link" label="Chain" />
           <Core.status_badge :if={@job.meta["recorded"]} icon="camera" label="Recorded" />
+          <Core.status_badge :if={signal_status(@job) != :none} icon="signal" label="Signal" />
           <Core.status_badge :if={@job.meta["encrypted"]} icon="lock_closed" label="Encrypted" />
           <Core.status_badge :if={@job.meta["structured"]} icon="table_cells" label="Structured" />
           <Core.status_badge :if={@job.meta["decorated"]} icon="sparkles" label="Decorated" />
@@ -231,7 +232,7 @@ defmodule Oban.Web.Jobs.DetailComponent do
         </div>
       </div>
 
-      <.job_data_section job={@job} resolver={@resolver} />
+      <.job_data_section job={@job} os_time={@os_time} resolver={@resolver} />
 
       <div class="px-3 py-6 border-t border-gray-200 dark:border-gray-700">
         <button
@@ -618,6 +619,7 @@ defmodule Oban.Web.Jobs.DetailComponent do
   # Job Data Section
 
   attr :job, :map, required: true
+  attr :os_time, :integer, required: true
   attr :resolver, :any, required: true
 
   defp job_data_section(assigns) do
@@ -699,6 +701,31 @@ defmodule Oban.Web.Jobs.DetailComponent do
               </button>
             </div>
             <pre class="font-mono text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-all">{format_recorded(@job, @resolver)}</pre>
+          </div>
+        </div>
+
+        <div :if={signal_status(@job) != :none} id="job-signal" class="mt-4">
+          <div class="relative bg-gray-50 dark:bg-gray-800 rounded-md p-4">
+            <div class="flex justify-between items-start min-h-7 mb-2">
+              <div class="flex items-center space-x-2">
+                <h4 class="font-medium text-xs uppercase text-gray-500 dark:text-gray-400">
+                  {signal_heading(@job)}
+                </h4>
+                <.pro_badge id="signal-pro-badge" tooltip="Awaitable signal from Oban.Pro.Worker" />
+              </div>
+              <button
+                :if={signal_status(@job) == :received}
+                type="button"
+                id="copy-signal"
+                class="w-9 h-9 -mr-2 -mt-2 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-white dark:hover:bg-gray-700 cursor-pointer"
+                data-title="Copy to clipboard"
+                phx-hook="Tippy"
+                phx-click={copy_to_clipboard(format_signal(@job, @os_time, @resolver))}
+              >
+                <Icons.icon name="icon-clipboard" class="w-4 h-4" />
+              </button>
+            </div>
+            <pre class="font-mono text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-all">{format_signal(@job, @os_time, @resolver)}</pre>
           </div>
         </div>
       </div>
@@ -812,6 +839,8 @@ defmodule Oban.Web.Jobs.DetailComponent do
         job
       end
 
+    job = %{job | meta: Map.delete(job.meta, "signal")}
+
     Resolver.call_with_fallback(resolver, :format_job_meta, [job])
   end
 
@@ -827,6 +856,35 @@ defmodule Oban.Web.Jobs.DetailComponent do
         "Recording Not Enabled"
     end
   end
+
+  defp signal_status(%{meta: %{"signal" => _}}), do: :received
+  defp signal_status(%{meta: %{"wait_until" => _}}), do: :awaiting
+  defp signal_status(_job), do: :none
+
+  defp signal_heading(job) do
+    case signal_status(job) do
+      :received -> "Received Signal"
+      :awaiting -> "Awaiting Signal"
+    end
+  end
+
+  defp format_signal(%{meta: %{"signal" => signal}} = job, _os_time, resolver) do
+    Resolver.call_with_fallback(resolver, :format_signal, [signal, job])
+  end
+
+  defp format_signal(%{meta: %{"wait_until" => wait_until}}, os_time, _resolver)
+       when is_integer(wait_until) do
+    deadline =
+      wait_until
+      |> DateTime.from_unix!(:millisecond)
+      |> DateTime.truncate(:second)
+
+    words = Timing.to_words(DateTime.to_unix(deadline) - os_time)
+
+    "Deadline #{words} (#{DateTime.to_iso8601(deadline)})"
+  end
+
+  defp format_signal(_job, _os_time, _resolver), do: "No deadline"
 
   defp error_entry(assigns) do
     error =

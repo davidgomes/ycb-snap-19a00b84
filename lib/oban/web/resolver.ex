@@ -42,6 +42,13 @@ defmodule Oban.Web.Resolver do
     end
 
     @impl true
+    def format_signal(signal, _job) do
+      signal
+      |> Oban.Web.Resolver.decode_signal()
+      |> inspect(charlists: :as_lists, pretty: true)
+    end
+
+    @impl true
     def jobs_query_limit(_state), do: 100_000
 
     @impl true
@@ -86,6 +93,8 @@ defmodule Oban.Web.Resolver do
   * [Format Job Args](#c:format_job_args/1)—Override the default verbose args formatting.
 
   * [Format Job Meta](#c:format_meta_args/1)—Override the default verbose meta formatting.
+
+  * [Format Signal](#c:format_signal/2)—Override the default awaitable signal formatting.
 
   * [Default Refresh](#c:resolve_refresh/1)—Set the default refresh interval for new sessions.
 
@@ -233,6 +242,35 @@ defmodule Oban.Web.Resolver do
       end
   """
   @callback format_recorded(recorded :: term(), job :: Job.t()) :: iodata()
+
+  @doc """
+  Customize the formatting of awaitable signal payloads wherever they are displayed.
+
+  Signals are delivered to jobs that pause with `Oban.Pro.Worker.await_signal/1`. This callback
+  behaves identically to `c:format_recorded/2`, but is used for received signal payloads.
+
+  Note that you **must decode the signal binary** prior to inspecting it.
+
+  ## Examples
+
+  Redact the `"token"` field from all signal payloads:
+
+      def format_signal(signal, _job) do
+        signal
+        |> Oban.Web.Resolver.decode_signal()
+        |> Map.replace("token", "REDACTED")
+        |> inspect(pretty: true)
+      end
+
+  Decode the signal without the `:safe` flag set, to allow decoding terms with unknown atoms:
+
+      def format_signal(signal, _job) do
+        signal
+        |> Oban.Web.Resolver.decode_signal([])
+        |> inspect(pretty: true)
+      end
+  """
+  @callback format_signal(signal :: term(), job :: Job.t()) :: iodata()
 
   @doc """
   Extract the current user from a `Plug.Conn` when the dashboard mounts.
@@ -411,6 +449,7 @@ defmodule Oban.Web.Resolver do
   @optional_callbacks format_job_args: 1,
                       format_job_meta: 1,
                       format_recorded: 2,
+                      format_signal: 2,
                       bulk_action_limit: 1,
                       hint_query_limit: 1,
                       jobs_query_limit: 1,
@@ -451,6 +490,22 @@ defmodule Oban.Web.Resolver do
     end
   end
 
+  @doc """
+  Decode an awaitable signal's payload from a base64 binary into proper terms.
+
+  Signal payloads are encoded the same way as recorded output, and decoding applies the same
+  `:safe` flag by default. See `decode_recorded/2` for details.
+
+  ## Example
+
+  Decode a signal binary:
+
+      iex> Oban.Web.Resolver.decode_signal("g3QAAAABdwRuYW1lbQAAAARvYmFu")
+      %{name: "oban"}
+  """
+  @spec decode_signal(binary(), [:safe]) :: term()
+  def decode_signal(bin, opts \\ [:safe]), do: decode_recorded(bin, opts)
+
   @doc false
   def call_with_fallback(resolver, fun, args) when is_atom(fun) and is_list(args) do
     resolver =
@@ -479,6 +534,13 @@ defmodule Oban.Web.Resolver do
   def format_recorded(recorded, _job) do
     recorded
     |> decode_recorded()
+    |> inspect(@inspect_opts)
+  end
+
+  @doc false
+  def format_signal(signal, _job) do
+    signal
+    |> decode_signal()
     |> inspect(@inspect_opts)
   end
 
