@@ -388,7 +388,7 @@ defmodule Flop.SchemaTest do
              )
   end
 
-  test "raises error if custom field is added to sortable list" do
+  test "raises error if custom field without field_dynamic is sortable" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Parsley do
@@ -408,5 +408,59 @@ defmodule Flop.SchemaTest do
       end
 
     assert error.message =~ "cannot sort by custom field"
+    assert error.message =~ "[:inserted_at]"
+  end
+
+  test "raises error if custom field without filter is filterable" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Rosemary do
+          @derive {
+            Flop.Schema,
+            filterable: [:inserted_at],
+            sortable: [],
+            custom_fields: [
+              inserted_at: [
+                field_dynamic: {__MODULE__, :some_function, []},
+                ecto_type: :utc_datetime
+              ]
+            ]
+          }
+          defstruct [:id, :inserted_at]
+        end
+      end
+
+    assert error.message =~ "cannot filter by custom field"
+    assert error.message =~ "[:inserted_at]"
+  end
+
+  test "allows sorting by custom field with field_dynamic" do
+    defmodule Thyme do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [
+            field_dynamic: {__MODULE__, :some_function, [some: "option"]},
+            ecto_type: :utc_datetime,
+            bindings: [:thyme]
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    assert Schema.sortable(%Thyme{}) == [:inserted_at]
+
+    assert Schema.field_info(%Thyme{}, :inserted_at) == %Flop.FieldInfo{
+             ecto_type: :utc_datetime,
+             extra: %{
+               type: :custom,
+               filter: nil,
+               field_dynamic: {Thyme, :some_function, [some: "option"]},
+               bindings: [:thyme]
+             }
+           }
   end
 end

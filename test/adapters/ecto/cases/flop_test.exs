@@ -170,6 +170,45 @@ defmodule Flop.Adapters.Ecto.FlopTest do
              ) == Enum.reverse(expected)
     end
 
+    test "orders by custom fields" do
+      owners = insert_list(20, :owner)
+      target = 50
+      q = select(Owner, [o], o.id)
+      opts = [for: Owner, extra_opts: [target: target]]
+
+      expected =
+        owners
+        |> Enum.sort_by(&{abs(&1.age - target), &1.id})
+        |> Enum.map(& &1.id)
+
+      assert Flop.all(q, %Flop{order_by: [:age_distance, :id]}, opts) ==
+               expected
+
+      for directions <- [[:desc, :desc], [:desc_nulls_last, :desc]] do
+        assert Flop.all(
+                 q,
+                 %Flop{order_by: [:age_distance, :id], order_directions: directions},
+                 opts
+               ) == Enum.reverse(expected)
+      end
+    end
+
+    test "orders by validated custom fields" do
+      insert_list(20, :owner)
+      q = select(Owner, [o], o.age)
+
+      assert {:ok, {ages, _}} =
+               Flop.validate_and_run(
+                 q,
+                 %{order_by: [:age_distance], page: 1, page_size: 20},
+                 for: Owner,
+                 extra_opts: [target: 50]
+               )
+
+      distances = Enum.map(ages, &abs(&1 - 50))
+      assert distances == Enum.sort(distances)
+    end
+
     test "warns if query passed to Flop already included ordering" do
       query = from p in Pet, order_by: :species
 

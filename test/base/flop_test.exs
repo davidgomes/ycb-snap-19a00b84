@@ -6,6 +6,7 @@ defmodule FlopTest do
   alias __MODULE__.TestProvider
   alias Flop.Meta
   alias MyApp.Fruit
+  alias MyApp.Owner
   alias MyApp.Pet
   alias MyApp.Vegetable
 
@@ -307,6 +308,56 @@ defmodule FlopTest do
 
     test "returns empty list if order_by is nil" do
       assert Flop.aliases(%Flop{order_by: nil}, MyApp.Owner) == []
+    end
+  end
+
+  describe "custom fields" do
+    test "orders by the expression returned by field_dynamic" do
+      flop = %Flop{order_by: [:age_distance], order_directions: [:desc]}
+      opts = [for: Owner, extra_opts: [target: 30]]
+
+      expected =
+        order_by(Owner, [o], desc: fragment("abs(? - ?)", o.age, ^30))
+
+      assert inspect(Flop.order_by(Owner, flop, opts)) == inspect(expected)
+    end
+
+    test "raises when ordering by a custom field without field_dynamic" do
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.order_by(Pet, %Flop{order_by: [:reverse_name]}, for: Pet)
+        end
+
+      assert error.message =~ "requires a field_dynamic function"
+    end
+
+    test "raises when filtering by a custom field without filter" do
+      flop = %Flop{
+        filters: [%Flop.Filter{field: :age_distance, op: :==, value: 5}]
+      }
+
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.filter(Owner, flop, for: Owner)
+        end
+
+      assert error.message =~ "requires a filter function"
+    end
+
+    test "raises when using a custom field as cursor field" do
+      flop = %Flop{
+        first: 1,
+        after: Flop.Cursor.encode(%{age_distance: 5}),
+        order_by: [:age_distance]
+      }
+
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.query(Owner, flop, for: Owner, extra_opts: [target: 30])
+        end
+
+      assert error.message =~
+               "cursor pagination is not supported for custom fields"
     end
   end
 

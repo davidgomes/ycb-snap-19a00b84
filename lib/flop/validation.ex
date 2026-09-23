@@ -343,9 +343,10 @@ defmodule Flop.Validation do
       struct = struct(module)
 
       unsupported =
-        Enum.filter(order_by, fn field ->
-          field in sortable_fields and unsupported_cursor_field?(struct, field)
-        end)
+        order_by
+        |> Enum.filter(&(&1 in sortable_fields))
+        |> Enum.group_by(&unsupported_cursor_field_kind(struct, &1))
+        |> Map.delete(nil)
 
       remove_unsupported_cursor_fields(
         changeset,
@@ -357,16 +358,25 @@ defmodule Flop.Validation do
     end
   end
 
-  defp unsupported_cursor_field?(struct, field) do
+  defp unsupported_cursor_field_kind(struct, field) do
     case Flop.Schema.field_info(struct, field) do
-      %FieldInfo{extra: %{type: type}} when type in [:compound, :alias] -> true
-      _ -> false
+      %FieldInfo{extra: %{type: type}} when type in [:compound, :alias] ->
+        :compound_or_alias
+
+      %FieldInfo{extra: %{type: :custom}} ->
+        :custom
+
+      _ ->
+        nil
     end
   end
 
-  defp remove_unsupported_cursor_fields(changeset, [], _), do: changeset
+  defp remove_unsupported_cursor_fields(changeset, unsupported, _)
+       when map_size(unsupported) == 0,
+       do: changeset
 
   defp remove_unsupported_cursor_fields(changeset, unsupported, true) do
+    unsupported = unsupported |> Map.values() |> Enum.concat()
     order_by = get_value(changeset, :order_by) || []
     order_directions = get_value(changeset, :order_directions) || []
 
@@ -383,13 +393,21 @@ defmodule Flop.Validation do
   end
 
   defp remove_unsupported_cursor_fields(changeset, unsupported, _) do
-    Changeset.add_error(
-      changeset,
-      :order_by,
-      "cursor pagination is not supported for compound and alias fields",
-      unsupported_fields: unsupported
-    )
+    Enum.reduce(unsupported, changeset, fn {kind, fields}, acc ->
+      Changeset.add_error(
+        acc,
+        :order_by,
+        unsupported_cursor_fields_message(kind),
+        unsupported_fields: fields
+      )
+    end)
   end
+
+  defp unsupported_cursor_fields_message(:compound_or_alias),
+    do: "cursor pagination is not supported for compound and alias fields"
+
+  defp unsupported_cursor_fields_message(:custom),
+    do: "cursor pagination is not supported for custom fields"
 
   defp remove_unsortable_fields(order_by, order_directions, sortable_fields) do
     Enum.reduce(

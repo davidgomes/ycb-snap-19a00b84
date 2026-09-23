@@ -29,10 +29,16 @@ defmodule Flop.ValidationTest do
 
     @derive {Flop.Schema,
              filterable: [],
-             sortable: [:name, :full_name, :thing_count],
+             sortable: [:name, :full_name, :thing_count, :name_length],
              adapter_opts: [
                compound_fields: [full_name: [:family_name, :given_name]],
-               alias_fields: [:thing_count]
+               alias_fields: [:thing_count],
+               custom_fields: [
+                 name_length: [
+                   field_dynamic: {__MODULE__, :name_length, []},
+                   ecto_type: :integer
+                 ]
+               ]
              ]}
 
     schema "things" do
@@ -788,12 +794,24 @@ defmodule Flop.ValidationTest do
       assert opts[:unsupported_fields] == [:full_name, :thing_count]
     end
 
+    test "rejects a custom field as cursor order field" do
+      params = %{first: 2, after: @cursor, order_by: [:name_length]}
+      assert {:error, changeset} = validate(params, for: Thing)
+
+      assert errors_on(changeset)[:order_by] == [
+               "cursor pagination is not supported for custom fields"
+             ]
+
+      assert {_, opts} = changeset.errors[:order_by]
+      assert opts[:unsupported_fields] == [:name_length]
+    end
+
     test "removes them with replace_invalid_params" do
       params = %{
         first: 2,
         after: @cursor,
-        order_by: [:full_name, :name, :thing_count],
-        order_directions: [:desc, :asc, :desc]
+        order_by: [:full_name, :name_length, :name, :thing_count],
+        order_directions: [:desc, :desc, :asc, :desc]
       }
 
       assert {:ok, %Flop{} = flop} =
@@ -889,6 +907,21 @@ defmodule Flop.ValidationTest do
 
       params = %{order_by: ["name"]}
       assert {:ok, %Flop{order_by: [:name]}} = validate(params, for: Pet)
+    end
+
+    test "allows to order by sortable custom fields" do
+      params = %{order_by: ["age_distance", "name"], order_directions: ["desc"]}
+
+      assert {:ok,
+              %Flop{
+                order_by: [:age_distance, :name],
+                order_directions: [:desc]
+              }} = validate(params, for: Owner)
+
+      # custom field without field_dynamic
+      params = %{order_by: [:reverse_name]}
+      assert {:error, changeset} = validate(params, for: Pet)
+      assert errors_on(changeset)[:order_by] == ["has an invalid entry"]
     end
 
     test "replaces invalid order fields with replace_invalid_params" do
