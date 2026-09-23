@@ -335,5 +335,35 @@ defmodule Guardian.Plug.VerifySessionTest do
       assert {:ok, _} = apply(ctx.impl, :decode_and_verify, [new_access_token])
       assert %{"sub" => "User:jane", "typ" => "access"} = Guardian.Plug.current_claims(conn)
     end
+
+    test "selects the verifying secret from the connection", ctx do
+      {:ok, token, claims} = apply(ctx.impl, :encode_and_sign, [%{id: "jane"}, %{}, [secret: "acme-secret"]])
+      secret = fn conn -> "#{conn.assigns.tenant}-secret" end
+
+      conn =
+        :get
+        |> conn("/")
+        |> init_test_session(%{guardian_default_token: token})
+        |> Plug.Conn.assign(:tenant, "acme")
+        |> Pipeline.put_module(ctx.impl)
+        |> Pipeline.put_error_handler(ctx.handler)
+        |> VerifySession.call(secret: secret)
+
+      refute conn.halted
+      assert Guardian.Plug.current_token(conn) == token
+      assert Guardian.Plug.current_claims(conn) == claims
+
+      conn =
+        :get
+        |> conn("/")
+        |> init_test_session(%{guardian_default_token: token})
+        |> Plug.Conn.assign(:tenant, "other")
+        |> Pipeline.put_module(ctx.impl)
+        |> Pipeline.put_error_handler(ctx.handler)
+        |> VerifySession.call(secret: secret)
+
+      assert conn.halted
+      refute Guardian.Plug.current_token(conn)
+    end
   end
 end

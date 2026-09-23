@@ -353,5 +353,40 @@ defmodule Guardian.Plug.VerifyHeaderTest do
       assert {:ok, _} = apply(ctx.impl, :decode_and_verify, [new_access_token])
       assert %{"sub" => "User:jane", "typ" => "access"} = Guardian.Plug.current_claims(conn)
     end
+
+    test "selects the verifying secret from the connection", ctx do
+      {:ok, token, claims} = apply(ctx.impl, :encode_and_sign, [%{id: "jane"}, %{}, [secret: "acme-secret"]])
+
+      secret = fn conn ->
+        [tenant] = get_req_header(conn, "x-tenant")
+        "#{tenant}-secret"
+      end
+
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_header("authorization", token)
+        |> put_req_header("x-tenant", "acme")
+        |> Pipeline.put_module(ctx.impl)
+        |> Pipeline.put_error_handler(ctx.handler)
+        |> VerifyHeader.call(secret: secret)
+
+      refute conn.halted
+      assert Guardian.Plug.current_token(conn) == token
+      assert Guardian.Plug.current_claims(conn) == claims
+
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_header("authorization", token)
+        |> put_req_header("x-tenant", "other")
+        |> Pipeline.put_module(ctx.impl)
+        |> Pipeline.put_error_handler(ctx.handler)
+        |> VerifyHeader.call(secret: secret)
+
+      assert conn.status == 401
+      assert conn.halted
+      refute Guardian.Plug.current_token(conn)
+    end
   end
 end

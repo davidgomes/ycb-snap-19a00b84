@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+* `Guardian.Plug.VerifyHeader`, `Guardian.Plug.VerifySession` and
+  `Guardian.Plug.VerifyCookie` accept a one-arity function as the `:secret`
+  option, called with the connection to select the verifying secret per request.
+
 ## v2.4.1
 
 ### Security

@@ -308,6 +308,19 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
+    @doc """
+    Resolves a `:secret` option given as a one-arity function by calling it with
+    the connection, so the verifying secret can be selected per request.
+    Any other `:secret` value is left untouched.
+    """
+    @spec put_secret_from_conn(Keyword.t(), Plug.Conn.t()) :: Keyword.t()
+    def put_secret_from_conn(opts, conn) do
+      case Keyword.get(opts, :secret) do
+        fun when is_function(fun, 1) -> Keyword.put(opts, :secret, fun.(conn))
+        _ -> opts
+      end
+    end
+
     @spec find_token_from_cookies(conn :: Plug.Conn.t(), Keyword.t()) :: {:ok, String.t()} | :no_token_found
     def find_token_from_cookies(conn, opts \\ []) do
       key =
