@@ -13,7 +13,7 @@ defmodule PlugRailsCookieSessionStore do
       plug :put_secret_key_base
 
       def put_secret_key_base(conn, _) do
-        put_in conn.secret_key_base, "-- LONG STRING WITH AT LEAST 64 BYTES --"
+        put_in conn.secret_key_base, "-- LONG STRING WITH AT LEAST 32 BYTES --"
       end
 
   ## Options
@@ -136,8 +136,8 @@ defmodule PlugRailsCookieSessionStore do
 
   defp validate_secret_key_base(nil), do:
     raise(ArgumentError, "cookie store expects conn.secret_key_base to be set")
-  defp validate_secret_key_base(secret_key_base) when byte_size(secret_key_base) < 64, do:
-    raise(ArgumentError, "cookie store expects conn.secret_key_base to be at least 64 bytes")
+  defp validate_secret_key_base(secret_key_base) when byte_size(secret_key_base) < 32, do:
+    raise(ArgumentError, "cookie store expects conn.secret_key_base to be at least 32 bytes")
   defp validate_secret_key_base(secret_key_base), do:
     secret_key_base
 
