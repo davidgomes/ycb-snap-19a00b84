@@ -67,9 +67,11 @@ defmodule Hexpm.Repository.ReleaseSemverSortKeyTest do
     assert keys["1.0.0-rc.1+build-2"] == keys["1.0.0-rc.1"]
   end
 
+  @invalid ["", "1", "1.0", "1.0.0.0", "01.0.0", "v1.0.0"] ++
+             ["1.0.0-", "1.0.0-01", "1.0.0-a..b", "1.0.0-a.", "1.0.0-a_b"]
+
   test "rejects versions that aren't SemVer" do
-    for version <- ["", "1", "1.0", "1.0.0.0", "01.0.0", "v1.0.0", "1.0.0-", "1.0.0-01"] ++
-                     ["1.0.0-a..b", "1.0.0-a.", "1.0.0-a_b"] do
+    for version <- @invalid do
       assert Version.parse(version) == :error
 
       assert_raise Postgrex.Error, ~r/invalid SemVer version/, fn ->
