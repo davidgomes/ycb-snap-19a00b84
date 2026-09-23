@@ -46,7 +46,71 @@ defmodule UtilsTest do
   test "required?/1 returns true if the resource is required" do
     assert required?(required: true) == true
     assert required?(required: false) == false
-    assert required?([]) == false
+    assert required?([]) == true
+  end
+
+  test "persisted?/1 is true only when :persisted or :required is explicitly set" do
+    assert persisted?([]) == false
+    assert persisted?(required: false) == false
+    assert persisted?(required: true) == true
+    assert persisted?(persisted: true) == true
+  end
+
+  describe "get_resource_name/2" do
+    test "infers the name from the model" do
+      assert get_resource_name(:show, model: MyApp.BlogPost) == :blog_post
+    end
+
+    test "pluralizes the name for the :index action unless the resource is persisted" do
+      assert get_resource_name(:index, model: Post) == :posts
+      assert get_resource_name(:index, model: Post, required: true) == :post
+      assert get_resource_name(:index, model: Post, persisted: true) == :post
+    end
+
+    test "uses the :as option when provided" do
+      assert get_resource_name(:index, model: Post, as: :my_posts) == :my_posts
+      assert get_resource_name(:show, model: Post, as: :my_post) == :my_post
+    end
+  end
+
+  test "non_id_actions/1 appends the :non_id_actions option to the defaults" do
+    assert non_id_actions([]) == [:index, :new, :create]
+    assert non_id_actions(non_id_actions: [:find]) == [:index, :new, :create, :find]
+  end
+
+  describe "apply_handle_not_found?/3" do
+    test "is false when the resource is assigned" do
+      refute apply_handle_not_found?(:show, %{post: %Post{id: 1}}, model: Post)
+    end
+
+    test "is true when the resource is missing and required by default" do
+      assert apply_handle_not_found?(:show, %{}, model: Post)
+      assert apply_handle_not_found?(:new, %{post: nil}, model: Post)
+    end
+
+    test "is false for non-id actions when the resource is not required" do
+      refute apply_handle_not_found?(:new, %{}, model: Post, required: false)
+      refute apply_handle_not_found?(:find, %{}, model: Post, required: false, non_id_actions: [:find])
+      assert apply_handle_not_found?(:show, %{}, model: Post, required: false)
+    end
+  end
+
+  describe "validate_opts/1" do
+    test "warns about deprecated options" do
+      assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+               assert validate_opts(model: Post, persisted: true) == [model: Post, persisted: true]
+             end) =~ "The `:persisted` option is deprecated"
+
+      assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+               validate_opts(model: Post, non_id_actions: [:find])
+             end) =~ "The `:non_id_actions` option is deprecated"
+    end
+
+    test "does not warn for supported options" do
+      assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+               validate_opts(model: Post, required: false)
+             end) == ""
+    end
   end
 
   describe "apply_error_handler/3" do

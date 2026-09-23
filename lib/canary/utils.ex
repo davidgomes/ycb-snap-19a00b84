@@ -99,11 +99,109 @@ defmodule Canary.Utils do
   end
 
   @doc """
-  Check if a key is present in a keyword list
+  Check if the resource is required, defaults to true
   """
   @spec required?(Keyword.t()) :: boolean
   def required?(opts) do
-    !!Keyword.get(opts, :required, false)
+    !!Keyword.get(opts, :required, true)
+  end
+
+  @doc """
+  Check if the resource should always be loaded from the database.
+
+  It's true when `:persisted` (deprecated) or `:required` is explicitly set to true.
+  """
+  @spec persisted?(Keyword.t()) :: boolean
+  def persisted?(opts) do
+    !!Keyword.get(opts, :persisted, false) || !!Keyword.get(opts, :required, false)
+  end
+
+  @doc ~S"""
+  Get the resource name used as the assigns key.
+
+  If the `:as` option is provided, it will be used as the resource name.
+  Otherwise it's inferred from the `:model` module name and pluralized for the `:index` action,
+  unless the resource is persisted.
+
+      iex> Canary.Utils.get_resource_name(:show, model: MyApp.Post)
+      :post
+
+      iex> Canary.Utils.get_resource_name(:index, model: MyApp.Post)
+      :posts
+
+      iex> Canary.Utils.get_resource_name(:index, model: MyApp.Post, required: true)
+      :post
+
+      iex> Canary.Utils.get_resource_name(:index, model: MyApp.Post, as: :my_posts)
+      :my_posts
+  """
+  @spec get_resource_name(atom, Keyword.t()) :: atom
+  def get_resource_name(action, opts) do
+    case opts[:as] do
+      nil ->
+        opts[:model]
+        |> Module.split()
+        |> List.last()
+        |> Macro.underscore()
+        |> pluralize_if_needed(action, opts)
+        |> String.to_atom()
+
+      as ->
+        as
+    end
+  end
+
+  defp pluralize_if_needed(name, action, opts) do
+    if action in [:index] and not persisted?(opts) do
+      name <> "s"
+    else
+      name
+    end
+  end
+
+  @doc ~S"""
+  Get the list of actions for which the model module name is used instead of a loaded resource.
+
+      iex> Canary.Utils.non_id_actions([])
+      [:index, :new, :create]
+
+      iex> Canary.Utils.non_id_actions(non_id_actions: [:find_by_name])
+      [:index, :new, :create, :find_by_name]
+  """
+  @spec non_id_actions(Keyword.t()) :: [atom]
+  def non_id_actions(opts) do
+    Enum.concat([:index, :new, :create], Keyword.get(opts, :non_id_actions, []))
+  end
+
+  @doc """
+  Check if the not found handler should be applied for the given action, assigns and options.
+  """
+  @spec apply_handle_not_found?(atom, map, Keyword.t()) :: boolean
+  def apply_handle_not_found?(action, assigns, opts) do
+    resource = Map.get(assigns, get_resource_name(action, opts))
+
+    is_nil(resource) and (required?(opts) or action not in non_id_actions(opts))
+  end
+
+  @doc false
+  @spec validate_opts(Keyword.t()) :: Keyword.t()
+  def validate_opts(opts) do
+    if Keyword.has_key?(opts, :persisted) do
+      IO.warn(
+        "The `:persisted` option is deprecated and will be removed in Canary 2.1.0. " <>
+          "Use `:required` instead. Check the documentation for more information."
+      )
+    end
+
+    if Keyword.has_key?(opts, :non_id_actions) do
+      IO.warn(
+        "The `:non_id_actions` option is deprecated and will be removed in Canary 2.1.0. " <>
+          "Use a separate `:authorize_resource` plug with `required: false` for non-id actions " <>
+          "and `:except` to skip them in other plugs. Check the documentation for more information."
+      )
+    end
+
+    opts
   end
 
   @doc """

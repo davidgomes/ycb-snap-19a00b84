@@ -1777,6 +1777,22 @@ defmodule Canary.PlugsTest do
 
       assert authorize_resource(conn, opts) == expected
     end
+
+    test "it authorizes against the model when the resource is not required" do
+      conn =
+        conn(
+          %Plug.Conn{
+            private: %{phoenix_action: :other_action},
+            assigns: %{current_user: %User{id: 1}}
+          },
+          :get,
+          "/posts/other-action",
+          %{}
+        )
+
+      assert authorize_resource(conn, model: Post, required: false).assigns.authorized == true
+      assert authorize_resource(conn, model: Post).assigns.authorized == false
+    end
   end
 
   test "it authorizes the controller correctly" do
