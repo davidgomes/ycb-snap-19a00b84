@@ -3,6 +3,13 @@
 This is a major rewrite of the previously-existing [`sqlite_ecto`](https://github.com/jazzyb/sqlite_ecto) that adds support for Ecto 2.1+.
 
 
+## Unreleased
+
+* Update to support Ecto 2.2. Ecto 2.1 is no longer supported.
+* Require Elixir 1.4 or newer, as Ecto 2.2 does.
+* Migrations: `:bigserial` (Ecto 2.2's default primary key and reference type) maps to `INTEGER`, so primary keys remain `INTEGER PRIMARY KEY AUTOINCREMENT`.
+
+
 ## v2.0.3
 
 _28 August 2017_

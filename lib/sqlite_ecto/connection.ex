@@ -328,13 +328,10 @@ if Code.ensure_loaded?(Sqlitex.Server) do
       quote_qualified_name(field, sources, idx)
     end
 
-    defp expr({:&, _, [idx, fields, _counter]}, sources, query) do
-      {source, name, schema} = elem(sources, idx)
-      if is_nil(schema) and is_nil(fields) do
-        error!(query, "SQLite does not support selecting all fields from #{source} without a schema. " <>
-                      "Please specify a schema or specify exactly which fields you want to select")
-      end
-      intersperse_map(fields, ", ", &[name, ?. | quote_name(&1)])
+    defp expr({:&, _, [idx]}, sources, query) do
+      {source, _name, _schema} = elem(sources, idx)
+      error!(query, "SQLite does not support selecting all fields from #{source} without a schema. " <>
+                    "Please specify a schema or specify exactly which fields you want to select")
     end
 
     defp expr({:in, _, [left, right]}, sources, query) when is_list(right) do
@@ -363,8 +360,8 @@ if Code.ensure_loaded?(Sqlitex.Server) do
       ["NOT (", expr(expr, sources, query), ?)]
     end
 
-    defp expr(%Ecto.SubQuery{query: query, fields: fields}, _sources, _query) do
-      query.select.fields |> put_in(fields) |> all()
+    defp expr(%Ecto.SubQuery{query: query}, _sources, _query) do
+      all(query)
     end
 
     defp expr({:fragment, _, [kw]}, _sources, query) when is_list(kw) or tuple_size(kw) == 3 do
@@ -476,11 +473,16 @@ if Code.ensure_loaded?(Sqlitex.Server) do
     # transaction and trigger. See corresponding code in Sqlitex.
 
     defp returning(%Query{select: nil}, _sources, _cmd), do: []
-    defp returning(%Query{select: %{fields: [{:&, [], [_, fields, _]}]}}, sources, cmd) do
+    defp returning(%Query{select: %{fields: fields}} = query, sources, cmd) do
       cmd = cmd |> Atom.to_string |> String.upcase
       table = table_from_first_source(sources)
-      fields = Enum.map_join([table | fields], ",", &quote_id/1)
-      [@pseudo_returning_statement, cmd, ?\s, fields]
+      fields = Enum.map(fields, &returning_field(&1, query))
+      [@pseudo_returning_statement, cmd, ?\s, Enum.map_join([table | fields], ",", &quote_id/1)]
+    end
+
+    defp returning_field({{:., _, [{:&, _, [0]}, field]}, _, []}, _query), do: field
+    defp returning_field(_expr, query) do
+      error!(query, "SQLite adapter only supports returning fields of the source table")
     end
 
     defp table_from_first_source(sources) do
@@ -527,7 +529,7 @@ if Code.ensure_loaded?(Sqlitex.Server) do
       current =
         case elem(sources, pos) do
           {table, schema} ->
-            name = [String.first(table) | Integer.to_string(pos)]
+            name = [create_alias(table) | Integer.to_string(pos)]
             {quote_table(prefix, table), name, schema}
           {:fragment, _, _} ->
             {nil, [?f | Integer.to_string(pos)], nil}
@@ -539,6 +541,13 @@ if Code.ensure_loaded?(Sqlitex.Server) do
 
     defp create_names(_prefix, _sources, pos, pos, _stmt) do
       []
+    end
+
+    defp create_alias(<<first, _rest::binary>>) when first in ?a..?z when first in ?A..?Z do
+      <<first>>
+    end
+    defp create_alias(_) do
+      "t"
     end
 
     defp prohibit_subquery_if_necessary([first | rest], stmt)
@@ -702,7 +711,7 @@ if Code.ensure_loaded?(Sqlitex.Server) do
       column_options(default, type, null, pk)
     end
 
-    defp column_options(_default, :serial, _, true) do
+    defp column_options(_default, type, _, true) when type in [:serial, :bigserial] do
       " PRIMARY KEY AUTOINCREMENT"
     end
     defp column_options(default, type, null, pk) do
@@ -765,6 +774,7 @@ if Code.ensure_loaded?(Sqlitex.Server) do
     # precision regardless of the declared column type. Decimals are the
     # only exception.
     defp column_type(:serial, _opts), do: "INTEGER"
+    defp column_type(:bigserial, _opts), do: "INTEGER"
     defp column_type(:string, _opts), do: "TEXT"
     defp column_type(:map, _opts), do: "TEXT"
     defp column_type({:map, _}, _opts), do: "TEXT"
