@@ -22,6 +22,11 @@ config :free_oban_ui, FreeObanUiWeb.Endpoint,
   pubsub_server: FreeObanUi.PubSub,
   live_view: [signing_salt: "NlgPets+"]
 
+config :free_oban_ui, Oban,
+  engine: Oban.Engines.Basic,
+  queues: [default: 10],
+  repo: FreeObanUi.Repo
+
 # Configures the mailer
 #
 # By default it uses the "Local" adapter which stores the emails
