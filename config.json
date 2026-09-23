@@ -952,6 +952,20 @@
         "difficulty": 2
       },
       {
+        "slug": "prism",
+        "name": "Prism",
+        "uuid": "4d3a7a2e-9c61-4b8f-a5e2-1f0c6b7d8e93",
+        "practices": [],
+        "prerequisites": [
+          "maps",
+          "lists",
+          "enum",
+          "recursion",
+          "floating-point-numbers"
+        ],
+        "difficulty": 5
+      },
+      {
         "slug": "protein-translation",
         "name": "Protein Translation",
         "uuid": "84af7be8-8f90-4990-9d48-b5324a0d4354",
