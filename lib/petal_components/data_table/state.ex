@@ -162,6 +162,11 @@ defmodule PetalComponents.DataTable.State do
   state unchanged; like `from_params/2`, no atoms are ever created
   from input.
 
+  Selection (`select`, `select_all`, `clear_selection`) is UI state,
+  not query state. Those ops are ignored here on purpose, so a shared
+  event name can carry both: handle them in your own clauses before
+  calling `handle_op/3`.
+
   A `filter` op's value normalizes by editor shape: a `values` list
   posts as-is (the select editor's `:in`), `between` pairs
   `value`/`value2` into `[min, max]`, anything blank removes the

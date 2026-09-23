@@ -27,6 +27,21 @@
   `search`/`page_size` ops through plain forms; link mode wires both
   through the new `PetalDataTable` hook, which fills in URL templates
   and clicks a hidden patch link so navigation stays LiveView's own.
+- **`<.data_table>` row selection (4.12 data table, milestone 3).**
+  `selectable` adds a leading checkbox column keyed by `row_id` (a
+  field or a function; it must uniquely identify records across ALL
+  pages). The header checkbox is tri-state: checked when every row on
+  the page is selected, indeterminate when only some are (the
+  `PetalDataTable` hook mirrors `data-pc-dt-indeterminate` onto the
+  DOM property, both wiring modes), unchecked otherwise. While any
+  rows are selected the toolbar morphs into the count, the
+  `:bulk_action` slot (`:let` receives the normalized ids) and a
+  clear button. Selection is UI state: it rides `on_ui` (defaulting
+  to `on_change`) with `select` / `select_all` / `clear_selection`
+  ops and never touches URLs or `State.handle_op/3`. Same-page
+  duplicate ids raise; a blank key renders an inert checkbox and
+  stays out of the select-all math. `row_label` gives each checkbox
+  a human name; without it the announcement is the row's position.
 - **`<.data_table>` column filters (4.12 data table, milestone 2,
   part 2).** `:col` gains `filterable` ("text" | "number" | "select" |
   "date") and `options`; each filterable column renders a toolbar

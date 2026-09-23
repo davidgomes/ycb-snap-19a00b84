@@ -4602,13 +4602,17 @@ export const PetalComboBox = {
 };
 
 // Link-mode wiring for the data table's quick search and rows-per-page
-// select. Event mode posts through plain phx-change forms and never
-// mounts this hook; link mode has no events by design (handle_params is
-// the whole backend), so state changes must become patch URLs. The
-// component renders URL templates (:term / :page_size placeholders,
-// assembled around the already-encoded rest of the query) and a hidden
-// data-phx-link anchor; the hook fills a template in and clicks the
-// anchor so navigation stays LiveView's own.
+// select. Event mode posts those through plain phx-change forms. Link
+// mode has no events by design (handle_params is the whole backend), so
+// state changes must become patch URLs. The component renders URL
+// templates (:term / :page_size placeholders, assembled around the
+// already-encoded rest of the query) and a hidden data-phx-link anchor;
+// the hook fills a template in and clicks the anchor so navigation stays
+// LiveView's own.
+//
+// Selectable tables mount this hook in BOTH wiring modes: indeterminate
+// is a DOM property, not an attribute, so the server stamps
+// data-pc-dt-indeterminate and the hook mirrors it after every render.
 export const PetalDataTable = {
   mounted() {
     this.searchTimer = null;
@@ -4659,6 +4663,19 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+    this.syncIndeterminate();
+  },
+
+  updated() {
+    this.syncIndeterminate();
+  },
+
+  // indeterminate is a DOM property, not an attribute - mirror the
+  // server-stamped data attr onto it after every mount/patch
+  syncIndeterminate() {
+    this.el.querySelectorAll("[data-pc-dt-indeterminate]").forEach((box) => {
+      box.indeterminate = box.dataset.pcDtIndeterminate === "true";
+    });
   },
 
   destroyed() {
