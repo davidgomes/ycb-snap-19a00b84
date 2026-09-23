@@ -5,6 +5,17 @@
     * added support for authorization LiveView
     * added `:error_handler` and ErrorHandler behaviour
     * aded  `:required` option
+    * consistent API for plugs and hooks - `Canary.Plugs` and `Canary.Hooks` load and authorize resources the same way
+    * the resource is not queried from the repo when there is no id in params
+
+  * Breaking changes
+    * `authorize_resource` plug authorizes against the resource loaded in `conn.assigns` (or the model when it's not loaded) instead of loading it from the repo, unless deprecated `:persisted` is set - use `load_and_authorize_resource`
+    * `:not_found_handler` is called only when the `:required` option is set
+    * `load_and_authorize_resource` plug does not call the `:not_found_handler` when the `:unauthorized_handler` halts the connection
+    * `load_and_authorize_resource` hook sets the resource to `nil` when unauthorized and calls the `:not_found_handler` when the `:unauthorized_handler` returns `{:cont, socket}`
+
+  * Deprecations
+    * `:persisted` option, use `:required` instead
 
   * Dependency changes
     * Elixir ~> 1.14 is now required

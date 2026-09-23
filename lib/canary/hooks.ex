@@ -313,9 +313,14 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     @doc """
     Loads and autorize resource and assigns it to the socket. When resource is required it will
-    halt the socket if the resource is not found. If the user is not authorized it will halt the socket.
+    halt the socket if the resource is not found. If the user is not authorized it will halt the socket
+    and the resource in the socket assigns is set to nil.
 
     It combines `load_resource` and `authorize_resource` functions.
+
+    > If both an `:unauthorized_handler` and a `:not_found_handler` are specified, and the event meets
+    > the criteria for both, the `:unauthorized_handler` will be called first. The `:not_found_handler`
+    > is called only when the `:unauthorized_handler` returns `{:cont, socket}`.
 
     Required opts:
 

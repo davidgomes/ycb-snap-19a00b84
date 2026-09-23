@@ -77,6 +77,8 @@ Will load the `Project.Post` having the id given in `params["id"]` through `Your
 
 Checks whether or not the `current_user` for the request can perform the given action on the given resource and assigns the result (true/false) to `assigns.authorized`. It is up to you to decide what to do with the result.
 
+The resource is the one already loaded into `assigns.<resource_name>` (e.g. by `load_resource`), it is not loaded from the database. When the resource is not loaded, the authorization is performed against the model module name, unless the `:required` option is set - then the authorization fails.
+
 For Phoenix applications, Canary determines the action automatically.
 For non-Phoenix applications, or to override the action provided by Phoenix, simply ensure that `assigns.canary_action` contains an atom specifying the action.
 
@@ -359,7 +361,7 @@ config :canary, unauthorized_handler: {Helpers, :handle_unauthorized}
 
 ### Handling resource not found
 
-By default, when a resource is not found, Canary simply sets the resource in `conn.assigns` to `nil`. Like unauthorized action handling , you can configure a function to which Canary will pass the `conn` when a resource is not found:
+By default, when a resource is not found, Canary simply sets the resource in `conn.assigns` to `nil`. Like unauthorized action handling , you can configure a function to which Canary will pass the `conn` when a required resource (with the `:required` option set) is not found:
 
 ```elixir
 config :canary, not_found_handler: {Helpers, :handle_not_found}
@@ -368,7 +370,9 @@ config :canary, not_found_handler: {Helpers, :handle_not_found}
 You can also specify handlers on an individual basis (which will override the corresponding configured handler, if any) by specifying the corresponding `opt` in the plug call:
 
 ```elixir
-plug :load_and_authorize_resource Post,
+plug :load_and_authorize_resource,
+  model: Post,
+  required: true,
   unauthorized_handler: {Helpers, :handle_unauthorized},
   not_found_handler: {Helpers, :handle_not_found}
 ```

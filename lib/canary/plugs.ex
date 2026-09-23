@@ -8,6 +8,9 @@ defmodule Canary.Plugs do
 
   The plugs all store data in conn.assigns (in Phoenix applications, keys in conn.assigns can be accessed with `@key_name` in templates)
 
+  The plugs load and authorize resources the same way as the `Canary.Hooks` do for LiveView,
+  except for loading all resources on the `:index` action and the `:non_id_actions` option.
+
   In order to use the plug functions, you must `import Canary.Plugs`.
 
   You must also specify the Ecto repo to use in your configuration:

@@ -145,7 +145,8 @@ Canary Plugs and Hooks uses the same configuration options.
 | `:id_name` | Specifies the name of the id in params, defaults to "id" | `:post_id` |
 | `:id_field` | Specifies the name of the ID field in the database for searching :id_name value, defaults to "id". | `:post_id` |
 | `:required` | Specifies if the resource is required, when it's not found it will handle not found error, default to false | true |
-| `:persisted` | Specifies the resource should always be loaded from the database, defaults to false **Available only in Canary.Plugs** | true |
+| `:persisted` | Deprecated, use `:required` instead. Specifies the resource should always be loaded from the database, defaults to false **Available only in Canary.Plugs** | true |
+| `:non_id_actions` | Specifies additional actions for which the authorization is performed against the model module name **Available only in Canary.Plugs** | `[:find_by_name]` |
 | `:not_found_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_not_found}` |
 | `:unauthorized_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_unauthorized}` |
 
@@ -191,7 +192,7 @@ Canary Plugs and Hooks uses the same configuration options.
 
 ## Plug and Hooks
 
-`Canary.Plugs` and `Canary.Hooks` should work the same way in most cases - except form loading all resources for non-id actions.
+`Canary.Plugs` and `Canary.Hooks` work the same way - except form loading all resources for non-id actions (and the `:non_id_actions` option), which is available only in `Canary.Plugs`.
 
 
 ### Authorize resource
@@ -345,7 +346,7 @@ config :canary, error_handler: ErrorHandler
 
 ### Handling resource not found
 
-By default, when a resource is not found, Canary simply sets the resource in `assigns` to `nil`. Like unauthorized action handling , you can configure a function to which Canary will pass the `conn` or `socket` when a resource is not found:
+By default, when a resource is not found, Canary simply sets the resource in `assigns` to `nil`. Like unauthorized action handling , you can configure a function to which Canary will pass the `conn` or `socket` when a required resource (with the `:required` option set) is not found:
 
 ```elixir
 config :canary, error_handler: ErrorHandler
@@ -356,7 +357,9 @@ You can also specify handlers on an individual basis (which will override the co
 <!-- tabs-open -->
 ### Conn Plugs
 ```elixir
-plug :load_and_authorize_resource Post,
+plug :load_and_authorize_resource,
+  model: Post,
+  required: true,
   unauthorized_handler: {Helpers, :handle_unauthorized},
   not_found_handler: {Helpers, :handle_not_found}
 ```
@@ -374,7 +377,9 @@ end
 
 ### LiveView Hooks
 ```elixir
-mount_canary :load_and_authorize_resource Post,
+mount_canary :load_and_authorize_resource,
+  model: Post,
+  required: true,
   unauthorized_handler: {Helpers, :handle_unauthorized},
   not_found_handler: {Helpers, :handle_not_found}
 ```
@@ -392,3 +397,4 @@ end
 > #### Error handler order {: .info}
 >
 > If both an `:unauthorized_handler` and a `:not_found_handler` are specified for `load_and_authorize_resource`, and the request meets the criteria for both, the `:unauthorized_handler` will be called first.
+> The `:not_found_handler` is not called when the `:unauthorized_handler` halts the request (`Plug.Conn.halt/1` or `{:halt, socket}`).
