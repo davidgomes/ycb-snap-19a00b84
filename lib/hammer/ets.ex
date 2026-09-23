@@ -16,6 +16,7 @@ defmodule Hammer.ETS do
   Runtime configuration:
   - `:clean_period` - (in milliseconds) period to clean up expired entries, defaults to 1 minute
   - `:key_older_than` - (in milliseconds) maximum age for entries before they are cleaned up, defaults to 1 hour
+  - `:before_clean` - optional 1-arity function called with each expired bucket key before it is removed (leaky and token bucket algorithms only)
   - `:algorithm` - the rate limiting algorithm to use, one of: `:fix_window`, `:sliding_window`, `:leaky_bucket`, `:token_bucket`. Defaults to `:fix_window`
 
   The ETS backend supports the following algorithms:
@@ -37,6 +38,7 @@ defmodule Hammer.ETS do
           | {:table, atom()}
           | {:algorithm, module()}
           | {:key_older_than, pos_integer()}
+          | {:before_clean, (term() -> any()) | nil}
           | GenServer.option()
 
   @type config :: %{
@@ -44,6 +46,7 @@ defmodule Hammer.ETS do
           table_opts: list(),
           clean_period: pos_integer(),
           key_older_than: pos_integer(),
+          before_clean: (term() -> any()) | nil,
           algorithm: module()
         }
 
@@ -144,6 +147,7 @@ defmodule Hammer.ETS do
     - `:clean_period` - How often to run the cleanup process (in milliseconds). Defaults to 1 minute.
     - `:key_older_than` - Optional maximum age for bucket entries (in milliseconds). Defaults to 24 hours.
       Entries older than this will be removed during cleanup.
+    - `:before_clean` - Optional function called with each expired bucket key before removal.
     - optional `:debug`, `:spawn_opts`, and `:hibernate_after` GenServer options
   """
   @spec start_link([start_option]) :: GenServer.on_start()
@@ -154,6 +158,7 @@ defmodule Hammer.ETS do
     {table, opts} = Keyword.pop!(opts, :table)
     {algorithm, opts} = Keyword.pop!(opts, :algorithm)
     {key_older_than, opts} = Keyword.pop(opts, :key_older_than, :timer.hours(24))
+    {before_clean, opts} = Keyword.pop(opts, :before_clean)
 
     case opts do
       [] ->
@@ -170,10 +175,30 @@ defmodule Hammer.ETS do
       table_opts: algorithm.ets_opts(),
       clean_period: clean_period,
       key_older_than: key_older_than,
+      before_clean: before_clean,
       algorithm: algorithm
     }
 
     GenServer.start_link(__MODULE__, config, gen_opts)
+  end
+
+  @doc false
+  def select_delete_with_callback(config, match_spec) do
+    case Map.get(config, :before_clean) do
+      nil ->
+        :ets.select_delete(config.table, match_spec)
+
+      callback ->
+        key_spec = for {head, guards, _} <- match_spec, do: {head, guards, [:"$_"]}
+
+        config.table
+        |> :ets.select(key_spec)
+        |> Enum.reduce(0, fn entry, count ->
+          callback.(elem(entry, 0))
+          :ets.delete_object(config.table, entry)
+          count + 1
+        end)
+    end
   end
 
   @compile inline: [update_counter: 4]

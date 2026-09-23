@@ -169,6 +169,6 @@ defmodule Hammer.ETS.LeakyBucket do
     older_than = now - div(config.key_older_than, 1000)
 
     match_spec = [{{:_, :_, :"$1"}, [], [{:<, :"$1", {:const, older_than}}]}]
-    :ets.select_delete(config.table, match_spec)
+    ETS.select_delete_with_callback(config, match_spec)
   end
 end
