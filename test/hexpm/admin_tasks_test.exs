@@ -227,6 +227,104 @@ defmodule Hexpm.AdminTasksTest do
     end
   end
 
+  describe "reasons/1" do
+    test "only lists reasons that apply to the scope" do
+      package_ids = Keyword.keys(AdminTasks.reasons(:package))
+      release_ids = Keyword.keys(AdminTasks.reasons(:release))
+      user_ids = Keyword.keys(AdminTasks.reasons(:user))
+
+      assert :name_squatting in package_ids
+      refute :name_squatting in release_ids
+      refute :name_squatting in user_ids
+
+      assert :spam_account in user_ids
+      refute :spam_account in package_ids
+
+      for ids <- [package_ids, release_ids, user_ids] do
+        assert :terms_of_service in ids
+      end
+    end
+  end
+
+  describe "remove_user/2 with reason" do
+    test "emails the user the reason instead of the account deletion notice" do
+      user = insert(:user)
+
+      assert :ok = AdminTasks.remove_user(user.username, reason: :spam_account)
+
+      refute Repo.get(User, user.id)
+
+      assert_email_sent(fn email ->
+        assert email.to == [{user.username, User.email(user, :primary)}]
+        assert email.subject == "Hex.pm - Your account has been removed"
+
+        assert email.text_body =~
+                 ~s(The Hex.pm account "#{user.username}" has been removed by the Hex.pm team.)
+
+        assert email.text_body =~ reason_text(:user, :spam_account)
+        assert email.html_body =~ reason_text(:user, :spam_account)
+        refute email.text_body =~ "remain available"
+      end)
+
+      refute_email_sent()
+    end
+
+    test "lists the packages removed together with the account" do
+      user = insert(:user)
+      package = insert(:package)
+      insert(:package_owner, package: package, user: user)
+
+      assert :ok =
+               AdminTasks.remove_user(user.username, delete_packages: true, reason: :seo_spam)
+
+      refute Repo.get(Package, package.id)
+
+      assert_email_sent(fn email ->
+        assert email.text_body =~ "the only owner of: #{package.name}."
+        assert email.text_body =~ reason_text(:user, :seo_spam)
+      end)
+
+      refute_email_sent()
+    end
+
+    test "accepts free text" do
+      user = insert(:user)
+
+      assert :ok = AdminTasks.remove_user(user.username, reason: "  Custom explanation.  ")
+
+      assert_email_sent(fn email -> assert email.text_body =~ "\nCustom explanation.\n" end)
+    end
+
+    test "returns an error and keeps the user for an unknown reason" do
+      user = insert(:user)
+
+      assert {:error, {:unknown_reason, :nope}} =
+               AdminTasks.remove_user(user.username, reason: :nope)
+
+      assert Repo.get(User, user.id)
+      refute_email_sent()
+    end
+
+    test "returns an error and keeps the user for a reason that does not apply to accounts" do
+      user = insert(:user)
+
+      assert {:error, {:reason_not_applicable, :name_squatting, :user}} =
+               AdminTasks.remove_user(user.username, reason: :name_squatting)
+
+      assert Repo.get(User, user.id)
+      refute_email_sent()
+    end
+
+    test "returns an error and keeps the user for a blank reason" do
+      user = insert(:user)
+
+      assert {:error, :blank_reason} = AdminTasks.remove_user(user.username, reason: " ")
+
+      assert Repo.get(User, user.id)
+      refute_email_sent()
+    end
+  end
+
   describe "rename_user/2" do
     test "renames user" do
       user = insert(:user, username: "oldname")
@@ -365,6 +463,85 @@ defmodule Hexpm.AdminTasksTest do
       assert {:error, :package_not_found} =
                AdminTasks.remove_package("hexpm", "nonexistent")
     end
+
+    test "does not send an email without a reason" do
+      package = insert(:package)
+      insert(:package_owner, package: package, user: insert(:user))
+
+      assert :ok = AdminTasks.remove_package("hexpm", package.name)
+
+      refute_email_sent()
+    end
+  end
+
+  describe "remove_package/3 with reason" do
+    test "emails every owner the reason" do
+      owner = insert(:user)
+      maintainer = insert(:user)
+      package = insert(:package)
+      insert(:package_owner, package: package, user: owner)
+      insert(:package_owner, package: package, user: maintainer, level: "maintainer")
+      insert(:release, package: package)
+
+      assert :ok = AdminTasks.remove_package("hexpm", package.name, reason: :seo_spam)
+
+      refute Repo.get(Package, package.id)
+
+      assert_email_sent(fn email ->
+        assert Enum.sort(Enum.map(email.to, &elem(&1, 1))) ==
+                 Enum.sort([User.email(owner, :primary), User.email(maintainer, :primary)])
+
+        assert email.subject == "Hex.pm - Package #{package.name} has been removed"
+
+        assert email.text_body =~
+                 "The package #{package.name} and all of its releases have been removed"
+
+        assert email.text_body =~ reason_text(:package, :seo_spam)
+        assert email.html_body =~ reason_text(:package, :seo_spam)
+        assert email.html_body =~ "support@hex.pm"
+      end)
+
+      refute_email_sent()
+    end
+
+    test "escapes free text in the html email" do
+      package = insert(:package)
+      insert(:package_owner, package: package, user: insert(:user))
+
+      assert :ok =
+               AdminTasks.remove_package("hexpm", package.name,
+                 reason: "First paragraph.\n\n<script>alert(1)</script>"
+               )
+
+      assert_email_sent(fn email ->
+        assert email.text_body =~ "First paragraph.\n\n<script>alert(1)</script>"
+        assert email.html_body =~ "First paragraph."
+        refute email.html_body =~ "<script>"
+        assert email.html_body =~ "&lt;script&gt;"
+      end)
+    end
+
+    test "returns an error and keeps the package for an unknown reason" do
+      package = insert(:package)
+      insert(:package_owner, package: package, user: insert(:user))
+
+      assert {:error, {:unknown_reason, :nope}} =
+               AdminTasks.remove_package("hexpm", package.name, reason: :nope)
+
+      assert Repo.get(Package, package.id)
+      refute_email_sent()
+    end
+
+    test "returns an error and keeps the package for a reason that does not apply to packages" do
+      package = insert(:package)
+      insert(:package_owner, package: package, user: insert(:user))
+
+      assert {:error, {:reason_not_applicable, :spam_account, :package}} =
+               AdminTasks.remove_package("hexpm", package.name, reason: :spam_account)
+
+      assert Repo.get(Package, package.id)
+      refute_email_sent()
+    end
   end
 
   describe "remove_release/3" do
@@ -393,6 +570,49 @@ defmodule Hexpm.AdminTasksTest do
 
       assert {:error, :release_not_found} =
                AdminTasks.remove_release("hexpm", package.name, "99.99.99")
+    end
+  end
+
+  describe "remove_release/4 with reason" do
+    test "emails the owners the reason" do
+      owner = insert(:user)
+      package = insert(:package)
+      insert(:package_owner, package: package, user: owner)
+      release = insert(:release, package: package, version: "0.1.0")
+      other_release = insert(:release, package: package, version: "0.2.0")
+
+      assert :ok =
+               AdminTasks.remove_release("hexpm", package.name, "0.1.0",
+                 reason: :undisclosed_behaviour
+               )
+
+      refute Repo.get(Release, release.id)
+      assert Repo.get(Release, other_release.id)
+
+      assert_email_sent(fn email ->
+        assert email.to == [{owner.username, User.email(owner, :primary)}]
+        assert email.subject == "Hex.pm - Package #{package.name} v0.1.0 has been removed"
+
+        assert email.text_body =~
+                 "Version 0.1.0 of the package #{package.name} has been removed"
+
+        assert email.text_body =~ reason_text(:release, :undisclosed_behaviour)
+        assert email.html_body =~ reason_text(:release, :undisclosed_behaviour)
+      end)
+
+      refute_email_sent()
+    end
+
+    test "returns an error and keeps the release for a reason that does not apply to releases" do
+      package = insert(:package)
+      insert(:package_owner, package: package, user: insert(:user))
+      release = insert(:release, package: package, version: "0.1.0")
+
+      assert {:error, {:reason_not_applicable, :name_squatting, :release}} =
+               AdminTasks.remove_release("hexpm", package.name, "0.1.0", reason: :name_squatting)
+
+      assert Repo.get(Release, release.id)
+      refute_email_sent()
     end
   end
 
@@ -702,4 +922,6 @@ defmodule Hexpm.AdminTasksTest do
       end)
     end
   end
+
+  defp reason_text(scope, id), do: Keyword.fetch!(AdminTasks.reasons(scope), id)
 end
