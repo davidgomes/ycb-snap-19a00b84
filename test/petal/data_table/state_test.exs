@@ -294,6 +294,50 @@ defmodule PetalComponents.DataTable.StateTest do
     end
   end
 
+  describe "selection" do
+    @opts [fields: [:name]]
+
+    test "select toggles one row, storing ids as strings" do
+      state = State.handle_op(%State{}, %{"op" => "select", "id" => 7}, @opts)
+      assert State.selected?(state, 7)
+      assert State.selected?(state, "7")
+      assert State.selected_ids(state) == ["7"]
+
+      state = State.handle_op(state, %{"op" => "select", "id" => "7"}, @opts)
+      assert State.selected_ids(state) == []
+    end
+
+    test "select_page selects the page unless all of it is already selected" do
+      state = State.put_selection(%State{}, [1, 9])
+
+      state = State.handle_op(state, %{"op" => "select_page", "ids" => ["1", "2", "3"]}, @opts)
+      assert State.selected_ids(state) == ~w(1 2 3 9)
+
+      # every page row selected: the header toggle deselects just this page
+      state = State.handle_op(state, %{"op" => "select_page", "ids" => ["1", "2", "3"]}, @opts)
+      assert State.selected_ids(state) == ["9"]
+
+      assert State.toggle_page(state, []) == state
+    end
+
+    test "clear_selection empties it; malformed payloads leave the state unchanged" do
+      state = State.put_selection(%State{}, ["a", "b"])
+      assert State.handle_op(state, %{"op" => "clear_selection"}, @opts).selected == MapSet.new()
+      assert State.handle_op(state, %{"op" => "select", "id" => %{}}, @opts) == state
+      assert State.handle_op(state, %{"op" => "select_page", "ids" => "a"}, @opts) == state
+    end
+
+    test "selection is not URL state and survives other ops" do
+      state = State.put_selection(%State{}, [1])
+      refute Map.has_key?(State.to_params(state), "selected")
+      assert State.from_params(%{"selected" => "1"}, @opts).selected == MapSet.new()
+
+      state = State.handle_op(state, %{"op" => "sort", "field" => "name"}, @opts)
+      state = State.clear_filters(state)
+      assert State.selected_ids(state) == ["1"]
+    end
+  end
+
   describe "total_pages/1" do
     test "nil total means unknown" do
       assert State.total_pages(%State{total: nil}) == nil

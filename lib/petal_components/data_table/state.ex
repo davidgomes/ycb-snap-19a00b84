@@ -26,6 +26,20 @@ defmodule PetalComponents.DataTable.State do
   `:after`. Engines may support a subset; unknown ops are an engine
   concern, not a state concern.
 
+  ## Selection
+
+  `selected` holds the ids of selected rows as strings - the DOM's view
+  of identity, so ids posted back by row checkboxes compare without
+  guessing their original type. Selection is ephemeral UI state: it
+  never round-trips through `to_params/1`, and it survives sorting,
+  paging and filtering (the toolbar counts every selected row, not just
+  the visible ones). In link mode carry it across patches yourself:
+
+      state =
+        params
+        |> State.from_params(fields: [:name, :email])
+        |> State.put_selection(socket.assigns.table.selected)
+
   ## Security
 
   `from_params/2` never creates atoms from user input: `:fields` is a
@@ -35,7 +49,13 @@ defmodule PetalComponents.DataTable.State do
   """
 
   @enforce_keys []
-  defstruct order_by: [], filters: [], search: nil, page: 1, page_size: 10, total: nil
+  defstruct order_by: [],
+            filters: [],
+            search: nil,
+            page: 1,
+            page_size: 10,
+            total: nil,
+            selected: MapSet.new()
 
   @type order :: {atom(), :asc | :desc}
   @type filter :: %{field: atom(), op: atom(), value: term()}
@@ -45,7 +65,8 @@ defmodule PetalComponents.DataTable.State do
           search: String.t() | nil,
           page: pos_integer(),
           page_size: pos_integer(),
-          total: non_neg_integer() | nil
+          total: non_neg_integer() | nil,
+          selected: MapSet.t(String.t())
         }
 
   @ops ~w(contains eq starts_with neq gt lt between in before on after)a
@@ -157,10 +178,13 @@ defmodule PetalComponents.DataTable.State do
       end
 
   Ops: `sort` (field), `page` (page), `search` (term), `page_size`
-  (page_size), `filter` (field, filter_op, value/value2/values), and
-  `clear_filters`. Unknown ops and non-whitelisted fields leave the
-  state unchanged; like `from_params/2`, no atoms are ever created
-  from input.
+  (page_size), `filter` (field, filter_op, value/value2/values),
+  `clear_filters`, and the selection ops: `select` (id - toggles one
+  row), `select_page` (ids - selects every listed row, or deselects
+  them all when all are already selected: the tri-state header's
+  grammar), and `clear_selection`. Unknown ops and non-whitelisted
+  fields leave the state unchanged; like `from_params/2`, no atoms are
+  ever created from input.
 
   A `filter` op's value normalizes by editor shape: a `values` list
   posts as-is (the select editor's `:in`), `between` pairs
@@ -195,6 +219,15 @@ defmodule PetalComponents.DataTable.State do
 
       %{"op" => "clear_filters"} ->
         clear_filters(state)
+
+      %{"op" => "select", "id" => id} when is_binary(id) or is_integer(id) ->
+        toggle_selected(state, id)
+
+      %{"op" => "select_page", "ids" => ids} when is_list(ids) ->
+        toggle_page(state, ids)
+
+      %{"op" => "clear_selection"} ->
+        clear_selection(state)
 
       _other ->
         state
@@ -235,6 +268,48 @@ defmodule PetalComponents.DataTable.State do
 
   @doc "Removes every filter, resetting to page 1."
   def clear_filters(%__MODULE__{} = state), do: %{state | filters: [], page: 1}
+
+  @doc "Replaces the selection with `ids` (any enumerable; ids are stored as strings)."
+  def put_selection(%__MODULE__{} = state, ids) do
+    %{state | selected: MapSet.new(ids, &to_string/1)}
+  end
+
+  @doc "Selects the row `id` if unselected, deselects it otherwise."
+  def toggle_selected(%__MODULE__{} = state, id) do
+    id = to_string(id)
+
+    selected =
+      if MapSet.member?(state.selected, id),
+        do: MapSet.delete(state.selected, id),
+        else: MapSet.put(state.selected, id)
+
+    %{state | selected: selected}
+  end
+
+  @doc """
+  The select-all header's toggle over one page of `ids`: selects them
+  all unless every one is already selected, in which case it deselects
+  them. Selections on other pages are left alone.
+  """
+  def toggle_page(%__MODULE__{} = state, ids) do
+    ids = ids |> Enum.reject(&(&1 in [nil, ""])) |> MapSet.new(&to_string/1)
+
+    selected =
+      if MapSet.size(ids) > 0 and MapSet.subset?(ids, state.selected),
+        do: MapSet.difference(state.selected, ids),
+        else: MapSet.union(state.selected, ids)
+
+    %{state | selected: selected}
+  end
+
+  @doc "Empties the selection."
+  def clear_selection(%__MODULE__{} = state), do: %{state | selected: MapSet.new()}
+
+  @doc "Whether the row `id` is selected."
+  def selected?(%__MODULE__{} = state, id), do: MapSet.member?(state.selected, to_string(id))
+
+  @doc "The selected ids, sorted - what bulk actions receive."
+  def selected_ids(%__MODULE__{} = state), do: state.selected |> MapSet.to_list() |> Enum.sort()
 
   @doc "Total pages when `total` is known, else nil (cursor/unknown mode)."
   def total_pages(%__MODULE__{total: nil}), do: nil
