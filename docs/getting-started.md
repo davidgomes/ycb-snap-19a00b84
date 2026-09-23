@@ -144,7 +144,7 @@ Canary Plugs and Hooks uses the same configuration options.
 | `:as` | Specifies the resource_name key in assigns | `:team_post` |
 | `:id_name` | Specifies the name of the id in params, defaults to "id" | `:post_id` |
 | `:id_field` | Specifies the name of the ID field in the database for searching :id_name value, defaults to "id". | `:post_id` |
-| `:required` | Specifies if the resource is required, when it's not found it will handle not found error, default to false | true |
+| `:required` | Specifies if the resource is required, when it's not found it will handle not found error, default to true | true |
 | `:persisted` | Specifies the resource should always be loaded from the database, defaults to false **Available only in Canary.Plugs** | true |
 | `:not_found_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_not_found}` |
 | `:unauthorized_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_unauthorized}` |
