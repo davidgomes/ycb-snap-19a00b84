@@ -81,4 +81,26 @@ defmodule ObanChore.IntegrationTest do
     assert active_job.id == job.id
     assert active_job.state == :scheduled
   end
+
+  test "list_history_jobs/3 returns previous runs newest first with atomized states", %{
+    oban_name: oban_name
+  } do
+    [_active, completed, discarded, cancelled] =
+      for user_id <- 1..4 do
+        {:ok, job} = Oban.insert(oban_name, IntegrationTestChore.new(%{user_id: user_id}))
+        job
+      end
+
+    TestRepo.update!(Ecto.Changeset.change(completed, state: "completed"))
+    TestRepo.update!(Ecto.Changeset.change(discarded, state: "discarded"))
+    TestRepo.update!(Ecto.Changeset.change(cancelled, state: "cancelled"))
+
+    history = ObanChore.list_history_jobs(IntegrationTestChore, oban_name)
+
+    assert Enum.map(history, & &1.id) == [cancelled.id, discarded.id, completed.id]
+    assert Enum.map(history, & &1.state) == [:cancelled, :discarded, :completed]
+
+    assert [%{id: cancelled_id}] = ObanChore.list_history_jobs(IntegrationTestChore, oban_name, 1)
+    assert cancelled_id == cancelled.id
+  end
 end
