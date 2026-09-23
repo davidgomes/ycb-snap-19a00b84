@@ -663,6 +663,7 @@ defmodule HexpmWeb.Dashboard.Policy.Components.PolicyEdit do
       |> assign(:overrides, Form.input_value(assigns.form, :overrides) || [])
       |> assign(:override_name, Form.input_name(assigns.form, :overrides))
       |> assign(:override_id, Form.input_id(assigns.form, :overrides))
+      |> assign(:override_drop_name, Form.input_name(assigns.form, :overrides_drop))
 
     assigns =
       assigns
@@ -701,6 +702,8 @@ defmodule HexpmWeb.Dashboard.Policy.Components.PolicyEdit do
       </div>
 
       <div class="p-4 sm:p-6">
+        <%!-- Submitted even with no rows so removing every override clears them. --%>
+        <input type="hidden" name={@override_drop_name <> "[]"} value="" />
         <div class="flex items-start gap-2 rounded-lg border border-yellow-300 dark:border-yellow-700 bg-yellow-100/70 dark:bg-yellow-900/30 p-3 mb-4 text-sm text-yellow-900 dark:text-yellow-100">
           {icon(:heroicon, "exclamation-triangle",
             class: "w-4 h-4 flex-shrink-0 mt-0.5",

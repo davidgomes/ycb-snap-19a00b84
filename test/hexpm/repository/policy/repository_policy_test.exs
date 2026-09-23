@@ -53,6 +53,29 @@ defmodule Hexpm.Repository.Policy.RepositoryPolicyTest do
     assert errors_on(cs).overrides == "list the same package more than once"
   end
 
+  test "clears every override when only the drop param is submitted" do
+    existing =
+      %{"repository" => "hexpm", "overrides" => [%{"action" => "deny", "package" => "phoenix"}]}
+      |> changeset()
+      |> Ecto.Changeset.apply_changes()
+
+    cs = RepositoryPolicy.changeset(existing, %{"overrides_drop" => [""]})
+
+    assert cs.valid?
+    assert Ecto.Changeset.apply_changes(cs).overrides == []
+  end
+
+  test "keeps overrides when neither overrides nor the drop param are submitted" do
+    existing =
+      %{"repository" => "hexpm", "overrides" => [%{"action" => "deny", "package" => "phoenix"}]}
+      |> changeset()
+      |> Ecto.Changeset.apply_changes()
+
+    cs = RepositoryPolicy.changeset(existing, %{"cooldown" => "14d"})
+
+    assert [%{package: "phoenix"}] = Ecto.Changeset.apply_changes(cs).overrides
+  end
+
   test "allows the same package across different repository tabs" do
     # uniqueness is per-tab, so two tabs may each reference the package
     cs1 =

@@ -157,6 +157,44 @@ defmodule HexpmWeb.Dashboard.OrganizationController.PolicyTest do
       assert Policies.get(org, "polone")
       refute Policies.get(org, "renamed")
     end
+
+    test "removes every override from a repository tab", %{user: user, organization: org} do
+      {:ok, %{policy: policy}} =
+        Policies.create(
+          org,
+          %{
+            "name" => "polone",
+            "visibility" => "private",
+            "repositories" => [
+              %{
+                "repository" => "hexpm",
+                "overrides" => [
+                  %{"action" => "deny", "package" => "badlib"},
+                  %{"action" => "allow", "package" => "goodlib"}
+                ]
+              }
+            ]
+          },
+          audit: audit_data(user)
+        )
+
+      conn = build_conn() |> test_login(user)
+
+      params = %{
+        "policy" => %{
+          "visibility" => "private",
+          "repositories" => repository_params(policy, "hexpm", %{"overrides_drop" => [""]})
+        }
+      }
+
+      conn = post(conn, "/dashboard/orgs/#{org.name}/policies/#{policy.name}", params)
+
+      assert redirected_to(conn) =~ "/dashboard/orgs/#{org.name}/policies/polone"
+
+      updated = Policies.get(org, "polone")
+      hexpm = Enum.find(updated.repositories, &(&1.repository == "hexpm"))
+      assert hexpm.overrides == []
+    end
   end
 
   # Builds the nested repositories params the edit form submits: every existing
