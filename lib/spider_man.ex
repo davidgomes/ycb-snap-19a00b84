@@ -187,6 +187,44 @@ defmodule SpiderMan do
     end
   end
 
+  @doc """
+  Throughput of each component while the spider is running.
+
+  Handy in Livebook: call it on a timer and render the maps (success, total, fail, tps).
+  """
+  @spec throughput(spider) :: [component_throughput_info :: map]
+  def throughput(spider) when is_atom(spider) do
+    spider
+    |> get_state()
+    |> Map.fetch!(:stats_tid)
+    |> throughput()
+  end
+
+  def throughput(stats_tid) when is_reference(stats_tid) do
+    stats_tid
+    |> :ets.tab2list()
+    |> Enum.sort()
+    |> Enum.map(fn {component, total, success, fail, duration} ->
+      tps =
+        case System.convert_time_unit(duration, :native, :millisecond) do
+          0 ->
+            0
+
+          ms ->
+            Float.floor(success / (ms / 1000), 2)
+        end
+
+      %{
+        component: component,
+        total: total,
+        success: success,
+        fail: fail,
+        tps: tps,
+        duration: duration
+      }
+    end)
+  end
+
   @spec run_until_zero(spider, settings, check_interval :: integer) :: millisecond :: integer
   def run_until_zero(spider, settings \\ [], check_interval \\ 1500) do
     run_until(spider, settings, fn ->

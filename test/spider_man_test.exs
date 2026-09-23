@@ -55,6 +55,14 @@ defmodule SpiderMan.SpiderManTest do
            ] = SpiderMan.stats(spider)
   end
 
+  test "throughput", %{spider: spider} do
+    assert [
+             %{component: :downloader, total: 0, success: 0, fail: 0, tps: 0, duration: 0},
+             %{component: :item_processor, total: 0, success: 0, fail: 0, tps: 0, duration: 0},
+             %{component: :spider, total: 0, success: 0, fail: 0, tps: 0, duration: 0}
+           ] = SpiderMan.throughput(spider)
+  end
+
   test "list_spiders", %{spider: spider} do
     spiders = SpiderMan.list_spiders()
     assert is_list(spiders)
