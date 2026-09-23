@@ -224,3 +224,51 @@ A lower level `phx:navigate` event is also triggered any time the browser's URL 
 
 For navigation-aware logic, prefer `phx:navigate` over hook callbacks like `updated()`,
 as hooks may fire before `window.location` is updated.
+
+### Cancelling live navigation
+
+Before a live navigation initiated on the client happens, such as clicking a
+`<.link navigate={...}>` or `<.link patch={...}>`, executing `Phoenix.LiveView.JS.navigate/1`
+or `Phoenix.LiveView.JS.patch/1`, or navigating back and forward in the browser history,
+LiveView dispatches a cancelable `phx:before-navigate` event on window. Its `info.detail`
+contains the `"href"`, `"patch"` and `"pop"` keys described for `phx:navigate`, as well as
+a `"direction"` key, which is either `"forward"` or `"backward"`. Calling `preventDefault()`
+on the event cancels the navigation. In case of back and forward navigation, LiveView
+restores the previous history entry.
+
+Navigations triggered by the server, such as `push_navigate` and `push_patch`, cannot be
+cancelled, as the server already acted on them. Regular page loads, such as reloading or
+closing the page, do not dispatch `phx:before-navigate`. For those, the browser's
+[`beforeunload`](https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event)
+event can be used instead.
+
+For example, the following hook asks for confirmation before leaving a form with unsaved changes:
+
+```javascript
+let Hooks = {}
+Hooks.ConfirmUnsaved = {
+  mounted() {
+    this.unsaved = false
+    this.el.addEventListener("input", () => (this.unsaved = true))
+    this.el.addEventListener("submit", () => (this.unsaved = false))
+    this.onBeforeNavigate = (e) => {
+      if (this.unsaved && !confirm("You have unsaved changes. Leave anyway?")) {
+        e.preventDefault()
+      }
+    }
+    this.onBeforeUnload = (e) => this.unsaved && e.preventDefault()
+    window.addEventListener("phx:before-navigate", this.onBeforeNavigate)
+    window.addEventListener("beforeunload", this.onBeforeUnload)
+  },
+  destroyed() {
+    window.removeEventListener("phx:before-navigate", this.onBeforeNavigate)
+    window.removeEventListener("beforeunload", this.onBeforeUnload)
+  }
+}
+```
+
+```heex
+<.form for={@form} id="post-form" phx-hook="ConfirmUnsaved" phx-change="validate" phx-submit="save">
+  ...
+</.form>
+```
