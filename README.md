@@ -365,6 +365,14 @@ By default, when a resource is not found, Canary simply sets the resource in `co
 config :canary, not_found_handler: {Helpers, :handle_not_found}
 ```
 
+The not found handler is called only for resources marked with the `:required` option:
+
+```elixir
+plug :load_resource, model: Post, required: true
+
+mount_canary :load_resource, model: Post, required: true
+```
+
 You can also specify handlers on an individual basis (which will override the corresponding configured handler, if any) by specifying the corresponding `opt` in the plug call:
 
 ```elixir

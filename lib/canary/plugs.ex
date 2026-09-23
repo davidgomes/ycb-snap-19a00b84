@@ -24,7 +24,8 @@ defmodule Canary.Plugs do
   config :canary, error_handler: Helpers
   ```
 
-  Module should implement the `Canary.ErrorHandler` behaviour.
+  Module should implement the `Canary.ErrorHandler` behaviour. It can be overridden for a single plug
+  with the `:error_handler` option.
 
   Canary will pass the `conn` to the handler function.
   """
@@ -43,7 +44,7 @@ defmodule Canary.Plugs do
   `conn.assigns.blog_post`
 
   If the resource cannot be fetched, `conn.assigns.resource_name` is set
-  to nil.
+  to nil. If the `:required` key is set, the not found handler is called as well.
 
   By default, when the action is `:index`, all records from the specified model will be loaded. This can
   be overridden to fetch a single record from the database by using the `:persisted` key.
@@ -68,8 +69,9 @@ defmodule Canary.Plugs do
   * `:id_name` - Specifies the name of the id in `conn.params`, defaults to "id"
   * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
   * `:persisted` - Specifies the resource should always be loaded from the database, defaults to false
-  * `:required` - Same as `:persisted` but with not found handler - even for :index, :new or :create action
-  * `:not_found_handler` - Specify a handler function to be called if the resource is not found
+  * `:required` - Same as `:persisted`, and calls the not found handler when the resource is not found, defaults to false
+  * `:not_found_handler` - Specify a handler function to be called if the required resource is not found
+  * `:error_handler` - Specify a module implementing `Canary.ErrorHandler`, overrides the configured `:error_handler`
 
 
   Examples:
@@ -149,6 +151,7 @@ defmodule Canary.Plugs do
   * `:only` - Specifies which actions to authorize
   * `:except` - Specifies which actions for which to skip authorization
   * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
+  * `:error_handler` - Specify a module implementing `Canary.ErrorHandler`, overrides the configured `:error_handler`
 
   Examples:
   ```
@@ -221,6 +224,9 @@ defmodule Canary.Plugs do
     ```
     if you are dealing with a nested resource, such as, "/post/post_id/comments"
 
+    When the resource cannot be found, the module name of the model is used as well, unless
+    the `:required` key is set - then the authorization fails.
+
 
     You can specify additional actions for which Canary will authorize based on the model name, by passing the `non_id_actions` opt to the plug.
 
@@ -240,8 +246,11 @@ defmodule Canary.Plugs do
   * `:preload` - Specifies association(s) to preload
   * `:id_name` - Specifies the name of the id in `conn.params`, defaults to "id"
   * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
+  * `:current_user` - Specifies the key in `conn.assigns` to get the current user
   * `:persisted` - Specifies the resource should always be loaded from the database, defaults to false
+  * `:required` - Same as `:persisted`, and fails the authorization when the resource is not found, defaults to false
   * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
+  * `:error_handler` - Specify a module implementing `Canary.ErrorHandler`, overrides the configured `:error_handler`
 
   Examples:
   ```
@@ -329,8 +338,12 @@ defmodule Canary.Plugs do
   * `:preload` - Specifies association(s) to preload
   * `:id_name` - Specifies the name of the id in `conn.params`, defaults to "id"
   * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
+  * `:current_user` - Specifies the key in `conn.assigns` to get the current user
+  * `:persisted` - Specifies the resource should always be loaded from the database, defaults to false
+  * `:required` - Same as `:persisted`, and calls the not found handler when the resource is not found, defaults to false
   * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
-  * `:not_found_handler` - Specify a handler function to be called if the resource is not found
+  * `:not_found_handler` - Specify a handler function to be called if the required resource is not found
+  * `:error_handler` - Specify a module implementing `Canary.ErrorHandler`, overrides the configured `:error_handler`
 
   Note: If both an `:unauthorized_handler` and a `:not_found_handler` are specified for `load_and_authorize_resource`,
   and the request meets the criteria for both, the `:unauthorized_handler` will be called first.

@@ -5,6 +5,16 @@
     * added support for authorization LiveView
     * added `:error_handler` and ErrorHandler behaviour
     * aded  `:required` option
+    * `:error_handler` can be overridden with the plug / `mount_canary` option
+
+  * Breaking changes
+    * plugs call the not found handler only when the `:required` option is set, same as hooks
+    * when the resource cannot be found, plugs authorize against the model module name
+      (or fail the authorization when the `:required` option is set), same as hooks
+
+  * Bug fixes
+    * the repo is not queried when the resource id is missing in the params
+    * `load_and_authorize_resource` hook sets the resource to `nil` when unauthorized, same as the plug
 
   * Dependency changes
     * Elixir ~> 1.14 is now required

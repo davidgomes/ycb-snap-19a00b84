@@ -103,7 +103,7 @@ with this override it will perform authorization check for the `:handle_event` s
 
 ### Different error handler
 
-If you want to override global Canary error handler you can override one of the functions `:not_found_handler` and `:unauthorized_handler`
+If you want to override global Canary error handler you can set a different module with the `:error_handler` option, or override one of the functions `:not_found_handler` and `:unauthorized_handler`
 
 <!-- tabs-open -->
 ### Conn Plugs
@@ -148,6 +148,7 @@ Canary Plugs and Hooks uses the same configuration options.
 | `:persisted` | Specifies the resource should always be loaded from the database, defaults to false **Available only in Canary.Plugs** | true |
 | `:not_found_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_not_found}` |
 | `:unauthorized_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_unauthorized}` |
+| `:error_handler` | Module which implements `Canary.ErrorHandler` behaviour, it overrides the `:error_handler` set in config | `YourApp.CustomErrorHandler` |
 
 ### Examples
 
@@ -191,7 +192,12 @@ Canary Plugs and Hooks uses the same configuration options.
 
 ## Plug and Hooks
 
-`Canary.Plugs` and `Canary.Hooks` should work the same way in most cases - except form loading all resources for non-id actions.
+`Canary.Plugs` and `Canary.Hooks` accept the same options and work the same way, except for:
+
+* loading all resources for non-id actions, and the `:non_id_actions` and `:persisted` options - available only in `Canary.Plugs`
+* `authorize_resource` plug loads the resource from the repo when it's not available in `conn.assigns` - `Canary.Hooks` use only the resource from `socket.assigns`
+* `authorize_controller` - available only in `Canary.Plugs`
+* `:on` option - available only in `Canary.Hooks`
 
 
 ### Authorize resource

@@ -228,6 +228,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     * `:current_user` - Specifies the key in the socket assigns to get the current user
     * `:required` - Specifies if the resource is required, when it's not assigned in socket it will halt the socket
     * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
+    * `:error_handler` - Specify a module implementing `Canary.ErrorHandler`, overrides the configured `:error_handler`
 
     Example:
 
@@ -279,7 +280,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     * `:id_name` - Specifies the name of the id in `params`, defaults to "id"
     * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
     * `:required` - Specifies if the resource is required, when it's not found it will halt the socket
-    * `:not_found_handler` - Specify a handler function to be called if the resource is not found
+    * `:not_found_handler` - Specify a handler function to be called if the required resource is not found
+    * `:error_handler` - Specify a module implementing `Canary.ErrorHandler`, overrides the configured `:error_handler`
 
     Example:
 
@@ -313,7 +315,8 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     @doc """
     Loads and autorize resource and assigns it to the socket. When resource is required it will
-    halt the socket if the resource is not found. If the user is not authorized it will halt the socket.
+    halt the socket if the resource is not found. If the user is not authorized the resource is set
+    to `nil` in the socket assigns and the socket is halted.
 
     It combines `load_resource` and `authorize_resource` functions.
 
@@ -334,8 +337,9 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     * `:id_name` - Specifies the name of the id in `params`, defaults to "id"
     * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
     * `:required` - Specifies if the resource is required, when it's not found it will halt the socket
-    * `:not_found_handler` - Specify a handler function to be called if the resource is not found
+    * `:not_found_handler` - Specify a handler function to be called if the required resource is not found
     * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
+    * `:error_handler` - Specify a module implementing `Canary.ErrorHandler`, overrides the configured `:error_handler`
 
     Example:
 
