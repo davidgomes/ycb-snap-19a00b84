@@ -40,6 +40,8 @@ defmodule Sentry.ClientReport.Sender do
                | ClientReport.t()
                | Sentry.Event.t()
                | Sentry.Transaction.t()
+               | Sentry.LogBatch.t()
+               | Sentry.MetricBatch.t()
   def record_discarded_events(reason, event_items, genserver)
       when is_list(event_items) do
     # We silently ignore events whose reasons aren't valid because we have to add it to the allowlist in Snuba
@@ -65,8 +67,30 @@ defmodule Sentry.ClientReport.Sender do
     [{Envelope.get_data_category(transaction), 1}, {"span", span_count}]
   end
 
+  defp data_categories(%Sentry.LogBatch{log_events: log_events} = batch) do
+    items = Enum.map(log_events, &Sentry.LogEvent.to_map/1)
+    [{Envelope.get_data_category(batch), length(items)}] ++ byte_outcome("log_byte", items)
+  end
+
+  defp data_categories(%Sentry.MetricBatch{metrics: metrics} = batch) do
+    items = Enum.map(metrics, &Sentry.Metric.to_map/1)
+    [{Envelope.get_data_category(batch), length(items)}] ++ byte_outcome("trace_metric_byte", items)
+  end
+
   defp data_categories(item) do
     [{Envelope.get_data_category(item), 1}]
+  end
+
+  defp byte_outcome(category, items) do
+    size =
+      Enum.reduce(items, 0, fn item, acc ->
+        case Sentry.JSON.encode(item, Config.json_library()) do
+          {:ok, encoded} -> acc + byte_size(encoded)
+          {:error, _reason} -> acc
+        end
+      end)
+
+    if size > 0, do: [{category, size}], else: []
   end
 
   ## Callbacks
