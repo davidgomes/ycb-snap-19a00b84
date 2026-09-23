@@ -15,6 +15,13 @@ defmodule Hammer do
       MyApp.RateLimit.hit("some-key", _scale = :timer.seconds(1), _limit = 10)
   """
 
+  @typedoc """
+  Identifies the bucket being rate limited.
+
+  The built-in ETS and Atomic backends accept any term as a key (strings, atoms,
+  integers, tuples, lists, maps, ...). Other backends may be more restrictive:
+  for example, `Hammer.Redis` requires keys to be strings.
+  """
   @type key :: term
   @type scale :: pos_integer
   @type limit :: pos_integer
