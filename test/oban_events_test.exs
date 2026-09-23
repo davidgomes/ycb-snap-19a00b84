@@ -2,6 +2,7 @@ defmodule ObanEventsTest do
   use ExUnit.Case, async: true
 
   alias ObanEvents.DispatchWorker
+  alias ObanEvents.Event
 
   # Test handler module
   defmodule TestHandler do
@@ -10,6 +11,28 @@ defmodule ObanEventsTest do
 
     @impl true
     def handle_event(_event, _data), do: :ok
+  end
+
+  defmodule RecordingHandler do
+    @moduledoc false
+    use ObanEvents.Handler
+
+    @impl true
+    def handle_event(event_name, event) do
+      send(self(), {:handled, __MODULE__, event_name, event})
+      :ok
+    end
+  end
+
+  defmodule OtherRecordingHandler do
+    @moduledoc false
+    use ObanEvents.Handler
+
+    @impl true
+    def handle_event(event_name, event) do
+      send(self(), {:handled, __MODULE__, event_name, event})
+      :ok
+    end
   end
 
   # Test event bus with handlers registered (uses defaults)
@@ -26,7 +49,8 @@ defmodule ObanEventsTest do
       portfolio_company_added: [],
       portfolio_company_removed: [],
       portfolio_fund_added: [],
-      portfolio_fund_removed: []
+      portfolio_fund_removed: [],
+      recorded_event: [RecordingHandler, OtherRecordingHandler]
     }
   end
 
@@ -97,6 +121,60 @@ defmodule ObanEventsTest do
     test "requires data to be a map" do
       assert_raise FunctionClauseError, fn ->
         TestEventBus.emit(:event_name, "not a map")
+      end
+    end
+  end
+
+  describe "emit/3 event metadata" do
+    test "stores event id, emission time, and metadata in job args" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{"investment_id" => 1},
+                 metadata: %{actor_id: 7, request_id: "req-1"}
+               )
+
+      assert {:ok, _} = Ecto.UUID.cast(job.args["event_id"])
+      assert {:ok, %DateTime{}, 0} = DateTime.from_iso8601(job.args["emitted_at"])
+      assert job.args["metadata"] == %{"actor_id" => 7, "request_id" => "req-1"}
+    end
+
+    test "defaults metadata to an empty map" do
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{"investment_id" => 1})
+
+      assert job.args["metadata"] == %{}
+    end
+
+    test "handlers receive an Event struct with string-keyed data and metadata" do
+      assert {:ok, _jobs} =
+               TestEventBus.emit(:recorded_event, %{user_id: 1}, metadata: %{actor_id: 2})
+
+      assert_received {:handled, RecordingHandler, :recorded_event, %Event{} = event}
+      assert event.name == :recorded_event
+      assert event.data == %{"user_id" => 1}
+      assert event.metadata == %{"actor_id" => 2}
+      assert %DateTime{} = event.emitted_at
+      assert event.attempt == 1
+    end
+
+    test "all handlers of one emission share the event id and emission time" do
+      assert {:ok, [_, _]} = TestEventBus.emit(:recorded_event, %{})
+
+      assert_received {:handled, RecordingHandler, :recorded_event, event}
+      assert_received {:handled, OtherRecordingHandler, :recorded_event, other_event}
+      assert is_binary(event.id)
+      assert event.id == other_event.id
+      assert event.emitted_at == other_event.emitted_at
+    end
+
+    test "each emission gets a new event id" do
+      assert {:ok, [first | _]} = TestEventBus.emit(:recorded_event, %{})
+      assert {:ok, [second | _]} = TestEventBus.emit(:recorded_event, %{})
+
+      assert first.args["event_id"] != second.args["event_id"]
+    end
+
+    test "raises ArgumentError when metadata is not a map" do
+      assert_raise ArgumentError, ~r/expected :metadata to be a map/, fn ->
+        TestEventBus.emit(:investment_created, %{}, metadata: [actor_id: 1])
       end
     end
   end

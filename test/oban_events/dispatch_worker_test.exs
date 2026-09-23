@@ -5,34 +5,42 @@ defmodule ObanEvents.DispatchWorkerTest do
   import ExUnit.CaptureLog
 
   alias ObanEvents.DispatchWorker
+  alias ObanEvents.Event
 
   # Mock handler for testing
   defmodule TestHandler do
     @moduledoc false
     @behaviour ObanEvents.Handler
 
-    def handle_event(:test_event, %{"action" => "success"}) do
+    alias ObanEvents.Event
+
+    def handle_event(:test_event, %Event{data: %{"action" => "success"}}) do
       send(self(), {:handler_called, :test_event, %{"action" => "success"}})
       :ok
     end
 
-    def handle_event(:test_event, %{"action" => "error"}) do
+    def handle_event(:test_event, %Event{data: %{"action" => "error"}}) do
       send(self(), {:handler_called, :test_event, %{"action" => "error"}})
       {:error, :test_error}
     end
 
-    def handle_event(:test_event, %{"action" => "raise"}) do
+    def handle_event(:test_event, %Event{data: %{"action" => "raise"}}) do
       raise "Test exception"
     end
 
-    def handle_event(:test_event, %{"action" => "success_with_result"}) do
+    def handle_event(:test_event, %Event{data: %{"action" => "success_with_result"}}) do
       send(self(), {:handler_called, :test_event, %{"action" => "success_with_result"}})
       {:ok, %{processed: true, count: 42}}
     end
 
-    def handle_event(:test_event, %{"action" => "unexpected"}) do
+    def handle_event(:test_event, %Event{data: %{"action" => "unexpected"}}) do
       send(self(), {:handler_called, :test_event, %{"action" => "unexpected"}})
       :unexpected_return_value
+    end
+
+    def handle_event(:test_event, %Event{data: %{"action" => "capture"}} = event) do
+      send(self(), {:event_received, event})
+      :ok
     end
 
     def handle_event(_event, _data), do: :ok
@@ -131,6 +139,48 @@ defmodule ObanEvents.DispatchWorkerTest do
 
       assert log =~ "Event handler returned unexpected value"
       assert_received {:handler_called, :test_event, %{"action" => "unexpected"}}
+    end
+
+    test "passes an Event struct with metadata to the handler" do
+      event_id = Ecto.UUID.generate()
+
+      job_args = %{
+        "event" => "test_event",
+        "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
+        "data" => %{"action" => "capture"},
+        "event_id" => event_id,
+        "emitted_at" => "2026-01-02T03:04:05.123456Z",
+        "metadata" => %{"actor_id" => 42}
+      }
+
+      assert :ok = perform_job(DispatchWorker, job_args, attempt: 2)
+
+      assert_received {:event_received, %Event{} = event}
+      assert event.id == event_id
+      assert event.name == :test_event
+      assert event.data == %{"action" => "capture"}
+      assert event.metadata == %{"actor_id" => 42}
+      assert event.emitted_at == ~U[2026-01-02 03:04:05.123456Z]
+      assert event.attempt == 2
+      assert is_integer(event.job_id)
+    end
+
+    test "supports jobs enqueued without event metadata" do
+      job_args = %{
+        "event" => "test_event",
+        "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
+        "data" => %{"action" => "capture"}
+      }
+
+      inserted_at = ~U[2026-01-02 03:04:05.000000Z]
+
+      assert :ok = perform_job(DispatchWorker, job_args, inserted_at: inserted_at)
+
+      assert_received {:event_received, %Event{} = event}
+      assert event.id == nil
+      assert event.metadata == %{}
+      assert event.emitted_at == inserted_at
+      assert event.attempt == 1
     end
   end
 
