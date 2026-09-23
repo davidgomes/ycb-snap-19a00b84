@@ -509,25 +509,28 @@ defmodule GRPC.StreamTest do
       {:ok, producer_pid} = TestProducer.start_link(elements)
 
       input = [1, 2, 3]
+      test_pid = self()
 
+      # The joined producer never finishes, so the stream never completes.
       task =
         Task.async(fn ->
           GRPC.Stream.from(input, join_with: producer_pid, max_demand: 500)
-          |> GRPC.Stream.map(fn it -> it end)
+          |> GRPC.Stream.map(fn it ->
+            send(test_pid, {:item, it})
+            it
+          end)
           |> GRPC.Stream.run_with(%GRPC.Server.Stream{}, dry_run: true)
         end)
 
-      result =
-        case Task.yield(task, 1000) || Task.shutdown(task) do
-          {:ok, _} -> :ok
-          _ -> :ok
-        end
+      for it <- input ++ elements do
+        assert_receive {:item, ^it}
+      end
+
+      Task.shutdown(task)
 
       if Process.alive?(producer_pid) do
         Process.exit(producer_pid, :normal)
       end
-
-      assert result == :ok
     end
   end
 
