@@ -28,6 +28,7 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       assert :available in issue.meta.missing_states
       assert :scheduled in issue.meta.missing_states
       assert :retryable in issue.meta.missing_states
+      assert issue.meta.docs == "https://hexdocs.pm/oban/Oban.Job.html#unique_states/1"
     end
 
     test "returns no issues when worker has all recommended states" do
@@ -88,6 +89,60 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       issues = UniquenessMissingStates.run(context)
 
       assert issues == []
+    end
+
+    test "does not flag named groups that include the recommended states" do
+      for group <- [:all, :incomplete, :successful] do
+        workers = [
+          %{
+            module: MyApp.Workers.GroupedWorker,
+            file: "lib/my_app/workers/grouped_worker.ex",
+            line: 1,
+            queue: :default,
+            unique: [fields: [:args], states: group],
+            max_attempts: nil
+          }
+        ]
+
+        assert UniquenessMissingStates.run(%{workers: workers}) == []
+      end
+    end
+
+    test "expands :scheduled and reports the states that group omits" do
+      workers = [
+        %{
+          module: MyApp.Workers.DebouncedWorker,
+          file: "lib/my_app/workers/debounced_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :scheduled],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = UniquenessMissingStates.run(context)
+
+      assert length(issues) == 1
+      [issue] = issues
+      assert issue.meta.configured_states == :scheduled
+      assert issue.meta.missing_states == [:available, :executing, :retryable]
+    end
+
+    test "expands a named group nested in a state list" do
+      workers = [
+        %{
+          module: MyApp.Workers.MixedWorker,
+          file: "lib/my_app/workers/mixed_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: [:incomplete]],
+          max_attempts: nil
+        }
+      ]
+
+      assert UniquenessMissingStates.run(%{workers: workers}) == []
     end
 
     test "does not flag workers using :all state group (handled by another check)" do

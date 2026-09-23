@@ -26,6 +26,8 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsageTest do
       assert issue.check == StateGroupUsage
       assert issue.message =~ ":all state group"
       assert issue.message =~ "cannot be re-enqueued"
+      assert issue.meta.state_group == :all
+      assert issue.meta.docs == "https://hexdocs.pm/oban/Oban.Job.html#unique_states/1"
     end
 
     test "returns error when worker uses states: [:all]" do
@@ -83,6 +85,23 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsageTest do
       issues = StateGroupUsage.run(context)
 
       assert issues == []
+    end
+
+    test "returns no issues for other named state groups" do
+      for group <- [:incomplete, :scheduled, :successful] do
+        workers = [
+          %{
+            module: MyApp.Workers.GroupedWorker,
+            file: "lib/my_app/workers/grouped_worker.ex",
+            line: 1,
+            queue: :default,
+            unique: [fields: [:args], states: group],
+            max_attempts: nil
+          }
+        ]
+
+        assert StateGroupUsage.run(%{workers: workers}) == []
+      end
     end
 
     test "returns no issues when worker has no unique config" do
