@@ -141,10 +141,7 @@ defmodule ErrorTracker do
     if enabled?() && !ignored?(error, context) do
       sanitized_context = sanitize_context(context)
 
-      {_error, occurrence} =
-        upsert_error!(error, stacktrace, sanitized_context, breadcrumbs, reason)
-
-      occurrence
+      upsert_error!(error, stacktrace, sanitized_context, breadcrumbs, reason)
     else
       :noop
     end
@@ -177,6 +174,39 @@ defmodule ErrorTracker do
       Telemetry.unresolved_error(updated_error)
       {:ok, updated_error}
     end
+  end
+
+  @doc """
+  Mutes the error so new occurrences are flagged as muted.
+
+  When an error is muted:
+
+  * New occurrences are still tracked and stored in the database.
+  * You can still see the error and its occurrences in the web UI.
+  * The `[:error_tracker, :occurrence, :new]` Telemetry event of new occurrences
+  includes `muted: true` in its metadata, so notifications can ignore them.
+
+  This is useful for noisy errors that you want to keep tracking but don't want
+  to receive notifications about. If you don't want to track an error at all
+  take a look at `ErrorTracker.Ignorer` instead.
+  """
+  @spec mute(Error.t()) :: {:ok, Error.t()} | {:error, Ecto.Changeset.t()}
+  def mute(error = %Error{}) do
+    changeset = Ecto.Changeset.change(error, muted: true)
+
+    Repo.update(changeset)
+  end
+
+  @doc """
+  Unmutes the error so new occurrences are no longer flagged as muted.
+
+  This reverses the effect of `mute/1`.
+  """
+  @spec unmute(Error.t()) :: {:ok, Error.t()} | {:error, Ecto.Changeset.t()}
+  def unmute(error = %Error{}) do
+    changeset = Ecto.Changeset.change(error, muted: false)
+
+    Repo.update(changeset)
   end
 
   @doc """
@@ -300,8 +330,10 @@ defmodule ErrorTracker do
   end
 
   defp upsert_error!(error, stacktrace, context, breadcrumbs, reason) do
-    existing_status =
-      Repo.one(from e in Error, where: [fingerprint: ^error.fingerprint], select: e.status)
+    existing_status_and_muted_query =
+      from e in Error, where: [fingerprint: ^error.fingerprint], select: {e.status, e.muted}
+
+    {existing_status, muted} = Repo.one(existing_status_and_muted_query) || {nil, false}
 
     {:ok, {error, occurrence}} =
       Repo.transaction(fn ->
@@ -333,6 +365,10 @@ defmodule ErrorTracker do
         {error, occurrence}
       end)
 
+    # The upsert does not update nor return the `muted` field of existing errors
+    error = %Error{error | muted: muted}
+    occurrence = %Occurrence{occurrence | error: error}
+
     # If the error existed and was marked as resolved before this exception,
     # sent a Telemetry event
     # If it is a new error, sent a Telemetry event
@@ -343,8 +379,8 @@ defmodule ErrorTracker do
     end
 
     # Always send a new occurrence Telemetry event
-    Telemetry.new_occurrence(occurrence)
+    Telemetry.new_occurrence(occurrence, muted)
 
-    {error, occurrence}
+    occurrence
   end
 end
