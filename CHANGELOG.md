@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed various typos
 - Fixed README badges
+- Graded cell `to_source` no longer embeds the raw cell source or the module map in the generated code
 
 ## [0.8.0] - 2022-09-01
 
