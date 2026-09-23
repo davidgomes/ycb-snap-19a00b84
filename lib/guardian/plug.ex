@@ -321,7 +321,7 @@ if Code.ensure_loaded?(Plug) do
     ```
 
     Use a remote capture such as `&MyApp.Tenants.token_secret/1`. Plug options
-    are usually escaped at compile time, which anonymous functions do not support.
+    are compiled into the module by default and anonymous functions cannot be.
 
     Any other value, including an `{m, f, a}` tuple, is returned untouched and
     resolved by the token module with `Guardian.Config.resolve_value/1`, which
