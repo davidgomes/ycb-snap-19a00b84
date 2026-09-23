@@ -23,7 +23,10 @@ defmodule Paginator.Ecto.Query do
   defp filter_values(query, fields, values, cursor_direction) when is_list(values) do
     new_values =
       fields
-      |> Enum.map(&elem(&1, 0))
+      |> Enum.map(fn
+        {{key, %Ecto.Query.DynamicExpr{}}, _order} -> key
+        {column, _order} -> column
+      end)
       |> Enum.zip(values)
       |> Map.new()
 
@@ -37,33 +40,41 @@ defmodule Paginator.Ecto.Query do
   end
 
   defp build_where_expression(query, [{column, order}], values, cursor_direction) do
-    value = Map.get(values, column)
-    {q_position, q_binding} = column_position(query, column)
-
-    DynamicFilterBuilder.build!(%{
-      sort_order: order,
-      direction: cursor_direction,
-      value: value,
-      entity_position: q_position,
-      column: q_binding,
-      next_filters: true
-    })
+    build_filter(query, column, order, values, cursor_direction, true)
   end
 
   defp build_where_expression(query, [{column, order} | fields], values, cursor_direction) do
-    value = Map.get(values, column)
-    {q_position, q_binding} = column_position(query, column)
-
     filters = build_where_expression(query, fields, values, cursor_direction)
+    build_filter(query, column, order, values, cursor_direction, filters)
+  end
+
+  defp build_filter(query, column, order, values, cursor_direction, next_filters) do
+    {_key, field_expr, value} = field_and_value(query, column, values)
 
     DynamicFilterBuilder.build!(%{
       sort_order: order,
       direction: cursor_direction,
       value: value,
-      entity_position: q_position,
-      column: q_binding,
-      next_filters: filters
+      field: field_expr,
+      next_filters: next_filters
     })
+  end
+
+  defp field_and_value(_query, {key, %Ecto.Query.DynamicExpr{} = expr}, values) do
+    {key, expr, Map.get(values, key)}
+  end
+
+  defp field_and_value(query, column, values) do
+    {q_position, q_binding} = column_position(query, column)
+    field_expr = dynamic([{q, q_position}], field(q, ^q_binding))
+
+    value =
+      case Map.get(values, column) do
+        nil -> nil
+        value -> dynamic([{q, q_position}], type(^value, field(q, ^q_binding)))
+      end
+
+    {column, field_expr, value}
   end
 
   defp maybe_where(query, %Config{

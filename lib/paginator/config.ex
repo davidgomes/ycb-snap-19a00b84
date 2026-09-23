@@ -92,6 +92,10 @@ defmodule Paginator.Config do
         {field, value} when is_atom(field) and value in @order_directions ->
           field
 
+        {{field, %Ecto.Query.DynamicExpr{}}, value}
+        when is_atom(field) and value in @order_directions ->
+          field
+
         {{schema, field}, value}
         when is_atom(schema) and is_atom(field) and value in @order_directions ->
           {schema, field}

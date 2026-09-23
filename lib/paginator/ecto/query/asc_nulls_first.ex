@@ -10,24 +10,24 @@ defmodule Paginator.Ecto.Query.AscNullsFirst do
 
   def build_dynamic_filter(args = %{direction: :after, value: nil}) do
     dynamic(
-      [{query, args.entity_position}],
-      (is_nil(field(query, ^args.column)) and ^args.next_filters) or
-        not is_nil(field(query, ^args.column))
+      [],
+      (is_nil(^args.field) and ^args.next_filters) or
+        not is_nil(^args.field)
     )
   end
 
   def build_dynamic_filter(args = %{direction: :after, next_filters: true}) do
     dynamic(
-      [{query, args.entity_position}],
-      field(query, ^args.column) > ^args.value
+      [],
+      ^args.field > ^args.value
     )
   end
 
   def build_dynamic_filter(args = %{direction: :after}) do
     dynamic(
-      [{query, args.entity_position}],
-      (field(query, ^args.column) == ^args.value and ^args.next_filters) or
-        field(query, ^args.column) > ^args.value
+      [],
+      (^args.field == ^args.value and ^args.next_filters) or
+        ^args.field > ^args.value
     )
   end
 
@@ -37,24 +37,24 @@ defmodule Paginator.Ecto.Query.AscNullsFirst do
 
   def build_dynamic_filter(args = %{direction: :before, value: nil}) do
     dynamic(
-      [{query, args.entity_position}],
-      is_nil(field(query, ^args.column)) and ^args.next_filters
+      [],
+      is_nil(^args.field) and ^args.next_filters
     )
   end
 
   def build_dynamic_filter(args = %{direction: :before, next_filters: true}) do
     dynamic(
-      [{query, args.entity_position}],
-      field(query, ^args.column) < ^args.value or is_nil(field(query, ^args.column))
+      [],
+      ^args.field < ^args.value or is_nil(^args.field)
     )
   end
 
   def build_dynamic_filter(args = %{direction: :before}) do
     dynamic(
-      [{query, args.entity_position}],
-      (field(query, ^args.column) == ^args.value and ^args.next_filters) or
-        field(query, ^args.column) < ^args.value or
-        is_nil(field(query, ^args.column))
+      [],
+      (^args.field == ^args.value and ^args.next_filters) or
+        ^args.field < ^args.value or
+        is_nil(^args.field)
     )
   end
 end

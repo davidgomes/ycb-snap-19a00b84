@@ -166,6 +166,22 @@ defmodule Paginator do
         limit: 50
       )
 
+  ## Paginate by expression
+
+  A cursor field can be an expression given as `{key, dynamic}`. The value
+  stored in the cursor is fetched from each record with `key`, so the query
+  should select the expression into that field:
+
+      rank = dynamic([p], fragment("? * 2", p.charged_at))
+
+      query =
+        from(p in Payment,
+          select_merge: %{rank: ^rank},
+          order_by: [desc: ^rank, asc: :id]
+        )
+
+      Repo.paginate(query, cursor_fields: [{{:rank, rank}, :desc}, id: :asc], limit: 50)
+
   """
   @callback paginate(queryable :: Ecto.Query.t(), opts :: Keyword.t(), repo_opts :: Keyword.t()) ::
               Paginator.Page.t()
@@ -309,6 +325,9 @@ defmodule Paginator do
        }) do
     cursor_fields
     |> Enum.map(fn
+      {{cursor_field, %Ecto.Query.DynamicExpr{}}, _order} ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
       {cursor_field, _order} ->
         {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
 
