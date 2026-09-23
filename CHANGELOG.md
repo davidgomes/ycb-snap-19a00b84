@@ -14,6 +14,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Support MySQL.
 - Support ordering and filtering by custom fields via a new `field_dynamic`
   option. Cursor pagination is not supported yet.
+- Support cursor pagination on nullable columns. Rows with a `NULL` in an order
+  field were skipped, and a `nil` cursor value was left out of the comparison.
+  Flop now checks for `NULL` according to where the order direction sorts it.
+
+### Changed
+
+- Raise an `ArgumentError` for cursor pagination with the `:asc` or `:desc`
+  direction if no repo is configured, unless the field is the primary key.
+  Where these directions sort `NULL` depends on the database, which Flop reads
+  from the repo. Configure a repo or use one of the nulls directions, such as
+  `:asc_nulls_last`.
 
 ### Fixed
 

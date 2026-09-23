@@ -17,6 +17,8 @@ which gives it three advantages:
 - Every page costs the same. The database compares the order values against the
   cursor and reads `first + 1` rows, which an index on the order fields serves
   directly, while `OFFSET 10_000` reads and discards ten thousand rows first.
+  Nullable fields can be an exception, see
+  [Indexes on nullable fields](#indexes-on-nullable-fields).
 - A page is one query instead of two, because there is no count query.
 
 The last one is also what you give up. `meta.total_count` and `meta.total_pages`
@@ -109,7 +111,7 @@ of replacing it. Replacing the order could drop the field that made it unique.
 
 ## Nullable fields
 
-Ordering by a nullable column loses the rows where it is `NULL`.
+Rows with a `NULL` in an order field are paged like any other row.
 
 ```elixir
 %{first: 2, order_by: [:age, :id]}
@@ -119,19 +121,37 @@ Ordering by a nullable column loses the rows where it is `NULL`.
 |---|---|
 | 1 | Bo 1, Ada 3 |
 | 2 | Ada 5, Ada 7 |
-| 3 | — |
+| 3 | Cy, Dee |
 
-Cy and Dee never appear, and page 3 reports `has_next_page?: false`. PostgreSQL
-sorts them last, but the cursor comparison is `age > 7`, and no comparison with
-`NULL` is ever true. A second order field does not help, because the `NULL` is
-in the first one.
+No comparison with `NULL` is ever true, so Flop checks for it separately. Page
+3 asks for the rows with an age above 7 or no age at all. Rows that are `NULL`
+in the same field tie like rows with the same value, so the order still needs a
+unique field after the nullable one. Here, `id` decides between Cy and Dee.
 
-Until Flop builds null-aware predicates, order by a column that has no `NULL`,
-or sort on a computed field that substitutes a value, as in the [computed fields
-recipe](computed_and_embedded_fields.md):
+The check depends on where the direction sorts `NULL`. The four nulls
+directions, such as `:asc_nulls_last`, place it explicitly. `:asc` and `:desc`
+leave it to the database: PostgreSQL sorts `NULL` last ascending and first
+descending, and MySQL and SQLite do the opposite. The pages above are from
+PostgreSQL. Flop reads the database from the repo, so cursor pagination with
+`:asc` or `:desc` raises if no repo is configured, for example when you build
+the query with `Flop.query/3` alone. The primary key is the exception, see
+below.
 
-```sql
-SELECT coalesce(age, -1) AS age_sortable
+### Indexes on nullable fields
+
+Where `NULL` sorts after the cursor, the condition for a field reads
+`age IS NULL OR age > 7`. PostgreSQL cannot start an index scan at such a
+condition. It reads the index from the beginning and discards the rows before
+the cursor, so later pages get slower. Only the first order field matters,
+since the remaining ones break ties within its range.
+
+A primary key cannot be `NULL`, so Flop leaves out the check for the primary
+key of the schema passed as `for`, and needs no repo for it. For other columns,
+a direction that sorts `NULL` first avoids it: `:desc`, or `:asc_nulls_first`
+together with an index in that order.
+
+```elixir
+create index(:pets, ["age ASC NULLS FIRST", :id])
 ```
 
 ## Reading the cursor value
