@@ -97,6 +97,35 @@ defmodule ObanChore.WorkerTest do
     assert "must be greater than 18" in errors_on(changeset).age
   end
 
+  defmodule UniqueWorker do
+    use ObanChore.Worker,
+      fields: [when: [type: :date], ratio: [type: :float, required: true]],
+      unique: [period: 60]
+
+    @impl Oban.Worker
+    def perform(_), do: :ok
+  end
+
+  test "defaults name to module name and tracks unique option" do
+    info = UniqueWorker.__chore_info__()
+    assert info.name == inspect(UniqueWorker)
+    assert info.unique == true
+    assert MyTestChore.__chore_info__().unique == false
+  end
+
+  test "casts float and date fields" do
+    changeset = UniqueWorker.changeset(%{"when" => "2024-01-02", "ratio" => "1.5"})
+    assert changeset.valid?
+    assert changeset.changes.when == ~D[2024-01-02]
+    assert changeset.changes.ratio == 1.5
+  end
+
+  test "does not add required error when field has a cast error" do
+    changeset = MyTestChore.changeset(%{"user_id" => "not-a-number"})
+    refute changeset.valid?
+    assert errors_on(changeset).user_id == ["is invalid"]
+  end
+
   test "raises on missing field type" do
     assert_raise ArgumentError, ~r/missing :type for field :bad_field/, fn ->
       defmodule MissingTypeChore do
