@@ -145,10 +145,17 @@ defmodule Warehouse.GenServers.InsertMonitor do
   end
 
   defp update_demands() do
-    Assembly.request_component_demands()
-    |> Stream.map(fn %{component_id: id, demand_quantity: demand} -> [id, demand] end)
-    |> Stream.each(&apply(Warehouse.Component, :update_component_demand, &1))
-    |> Stream.run()
+    updated_ids =
+      Assembly.request_component_demands()
+      |> Stream.map(fn %{component_id: id, demand_quantity: demand} ->
+        Warehouse.Component.update_component_demand(id, demand)
+        to_string(id)
+      end)
+      |> MapSet.new()
+
+    Warehouse.Component.list_components()
+    |> Enum.reject(&MapSet.member?(updated_ids, to_string(&1.id)))
+    |> Enum.each(&Warehouse.Component.update_component_demand(&1.id, 0))
   end
 
   defp wrap_supervisor_start({:ok, _child}, acc), do: acc + 1
