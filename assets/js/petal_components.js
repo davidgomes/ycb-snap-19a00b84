@@ -5444,6 +5444,119 @@ export const PetalDataTable = {
   },
 };
 
+// Dropdown panel: opens downward with the existing LiveView.JS toggle.
+// This hook only decides the side. When the viewport has no room below
+// the trigger and more room above, it marks the panel so CSS anchors it
+// to the top edge. When neither side fits, the winning side's space caps
+// the panel so items scroll inside the viewport instead of past it.
+export const PetalDropdown = {
+  mounted() {
+    this.panel = this.el.querySelector(".pc-dropdown__menu-items-wrapper");
+    this.trigger = this.el.querySelector(":scope > div > button");
+    if (!this.panel || !this.trigger) return;
+
+    this.listening = false;
+    this.onReposition = () => this.positionPanel();
+    this.observer = new MutationObserver(() => this.sync());
+    this.observe();
+    this.sync();
+  },
+
+  updated() {
+    this.sync();
+  },
+
+  destroyed() {
+    if (this.observer) this.observer.disconnect();
+    this.unlisten();
+  },
+
+  observe() {
+    if (!this.observer || !this.panel) return;
+    this.observer.observe(this.panel, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+  },
+
+  isOpen() {
+    return this.panel && this.panel.style.display !== "none";
+  },
+
+  sync() {
+    if (!this.panel || !this.trigger) return;
+    if (this.isOpen()) {
+      this.positionPanel();
+      this.listen();
+    } else {
+      this.clearPlacement();
+      this.unlisten();
+    }
+  },
+
+  listen() {
+    if (this.listening) return;
+    this.listening = true;
+    window.addEventListener("scroll", this.onReposition, true);
+    window.addEventListener("resize", this.onReposition);
+  },
+
+  unlisten() {
+    if (!this.listening) return;
+    this.listening = false;
+    window.removeEventListener("scroll", this.onReposition, true);
+    window.removeEventListener("resize", this.onReposition);
+  },
+
+  clearPlacement() {
+    if (!this.panel) return;
+    const dirty =
+      this.panel.hasAttribute("data-flip") ||
+      this.panel.style.maxHeight !== "" ||
+      this.panel.style.overflowY !== "";
+    if (!dirty) return;
+    this.observer.disconnect();
+    this.panel.removeAttribute("data-flip");
+    this.panel.style.maxHeight = "";
+    this.panel.style.overflowY = "";
+    this.observe();
+  },
+
+  // Measured with flip and cap cleared so natural height decides.
+  // Disconnect around the writes: the observer watches style, and a
+  // measurement that mutates style would otherwise re-enter sync.
+  positionPanel() {
+    if (!this.panel || !this.trigger || !this.isOpen()) return;
+
+    this.observer.disconnect();
+    this.panel.removeAttribute("data-flip");
+    this.panel.style.maxHeight = "";
+    this.panel.style.overflowY = "";
+
+    const control = this.trigger.getBoundingClientRect();
+    const panelH = this.panel.offsetHeight;
+
+    if (!panelH || (!control.top && !control.bottom)) {
+      this.observe();
+      return;
+    }
+
+    const gap = 8;
+    const below = window.innerHeight - control.bottom - gap;
+    const above = control.top - gap;
+    const flip = panelH > below && above > below;
+    if (flip) this.panel.setAttribute("data-flip", "");
+
+    const room = Math.max(flip ? above : below, 0);
+    if (panelH > room) {
+      this.panel.style.maxHeight = `${room}px`;
+      this.panel.style.overflowY = "auto";
+    }
+
+    this.observe();
+  },
+};
+
 export default {
   PetalChart,
   PetalColorScheme,
@@ -5474,4 +5587,5 @@ export default {
   PetalCommandDialog,
   PetalComboBox,
   PetalDataTable,
+  PetalDropdown,
 };

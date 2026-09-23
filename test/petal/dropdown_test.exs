@@ -116,6 +116,18 @@ defmodule PetalComponents.DropdownTest do
       assert_has_class(html, "pc-dropdown__menu-items-wrapper-placement--left")
     end
 
+    test "mounts the flip hook on the root", %{assigns: assigns} do
+      html =
+        rendered_to_string(~H"""
+        <.dropdown id="account-menu" label="Dropdown">
+          <.dropdown_menu_item label="Option" />
+        </.dropdown>
+        """)
+
+      assert html =~ ~s(id="account-menu")
+      assert html =~ ~s(phx-hook="PetalDropdown")
+    end
+
     test "renders with right placement", %{assigns: assigns} do
       html =
         rendered_to_string(~H"""

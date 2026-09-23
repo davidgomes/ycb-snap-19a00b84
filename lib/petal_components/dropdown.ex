@@ -30,6 +30,11 @@ defmodule PetalComponents.Dropdown do
     doc: "additional JS commands to run when the dropdown closes (LiveView.JS only)"
 
   attr :placement, :string, default: "left", values: ["left", "right"]
+
+  attr :id, :string,
+    default: nil,
+    doc: "DOM id for the dropdown root. Generated when omitted so the flip hook can mount"
+
   attr :rest, :global
 
   slot :trigger_element,
@@ -54,9 +59,14 @@ defmodule PetalComponents.Dropdown do
     assigns =
       assigns
       |> assign_new(:options_container_id, fn -> "dropdown_#{Ecto.UUID.generate()}" end)
+      |> then(fn assigns ->
+        assign(assigns, :id, assigns.id || "#{assigns.options_container_id}-root")
+      end)
 
     ~H"""
     <div
+      id={@id}
+      phx-hook="PetalDropdown"
       {@rest}
       {js_attributes("container", @options_container_id, @on_close)}
       class={[@class, "pc-dropdown"]}

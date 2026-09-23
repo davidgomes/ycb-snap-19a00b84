@@ -3,6 +3,15 @@
 
 #### Fixed
 
+- **Dropdown menus flip upward when the viewport has no room below.**
+  A menu near the bottom of the screen used to open downward and run
+  off the page. `PetalDropdown` measures on open (and again on scroll
+  and resize while the menu is open) and sets `data-flip` when the
+  panel is taller than the space below the trigger and there is more
+  room above. CSS then anchors the panel to the top edge, keeping the
+  same left/right placement. If neither side fits, the winning side
+  caps the panel and the items scroll inside it.
+
 - **`command_dialog` now locks background scroll while the palette is
   open.** A native modal `<dialog>` hands you the top layer, the focus
   trap and Escape, but it does not stop the page underneath from
