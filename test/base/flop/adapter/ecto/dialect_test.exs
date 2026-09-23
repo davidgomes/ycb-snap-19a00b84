@@ -182,6 +182,47 @@ defmodule Flop.Adapter.Ecto.DialectTest do
       assert Dialect.dump_array_element("pear", nil) == "pear"
       assert Dialect.dump_array_element("pear", {:array, :integer}) == "pear"
     end
+
+    test "uses JSON_CONTAINS for a custom field without an array type" do
+      assert custom_where_clause(MyXQLRepo, :tag_list, :contains, "a") ==
+               ~S|fragment("JSON_CONTAINS(?, ?)", c0.tags, ^["a"])|
+
+      assert custom_where_clause(MyXQLRepo, :tag_list, :not_contains, "a") ==
+               ~S|not fragment("JSON_CONTAINS(?, ?)", c0.tags, ^["a"])|
+    end
+
+    test "uses the array itself for a custom field that has one" do
+      assert custom_where_clause(PostgresRepo, :tag_list, :contains, "a") ==
+               ~S|^"a" in c0.tags|
+
+      assert custom_where_clause(PostgresRepo, :tag_list, :empty, true) ==
+               ~S|is_nil(c0.tags) or c0.tags == type(^[], {:array, :string})|
+    end
+
+    test "uses JSON_LENGTH for an empty custom array field" do
+      assert custom_where_clause(MyXQLRepo, :tag_list, :empty, true) ==
+               ~S|is_nil(c0.tags) or fragment("JSON_LENGTH(?) = 0", c0.tags)|
+    end
+
+    test "builds a custom field ilike filter with LIKE without ILIKE" do
+      expected =
+        ~S|fragment("? LIKE ? ESCAPE ?", fragment("lower(?)", c0.name), | <>
+          ~S|^"%abc%", ^"\\")|
+
+      assert custom_where_clause(SQLite3Repo, :name_lower, :ilike, "abc") ==
+               expected
+    end
+  end
+
+  defp custom_where_clause(repo, field, op, value) do
+    flop = %Flop{filters: [%Flop.Filter{field: field, op: op, value: value}]}
+
+    MyApp.CustomFieldPet
+    |> Flop.query(flop, for: MyApp.CustomFieldPet, repo: repo)
+    |> inspect()
+    |> String.split("where: ")
+    |> List.last()
+    |> String.trim_trailing(">")
   end
 
   defp where_clause(repo) do
