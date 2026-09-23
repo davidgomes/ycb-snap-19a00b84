@@ -226,6 +226,8 @@ end
 - `priority`: `2` (0-3, lower is higher priority)
 - `tags`: `[]`
 
+Any other option accepted by [`Oban.Job.new/2`](https://hexdocs.pm/oban/Oban.Job.html#new/2) can be set in the global `:oban` tuple (`meta`, `unique`, `schedule_in`, and so on). Those values become the default for every handler.
+
 ### Per-handler configuration
 
 Override global options for specific handlers using tuple syntax:
@@ -239,6 +241,9 @@ Override global options for specific handlers using tuple syntax:
     # Low-priority handler in different queue
     {MyApp.AnalyticsHandler, oban: [queue: :analytics, priority: 3]},
 
+    # Delayed handler
+    {MyApp.ReminderHandler, oban: [schedule_in: {24, :hours}]},
+
     # Handler using all global defaults
     MyApp.NotificationHandler
   ]
@@ -247,53 +252,17 @@ Override global options for specific handlers using tuple syntax:
 
 **Supported per-handler options:**
 
-Oban job options (under `:oban` key):
+Any option accepted by [`Oban.Job.new/2`](https://hexdocs.pm/oban/Oban.Job.html#new/2) can be set under the `:oban` key. Per-handler values are merged over the global defaults, so you only need to specify the options you want to override. Each key is replaced as a whole (`tags`, `meta`, and `unique` are not deep-merged).
+
+Common options:
 - `queue` - Override queue (atom)
 - `max_attempts` - Override retry count (integer)
 - `priority` - Override priority (0-3, lower is higher)
 - `tags` - Override tags (list of strings)
-
-Conditional execution (`:if` key):
-- Function: `fn event -> boolean() end` - receives full Event struct
-- MFA tuple: `{Module, :function, [args]}` - event is appended as last argument
-
-### Conditional handlers
-
-Use the `:if` option to conditionally schedule handlers based on runtime conditions:
-
-```elixir
-@events %{
-  user_created: [
-    # Feature flag check (recommended for @events - can be serialized)
-    {MyApp.NewEmailHandler, if: {FunWithFlags, :enabled?, [:new_email_template]}},
-
-    # Custom validation function
-    {MyApp.PremiumHandler, if: {MyApp.Features, :is_premium?, []}},
-
-    # Always scheduled (no :if)
-    MyApp.StandardHandler
-  ]
-}
-
-# Helper module example
-defmodule MyApp.Features do
-  def is_premium?(event) do
-    event.data["plan"] != "free"
-  end
-end
-```
-
-**The `:if` condition:**
-- Receives the full `Event` struct (with `data`, `event_id`, `causation_id`, `correlation_id`)
-- `idempotency_key` is `nil` in the `:if` check (generated per-job after condition passes)
-- Runs synchronously during `emit/3`, before Oban jobs are created
-- If returns `false`, handler is skipped (no job created)
-- Keep checks fast - they block the emit caller
-
-**MFA vs Function:**
-- MFA tuples (`{Module, :function, []}`) can be used in `@events` module attributes
-- Anonymous functions work at runtime but cannot be stored in module attributes
-- For feature flags, use MFA tuples with libraries like `fun_with_flags`
+- `meta` - Extra job metadata (map)
+- `unique` - Uniqueness constraints (keyword list)
+- `schedule_in` - Delay execution (integer seconds or `{n, unit}`)
+- `scheduled_at` - Run at a specific `DateTime`
 
 ## API
 

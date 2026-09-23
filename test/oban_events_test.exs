@@ -55,25 +55,16 @@ defmodule ObanEventsTest do
     }
   end
 
-  # Helper module for :if conditions
-  defmodule ConditionHelpers do
-    def check_enabled(event), do: event.data["enabled"] == true
-    def check_premium(event), do: event.data["plan"] == "premium"
-    def always_false(_event), do: false
-  end
-
-  # Test module with :if conditions
-  defmodule ConditionalHandlers do
+  # Test events module that forwards arbitrary Oban.Job options
+  defmodule ArbitraryOptsEventBus do
     @moduledoc false
-    use ObanEvents
-
-    alias ObanEventsTest.ConditionHelpers
+    use ObanEvents,
+      oban: {Oban, meta: %{"scope" => "global"}, unique: [period: 60]}
 
     @events %{
-      conditional_event: [
-        {TestHandler, if: {ConditionHelpers, :check_enabled, []}},
-        {TestHandler, if: {ConditionHelpers, :check_premium, []}},
-        {TestHandler, if: {ConditionHelpers, :always_false, []}},
+      passthrough_event: [
+        {TestHandler,
+         oban: [meta: %{"scope" => "handler"}, unique: [period: 30], schedule_in: 3600]},
         TestHandler
       ]
     }
@@ -189,39 +180,17 @@ defmodule ObanEventsTest do
       assert job3.tags == []
     end
 
-    test ":if conditions filter handlers based on event data" do
-      # enabled=true, plan=premium -> should schedule first 2 handlers + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => true,
-                 "plan" => "premium"
-               })
-
-      assert length(jobs) == 3
-
-      # enabled=true, plan=free -> should schedule first handler + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{"enabled" => true, "plan" => "free"})
-
+    test "passes through any Oban.Job option and lets handlers replace global values" do
+      assert {:ok, jobs} = ArbitraryOptsEventBus.emit(:passthrough_event, %{"test" => "data"})
       assert length(jobs) == 2
 
-      # enabled=false, plan=premium -> should schedule second handler + default
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => false,
-                 "plan" => "premium"
-               })
+      [overridden, inherited] = jobs
 
-      assert length(jobs) == 2
+      assert overridden.meta["scope"] == "handler"
+      assert overridden.unique.period == 30
 
-      # enabled=false, plan=free -> should only schedule default handler
-      assert {:ok, jobs} =
-               ConditionalHandlers.emit(:conditional_event, %{
-                 "enabled" => false,
-                 "plan" => "free"
-               })
-
-      assert length(jobs) == 1
+      assert inherited.meta["scope"] == "global"
+      assert inherited.unique.period == 60
     end
   end
 end
