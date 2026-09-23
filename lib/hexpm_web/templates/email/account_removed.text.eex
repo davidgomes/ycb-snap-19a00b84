@@ -1,0 +1,9 @@
+<%= AccountRemoved.title() %>
+
+<%= AccountRemoved.message(@username, @packages) %>
+
+<%= Common.reason_label() %>
+
+<%= @reason %>
+
+<%= Common.questions_notice(:text) %>

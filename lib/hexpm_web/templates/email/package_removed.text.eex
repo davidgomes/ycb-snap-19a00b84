@@ -1,0 +1,9 @@
+<%= PackageRemoved.title(@package) %>
+
+<%= PackageRemoved.message(@package) %>
+
+<%= Common.reason_label() %>
+
+<%= @reason %>
+
+<%= Common.questions_notice(:text) %>

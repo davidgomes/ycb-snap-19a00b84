@@ -132,9 +132,14 @@ defmodule Hexpm.EmailsTest do
     end
 
     test "helpers returning html render as html instead of escaped text" do
+      package = build(:package, name: "cowboy")
+
       emails = [
         Emails.password_reset_request(build(:user), %{key: "abc"}),
-        Emails.security_password_reset(build(:user), %{key: "abc"})
+        Emails.security_password_reset(build(:user), %{key: "abc"}),
+        Emails.package_removed(package, [build(:user)], "Reason."),
+        Emails.release_removed(package, build(:release), [build(:user)], "Reason."),
+        Emails.account_removed(build(:user), [], "Reason.")
       ]
 
       for email <- emails do
