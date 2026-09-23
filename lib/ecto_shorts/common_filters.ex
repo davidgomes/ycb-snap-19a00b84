@@ -98,7 +98,7 @@ defmodule EctoShorts.CommonFilters do
   end
 
   @doc """
-  Implementation for `c:EctoShorts.QueryBuilder.create_schema_filter/2`.
+  Implementation for `c:EctoShorts.QueryBuilder.create_schema_filter/3`.
 
   ### Examples
 
