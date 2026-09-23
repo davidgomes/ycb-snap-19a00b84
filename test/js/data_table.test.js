@@ -264,6 +264,38 @@ describe("PetalDataTable", () => {
     expect(wrap.style.display).toBe("none");
   });
 
+  it("closes an in-page panel through LiveView JS so a patch can't reopen it", () => {
+    const { hook, el, patched, form } = mountWithFilter({
+      navTemplate: "/orders?:filters",
+      filters: [],
+      formHtml: `
+        <form class="pc-data-table__filter-form" data-pc-dt-filter data-field="email">
+          <select name="filter_op"><option value="contains" selected>contains</option></select>
+          <input name="value" value="x" />
+        </form>
+      `,
+    });
+    const trigger = document.createElement("button");
+    trigger.id = "pop-trigger";
+    trigger.setAttribute("aria-expanded", "true");
+    el.appendChild(trigger);
+
+    const calls = [];
+    hook.js = () => ({
+      hide: (target, opts) => calls.push(["hide", target.id, opts]),
+      setAttribute: (target, attr, val) =>
+        calls.push(["setAttribute", target.id, attr, val]),
+    });
+
+    submit(form);
+    expect(calls).toEqual([
+      ["hide", "pop", { time: 0 }],
+      ["setAttribute", "pop-trigger", "aria-expanded", "false"],
+    ]);
+    expect(el.querySelector(".pc-popover__panel").style.display).toBe("");
+    expect(patched).toHaveLength(1);
+  });
+
   it("mirrors the indeterminate stamp onto the DOM property on mount and update", () => {
     const { hook, el } = mountBase({});
     const box = document.createElement("input");

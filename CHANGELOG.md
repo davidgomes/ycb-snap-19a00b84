@@ -3,6 +3,15 @@
 
 #### Fixed
 
+- **`data_table` menus live in the page.** The filter editors and the
+  Columns dropdown were top-layer popovers, so `PetalPopover` had to
+  chase the viewport - re-measuring on every scroll, resize and
+  keyboard, flipping, clamping and hiding - and still lagged, drifted
+  or detached on mobile. They now render as ordinary anchored popovers
+  inside the toolbar: absolutely positioned under their trigger, they
+  scroll with the page for free. The toolbar sits outside the table's
+  scroll container, so nothing clips them. The `PetalDataTable` hook
+  still closes a filter editor after an Apply, in both wiring modes.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to

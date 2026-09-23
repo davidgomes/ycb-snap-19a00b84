@@ -4863,8 +4863,17 @@ export const PetalDataTable = {
       panel.hidePopover();
       return;
     }
-    panel.style.display = "none";
     const trigger = document.getElementById(`${panel.id}-trigger`);
+    // the trigger opened the panel with JS.toggle, whose sticky display
+    // op a later patch would re-apply - close through LiveView's JS so
+    // the Apply's own patch doesn't reopen it
+    const js = typeof this.js === "function" ? this.js() : null;
+    if (js) {
+      js.hide(panel, { time: 0 });
+      if (trigger) js.setAttribute(trigger, "aria-expanded", "false");
+      return;
+    }
+    panel.style.display = "none";
     if (trigger) trigger.setAttribute("aria-expanded", "false");
   },
 
