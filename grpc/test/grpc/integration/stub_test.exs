@@ -146,7 +146,7 @@ defmodule GRPC.Integration.StubTest do
               %GRPC.RPCError{
                 message: "Deadline expired",
                 status: GRPC.Status.deadline_exceeded()
-              }} == channel |> Helloworld.Greeter.Stub.say_hello(req, timeout: 100)
+              }} == channel |> Helloworld.Greeter.Stub.say_hello(req, timeout: 200)
     end)
   end
 end

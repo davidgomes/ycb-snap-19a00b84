@@ -422,7 +422,7 @@ defmodule GRPC.Integration.ServerTest do
           error = %GRPC.RPCError{message: "Deadline expired", status: 4}
 
           assert {:error, ^error} =
-                   channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 100)
+                   channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 200)
         end)
       end)
 
