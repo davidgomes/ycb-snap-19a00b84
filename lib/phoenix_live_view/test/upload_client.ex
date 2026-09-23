@@ -87,6 +87,7 @@ defmodule Phoenix.LiveViewTest.UploadClient do
       for {name, %{socket: %{channel_pid: pid}}} <- state.entries,
           into: %{},
           do: {name, pid}
+
     {:reply, pids, state}
   end
 
