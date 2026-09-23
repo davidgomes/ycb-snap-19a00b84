@@ -436,6 +436,78 @@ defmodule GRPC.Client.ReResolveTest do
 
       disconnect_and_wait(channel)
     end
+
+    test "reconcile updates the balancer without republishing to persistent_term", ctx do
+      {:ok, channel} =
+        connect_with_resolver(
+          ctx.ref,
+          ctx.resolver,
+          ctx.adapter,
+          [%{address: "10.0.0.1", port: 50051}],
+          lb_policy: :round_robin
+        )
+
+      published = :persistent_term.get({Connection, ctx.ref})
+
+      stub(ctx.resolver, :resolve, fn _target ->
+        {:ok,
+         %{
+           addresses: [%{address: "10.0.0.1", port: 50051}, %{address: "10.0.0.2", port: 50051}],
+           service_config: nil
+         }}
+      end)
+
+      Process.sleep(@wait)
+
+      assert :persistent_term.get({Connection, ctx.ref}) === published
+
+      hosts =
+        for _ <- 1..4 do
+          {:ok, picked} = Connection.pick_channel(channel)
+          picked.host
+        end
+
+      assert Enum.sort(Enum.uniq(hosts)) == ["10.0.0.1", "10.0.0.2"]
+
+      disconnect_and_wait(channel)
+    end
+
+    test "concurrent picks during a shrinking reconcile only see surviving backends", ctx do
+      {:ok, channel} =
+        connect_with_resolver(
+          ctx.ref,
+          ctx.resolver,
+          ctx.adapter,
+          [
+            %{address: "10.0.0.1", port: 50051},
+            %{address: "10.0.0.2", port: 50051},
+            %{address: "10.0.0.3", port: 50051}
+          ],
+          lb_policy: :round_robin
+        )
+
+      stub(ctx.resolver, :resolve, fn _target ->
+        {:ok, %{addresses: [%{address: "10.0.0.1", port: 50051}], service_config: nil}}
+      end)
+
+      pickers =
+        for _ <- 1..30 do
+          Task.async(fn ->
+            for _ <- 1..200 do
+              assert {:ok, %GRPC.Channel{}} = Connection.pick_channel(channel)
+            end
+          end)
+        end
+
+      Task.await_many(pickers, 5_000)
+      Process.sleep(@wait)
+
+      for _ <- 1..10 do
+        assert {:ok, %GRPC.Channel{host: "10.0.0.1"}} = Connection.pick_channel(channel)
+      end
+
+      disconnect_and_wait(channel)
+    end
   end
 
   describe "pick_channel after full backend replacement" do
@@ -846,7 +918,7 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "stale persistent_term prevention" do
+  describe "failed channels excluded from picks" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.99"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
@@ -932,6 +1004,8 @@ defmodule GRPC.Client.ReResolveTest do
       Process.sleep(@wait)
 
       assert {:error, :no_connection} = Connection.pick_channel(channel)
+
+      disconnect_and_wait(channel)
     end
   end
 
@@ -1042,14 +1116,14 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "refresh handler with failed channels" do
+  describe "per-request pick with failed channels" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.2"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
       Map.put(ctx, :failing_adapter, GRPC.Test.FailingClientAdapter)
     end
 
-    test "GenServer survives when :refresh picks a failed channel", ctx do
+    test "round robin never picks a failed channel", ctx do
       # Connect with 2 backends — one healthy, one failing
       expect(ctx.resolver, :resolve, fn _target ->
         {:ok,
@@ -1088,20 +1162,10 @@ defmodule GRPC.Client.ReResolveTest do
       state = get_state(ctx.ref)
       assert match?({:failed, _}, Map.get(state.real_channels, "10.0.0.2:50051"))
 
-      # Wait for several :refresh cycles (15s default, but we'll trigger manually).
-      # Round-robin will eventually pick 10.0.0.2. Without the fix, this crashes.
-      pid = whereis_name(ctx.ref)
-
       for _ <- 1..5 do
-        send(pid, :refresh)
+        assert {:ok, picked} = Connection.pick_channel(channel)
+        assert picked.host == "10.0.0.1"
       end
-
-      # Small sleep for messages to process
-      Process.sleep(50)
-
-      assert Process.alive?(pid)
-      assert {:ok, picked} = Connection.pick_channel(channel)
-      assert picked.host == "10.0.0.1"
 
       disconnect_and_wait(channel)
     end

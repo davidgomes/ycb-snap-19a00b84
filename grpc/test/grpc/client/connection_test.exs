@@ -16,13 +16,13 @@ defmodule GRPC.Client.ConnectionTest do
   end
 
   describe "pick_channel/2" do
-    test "returns {:error, :no_connection} when no persistent_term entry exists", %{ref: ref} do
+    test "returns {:error, :no_connection} when the connection does not exist", %{ref: ref} do
       channel = %Channel{ref: ref}
 
       assert {:error, :no_connection} = Connection.pick_channel(channel)
     end
 
-    test "returns {:ok, channel} when a channel is stored in persistent_term", %{
+    test "returns {:ok, channel} for a connected channel", %{
       ref: ref,
       target: target,
       adapter: adapter
@@ -30,6 +30,40 @@ defmodule GRPC.Client.ConnectionTest do
       {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
 
       assert {:ok, ^channel} = Connection.pick_channel(%Channel{ref: ref})
+    end
+
+    test "round robin rotates across backends on every pick", %{ref: ref, adapter: adapter} do
+      {:ok, channel} =
+        Connection.connect("ipv4:127.0.0.1:50051,127.0.0.2:50051,127.0.0.3:50051",
+          adapter: adapter,
+          name: ref,
+          lb_policy: :round_robin
+        )
+
+      hosts =
+        for _ <- 1..6 do
+          {:ok, picked} = Connection.pick_channel(channel)
+          picked.host
+        end
+
+      assert Enum.frequencies(hosts) == %{"127.0.0.1" => 2, "127.0.0.2" => 2, "127.0.0.3" => 2}
+
+      Connection.disconnect(channel)
+    end
+
+    test "pick first keeps returning the first backend", %{ref: ref, adapter: adapter} do
+      {:ok, channel} =
+        Connection.connect("ipv4:127.0.0.1:50051,127.0.0.2:50051",
+          adapter: adapter,
+          name: ref,
+          lb_policy: :pick_first
+        )
+
+      for _ <- 1..5 do
+        assert {:ok, %Channel{host: "127.0.0.1"}} = Connection.pick_channel(channel)
+      end
+
+      Connection.disconnect(channel)
     end
   end
 
@@ -69,7 +103,7 @@ defmodule GRPC.Client.ConnectionTest do
       assert_receive {:DOWN, ^ref_mon, :process, ^pid, _reason}, 500
     end
 
-    test "pick_channel returns {:error, :no_connection} after disconnect (persistent_term is erased)",
+    test "pick_channel returns {:error, :no_connection} after disconnect",
          %{ref: ref, target: target, adapter: adapter} do
       {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
 
@@ -77,10 +111,63 @@ defmodule GRPC.Client.ConnectionTest do
 
       assert {:error, :no_connection} = Connection.pick_channel(channel)
     end
+
+    test "frees the load balancer's ETS table", %{ref: ref, target: target, adapter: adapter} do
+      {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
+      %{lb_state: %{tid: tid}} = :sys.get_state(whereis_name(ref))
+
+      {:ok, _} = Connection.disconnect(channel)
+
+      assert :undefined == :ets.info(tid)
+    end
+
+    test "concurrent picks during disconnect never crash", %{ref: ref, adapter: adapter} do
+      {:ok, channel} =
+        Connection.connect("ipv4:127.0.0.1:50051,127.0.0.2:50051",
+          adapter: adapter,
+          name: ref,
+          lb_policy: :round_robin
+        )
+
+      pickers =
+        for _ <- 1..50 do
+          Task.async(fn ->
+            for _ <- 1..100, do: Connection.pick_channel(channel)
+          end)
+        end
+
+      {:ok, _} = Connection.disconnect(channel)
+
+      for result <- pickers |> Task.await_many() |> List.flatten() do
+        assert match?({:ok, %Channel{}}, result) or result == {:error, :no_connection}
+      end
+    end
+
+    test "repeated connect/disconnect cycles leak no persistent_term entries or ETS tables",
+         %{target: target, adapter: adapter} do
+      count_entries = fn ->
+        Enum.count(:persistent_term.get(), &match?({{Connection, _}, _}, &1))
+      end
+
+      entries_before = count_entries.()
+      tables_before = length(:ets.all())
+
+      for _ <- 1..200 do
+        {:ok, channel} = Connection.connect(target, adapter: adapter, name: make_ref())
+        pid = whereis_name(channel.ref)
+        ref_mon = Process.monitor(pid)
+        {:ok, _} = Connection.disconnect(channel)
+        assert_receive {:DOWN, ^ref_mon, :process, ^pid, _}, 500
+      end
+
+      assert count_entries.() == entries_before
+      # a leak would add one table per cycle; allow slack for unrelated tables
+      assert length(:ets.all()) - tables_before < 10
+    end
   end
 
-  describe "terminate/2 - persistent_term cleanup on process kill" do
-    test "persistent_term is erased when process is killed without disconnect", %{
+  describe "terminate/2 - cleanup on process kill" do
+    test "pick_channel fails when process is stopped without disconnect", %{
       ref: ref,
       target: target,
       adapter: adapter
@@ -88,11 +175,13 @@ defmodule GRPC.Client.ConnectionTest do
       {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
 
       pid = whereis_name(ref)
+      %{lb_state: %{tid: tid}} = :sys.get_state(pid)
       ref_mon = Process.monitor(pid)
       GenServer.stop(pid, :shutdown)
       assert_receive {:DOWN, ^ref_mon, :process, ^pid, :shutdown}, 500
 
       assert {:error, :no_connection} = Connection.pick_channel(channel)
+      assert :undefined == :ets.info(tid)
     end
   end
 
