@@ -106,6 +106,20 @@ defmodule Hexpm.AdminTasksTest do
       refute_email_sent()
     end
 
+    test "emails the user the reason for the removal" do
+      user = insert(:user)
+
+      assert :ok = AdminTasks.remove_user(user.username, reason: "Publishing spam packages.")
+
+      assert_email_sent(fn email ->
+        assert email.to == [{user.username, User.email(user, :primary)}]
+        assert email.subject == "Hex.pm - Your account has been removed"
+        assert email.text_body =~ "Publishing spam packages."
+        assert email.html_body =~ "Publishing spam packages."
+        refute email.text_body =~ "have also been removed"
+      end)
+    end
+
     test "removes user with associated records" do
       user = insert(:user)
       user_id = user.id
@@ -211,6 +225,28 @@ defmodule Hexpm.AdminTasksTest do
 
       refute Repo.get(User, user.id)
       assert Repo.get(Package, package_id)
+    end
+
+    test "lists the removed packages in the removal email" do
+      user = insert(:user)
+      package = insert(:package)
+      insert(:package_owner, package: package, user: user)
+      shared_package = insert(:package)
+      insert(:package_owner, package: shared_package, user: user)
+      insert(:package_owner, package: shared_package, user: insert(:user))
+
+      assert :ok =
+               AdminTasks.remove_user(user.username,
+                 delete_packages: true,
+                 reason: "Publishing malicious packages."
+               )
+
+      assert_email_sent(fn email ->
+        assert email.to == [{user.username, User.email(user, :primary)}]
+        assert email.text_body =~ "Publishing malicious packages."
+        assert email.text_body =~ "have also been removed: #{package.name}."
+        assert email.html_body =~ "have also been removed: #{package.name}."
+      end)
     end
 
     test "without option leaves packages intact" do
@@ -354,6 +390,39 @@ defmodule Hexpm.AdminTasksTest do
 
       refute Repo.get(Package, package_id)
       refute Repo.get(Release, release_id)
+    end
+
+    test "does not send an email without a reason" do
+      package = insert(:package)
+      insert(:package_owner, package: package, user: insert(:user))
+
+      assert :ok = AdminTasks.remove_package("hexpm", package.name)
+
+      refute_email_sent()
+    end
+
+    test "emails the owners the reason for the removal" do
+      package = insert(:package)
+      owner1 = insert(:user)
+      owner2 = insert(:user)
+      insert(:package_owner, package: package, user: owner1)
+      insert(:package_owner, package: package, user: owner2)
+
+      assert :ok =
+               AdminTasks.remove_package("hexpm", package.name,
+                 reason: "The package contained malware."
+               )
+
+      refute Repo.get(Package, package.id)
+
+      assert_email_sent(fn email ->
+        assert Enum.sort(Enum.map(email.to, &elem(&1, 1))) ==
+                 Enum.sort([User.email(owner1, :primary), User.email(owner2, :primary)])
+
+        assert email.subject == "Hex.pm - Package #{package.name} has been removed"
+        assert email.text_body =~ "The package contained malware."
+        assert email.html_body =~ "The package contained malware."
+      end)
     end
 
     test "returns error for nonexistent repository" do
