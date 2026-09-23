@@ -59,7 +59,7 @@ defmodule MyApp.EmailHandler do
   require Logger
 
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, %ObanEvents.Event{data: data}) do
     %{"user_id" => user_id, "email" => email} = data
 
     Logger.info("Sending welcome email to #{email}")
@@ -133,15 +133,18 @@ end
 
 Your event bus module provides these functions:
 
-### `emit/2`
+### `emit/3`
 
 Emit an event to all registered handlers.
 
 ```elixir
-@spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+@spec emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
 
 # Raises ArgumentError if event is not registered
 MyApp.Events.emit(:user_created, %{user_id: 123, email: "user@example.com"})
+
+# Attach additional metadata (must be JSON-serializable)
+MyApp.Events.emit(:user_created, %{user_id: 123}, metadata: %{actor_id: 42})
 ```
 
 ### `get_handlers!/1`
@@ -179,21 +182,31 @@ MyApp.Events.registered?(:user_created)
 
 ## Handler Implementation
 
-Handlers must implement the `handle_event/2` callback:
+Handlers must implement the `handle_event/2` callback. The second argument is an
+`ObanEvents.Event` struct:
+
+- `name` - the event name atom
+- `data` - event data (string keys)
+- `event_id` - unique id shared by all handler jobs of a single emit
+- `emitted_at` - `DateTime` the event was emitted
+- `metadata` - metadata passed via `emit/3` (string keys)
+- `job_id` / `attempt` - the Oban job id and current attempt
+
+
 
 ```elixir
 defmodule MyApp.AnalyticsHandler do
   use ObanEvents.Handler
 
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, %ObanEvents.Event{data: data}) do
     %{"user_id" => user_id} = data
     MyApp.Analytics.track("User Created", user_id: user_id)
     :ok
   end
 
   @impl true
-  def handle_event(:user_updated, data) do
+  def handle_event(:user_updated, %ObanEvents.Event{data: data}) do
     %{"user_id" => user_id, "changes" => changes} = data
     MyApp.Analytics.track("User Updated", user_id: user_id, changes: changes)
     :ok
@@ -237,7 +250,7 @@ end)
 Handlers may be retried. Design them to be safe to run multiple times:
 
 ```elixir
-def handle_event(:user_created, %{"user_id" => user_id}) do
+def handle_event(:user_created, %ObanEvents.Event{data: %{"user_id" => user_id}}) do
   # Use upsert instead of insert to handle retries
   %UserProfile{user_id: user_id}
   |> Repo.insert(
@@ -296,7 +309,7 @@ def handle_event(_other, _data), do: :ok  # ignore rest
 ### 6. Return Errors for Retriable Failures
 
 ```elixir
-def handle_event(:send_notification, data) do
+def handle_event(:send_notification, %ObanEvents.Event{data: data}) do
   case NotificationService.send(data) do
     {:ok, _} -> :ok
     {:error, :rate_limited} -> {:error, :rate_limited}  # Will retry
@@ -323,7 +336,7 @@ defmodule MyApp.Notifications.EmailHandler do
   use ObanEvents.Handler
 
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, event) do
     # Your handler logic
     :ok
   end
@@ -332,7 +345,7 @@ end
 # 2. Keep the old module as an alias
 defmodule MyApp.EmailHandler do
   @moduledoc false
-  defdelegate handle_event(event, data), to: MyApp.Notifications.EmailHandler
+  defdelegate handle_event(name, event), to: MyApp.Notifications.EmailHandler
 end
 
 # 3. Update your event registry to use the new name
@@ -380,12 +393,25 @@ end
 
 ### Testing Handlers
 
-```elixir
-test "EmailHandler sends welcome email" do
-  data = %{"user_id" => 123, "email" => "test@example.com"}
+Use `ObanEvents.Testing` to build events the way handlers receive them
+(keys are stringified, metadata defaults are filled in):
 
-  assert :ok = MyApp.EmailHandler.handle_event(:user_created, data)
+```elixir
+import ObanEvents.Testing
+
+test "EmailHandler sends welcome email" do
+  assert :ok =
+           call_handler(MyApp.EmailHandler, :user_created, %{
+             user_id: 123,
+             email: "test@example.com"
+           })
+
   assert_email_sent(to: "test@example.com", subject: "Welcome!")
+end
+
+test "builds an event struct directly" do
+  event = build_event(:user_created, %{user_id: 123}, metadata: %{actor_id: 1})
+  assert :ok = MyApp.EmailHandler.handle_event(:user_created, event)
 end
 ```
 

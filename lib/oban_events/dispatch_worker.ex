@@ -13,6 +13,9 @@ defmodule ObanEvents.DispatchWorker do
   - `event`: String representation of the event name
   - `handler`: String representation of the handler module
   - `data`: Map of event-specific data
+  - `event_id`, `emitted_at`, `metadata`: Optional event metadata
+
+  Handlers receive an `ObanEvents.Event` struct built from these arguments.
 
   ## Configuration
 
@@ -31,17 +34,29 @@ defmodule ObanEvents.DispatchWorker do
   require Logger
 
   @impl Oban.Worker
-  def perform(%Oban.Job{
-        args: %{"event" => event_name_string, "handler" => handler_module_string, "data" => data}
-      }) do
+  def perform(
+        %Oban.Job{
+          args: %{"event" => event_name_string, "handler" => handler_module_string, "data" => data}
+        } = job
+      ) do
     # Safely convert strings back to atoms
     # These atoms should already exist since they were created during emit
     event = String.to_existing_atom(event_name_string)
     handler = String.to_existing_atom(handler_module_string)
 
+    event_struct = %ObanEvents.Event{
+      name: event,
+      data: data,
+      event_id: job.args["event_id"],
+      emitted_at: ObanEvents.Event.parse_datetime(job.args["emitted_at"]),
+      metadata: job.args["metadata"] || %{},
+      job_id: job.id,
+      attempt: job.attempt
+    }
+
     Logger.info("Processing event: #{event} with handler: #{inspect(handler)}")
 
-    case handler.handle_event(event, data) do
+    case handler.handle_event(event, event_struct) do
       :ok ->
         Logger.info("Event processed successfully: #{event} by #{inspect(handler)}")
         :ok

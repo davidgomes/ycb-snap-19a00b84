@@ -52,7 +52,7 @@ defmodule ObanEvents do
   3. Oban jobs are created (one per handler)
   4. Jobs are persisted to the database within the transaction
   5. `DispatchWorker` processes each job asynchronously
-  6. Each handler's `handle_event/2` callback is invoked
+  6. Each handler's `handle_event/2` callback is invoked with an `ObanEvents.Event`
 
   ## Configuration Options
 
@@ -77,7 +77,7 @@ defmodule ObanEvents do
         use ObanEvents.Handler
 
         @impl true
-        def handle_event(:user_created, data) do
+        def handle_event(:user_created, %ObanEvents.Event{data: data}) do
           %{"user_id" => user_id, "email" => email} = data
           # Send welcome email
           :ok
@@ -95,7 +95,7 @@ defmodule ObanEvents do
 
   Returns `{:ok, jobs}` on success. Raises `ArgumentError` if event is not registered.
   """
-  @callback emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+  @callback emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
 
   @doc """
   Get all handler modules registered for a given event.
@@ -172,15 +172,29 @@ defmodule ObanEvents do
             "new_email" => "new@example.com"
           })
 
-      Note: Handlers always receive data with string keys, regardless of how you emit.
+          # With additional metadata
+          #{inspect(__MODULE__)}.emit(:user_created, %{id: user.id},
+            metadata: %{actor_id: admin.id}
+          )
+
+      Note: Handlers receive an `ObanEvents.Event` struct whose data and
+      metadata always have string keys, regardless of how you emit.
+
+      ## Options
+
+      - `:metadata` - JSON-serializable map attached to the event (default: `%{}`)
 
       ## Errors
 
       Raises `ArgumentError` if the event is not registered.
       """
-      @spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
-      def emit(event_name, data) when is_atom(event_name) and is_map(data) do
+      @spec emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
+      def emit(event_name, data, opts \\ [])
+          when is_atom(event_name) and is_map(data) and is_list(opts) do
         handlers = get_handlers!(event_name)
+        event_id = ObanEvents.Event.generate_id()
+        emitted_at = DateTime.to_iso8601(DateTime.utc_now())
+        metadata = Keyword.get(opts, :metadata, %{})
 
         jobs =
           Enum.map(handlers, fn handler_module ->
@@ -188,7 +202,10 @@ defmodule ObanEvents do
               %{
                 event: Atom.to_string(event_name),
                 handler: Atom.to_string(handler_module),
-                data: data
+                data: data,
+                event_id: event_id,
+                emitted_at: emitted_at,
+                metadata: metadata
               },
               queue: @oban_queue,
               max_attempts: @oban_max_attempts,

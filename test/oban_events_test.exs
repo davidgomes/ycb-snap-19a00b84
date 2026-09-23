@@ -76,6 +76,17 @@ defmodule ObanEventsTest do
       assert length(jobs) == 1
     end
 
+    test "includes event id, timestamp, and metadata in job args" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{"a" => 1},
+                 metadata: %{"actor" => "admin"}
+               )
+
+      assert is_binary(job.args["event_id"])
+      assert {:ok, _, _} = DateTime.from_iso8601(job.args["emitted_at"])
+      assert job.args["metadata"] == %{"actor" => "admin"}
+    end
+
     test "raises ArgumentError for unregistered events" do
       assert_raise ArgumentError, ~r/Unknown event: :unknown_event/, fn ->
         TestEventBus.emit(:unknown_event, %{"data" => "value"})
