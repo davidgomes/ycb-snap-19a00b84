@@ -101,6 +101,156 @@ defmodule Hexpm.Repository.PoliciesTest do
       assert tab(updated, "hexpm").cooldown == "14d"
     end
 
+    test "clears the overrides of a submitted tab that has none",
+         %{organization: org, audit_data: audit_data} do
+      {:ok, %{policy: policy}} =
+        Policies.create(
+          org,
+          %{
+            "name" => "pol1",
+            "visibility" => "public",
+            "repositories" => [
+              %{
+                "repository" => "hexpm",
+                "overrides" => [%{"action" => "deny", "package" => "badlib"}]
+              },
+              %{
+                "repository" => org.name,
+                "overrides" => [%{"action" => "allow", "package" => "internal"}]
+              }
+            ]
+          },
+          audit: audit_data
+        )
+
+      org_tab = tab(policy, org.name)
+
+      params = %{
+        "repositories" => [
+          %{"id" => tab(policy, "hexpm").id, "repository" => "hexpm", "cooldown" => "7d"},
+          %{
+            "id" => org_tab.id,
+            "repository" => org.name,
+            "overrides" => [
+              %{"id" => hd(org_tab.overrides).id, "action" => "allow", "package" => "internal"}
+            ]
+          }
+        ]
+      }
+
+      assert {:ok, %{policy: updated}} = Policies.update(policy, params, audit: audit_data)
+
+      assert tab(updated, "hexpm").overrides == []
+      assert Enum.map(tab(updated, org.name).overrides, & &1.package) == ["internal"]
+    end
+
+    test "drops submitted overrides that carry no package",
+         %{organization: org, audit_data: audit_data} do
+      {:ok, %{policy: policy}} =
+        Policies.create(
+          org,
+          %{
+            "name" => "pol1",
+            "visibility" => "public",
+            "repositories" => [
+              %{
+                "repository" => "hexpm",
+                "overrides" => [
+                  %{"action" => "allow", "package" => "kept"},
+                  %{"action" => "deny", "package" => "removed"}
+                ]
+              }
+            ]
+          },
+          audit: audit_data
+        )
+
+      hexpm = tab(policy, "hexpm")
+      [kept, removed] = hexpm.overrides
+
+      params = %{
+        "repositories" => [
+          %{
+            "id" => hexpm.id,
+            "repository" => "hexpm",
+            "overrides" => [
+              %{"id" => kept.id, "action" => "allow", "package" => "kept"},
+              %{"id" => removed.id}
+            ]
+          }
+        ]
+      }
+
+      assert {:ok, %{policy: updated}} = Policies.update(policy, params, audit: audit_data)
+
+      assert Enum.map(tab(updated, "hexpm").overrides, & &1.package) == ["kept"]
+    end
+
+    test "clears the overrides of every submitted tab in one save",
+         %{organization: org, audit_data: audit_data} do
+      {:ok, %{policy: policy}} =
+        Policies.create(
+          org,
+          %{
+            "name" => "pol1",
+            "visibility" => "private",
+            "repositories" => [
+              %{
+                "repository" => "hexpm",
+                "overrides" => [%{"action" => "deny", "package" => "badlib"}]
+              },
+              %{
+                "repository" => org.name,
+                "overrides" => [%{"action" => "allow", "package" => "internal"}]
+              }
+            ]
+          },
+          audit: audit_data
+        )
+
+      params = %{
+        "repositories" =>
+          Enum.map(policy.repositories, fn tab ->
+            %{"id" => tab.id, "repository" => tab.repository, "cooldown" => "3d"}
+          end)
+      }
+
+      assert {:ok, %{policy: updated}} = Policies.update(policy, params, audit: audit_data)
+
+      assert Enum.map(updated.repositories, & &1.overrides) == [[], []]
+      assert Enum.map(updated.repositories, & &1.cooldown) == ["3d", "3d"]
+
+      audit_log =
+        Hexpm.Repo.all(Hexpm.Accounts.AuditLog)
+        |> Enum.find(&(&1.action == "policy.update"))
+
+      assert Enum.map(audit_log.params["repositories"], & &1["overrides"]) == [[], []]
+    end
+
+    test "preserves overrides when repositories are not submitted",
+         %{organization: org, audit_data: audit_data} do
+      {:ok, %{policy: policy}} =
+        Policies.create(
+          org,
+          %{
+            "name" => "pol1",
+            "visibility" => "public",
+            "repositories" => [
+              %{
+                "repository" => "hexpm",
+                "overrides" => [%{"action" => "deny", "package" => "badlib"}]
+              }
+            ]
+          },
+          audit: audit_data
+        )
+
+      {:ok, %{policy: updated}} =
+        Policies.update(policy, %{"description" => "updated"}, audit: audit_data)
+
+      assert Enum.map(tab(updated, "hexpm").overrides, & &1.package) == ["badlib"]
+    end
+
     test "writes a policy.update audit log entry",
          %{organization: org, audit_data: audit_data} do
       {:ok, %{policy: policy}} =
