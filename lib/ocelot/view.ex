@@ -3,12 +3,10 @@ defmodule Ocelot.View do
 
   require EEx
 
-  @templates Path.join(__DIR__, "templates")
-
-  EEx.function_from_file(:def, :layout, Path.join(@templates, "layout.html.eex"), [:assigns])
-  EEx.function_from_file(:def, :index, Path.join(@templates, "index.html.eex"), [:assigns])
-  EEx.function_from_file(:def, :show, Path.join(@templates, "show.html.eex"), [:assigns])
-  EEx.function_from_file(:def, :not_found, Path.join(@templates, "not_found.html.eex"), [:assigns])
+  for name <- [:layout, :index, :show, :not_found] do
+    path = Path.join([__DIR__, "templates", "#{name}.html.eex"])
+    EEx.function_from_file(:def, name, path, [:assigns])
+  end
 
   def h(nil), do: ""
   def h(value) when is_binary(value), do: Plug.HTML.html_escape(value)

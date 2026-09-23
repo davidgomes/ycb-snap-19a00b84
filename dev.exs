@@ -41,12 +41,13 @@ end
 
 File.mkdir_p!("db")
 
-{:ok, _} = Supervisor.start_link([Ocelot.Dev.Repo], strategy: :one_for_one)
-Ecto.Migrator.run(Ocelot.Dev.Repo, [{1, Ocelot.Dev.Migration}], :up, all: true)
+migrate = &Ecto.Migrator.run(&1, [{1, Ocelot.Dev.Migration}], &2, &3)
 
-{:ok, _} =
+{:ok, supervisor} =
   Supervisor.start_link(
     [
+      Ocelot.Dev.Repo,
+      {Ecto.Migrator, repos: [Ocelot.Dev.Repo], migrator: migrate},
       {Oban,
        engine: Oban.Engines.Lite,
        repo: Ocelot.Dev.Repo,
@@ -57,6 +58,9 @@ Ecto.Migrator.run(Ocelot.Dev.Repo, [{1, Ocelot.Dev.Migration}], :up, all: true)
     strategy: :one_for_one
   )
 
+# Keep the tree alive after this script finishes evaluating under `--no-halt`.
+Process.unlink(supervisor)
+
 [
   Ocelot.Dev.Worker.new(%{"hello" => "world"}),
   Ocelot.Dev.Worker.new(%{"fail" => true}),
@@ -64,6 +68,6 @@ Ecto.Migrator.run(Ocelot.Dev.Repo, [{1, Ocelot.Dev.Migration}], :up, all: true)
   Ocelot.Dev.Worker.new(%{"later" => true}, schedule_in: 3600),
   Ocelot.Dev.Worker.new(%{"to" => "someone@example.com"}, queue: :mailers, tags: ["email"])
 ]
-|> Oban.insert_all()
+|> Enum.each(&Oban.insert!/1)
 
 IO.puts("Ocelot running at http://localhost:4000/oban")
