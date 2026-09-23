@@ -177,10 +177,15 @@ defmodule Canary.Plugs do
       opts[:current_user] ||
         Application.get_env(:canary, :current_user, :current_user)
 
-    current_user = Map.fetch!(conn.assigns, current_user_name)
     action = get_action(conn)
 
-    Plug.Conn.assign(conn, :authorized, can?(current_user, action, controller))
+    authorized =
+      case Map.fetch(conn.assigns, current_user_name) do
+        {:ok, current_user} -> can?(current_user, action, controller)
+        :error -> false
+      end
+
+    Plug.Conn.assign(conn, :authorized, authorized)
   end
 
   @doc """
@@ -271,7 +276,7 @@ defmodule Canary.Plugs do
     current_user_name =
       opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
 
-    current_user = Map.fetch!(conn.assigns, current_user_name)
+    current_user = Map.fetch(conn.assigns, current_user_name)
     action = get_action(conn)
     is_persisted = persisted?(opts)
 
@@ -294,7 +299,14 @@ defmodule Canary.Plugs do
           fetch_resource(conn, opts)
       end
 
-    Plug.Conn.assign(conn, :authorized, can?(current_user, action, resource))
+    authorized =
+      case {current_user, resource} do
+        {{:ok, _current_user}, nil} -> false
+        {{:ok, current_user}, _} -> can?(current_user, action, resource)
+        _ -> false
+      end
+
+    Plug.Conn.assign(conn, :authorized, authorized)
   end
 
   @doc """

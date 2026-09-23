@@ -1569,9 +1569,8 @@ defmodule Canary.PlugsTest do
           params
         )
 
-      assert_raise KeyError, ~r/^key :configured_current_user not found in: %{/, fn ->
-        authorize_resource(conn, opts)
-      end
+      conn = authorize_resource(conn, opts)
+      assert conn.assigns.authorized == false
     end
   end
 
