@@ -603,6 +603,43 @@ defmodule FlopTest do
                Flop.validate(%{limit: 20_000}, for: SchemaWithoutMaxLimit)
     end
 
+    test "orders by a custom field dynamic" do
+      defmodule HumanAgeSchema do
+        @derive {
+          Flop.Schema,
+          filterable: [],
+          sortable: [:human_age],
+          custom_fields: [
+            human_age: [
+              field_dynamic: {__MODULE__, :human_age, [factor: 7]},
+              ecto_type: :integer
+            ]
+          ]
+        }
+
+        defstruct [:age]
+
+        def human_age(opts) do
+          factor = Keyword.fetch!(opts, :factor)
+          send(self(), {:sorter_opts, opts})
+          Ecto.Query.dynamic([p], fragment("? * ?", p.age, ^factor))
+        end
+      end
+
+      query =
+        Flop.query(
+          from(p in "pets"),
+          %Flop{order_by: [:human_age], order_directions: [:desc]},
+          for: HumanAgeSchema,
+          extra_opts: [timezone: "UTC"]
+        )
+
+      assert inspect(query) =~ "p0.age * ?"
+      assert_received {:sorter_opts, opts}
+      assert opts[:factor] == 7
+      assert opts[:timezone] == "UTC"
+    end
+
     test "raises for an option a backend module does not accept" do
       assert_raise Flop.InvalidConfigError, fn ->
         defmodule BackendWithUnknownOption do

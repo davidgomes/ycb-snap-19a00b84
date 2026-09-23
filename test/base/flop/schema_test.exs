@@ -407,6 +407,32 @@ defmodule Flop.SchemaTest do
         end
       end
 
-    assert error.message =~ "cannot sort by custom field"
+    assert error.message =~ "field_dynamic"
+  end
+
+  test "allows a custom field in the sortable list when field_dynamic is set" do
+    defmodule SortableParsley do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:human_age],
+        custom_fields: [
+          human_age: [
+            field_dynamic: {__MODULE__, :human_age, []},
+            ecto_type: :integer
+          ]
+        ]
+      }
+      defstruct [:id]
+
+      def human_age(_opts) do
+        Ecto.Query.dynamic([p], fragment("? * 7", p.age))
+      end
+    end
+
+    info = Schema.field_info(%SortableParsley{}, :human_age)
+
+    assert info.extra.field_dynamic == {SortableParsley, :human_age, []}
+    assert info.extra.path == [:human_age]
   end
 end
