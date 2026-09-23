@@ -33,8 +33,7 @@ defmodule ObanChoreWeb.DashboardLiveTest do
     start_supervised!({Phoenix.PubSub, name: @pubsub})
 
     start_supervised!(
-      {Oban,
-       name: Oban, repo: MockRepo, testing: :inline, notifier: Oban.Notifiers.Isolated}
+      {Oban, name: Oban, repo: MockRepo, testing: :inline, notifier: Oban.Notifiers.Isolated}
     )
 
     start_supervised!({ObanChore.Plugin, otp_app: @app, pubsub_server: @pubsub})
@@ -84,7 +83,11 @@ defmodule ObanChoreWeb.DashboardLiveTest do
     test "loads the discovered chores with their counts and active jobs" do
       socket = mount_dashboard()
 
-      assert socket.assigns.chores == [ReportChore.__chore_info__(), CleanupChore.__chore_info__()]
+      assert socket.assigns.chores == [
+               ReportChore.__chore_info__(),
+               CleanupChore.__chore_info__()
+             ]
+
       assert socket.assigns.counts == %{ReportChore => 1, CleanupChore => 0}
       assert %{1 => %Oban.Job{id: 1, state: :executing}} = socket.assigns.jobs
       assert socket.assigns.chore_jobs == %{ReportChore => [1], CleanupChore => []}
@@ -150,7 +153,8 @@ defmodule ObanChoreWeb.DashboardLiveTest do
     test "tracks a newly enqueued job and opens its tab" do
       socket = mount_dashboard(connected_socket())
 
-      {:noreply, socket} = DashboardLive.handle_info({:job_enqueued, new_job(2), ReportChore}, socket)
+      {:noreply, socket} =
+        DashboardLive.handle_info({:job_enqueued, new_job(2), ReportChore}, socket)
 
       assert socket.assigns.jobs[2] == new_job(2)
       assert socket.assigns.chore_jobs[ReportChore] == [2, 1]
@@ -166,8 +170,11 @@ defmodule ObanChoreWeb.DashboardLiveTest do
     test "does not track the same job twice" do
       socket = mount_dashboard()
 
-      {:noreply, socket} = DashboardLive.handle_info({:job_enqueued, new_job(2), ReportChore}, socket)
-      {:noreply, socket} = DashboardLive.handle_info({:job_enqueued, new_job(2), ReportChore}, socket)
+      {:noreply, socket} =
+        DashboardLive.handle_info({:job_enqueued, new_job(2), ReportChore}, socket)
+
+      {:noreply, socket} =
+        DashboardLive.handle_info({:job_enqueued, new_job(2), ReportChore}, socket)
 
       assert socket.assigns.chore_jobs[ReportChore] == [2, 1]
     end

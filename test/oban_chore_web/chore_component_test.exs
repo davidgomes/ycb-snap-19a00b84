@@ -36,8 +36,7 @@ defmodule ObanChoreWeb.ChoreComponentTest do
 
   setup do
     start_supervised!(
-      {Oban,
-       name: Oban, repo: MockRepo, testing: :inline, notifier: Oban.Notifiers.Isolated}
+      {Oban, name: Oban, repo: MockRepo, testing: :inline, notifier: Oban.Notifiers.Isolated}
     )
 
     :ok
@@ -62,7 +61,11 @@ defmodule ObanChoreWeb.ChoreComponentTest do
   end
 
   defp render_chore(module, selected \\ true) do
-    render_component(ChoreComponent, id: module, chore: module.__chore_info__(), selected: selected)
+    render_component(ChoreComponent,
+      id: module,
+      chore: module.__chore_info__(),
+      selected: selected
+    )
   end
 
   describe "render" do
