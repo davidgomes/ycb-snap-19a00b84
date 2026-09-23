@@ -14,7 +14,7 @@ defmodule PlugRailsCookieSessionStore.MessageVerifier do
     case String.split(binary, "--") do
       [content, digest] when content != "" and digest != "" ->
         if Plug.Crypto.secure_compare(digest(secret, content), digest) do
-          {:ok, Base.decode64!(content)}
+          Base.decode64(content)
         else
           :error
         end
@@ -32,6 +32,12 @@ defmodule PlugRailsCookieSessionStore.MessageVerifier do
   end
 
   defp digest(secret, data) do
-    :crypto.hmac(:sha, secret, data) |> Base.encode16(case: :lower)
+    hmac(secret, data) |> Base.encode16(case: :lower)
+  end
+
+  if Code.ensure_loaded?(:crypto) and function_exported?(:crypto, :mac, 4) do
+    defp hmac(secret, data), do: :crypto.mac(:hmac, :sha, secret, data)
+  else
+    defp hmac(secret, data), do: :crypto.hmac(:sha, secret, data)
   end
 end

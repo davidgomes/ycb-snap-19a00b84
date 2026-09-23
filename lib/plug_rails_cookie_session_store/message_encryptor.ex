@@ -45,19 +45,33 @@ defmodule PlugRailsCookieSessionStore.MessageEncryptor do
       when is_binary(encrypted) and is_binary(secret) and is_binary(sign_secret) do
     case MessageVerifier.verify(encrypted, sign_secret) do
       {:ok, verified} ->
-        [encrypted, iv] = String.split(verified, "--") |> Enum.map(&Base.decode64!/1)
-        encrypted |> decrypt(cipher, secret, iv) |> unpad_message
+        case String.split(verified, "--") |> Enum.map(&Base.decode64/1) do
+          [{:ok, encrypted}, {:ok, iv}] ->
+            encrypted |> decrypt(cipher, secret, iv) |> unpad_message
+          _ ->
+            :error
+        end
       :error ->
         :error
     end
   end
 
   defp encrypt(message, cipher, secret, iv) do
-    :crypto.block_encrypt(cipher, trim_secret(secret), iv, message)
+    crypt(cipher, trim_secret(secret), iv, message, true)
   end
 
   defp decrypt(encrypted, cipher, secret, iv) do
-    :crypto.block_decrypt(cipher, trim_secret(secret), iv, encrypted)
+    crypt(cipher, trim_secret(secret), iv, encrypted, false)
+  end
+
+  if Code.ensure_loaded?(:crypto) and function_exported?(:crypto, :crypto_one_time, 5) do
+    defp crypt(:aes_cbc256, key, iv, data, encrypt?),
+      do: :crypto.crypto_one_time(:aes_256_cbc, key, iv, data, encrypt?)
+    defp crypt(cipher, key, iv, data, encrypt?),
+      do: :crypto.crypto_one_time(cipher, key, iv, data, encrypt?)
+  else
+    defp crypt(cipher, key, iv, data, true), do: :crypto.block_encrypt(cipher, key, iv, data)
+    defp crypt(cipher, key, iv, data, false), do: :crypto.block_decrypt(cipher, key, iv, data)
   end
 
   defp pad_message(msg) do
@@ -68,7 +82,7 @@ defmodule PlugRailsCookieSessionStore.MessageEncryptor do
 
   defp unpad_message(msg) do
     padding_size = :binary.last(msg)
-    if padding_size <= 16 do
+    if padding_size > 0 and padding_size <= 16 and padding_size <= byte_size(msg) do
       msg_size = byte_size(msg)
       if binary_part(msg, msg_size, -padding_size) == :binary.copy(<<padding_size>>, padding_size) do
         {:ok, binary_part(msg, 0, msg_size - padding_size)}
