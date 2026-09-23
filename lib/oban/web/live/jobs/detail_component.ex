@@ -64,6 +64,7 @@ defmodule Oban.Web.Jobs.DetailComponent do
           <Core.status_badge :if={@job.meta["chunk"]} icon="user_group" label="Chunk" />
           <Core.status_badge :if={@job.meta["chain"]} icon="link" label="Chain" />
           <Core.status_badge :if={@job.meta["recorded"]} icon="camera" label="Recorded" />
+          <Core.status_badge :if={@job.meta["signals"]} icon="bell" label="Signals" />
           <Core.status_badge :if={@job.meta["encrypted"]} icon="lock_closed" label="Encrypted" />
           <Core.status_badge :if={@job.meta["structured"]} icon="table_cells" label="Structured" />
           <Core.status_badge :if={@job.meta["decorated"]} icon="sparkles" label="Decorated" />
@@ -699,6 +700,18 @@ defmodule Oban.Web.Jobs.DetailComponent do
               </button>
             </div>
             <pre class="font-mono text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-all">{format_recorded(@job, @resolver)}</pre>
+          </div>
+        </div>
+
+        <div :if={@job.meta["signals"]} id="job-signals" class="mt-4">
+          <div class="relative bg-gray-50 dark:bg-gray-800 rounded-md p-4">
+            <div class="flex items-center space-x-2 mb-2">
+              <h4 class="font-medium text-xs uppercase text-gray-500 dark:text-gray-400">
+                Signals
+              </h4>
+              <.pro_badge id="signals-pro-badge" tooltip="Awaitable signals from Oban.Pro.Worker" />
+            </div>
+            <pre class="font-mono text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-all">{inspect(@job.meta["signals"], pretty: true, limit: :infinity)}</pre>
           </div>
         </div>
       </div>
