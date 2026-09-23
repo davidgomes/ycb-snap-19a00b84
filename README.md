@@ -17,6 +17,12 @@ end
 
 And do not forget to add `:plug_rails_cookie_session_store` to the applications list.
 
+## Rails compatibility
+
+Both Rails 4 and Rails 5 (up to 5.1, which use AES-256-CBC encrypted cookies) are supported.
+Rails 4 derives a 64 byte encryption key while Rails 5 uses 32 bytes; the store only uses the
+first 32 bytes of the derived key, so `key_length: 64` works for both.
+
 ## How to use with Phoenix
 
 #### Copy/share the encryption information from Rails to Phoenix.
