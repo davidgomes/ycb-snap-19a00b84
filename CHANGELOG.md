@@ -3,6 +3,18 @@
 
 #### Fixed
 
+- **`data_table` menus live in the page.** The filter editors and the
+  Columns dropdown rode top-layer popovers: fixed panels that
+  `PetalPopover` re-anchored on every scroll, resize, keyboard and
+  patch, a chase they kept losing on mobile. They now render as
+  in-page popovers, positioned by CSS beside their trigger, so they
+  scroll with the page, let the browser keep a focused field above the
+  keyboard, and ride out patches with no JS. Below `sm` the panels
+  anchor to the toolbar's edge rather than their button, so an editor
+  opened near the screen edge still opens on screen. Apply closes the
+  editor through `LiveView.JS` in both wiring modes (sticky across the
+  patch it triggers) and returns focus to its button, so event mode no
+  longer mounts the `PetalDataTable` hook for filters.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to
