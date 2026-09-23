@@ -13,7 +13,7 @@ defmodule PlugRailsCookieSessionStore do
       plug :put_secret_key_base
 
       def put_secret_key_base(conn, _) do
-        put_in conn.secret_key_base, "-- LONG STRING WITH AT LEAST 64 BYTES --"
+        put_in conn.secret_key_base, "-- LONG STRING WITH AT LEAST 32 BYTES --"
       end
 
   ## Options
@@ -54,7 +54,6 @@ defmodule PlugRailsCookieSessionStore do
 
   @behaviour Plug.Session.Store
 
-  alias Plug.Crypto.KeyGenerator
   alias PlugRailsCookieSessionStore.MessageVerifier
   alias PlugRailsCookieSessionStore.MessageEncryptor
 
@@ -65,42 +64,48 @@ defmodule PlugRailsCookieSessionStore do
     iterations = Keyword.get(opts, :key_iterations, 1000)
     length = Keyword.get(opts, :key_length, 32)
     digest = Keyword.get(opts, :key_digest, :sha256)
-    key_opts = [iterations: iterations,
-                length: length,
-                digest: digest,
-                cache: Plug.Keys]
+    key_opts = [iterations: iterations, length: length, digest: digest, cache: Plug.Keys]
 
     serializer = check_serializer(opts[:serializer] || :external_term_format)
 
-    %{encryption_salt: encryption_salt,
+    %{
+      encryption_salt: encryption_salt,
       signing_salt: signing_salt,
       key_opts: key_opts,
-      serializer: serializer}
+      serializer: serializer
+    }
   end
 
   def get(conn, cookie, opts) do
     key_opts = opts.key_opts
-    cookie = cookie |> URI.decode_www_form
+    cookie = cookie |> URI.decode_www_form()
+
     if key = opts.encryption_salt do
-      MessageEncryptor.verify_and_decrypt(cookie,
-                                          derive(conn, key, key_opts),
-                                          derive(conn, opts.signing_salt, key_opts))
+      MessageEncryptor.verify_and_decrypt(
+        cookie,
+        derive(conn, key, key_opts),
+        derive(conn, opts.signing_salt, key_opts)
+      )
     else
       MessageVerifier.verify(cookie, derive(conn, opts.signing_salt, key_opts))
-    end |> decode(opts.serializer)
+    end
+    |> decode(opts.serializer)
   end
-
 
   def put(conn, _sid, term, opts) do
     binary = encode(term, opts.serializer)
     key_opts = opts.key_opts
+
     if key = opts.encryption_salt do
-      MessageEncryptor.encrypt_and_sign(binary,
-                                        derive(conn, key, key_opts),
-                                        derive(conn, opts.signing_salt, key_opts))
+      MessageEncryptor.encrypt_and_sign(
+        binary,
+        derive(conn, key, key_opts),
+        derive(conn, opts.signing_salt, key_opts)
+      )
     else
       MessageVerifier.sign(binary, derive(conn, opts.signing_salt, key_opts))
-    end |> URI.encode_www_form
+    end
+    |> URI.encode_www_form()
   end
 
   def delete(_conn, _sid, _opts) do
@@ -108,6 +113,7 @@ defmodule PlugRailsCookieSessionStore do
   end
 
   defp encode(term, :external_term_format), do: :erlang.term_to_binary(term)
+
   defp encode(term, serializer) do
     case serializer.encode(term) do
       {:ok, binary} -> binary
@@ -116,14 +122,15 @@ defmodule PlugRailsCookieSessionStore do
   end
 
   defp decode({:ok, binary}, :external_term_format), do: {nil, :erlang.binary_to_term(binary)}
+
   defp decode({:ok, binary}, serializer) do
     case serializer.decode(binary) do
       {:ok, term} -> {nil, term}
       _ -> {nil, %{}}
     end
   end
-  defp decode(:error, _serializer), do:
-    {nil, %{}}
+
+  defp decode(:error, _serializer), do: {nil, %{}}
 
   defp derive(conn, key, key_opts) do
     conn.secret_key_base
@@ -132,19 +139,73 @@ defmodule PlugRailsCookieSessionStore do
   end
 
   defp generate_key(secret, nil, _), do: secret
-  defp generate_key(secret, key, key_opts), do: KeyGenerator.generate(secret, key, key_opts)
 
-  defp validate_secret_key_base(nil), do:
-    raise(ArgumentError, "cookie store expects conn.secret_key_base to be set")
-  defp validate_secret_key_base(secret_key_base) when byte_size(secret_key_base) < 64, do:
-    raise(ArgumentError, "cookie store expects conn.secret_key_base to be at least 64 bytes")
-  defp validate_secret_key_base(secret_key_base), do:
-    secret_key_base
+  defp generate_key(secret, salt, key_opts) do
+    iterations = Keyword.get(key_opts, :iterations, 1000)
+    length = Keyword.get(key_opts, :length, 32)
+    digest = Keyword.get(key_opts, :digest, :sha256)
+    cache = Keyword.get(key_opts, :cache)
+
+    cached_key(cache, {secret, salt, iterations, length, digest}, fn ->
+      pbkdf2(hmac_fun(digest, secret), salt, iterations, length, 1, [], 0)
+    end)
+  end
+
+  defp cached_key(nil, _key, fun), do: fun.()
+
+  defp cached_key(ets, key, fun) do
+    case :ets.lookup(ets, key) do
+      [{_key, value}] ->
+        value
+
+      [] ->
+        value = fun.()
+        :ets.insert(ets, [{key, value}])
+        value
+    end
+  end
+
+  # PBKDF2 as implemented by Plug.Crypto.KeyGenerator (and Rails' KeyGenerator).
+  defp pbkdf2(_fun, _salt, _iterations, max_length, _block_index, acc, length)
+       when length >= max_length do
+    acc
+    |> IO.iodata_to_binary()
+    |> binary_part(0, max_length)
+  end
+
+  defp pbkdf2(fun, salt, iterations, max_length, block_index, acc, length) do
+    initial = fun.(<<salt::binary, block_index::integer-size(32)>>)
+    block = iterate(fun, iterations - 1, initial, initial)
+    length = byte_size(block) + length
+    pbkdf2(fun, salt, iterations, max_length, block_index + 1, [acc | block], length)
+  end
+
+  defp iterate(_fun, 0, _prev, acc), do: acc
+
+  defp iterate(fun, iteration, prev, acc) do
+    next = fun.(prev)
+    iterate(fun, iteration - 1, next, :crypto.exor(next, acc))
+  end
+
+  # OTP 24 removed :crypto.hmac/3.
+  if Code.ensure_loaded?(:crypto) and function_exported?(:crypto, :mac, 4) do
+    defp hmac_fun(digest, key), do: &:crypto.mac(:hmac, digest, key, &1)
+  else
+    defp hmac_fun(digest, key), do: &:crypto.hmac(digest, key, &1)
+  end
+
+  defp validate_secret_key_base(nil),
+    do: raise(ArgumentError, "cookie store expects conn.secret_key_base to be set")
+
+  defp validate_secret_key_base(secret_key_base) when byte_size(secret_key_base) < 32,
+    do: raise(ArgumentError, "cookie store expects conn.secret_key_base to be at least 32 bytes")
+
+  defp validate_secret_key_base(secret_key_base), do: secret_key_base
 
   defp check_signing_salt(opts) do
     if Keyword.get(opts, :signing_with_salt, true) do
       case opts[:signing_salt] do
-        nil  -> raise ArgumentError, "cookie store expects :signing_salt as option"
+        nil -> raise ArgumentError, "cookie store expects :signing_salt as option"
         salt -> salt
       end
     end
@@ -153,13 +214,14 @@ defmodule PlugRailsCookieSessionStore do
   defp check_encryption_salt(opts) do
     if Keyword.get(opts, :encrypt, true) do
       case opts[:encryption_salt] do
-        nil  -> raise ArgumentError, "encrypted cookie store expects :encryption_salt as option"
+        nil -> raise ArgumentError, "encrypted cookie store expects :encryption_salt as option"
         salt -> salt
       end
     end
   end
 
   defp check_serializer(serializer) when is_atom(serializer), do: serializer
-  defp check_serializer(_), do:
-    raise(ArgumentError, "cookie store expects :serializer option to be a module")
+
+  defp check_serializer(_),
+    do: raise(ArgumentError, "cookie store expects :serializer option to be a module")
 end

@@ -32,6 +32,13 @@ defmodule PlugRailsCookieSessionStore.MessageVerifier do
   end
 
   defp digest(secret, data) do
-    :crypto.hmac(:sha, secret, data) |> Base.encode16(case: :lower)
+    hmac(:sha, secret, data) |> Base.encode16(case: :lower)
+  end
+
+  # OTP 24 removed :crypto.hmac/3 in favor of :crypto.mac/4.
+  if Code.ensure_loaded?(:crypto) and function_exported?(:crypto, :mac, 4) do
+    defp hmac(type, key, data), do: :crypto.mac(:hmac, type, key, data)
+  else
+    defp hmac(type, key, data), do: :crypto.hmac(type, key, data)
   end
 end

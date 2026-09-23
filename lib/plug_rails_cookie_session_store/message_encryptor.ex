@@ -53,11 +53,42 @@ defmodule PlugRailsCookieSessionStore.MessageEncryptor do
   end
 
   defp encrypt(message, cipher, secret, iv) do
-    :crypto.block_encrypt(cipher, trim_secret(secret), iv, message)
+    block_encrypt(cipher, trim_secret(secret), iv, message)
   end
 
   defp decrypt(encrypted, cipher, secret, iv) do
-    :crypto.block_decrypt(cipher, trim_secret(secret), iv, encrypted)
+    block_decrypt(cipher, trim_secret(secret), iv, encrypted)
+  end
+
+  # OTP 23+ replaced block_encrypt/block_decrypt with crypto_one_time.
+  # Padding is applied by pad_message/1, matching Rails' AES-256-CBC cookies.
+  if Code.ensure_loaded?(:crypto) and function_exported?(:crypto, :crypto_one_time, 5) do
+    defp block_encrypt(cipher, key, iv, data) do
+      :crypto.crypto_one_time(normalize_cipher(cipher), key, iv, data,
+        encrypt: true,
+        padding: :none
+      )
+    end
+
+    defp block_decrypt(cipher, key, iv, data) do
+      :crypto.crypto_one_time(normalize_cipher(cipher), key, iv, data,
+        encrypt: false,
+        padding: :none
+      )
+    end
+
+    defp normalize_cipher(:aes_cbc256), do: :aes_256_cbc
+    defp normalize_cipher(:aes_cbc128), do: :aes_128_cbc
+    defp normalize_cipher(:aes_cbc192), do: :aes_192_cbc
+    defp normalize_cipher(cipher), do: cipher
+  else
+    defp block_encrypt(cipher, key, iv, data) do
+      :crypto.block_encrypt(cipher, key, iv, data)
+    end
+
+    defp block_decrypt(cipher, key, iv, data) do
+      :crypto.block_decrypt(cipher, key, iv, data)
+    end
   end
 
   defp pad_message(msg) do
