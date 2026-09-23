@@ -74,6 +74,17 @@ defmodule Ecto.Adapters.ClickHouse.MigrationTest do
     end
   end
 
+  defmodule CreateQuotedNotes do
+    use Ecto.Migration
+
+    def change do
+      create table(:notes, primary_key: false, engine: "Memory", comment: ~S|owner's \ "notes"|) do
+        add :id, :UInt8
+        add :body, :string, default: ~S|it's a \ "default"|, comment: ~S|body's \ "comment"|
+      end
+    end
+  end
+
   test "events (table+index)" do
     database = "ecto_ch_migration_test_events"
     opts = [database: database]
@@ -203,5 +214,48 @@ defmodule Ecto.Adapters.ClickHouse.MigrationTest do
              Ch.query!(conn, "INSERT INTO products (name) VALUES ('book')")
 
     assert [[1]] == Ch.query!(conn, "SELECT price FROM products").rows
+  end
+
+  test "quoted comments and defaults" do
+    database = "ecto_ch_migration_test_quoted_comments"
+    opts = [database: database]
+
+    assert :ok = ClickHouse.storage_up(opts)
+    on_exit(fn -> ClickHouse.storage_down(opts) end)
+
+    Application.put_env(:migration_test, MigrationRepo,
+      database: database,
+      show_sensitive_data_on_connection_error: true
+    )
+
+    on_exit(fn -> Application.delete_env(:migration_test, MigrationRepo) end)
+
+    start_supervised!(MigrationRepo)
+
+    assert [1] ==
+             Ecto.Migrator.run(MigrationRepo, [{1, CreateQuotedNotes}], :up,
+               all: true,
+               log: false
+             )
+
+    conn = start_supervised!({Ch, opts})
+    params = %{"database" => database, "table" => "notes"}
+
+    assert [[~S|owner's \ "notes"|]] ==
+             Ch.query!(
+               conn,
+               "select comment from system.tables where database = {database:String} and name = {table:String}",
+               params
+             ).rows
+
+    assert [[~S|body's \ "comment"|]] ==
+             Ch.query!(
+               conn,
+               "select comment from system.columns where database = {database:String} and table = {table:String} and name = 'body'",
+               params
+             ).rows
+
+    assert %{num_rows: 1} = Ch.query!(conn, "INSERT INTO notes (id) VALUES (1)")
+    assert [[~S|it's a \ "default"|]] == Ch.query!(conn, "SELECT body FROM notes").rows
   end
 end
