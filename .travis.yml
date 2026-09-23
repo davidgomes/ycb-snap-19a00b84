@@ -1,0 +1,16 @@
+language: elixir
+
+elixir:
+  - 1.9.2
+
+otp_release:
+  - 22.1
+
+services:
+  - postgresql
+
+env:
+  - DATABASE_URL=postgres://postgres@localhost/gen_queue_oban_test
+
+script:
+  - mix test
