@@ -192,4 +192,11 @@ defmodule Hammer.Atomic.TokenBucket do
         0
     end
   end
+
+  @doc false
+  @spec normalize_entry({term(), :atomics.atomics_ref()}) :: map()
+  def normalize_entry({key, atomic}) do
+    {_timestamp, fill} = unpack(:atomics.get(atomic, 1))
+    %{key: key, tokens: fill, last_update: :atomics.get(atomic, 2)}
+  end
 end

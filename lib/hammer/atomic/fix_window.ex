@@ -185,4 +185,10 @@ defmodule Hammer.Atomic.FixWindow do
       [] -> 0
     end
   end
+
+  @doc false
+  @spec normalize_entry({{term(), integer()}, :atomics.atomics_ref()}) :: map()
+  def normalize_entry({{key, window}, atomic}) do
+    %{key: key, window: window, count: :atomics.get(atomic, 1), expires_at: :atomics.get(atomic, 2)}
+  end
 end

@@ -171,4 +171,22 @@ defmodule Hammer.ETS.TokenBucket do
     match_spec = [{{:_, :_, :"$1"}, [], [{:<, :"$1", {:const, older_than}}]}]
     :ets.select_delete(config.table, match_spec)
   end
+
+  @doc false
+  @spec select_expired(config :: ETS.config()) :: [tuple()]
+  def select_expired(config) do
+    now = System.system_time(:second)
+    older_than = now - div(config.key_older_than, 1000)
+
+    match_spec = [{{:_, :_, :"$1"}, [{:<, :"$1", {:const, older_than}}], [:"$_"]}]
+    :ets.select(config.table, match_spec)
+  end
+
+  @doc false
+  @spec normalize_expired([tuple()]) :: [map()]
+  def normalize_expired(entries) do
+    Enum.map(entries, fn {key, tokens, last_update} ->
+      %{key: key, tokens: tokens, last_update: last_update}
+    end)
+  end
 end

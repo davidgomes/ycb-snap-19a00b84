@@ -154,6 +154,21 @@ defmodule Hammer.ETS.SlidingWindow do
     :ets.select_delete(table, match_spec)
   end
 
+  @doc false
+  @spec select_expired(config :: Hammer.ETS.config()) :: [tuple()]
+  def select_expired(config) do
+    match_spec = [{{:_, :"$1"}, [{:<, :"$1", {:const, now()}}], [:"$_"]}]
+    :ets.select(config.table, match_spec)
+  end
+
+  @doc false
+  @spec normalize_expired([tuple()]) :: [map()]
+  def normalize_expired(entries) do
+    Enum.map(entries, fn {{key, timestamp}, expires_at} ->
+      %{key: key, timestamp: timestamp, expires_at: expires_at}
+    end)
+  end
+
   defp get_earliest_expiry(table, key, now) do
     match_spec = [
       {
