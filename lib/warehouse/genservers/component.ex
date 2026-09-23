@@ -72,12 +72,15 @@ defmodule Warehouse.GenServers.Component do
 
   @impl true
   def handle_cast({:set_kits, kits}, state) do
+    sku_demands = Kit.kit_sku_demand(kits, state.demand)
+    Task.Supervisor.async_nolink(Warehouse.TaskSupervisor, Sku, :update_sku_demands, [])
+
     Task.Supervisor.async_nolink(Warehouse.TaskSupervisor, fn ->
       update_demands(state.component.id)
     end)
 
     Process.send_after(self(), :update_available, 0)
-    {:noreply, %{state | kits: kits}}
+    {:noreply, %{state | kits: kits, sku_demands: sku_demands}}
   end
 
   def handle_info(:update_available, state) do

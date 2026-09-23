@@ -1,8 +1,11 @@
 defmodule Warehouse.BroadwayTest do
   use Warehouse.DataCase
 
+  import Mox
+
   alias Bottle.Assembly.V1.BuildPicked
   alias Bottle.Inventory.V1.ComponentKitChanged
+  alias Warehouse.AdditiveMap
   alias Warehouse.Broadway
   alias Warehouse.Component
 
@@ -82,6 +85,28 @@ defmodule Warehouse.BroadwayTest do
                  ]
                }
              ] = Component.get_component_picking_options(component.id)
+    end
+
+    test "recalculates sku demand for components assembly has no demand for" do
+      stub(Warehouse.Clients.Assembly.Mock, :request_component_demands, fn -> [] end)
+      stub(Warehouse.MockEvents, :broadcast_sku_quantities, fn _, _ -> :ok end)
+
+      sku = :sku |> insert() |> supervise()
+      component = insert(:component)
+      kit = insert(:kit, component: component, sku: sku, quantity: 4)
+      supervise(component)
+
+      Component.update_component_demand(component.id, 3)
+      assert AdditiveMap.get(Component.get_sku_demands(), sku.id) == 12
+
+      kit
+      |> Ecto.Changeset.change(%{quantity: 2})
+      |> Repo.update()
+
+      message = ComponentKitChanged.new(component: %{id: component.id})
+      Broadway.notify_handler({:component_kit_changed, message})
+
+      assert AdditiveMap.get(Component.get_sku_demands(), sku.id) == 6
     end
   end
 end

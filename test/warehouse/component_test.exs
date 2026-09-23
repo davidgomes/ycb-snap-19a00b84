@@ -53,4 +53,26 @@ defmodule Warehouse.ComponentTest do
     component = :component |> insert() |> supervise()
     assert :ok = Component.update_component_demand(component.id, 5)
   end
+
+  test "update_component_kits/2 moves demand to the new kits when assembly has no demand for the component" do
+    stub(Warehouse.Clients.Assembly.Mock, :request_component_demands, fn -> [] end)
+    stub(Warehouse.MockEvents, :broadcast_sku_quantities, fn _, _ -> :ok end)
+
+    old_sku = :sku |> insert() |> supervise()
+    new_sku = :sku |> insert() |> supervise()
+
+    component = insert(:component)
+    insert(:kit, component: component, sku: old_sku, quantity: 2)
+    supervise(component)
+
+    Component.update_component_demand(component.id, 5)
+    assert AdditiveMap.get(Component.get_sku_demands(), old_sku.id) == 10
+
+    new_kit = insert(:kit, component: component, sku: new_sku, quantity: 3)
+    Component.update_component_kits(component.id, [new_kit])
+
+    demand = Component.get_sku_demands()
+    assert AdditiveMap.get(demand, old_sku.id) == 0
+    assert AdditiveMap.get(demand, new_sku.id) == 15
+  end
 end
