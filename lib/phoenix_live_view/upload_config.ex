@@ -367,9 +367,32 @@ defmodule Phoenix.LiveView.UploadConfig do
 
   @doc false
   def unregister_completed_entry(%UploadConfig{} = conf, entry_ref) do
-    %UploadEntry{} = entry = get_entry_by_ref(conf, entry_ref)
+    case Map.fetch(conf.entry_refs_to_pids, entry_ref) do
+      {:ok, @invalid} ->
+        conf
 
-    drop_entry(conf, entry)
+      _ ->
+        %UploadEntry{} = entry = get_entry_by_ref(conf, entry_ref)
+        drop_entry(conf, entry)
+    end
+  end
+
+  @doc false
+  def fail_entry(%UploadConfig{} = conf, entry_ref, reason) do
+    case get_entry_by_ref(conf, entry_ref) do
+      %UploadEntry{} ->
+        pair = {entry_ref, reason}
+        new_conf = update_entry(conf, entry_ref, fn entry -> %{entry | valid?: false} end)
+
+        %{
+          new_conf
+          | entry_refs_to_pids: Map.put(new_conf.entry_refs_to_pids, entry_ref, @invalid),
+            errors: List.delete(new_conf.errors, pair) ++ [pair]
+        }
+
+      nil ->
+        conf
+    end
   end
 
   @doc false
@@ -402,7 +425,7 @@ defmodule Phoenix.LiveView.UploadConfig do
       {:ok, existing_pid} when is_pid(existing_pid) ->
         {:error, :already_registered}
 
-      :error ->
+      _ ->
         {:error, :disallowed}
     end
   end

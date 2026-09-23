@@ -189,6 +189,16 @@ defmodule Phoenix.LiveView.Upload do
   end
 
   @doc """
+  Marks an entry as failed, retaining it with the given error until cancelled.
+  """
+  def fail_upload_entry(%Socket{} = socket, conf_name, entry_ref, reason) do
+    socket.assigns.uploads
+    |> Map.fetch!(conf_name)
+    |> UploadConfig.fail_entry(entry_ref, reason)
+    |> update_uploads(socket)
+  end
+
+  @doc """
   Retrieves the `%UploadConfig{}` from the socket for the provided ref.
 
   Returns `:error` when the socket has no upload allowed for the ref.
