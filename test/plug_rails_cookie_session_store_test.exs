@@ -1,6 +1,7 @@
 defmodule PlugRailsCookieSessionStoreTest do
   use ExUnit.Case, async: true
-  use Plug.Test
+  import Plug.Test
+  import Plug.Conn
 
   alias PlugRailsCookieSessionStore, as: CookieStore
 
@@ -17,12 +18,12 @@ defmodule PlugRailsCookieSessionStoreTest do
   @encrypted_opts Plug.Session.init(@default_opts)
 
   defmodule CustomSerializer do
-    def encode(%{foo: "bar"}), do: {:ok, "encoded session"}
+    def encode(%{"foo" => "bar"}), do: {:ok, "encoded session"}
     def encode(%{foo: :bar}), do: {:ok, "another encoded session"}
     def encode(%{}), do: {:ok, ""}
     def encode(_), do: :error
 
-    def decode("encoded session"), do: {:ok, %{foo: "bar"}}
+    def decode("encoded session"), do: {:ok, %{"foo" => "bar"}}
     def decode("another encoded session"), do: {:ok, %{foo: :bar}}
     def decode(nil), do: {:ok, nil}
     def decode(_), do: :error
