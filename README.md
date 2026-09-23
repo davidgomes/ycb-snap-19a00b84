@@ -59,7 +59,7 @@ defmodule MyApp.EmailHandler do
   require Logger
 
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, %ObanEvents.Event{data: data}) do
     %{"user_id" => user_id, "email" => email} = data
 
     Logger.info("Sending welcome email to #{email}")
@@ -69,7 +69,7 @@ defmodule MyApp.EmailHandler do
   end
 
   @impl true
-  def handle_event(_event, _data), do: :ok
+  def handle_event(_event_name, _event), do: :ok
 end
 ```
 
@@ -133,16 +133,25 @@ end
 
 Your event bus module provides these functions:
 
-### `emit/2`
+### `emit/3`
 
 Emit an event to all registered handlers.
 
 ```elixir
-@spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+@spec emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
 
 # Raises ArgumentError if event is not registered
 MyApp.Events.emit(:user_created, %{user_id: 123, email: "user@example.com"})
+
+# With additional metadata
+MyApp.Events.emit(:user_created, %{user_id: 123}, metadata: %{source: "admin"})
 ```
+
+Options:
+
+- `:metadata` - Map of additional JSON-serializable metadata
+- `:causation_id` - ID of the event that caused this one
+- `:correlation_id` - ID shared by a chain of related events (defaults to the event ID)
 
 ### `get_handlers!/1`
 
@@ -179,21 +188,22 @@ MyApp.Events.registered?(:user_created)
 
 ## Handler Implementation
 
-Handlers must implement the `handle_event/2` callback:
+Handlers must implement the `handle_event/2` callback. It receives the event name
+and an `ObanEvents.Event` struct:
 
 ```elixir
 defmodule MyApp.AnalyticsHandler do
   use ObanEvents.Handler
 
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, %ObanEvents.Event{data: data}) do
     %{"user_id" => user_id} = data
     MyApp.Analytics.track("User Created", user_id: user_id)
     :ok
   end
 
   @impl true
-  def handle_event(:user_updated, data) do
+  def handle_event(:user_updated, %ObanEvents.Event{data: data}) do
     %{"user_id" => user_id, "changes" => changes} = data
     MyApp.Analytics.track("User Updated", user_id: user_id, changes: changes)
     :ok
@@ -201,7 +211,30 @@ defmodule MyApp.AnalyticsHandler do
 
   # Ignore other events
   @impl true
-  def handle_event(_event, _data), do: :ok
+  def handle_event(_event_name, _event), do: :ok
+end
+```
+
+### The Event Struct
+
+`ObanEvents.Event` has the following fields:
+
+- `event_id` - UUID generated at emit time, shared by all handlers of one emit (useful as an idempotency key)
+- `name` - Event name atom
+- `data` - Event payload (string keys)
+- `metadata` - Additional metadata passed via `emit/3` (string keys)
+- `causation_id` - ID of the event that caused this one
+- `correlation_id` - ID shared across a chain of events
+- `emitted_at` - UTC `DateTime` of emission
+- `handler`, `job_id`, `attempt` - Processing context
+
+Emit follow-up events that keep the causation chain with `ObanEvents.Event.caused_by/1`:
+
+```elixir
+def handle_event(:user_created, %ObanEvents.Event{} = event) do
+  MyApp.Events.emit(:welcome_email_queued, %{user_id: event.data["user_id"]},
+    ObanEvents.Event.caused_by(event)
+  )
 end
 ```
 
@@ -237,7 +270,7 @@ end)
 Handlers may be retried. Design them to be safe to run multiple times:
 
 ```elixir
-def handle_event(:user_created, %{"user_id" => user_id}) do
+def handle_event(:user_created, %ObanEvents.Event{data: %{"user_id" => user_id}}) do
   # Use upsert instead of insert to handle retries
   %UserProfile{user_id: user_id}
   |> Repo.insert(
@@ -288,15 +321,15 @@ Events.emit(:user_created, %{user: user})
 Only handle events you care about:
 
 ```elixir
-def handle_event(:user_created, data), do: # handle
-def handle_event(:user_updated, data), do: # handle
-def handle_event(_other, _data), do: :ok  # ignore rest
+def handle_event(:user_created, event), do: # handle
+def handle_event(:user_updated, event), do: # handle
+def handle_event(_other, _event), do: :ok  # ignore rest
 ```
 
 ### 6. Return Errors for Retriable Failures
 
 ```elixir
-def handle_event(:send_notification, data) do
+def handle_event(:send_notification, %ObanEvents.Event{data: data}) do
   case NotificationService.send(data) do
     {:ok, _} -> :ok
     {:error, :rate_limited} -> {:error, :rate_limited}  # Will retry
@@ -323,7 +356,7 @@ defmodule MyApp.Notifications.EmailHandler do
   use ObanEvents.Handler
 
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, event) do
     # Your handler logic
     :ok
   end
@@ -332,7 +365,7 @@ end
 # 2. Keep the old module as an alias
 defmodule MyApp.EmailHandler do
   @moduledoc false
-  defdelegate handle_event(event, data), to: MyApp.Notifications.EmailHandler
+  defdelegate handle_event(event_name, event), to: MyApp.Notifications.EmailHandler
 end
 
 # 3. Update your event registry to use the new name
@@ -380,14 +413,46 @@ end
 
 ### Testing Handlers
 
-```elixir
-test "EmailHandler sends welcome email" do
-  data = %{"user_id" => 123, "email" => "test@example.com"}
+`ObanEvents.Testing` provides helpers to build events and call handlers:
 
-  assert :ok = MyApp.EmailHandler.handle_event(:user_created, data)
+```elixir
+import ObanEvents.Testing
+
+test "EmailHandler sends welcome email" do
+  assert :ok =
+           call_handler(MyApp.EmailHandler, :user_created, %{
+             user_id: 123,
+             email: "test@example.com"
+           })
+
   assert_email_sent(to: "test@example.com", subject: "Welcome!")
 end
+
+test "with a custom event" do
+  event = build_event(:user_created, %{user_id: 123}, metadata: %{source: "admin"})
+  assert :ok = MyApp.EmailHandler.handle_event(:user_created, event)
+end
 ```
+
+### Asserting Emitted Events
+
+With Oban in `:manual` testing mode:
+
+```elixir
+import ObanEvents.Testing
+
+test "emits user_created" do
+  {:ok, user} = Accounts.create_user(%{email: "test@example.com"})
+
+  [event | _] = assert_event_emitted(MyApp.Repo, :user_created, data: %{user_id: user.id})
+  assert event.metadata == %{}
+
+  assert_event_emitted(MyApp.Repo, :user_created, handler: MyApp.EmailHandler)
+  refute_event_emitted(MyApp.Repo, :user_deleted)
+end
+```
+
+`events_from_jobs/1` converts jobs (e.g. from `emit/3`) into `ObanEvents.Event` structs.
 
 ### Testing with Oban Inline Mode
 
