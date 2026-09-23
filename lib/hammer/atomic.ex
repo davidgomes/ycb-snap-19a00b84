@@ -258,19 +258,19 @@ defmodule Hammer.Atomic do
     delete_expired(config, expired)
   end
 
-  defp delete_expired(
-         %{before_clean: callback, algorithm_module: algorithm_module} = config,
-         expired
-       )
-       when callback != nil and expired != [] do
-    entries =
-      Enum.map(expired, fn {key, atomic} -> algorithm_module.normalize_entry(key, atomic) end)
-
-    Hammer.CleanUtils.invoke_before_clean(callback, algorithm_name(algorithm_module), entries)
+  defp delete_expired(%{before_clean: nil} = config, expired) do
     Hammer.CleanUtils.delete_expired(config.table, expired)
   end
 
-  defp delete_expired(config, expired) do
+  defp delete_expired(%{algorithm_module: algorithm_module} = config, expired) do
+    if expired != [] do
+      Hammer.CleanUtils.invoke_before_clean(
+        config.before_clean,
+        algorithm_name(algorithm_module),
+        Enum.map(expired, fn {key, atomic} -> algorithm_module.normalize_entry(key, atomic) end)
+      )
+    end
+
     Hammer.CleanUtils.delete_expired(config.table, expired)
   end
 
