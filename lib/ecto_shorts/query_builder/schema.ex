@@ -4,7 +4,7 @@ defmodule EctoShorts.QueryBuilder.Schema do
   when passed a query it can pull the schema from it and attempt
   to filter on any natural field
   """
-  alias EctoShorts.QueryBuilder
+  alias EctoShorts.{QueryBuilder, QueryHelpers}
   alias EctoShorts.QueryBuilder.Schema.ComparisonFilter
 
   require Logger
@@ -13,15 +13,9 @@ defmodule EctoShorts.QueryBuilder.Schema do
   @behaviour QueryBuilder
 
   @impl QueryBuilder
-  def create_schema_filter({filter_field, val}, query) do
-    create_schema_filter(
-      {filter_field, val},
-      QueryBuilder.query_schema(query),
-      query
-    )
-  end
+  def create_schema_filter(query, filter_field, val) do
+    schema = QueryHelpers.get_queryable(query)
 
-  def create_schema_filter({filter_field, val}, schema, query) do
     cond do
       filter_field in schema.__schema__(:query_fields) ->
         create_schema_query_field_filter(query, schema, filter_field, val)

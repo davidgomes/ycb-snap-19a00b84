@@ -25,10 +25,10 @@ defmodule EctoShorts.QueryBuilder.CommonTest do
   end
 
   describe "create_schema_filters: " do
-    test "returns query without changes when passed {:search, term()}" do
+    test "returns query without changes when passed :search and term()" do
       expected_query = Comment
 
-      assert ^expected_query = Common.create_schema_filter({:search, %{id: 1}}, expected_query)
+      assert ^expected_query = Common.create_schema_filter(expected_query, :search, %{id: 1})
     end
   end
 end
