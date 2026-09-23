@@ -3,6 +3,14 @@
 
 #### Fixed
 
+- **`dropdown` flips its panel upward when the viewport has no room
+  below.** Menus were absolutely positioned under the trigger and
+  painted off-screen at the bottom of a form. `PetalDropdown` measures
+  on open (and on scroll or resize while open) and sets `data-flip`
+  when the panel is taller than the space below and there is more room
+  above. If neither side fits, the winning side caps the panel height
+  so the items scroll inside the viewport.
+
 - **`command_dialog` now locks background scroll while the palette is
   open.** A native modal `<dialog>` hands you the top layer, the focus
   trap and Escape, but it does not stop the page underneath from

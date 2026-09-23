@@ -14,6 +14,7 @@ defmodule PetalComponents.Dropdown do
   @transition_out_end "transform opacity-0 scale-95"
 
   attr :options_container_id, :string
+  attr :id, :string, default: nil, doc: "DOM id of the dropdown root (required by the flip hook)"
   attr :label, :string, default: nil, doc: "labels your dropdown option"
   attr :class, :any, default: nil, doc: "any extra CSS class for the parent container"
 
@@ -58,6 +59,8 @@ defmodule PetalComponents.Dropdown do
     ~H"""
     <div
       {@rest}
+      id={@id || "#{@options_container_id}-root"}
+      phx-hook="PetalDropdown"
       {js_attributes("container", @options_container_id, @on_close)}
       class={[@class, "pc-dropdown"]}
     >

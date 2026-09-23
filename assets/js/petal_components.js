@@ -3715,6 +3715,80 @@ function sameValueMultiset(a, b) {
 // [tabindex] covers hand-rolled widgets; the option rows have none.
 const FOCUSABLE_IN_PANEL = "input, select, textarea, button, [tabindex]";
 
+// Menu panels are positioned with CSS (absolute, under the trigger).
+// LiveView.JS only toggles display, so a menu at the bottom of the
+// viewport used to paint off-screen. This hook measures on open — and
+// again while the menu stays open — and flips the panel above the
+// trigger when there is no room below and more room above. When neither
+// side fits, the winning side caps the panel so items scroll in view.
+export const PetalDropdown = {
+  mounted() {
+    this.panel = this.el.querySelector(".pc-dropdown__menu-items-wrapper");
+    if (!this.panel) return;
+    this.listening = false;
+    this.lastDisplay = this.panel.style.display;
+    this.onReposition = () => this.positionPanel();
+    // display is the open/close signal (JS.toggle writes it). Ignore the
+    // style writes this hook makes itself (max-height) so we don't loop.
+    this.observer = new MutationObserver(() => {
+      const display = this.panel.style.display;
+      if (display === this.lastDisplay) return;
+      this.lastDisplay = display;
+      this.positionPanel();
+    });
+    this.observer.observe(this.panel, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+  },
+
+  destroyed() {
+    this.observer?.disconnect();
+    this.unbind();
+  },
+
+  bind() {
+    if (this.listening) return;
+    window.addEventListener("scroll", this.onReposition, true);
+    window.addEventListener("resize", this.onReposition);
+    this.listening = true;
+  },
+
+  unbind() {
+    if (!this.listening) return;
+    window.removeEventListener("scroll", this.onReposition, true);
+    window.removeEventListener("resize", this.onReposition);
+    this.listening = false;
+  },
+
+  positionPanel() {
+    if (!this.panel) return;
+    const open = this.panel.style.display !== "none";
+    this.panel.removeAttribute("data-flip");
+    this.panel.style.maxHeight = "";
+    this.panel.style.overflowY = "";
+    if (!open) {
+      this.unbind();
+      return;
+    }
+    this.bind();
+    const trigger = this.el.querySelector("button") || this.el;
+    const control = trigger.getBoundingClientRect();
+    const panelH = this.panel.offsetHeight;
+    if (!panelH || (!control.top && !control.bottom)) return;
+    const gap = 8;
+    const below = window.innerHeight - control.bottom - gap;
+    const above = control.top - gap;
+    const flip = panelH > below && above > below;
+    if (flip) this.panel.setAttribute("data-flip", "");
+    const room = flip ? above : below;
+    if (panelH > room) {
+      this.panel.style.maxHeight = `${Math.max(room, 0)}px`;
+      this.panel.style.overflowY = "auto";
+    }
+  },
+};
+
 export const PetalComboBox = {
   mounted() {
     this.select = this.el.querySelector(".pc-combo-box__select");
@@ -5473,5 +5547,6 @@ export default {
   PetalNavMenu,
   PetalCommandDialog,
   PetalComboBox,
+  PetalDropdown,
   PetalDataTable,
 };
