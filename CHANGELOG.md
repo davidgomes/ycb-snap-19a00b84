@@ -3,6 +3,15 @@
 
 #### Fixed
 
+- **`data_table` menus live in the page.** The filter editors and the
+  Columns dropdown rendered as top-layer popovers, positioned by
+  script against the viewport - so on every scroll, keyboard open or
+  patch they had to chase their trigger, and lagged or detached when
+  they lost. They now use the popover's default anchored mode: the
+  panel sits in the document under its button and scrolls with it,
+  no positioning pass needed. The toolbar isn't overflow-clipped, so
+  nothing was being escaped; the `PetalDataTable` hook still closes an
+  editor after Apply.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to
