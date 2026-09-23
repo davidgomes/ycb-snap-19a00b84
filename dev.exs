@@ -748,6 +748,7 @@ defmodule Dev.PlaygroundLive do
        combo: %{disabled: false, chosen: nil},
        rich: %{labels: ~w(feat bug imp des), team: ~w(amelia jonah)},
        dt: PetalComponents.DataTable.State |> struct(page_size: 5) |> run_dt(),
+       dt_exported: nil,
        radio: %{
          style: "cards",
          variant: "outline",
@@ -1439,14 +1440,25 @@ defmodule Dev.PlaygroundLive do
     do: {:noreply, update(socket, :combo, &%{&1 | chosen: value})}
 
   # the data table's event-mode op grammar: State.handle_op speaks all of
-  # it (sort/page/search/page_size/filter/clear_filters), so the whole
-  # backend is one call plus a re-run through the free engine
+  # it (sort/page/search/page_size/filter/clear_filters and the selection
+  # ops), so the whole backend is one call plus a re-run through the
+  # free engine
   def handle_event("pg_table", params, socket) do
     alias PetalComponents.DataTable.State
     {state, _rows} = socket.assigns.dt
 
     state = State.handle_op(state, params, fields: [:name, :email, :status, :amount])
     {:noreply, assign(socket, :dt, run_dt(state))}
+  end
+
+  # a bulk action reads the selection straight off the state, then
+  # clears it once the work is done
+  def handle_event("pg_table_export", _params, socket) do
+    alias PetalComponents.DataTable.State
+    {state, rows} = socket.assigns.dt
+
+    {:noreply,
+     assign(socket, dt: {State.clear_selection(state), rows}, dt_exported: state.selected)}
   end
 
   defp run_dt(state) do
@@ -7305,10 +7317,11 @@ defmodule Dev.PlaygroundLive do
     <div class="max-w-3xl px-4 py-8 mx-auto sm:px-8 sm:py-10">
       <h1 class="text-3xl font-bold tracking-tight">Data table</h1>
       <p class="mt-2 mb-6 text-gray-600 dark:text-gray-300">
-        Sortable, paged and filter-aware, driven by one State struct. This live demo runs
-        EVENT mode: every interaction pushes a single op-grammar event, the handler applies it
-        with State helpers and re-runs the free in-memory engine. Link mode does the same
-        through patch URLs - state you can curl.
+        Sortable, paged, filter-aware and selectable, driven by one State struct. This live
+        demo runs EVENT mode: every interaction pushes a single op-grammar event, the handler
+        applies it with State helpers and re-runs the free in-memory engine. Link mode does the
+        same through patch URLs - state you can curl. Check a few rows to see the toolbar morph
+        into the selection bar.
       </p>
 
       <div class="border border-gray-200 dark:border-gray-400/20 rounded-xl p-6">
@@ -7320,6 +7333,7 @@ defmodule Dev.PlaygroundLive do
           on_change="pg_table"
           striped
           searchable
+          selectable
           page_size_options={[5, 10, 20]}
         >
           <:col :let={row} field={:name} sortable>{row.name}</:col>
@@ -7346,7 +7360,15 @@ defmodule Dev.PlaygroundLive do
           <:col :let={row} field={:amount} sortable align="right" filterable="number">
             ${row.amount}
           </:col>
+          <:bulk_action>
+            <.button size="sm" variant="outline" color="gray" phx-click="pg_table_export">
+              <.icon name="hero-arrow-down-tray" class="w-4 h-4 mr-1.5" /> Export
+            </.button>
+          </:bulk_action>
         </.data_table>
+        <p :if={@dt_exported} class="mt-3 text-sm text-gray-500 dark:text-gray-400">
+          Exported rows {Enum.join(@dt_exported, ", ")}.
+        </p>
       </div>
 
       <div
@@ -7354,7 +7376,7 @@ defmodule Dev.PlaygroundLive do
           ex <-
             examples_for(
               PetalComponents.Showcase.DataTable,
-              ~w(basic loading empty)a
+              ~w(basic selection loading empty)a
             )
         }
         class="mt-10"

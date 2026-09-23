@@ -52,8 +52,31 @@
   `min-w-0 max-w-full` so flex/grid parents can't size it to the
   table's min-content; footer children shrink and wrap. Wide tables
   scroll inside `pc-data-table__scroll`, never the page.
+- **`<.data_table>` row selection.** `selectable` adds a leading
+  checkbox column (ids via `row_id`, default `:id`) with a tri-state
+  select-all header over the rows on screen - none/some/all is stamped
+  on the root as `data-selection` and the `PetalDataTable` hook mirrors
+  "some" onto the native `indeterminate`. While anything is checked the
+  toolbar morphs in place into a selection bar: an `aria-live` count,
+  the new `:bulk_action` slot (`:let` receives the selected ids) and a
+  clear button; checked rows highlight via `:has()`. Selection lives in
+  the new `State.selected` (string ids, never encoded by `to_params`)
+  and speaks the op grammar - `select` (toggle one), `select_all` (the
+  page's ids), `clear_selection` - through `State.toggle_selected/2`,
+  `select_all/2` and `clear_selection/1`, all handled by
+  `State.handle_op/3`. Every change to the visible rows (sort, page,
+  search, filters, page size) drops the selection. Event mode pushes
+  selection through `on_change`; link mode sends it to the new
+  `on_select` event, since selection never rides the URL. Labels
+  localize via `selected_label`, `select_all_label`, `select_row_label`
+  and `clear_selection_label`.
+- **`pc-checkbox` styles the indeterminate state** - the checked fill
+  with a dash, themable through `--pc-checkbox-dash` like the tick's
+  `--pc-checkbox-check`.
 - **`table` `on_sort` accepts a 1-arity function** of the sort key -
   per-column events/JS, how the data table patches sort URLs.
+- **`table` `:col` gains `header`** - rendered content for the header
+  cell in place of `label` (the data table's select-all checkbox).
 - **`pagination` event mode grows up**: `event` accepts a custom event
   name (string) and `event_values` adds phx-value-* pairs - page
   clicks can speak any consumer's event grammar.

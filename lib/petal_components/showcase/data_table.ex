@@ -35,6 +35,34 @@ defmodule PetalComponents.Showcase.DataTable do
     """
   end
 
+  example :selection, "Row selection and bulk actions",
+    description:
+      "selectable adds a checkbox column with a tri-state header over the rows on screen. While anything is checked the toolbar morphs into a selection bar: the count, your :bulk_action buttons (their :let gets the selected ids) and a way to clear. Selection lives in state.selected and speaks the same op grammar (select, select_all, clear_selection), so State.handle_op already handles it. Link mode sends those ops to on_select, because a selection never belongs in the URL. Two rows start checked here, so the header reads as mixed." do
+    ~H"""
+    <% state = %State{page_size: 5, selected: ["2", "3"]} %>
+    <% {rows, state} = Engine.List.run(PetalComponents.Showcase.DataTable.sample_rows(), state) %>
+    <.data_table id="sx-dt-selection" rows={rows} state={state} path="#" on_select="select" selectable>
+      <:col :let={row} field={:name}>{row.name}</:col>
+      <:col :let={row} field={:status}>{row.status}</:col>
+      <:col :let={row} field={:amount} align="right">${row.amount}</:col>
+      <:bulk_action :let={ids}>
+        <.button
+          size="sm"
+          variant="outline"
+          color="gray"
+          phx-click="export"
+          phx-value-ids={Enum.join(ids, ",")}
+        >
+          Export
+        </.button>
+      </:bulk_action>
+      <:bulk_action>
+        <.button size="sm" variant="soft" color="danger" phx-click="delete_selected">Delete</.button>
+      </:bulk_action>
+    </.data_table>
+    """
+  end
+
   example :loading, "Loading skeletons",
     description:
       "loading swaps the page for skeleton rows - one per page_size row, respecting column count and alignment. Flip it off when the query resolves." do
