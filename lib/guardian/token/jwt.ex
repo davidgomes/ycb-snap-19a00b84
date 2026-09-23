@@ -34,7 +34,9 @@ defmodule Guardian.Token.Jwt do
 
   These options are available to encoding and decoding:
 
-  * `secret` The secret key to use for signing
+  * `secret` The secret key to use for signing and verifying. When given, it
+    replaces `secret_key` entirely: a `secret` that resolves to `nil` returns
+    `{:error, :secret_not_found}` rather than falling back to `secret_key`
   * `headers` The Jose headers that should be used
   * `allowed_algos` - A list of allowable algos
   * `token_type` - Override the default token type. The default is "access"
@@ -209,19 +211,19 @@ defmodule Guardian.Token.Jwt do
     @moduledoc false
     use Guardian.Token.Jwt.SecretFetcher
 
-    def fetch_signing_secret(mod, opts) do
-      secret = Keyword.get(opts, :secret)
-      secret = Config.resolve_value(secret) || apply(mod, :config, [:secret_key])
+    def fetch_signing_secret(mod, opts), do: fetch_secret(mod, opts)
 
-      case secret do
-        nil -> {:error, :secret_not_found}
-        val -> {:ok, val}
-      end
-    end
+    def fetch_verifying_secret(mod, _token_headers, opts), do: fetch_secret(mod, opts)
 
-    def fetch_verifying_secret(mod, _token_headers, opts) do
-      secret = Keyword.get(opts, :secret)
-      secret = Config.resolve_value(secret) || mod.config(:secret_key)
+    # Only an absent `:secret` falls back to `secret_key`. An explicit secret
+    # resolving to `nil` must not silently sign or verify with the application
+    # wide key.
+    defp fetch_secret(mod, opts) do
+      secret =
+        case Keyword.fetch(opts, :secret) do
+          {:ok, secret} -> Config.resolve_value(secret)
+          :error -> mod.config(:secret_key)
+        end
 
       case secret do
         nil -> {:error, :secret_not_found}
@@ -318,6 +320,9 @@ defmodule Guardian.Token.Jwt do
 
   * `secret` - Override the configured secret. `Guardian.Config.config_value` is valid
   * `allowed_algos` - A list of allowable algos
+
+  Returns `{:error, :secret_not_found}` when no secret could be found, and
+  `{:error, :invalid_token}` for any other failure.
   """
   def decode_token(mod, token, options \\ []) do
     with {:ok, secret_fetcher} <- fetch_secret_fetcher(mod),
@@ -332,6 +337,7 @@ defmodule Guardian.Token.Jwt do
         {false, _, _} -> {:error, :invalid_token}
       end
     else
+      {:error, :secret_not_found} = error -> error
       _ -> {:error, :invalid_token}
     end
   end
