@@ -83,7 +83,11 @@ defmodule Phoenix.LiveViewTest.UploadClient do
   end
 
   def handle_call(:channel_pids, _from, state) do
-    pids = Enum.into(state.entries, %{}, fn {name, entry} -> {name, entry.socket.channel_pid} end)
+    pids =
+      for {name, %{socket: %{channel_pid: pid}}} <- state.entries,
+          into: %{},
+          do: {name, pid}
+
     {:reply, pids, state}
   end
 
@@ -134,20 +138,28 @@ defmodule Phoenix.LiveViewTest.UploadClient do
       "ref" => ref
     } = client_entry
 
-    {:ok, _resp, entry_socket} =
-      Phoenix.ChannelTest.subscribe_and_join(state.socket, "lvu:123", %{"token" => token})
+    case Phoenix.ChannelTest.subscribe_and_join(state.socket, "lvu:123", %{"token" => token}) do
+      {:ok, _resp, entry_socket} ->
+        # an entry's channel may close on its own, such as on a writer failure,
+        # without taking down the uploads of the other entries
+        Process.unlink(entry_socket.channel_pid)
+        Process.monitor(entry_socket.channel_pid)
 
-    %{
-      name: name,
-      content: content,
-      size: byte_size(content),
-      type: type,
-      socket: entry_socket,
-      ref: ref,
-      token: token,
-      chunk_percent: 0
-    }
-    |> with_chunk_boundaries()
+        %{
+          name: name,
+          content: content,
+          size: byte_size(content),
+          type: type,
+          socket: entry_socket,
+          ref: ref,
+          token: token,
+          chunk_percent: 0
+        }
+        |> with_chunk_boundaries()
+
+      {:error, %{reason: reason}} ->
+        {:error, reason}
+    end
   end
 
   def with_chunk_boundaries(entry) do
@@ -237,6 +249,7 @@ defmodule Phoenix.LiveViewTest.UploadClient do
       end
 
     ref = Phoenix.ChannelTest.push(entry.socket, "chunk", {:binary, chunk})
+    channel_pid = entry.socket.channel_pid
 
     receive do
       %Phoenix.Socket.Reply{ref: ^ref, status: :ok} ->
@@ -252,6 +265,12 @@ defmodule Phoenix.LiveViewTest.UploadClient do
 
         update_entry_percent(state, entry, stats.new_percent)
 
+      # like the JS client, leave the entry pending instead of reporting a generic
+      # client error, as the server already failed it with the writer failure
+      %Phoenix.Socket.Reply{ref: ^ref, status: :error, payload: %{reason: :writer_error}} ->
+        GenServer.reply(from, {:ok, :closed})
+        update_entry_percent(state, entry, stats.new_percent)
+
       %Phoenix.Socket.Reply{ref: ^ref, status: :error} ->
         :ok =
           ClientProxy.report_upload_progress(
@@ -264,6 +283,9 @@ defmodule Phoenix.LiveViewTest.UploadClient do
           )
 
         update_entry_percent(state, entry, stats.new_percent)
+
+      {:DOWN, _ref, :process, ^channel_pid, reason} ->
+        exit(reason)
     after
       get_chunk_timeout(state) -> exit(:timeout)
     end
@@ -295,7 +317,28 @@ defmodule Phoenix.LiveViewTest.UploadClient do
     {:noreply, state}
   end
 
-  def handle_info({:socket_close, _pid, reason}, state) do
-    {:stop, reason, state}
+  def handle_info({:socket_close, pid, reason}, state) do
+    drop_closed_channel(state, pid, reason)
+  end
+
+  def handle_info({:DOWN, _ref, :process, pid, reason}, state) do
+    drop_closed_channel(state, pid, reason)
+  end
+
+  defp drop_closed_channel(state, pid, reason) do
+    case Enum.find(state.entries, &match?({_name, %{socket: %{channel_pid: ^pid}}}, &1)) do
+      {name, _entry} ->
+        new_state = %{state | entries: Map.delete(state.entries, name)}
+
+        # entries rejected before joining are kept as {:error, reason} without a channel
+        if Enum.any?(new_state.entries, &match?({_name, %{socket: _}}, &1)) do
+          {:noreply, new_state}
+        else
+          {:stop, reason, new_state}
+        end
+
+      nil ->
+        {:noreply, state}
+    end
   end
 end
