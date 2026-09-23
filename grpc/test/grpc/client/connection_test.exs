@@ -16,13 +16,13 @@ defmodule GRPC.Client.ConnectionTest do
   end
 
   describe "pick_channel/2" do
-    test "returns {:error, :no_connection} when no persistent_term entry exists", %{ref: ref} do
+    test "returns {:error, :no_connection} when no connection is registered", %{ref: ref} do
       channel = %Channel{ref: ref}
 
       assert {:error, :no_connection} = Connection.pick_channel(channel)
     end
 
-    test "returns {:ok, channel} when a channel is stored in persistent_term", %{
+    test "returns {:ok, channel} for a live connection", %{
       ref: ref,
       target: target,
       adapter: adapter
@@ -69,7 +69,7 @@ defmodule GRPC.Client.ConnectionTest do
       assert_receive {:DOWN, ^ref_mon, :process, ^pid, _reason}, 500
     end
 
-    test "pick_channel returns {:error, :no_connection} after disconnect (persistent_term is erased)",
+    test "pick_channel returns {:error, :no_connection} after disconnect",
          %{ref: ref, target: target, adapter: adapter} do
       {:ok, channel} = Connection.connect(target, adapter: adapter, name: ref)
 
@@ -79,8 +79,8 @@ defmodule GRPC.Client.ConnectionTest do
     end
   end
 
-  describe "terminate/2 - persistent_term cleanup on process kill" do
-    test "persistent_term is erased when process is killed without disconnect", %{
+  describe "terminate/2 - LB cleanup on process stop" do
+    test "pick_channel fails when process is stopped without disconnect", %{
       ref: ref,
       target: target,
       adapter: adapter
