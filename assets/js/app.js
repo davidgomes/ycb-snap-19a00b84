@@ -1,6 +1,37 @@
 // Phoenix assets are imported from dependencies.
 import topbar from "topbar";
 
+const THEME_STORAGE_KEY = "error-tracker-theme";
+const darkMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+function storedTheme() {
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function applyTheme(theme) {
+  const dark = theme === "dark" || (theme !== "light" && darkMediaQuery.matches);
+  document.documentElement.classList.toggle("dark", dark);
+  document.documentElement.style.colorScheme = dark ? "dark" : "light";
+}
+
+applyTheme(storedTheme());
+
+darkMediaQuery.addEventListener("change", () => applyTheme(storedTheme()));
+
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("[data-theme-toggle]")) return;
+
+  const theme = document.documentElement.classList.contains("dark") ? "light" : "dark";
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch (_error) {}
+  applyTheme(theme);
+});
+
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
 let livePath = document.querySelector("meta[name='live-path']").getAttribute("content");
 let liveTransport = document .querySelector("meta[name='live-transport']") .getAttribute("content");
