@@ -178,18 +178,26 @@ defmodule Sentry.Telemetry.Buffer do
 
   defp offer(%Buffer{size: size, capacity: capacity} = state, item)
        when size >= capacity do
-    {{:value, _dropped}, items} = :queue.out(state.items)
-
-    ClientReport.Sender.record_discarded_events(
-      :cache_overflow,
-      Category.data_category(state.category)
-    )
-
+    {{:value, dropped}, items} = :queue.out(state.items)
+    record_overflow(state.category, dropped)
     %{state | items: :queue.in(item, items)}
   end
 
   defp offer(%Buffer{} = state, item) do
     %{state | items: :queue.in(item, state.items), size: state.size + 1}
+  end
+
+  # Logs and metrics are recorded from the dropped item itself so that their
+  # byte size is reported alongside the count.
+  defp record_overflow(category, dropped) when category in [:log, :metric] do
+    ClientReport.Sender.record_discarded_events(:cache_overflow, [dropped])
+  end
+
+  defp record_overflow(category, _dropped) do
+    ClientReport.Sender.record_discarded_events(
+      :cache_overflow,
+      Category.data_category(category)
+    )
   end
 
   defp poll_batch(state, count), do: poll_batch(state, count, [])

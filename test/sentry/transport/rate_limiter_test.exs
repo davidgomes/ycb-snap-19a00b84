@@ -3,6 +3,39 @@ defmodule Sentry.Transport.RateLimiterTest do
 
   alias Sentry.Transport.RateLimiter
 
+  describe "rate_limited_for_category?/1" do
+    test "log_byte limits log items" do
+      RateLimiter.update_rate_limits("60:log_byte:organization")
+
+      assert RateLimiter.rate_limited?("log_item") == false
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == false
+    end
+
+    test "trace_metric_byte limits trace metrics" do
+      RateLimiter.update_rate_limits("60:trace_metric_byte:organization")
+
+      assert RateLimiter.rate_limited?("trace_metric") == false
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == true
+      assert RateLimiter.rate_limited_for_category?("log_item") == false
+    end
+
+    test "count categories are still honored" do
+      RateLimiter.update_rate_limits("60:log_item;error")
+
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("error") == true
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == false
+    end
+
+    test "global limits apply to every category" do
+      RateLimiter.update_rate_limits("60::organization")
+
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("transaction") == true
+    end
+  end
+
   describe "parse_rate_limits_header/1" do
     test "parses single category limit" do
       # X-Sentry-Rate-Limits: 60:error

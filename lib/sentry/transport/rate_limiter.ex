@@ -25,6 +25,8 @@ defmodule Sentry.Transport.RateLimiter do
 
   @default_sweep_interval_ms 60_000
 
+  @byte_categories %{"log_item" => "log_byte", "trace_metric" => "trace_metric_byte"}
+
   defstruct [:table_name]
 
   ## Public API
@@ -88,6 +90,30 @@ defmodule Sentry.Transport.RateLimiter do
   def rate_limited?(category) when is_binary(category) do
     now = System.system_time(:second)
     rate_limited?(category, now) or rate_limited?(:global, now)
+  end
+
+  @doc """
+  Checks if items of the given data category should be dropped due to rate limits.
+
+  Like `rate_limited?/1`, but also takes into account the byte-based categories
+  associated with the given count category (`log_byte` for `log_item` and
+  `trace_metric_byte` for `trace_metric`).
+
+  ## Examples
+
+      iex> :ets.insert(RateLimiter, {"log_byte", System.system_time(:second) + 60})
+      iex> RateLimiter.rate_limited?("log_item")
+      false
+      iex> RateLimiter.rate_limited_for_category?("log_item")
+      true
+
+  """
+  @spec rate_limited_for_category?(String.t()) :: boolean()
+  def rate_limited_for_category?(category) when is_binary(category) do
+    case Map.fetch(@byte_categories, category) do
+      {:ok, byte_category} -> rate_limited?(category) or rate_limited?(byte_category)
+      :error -> rate_limited?(category)
+    end
   end
 
   @doc """
