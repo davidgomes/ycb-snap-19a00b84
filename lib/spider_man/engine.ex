@@ -607,7 +607,7 @@ defmodule SpiderMan.Engine do
     Stats.attach_spider_stats(spider, tid)
 
     pid =
-      if state.print_stats do
+      if Map.get(state, :print_stats, true) do
         {:ok, stats_task_pid} =
           Stats.Task.start_link(%{status: status, tid: tid, refresh_interval: 1000})
 
