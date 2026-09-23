@@ -166,6 +166,31 @@ defmodule Paginator do
         limit: 50
       )
 
+  ## Example with sorting on an expression
+
+  A cursor field can also be `{name, fun}` where `fun` is a zero-arity function
+  returning an `Ecto.Query.dynamic/2` expression. The expression is used when
+  filtering on the cursor, while `name` is the key under which the value is stored
+  in the cursor and is passed to `:fetch_cursor_value_fun`.
+
+      query =
+        from(
+          p in Post,
+          select_merge: %{title_length: fragment("length(?)", p.title)},
+          order_by: [desc: fragment("length(?)", p.title), asc: p.id]
+        )
+
+      Repo.paginate(query,
+        cursor_fields: [
+          {{:title_length, fn -> dynamic([p], fragment("length(?)", p.title)) end}, :desc},
+          id: :asc
+        ],
+        limit: 50
+      )
+
+  Here `title_length` must be a (virtual) field on the returned records, otherwise
+  a custom `:fetch_cursor_value_fun` has to compute the value.
+
   """
   @callback paginate(queryable :: Ecto.Query.t(), opts :: Keyword.t(), repo_opts :: Keyword.t()) ::
               Paginator.Page.t()
@@ -309,6 +334,12 @@ defmodule Paginator do
        }) do
     cursor_fields
     |> Enum.map(fn
+      {{cursor_field, handler}, _order} when is_function(handler, 0) ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
+      {cursor_field, handler} when is_atom(cursor_field) and is_function(handler, 0) ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
       {cursor_field, _order} ->
         {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
 

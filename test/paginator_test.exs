@@ -337,6 +337,65 @@ defmodule PaginatorTest do
     end
   end
 
+  describe "paginate a collection of payments, sorting by an expression" do
+    setup %{customers: {c1, _c2, _c3}} do
+      fetch_cursor_value_fun = fn
+        schema, :doubled_amount -> schema.amount * 2
+        schema, field -> Paginator.default_fetch_cursor_value(schema, field)
+      end
+
+      {:ok, customer: c1, fetch_cursor_value_fun: fetch_cursor_value_fun}
+    end
+
+    test "paginates forward and backward with an expression cursor field", %{
+      customer: customer,
+      fetch_cursor_value_fun: fetch_cursor_value_fun,
+      payments: {_p1, _p2, _p3, _p4, p5, p6, p7, p8, _p9, _p10, _p11, _p12}
+    } do
+      query = customer_payments_by_doubled_amount(customer, :desc)
+
+      opts = [
+        cursor_fields: [
+          {{:doubled_amount, fn -> dynamic([p], p.amount * 2) end}, :desc},
+          id: :asc
+        ],
+        fetch_cursor_value_fun: fetch_cursor_value_fun,
+        limit: 2
+      ]
+
+      page = Repo.paginate(query, opts)
+      assert to_ids(page.entries) == to_ids([p8, p7])
+      assert page.metadata.before == nil
+
+      assert page.metadata.after ==
+               encode_cursor(%{doubled_amount: p7.amount * 2, id: p7.id})
+
+      page = Repo.paginate(query, opts ++ [after: page.metadata.after])
+      assert to_ids(page.entries) == to_ids([p5, p6])
+      assert page.metadata.after == nil
+
+      page = Repo.paginate(query, opts ++ [before: page.metadata.before])
+      assert to_ids(page.entries) == to_ids([p8, p7])
+      assert page.metadata.before == nil
+    end
+
+    test "uses the default sort direction for an expression cursor field", %{
+      customer: customer,
+      fetch_cursor_value_fun: fetch_cursor_value_fun,
+      payments: {_p1, _p2, _p3, _p4, p5, p6, p7, p8, _p9, _p10, _p11, _p12}
+    } do
+      query = customer_payments_by_doubled_amount(customer, :asc)
+
+      opts = [
+        cursor_fields: [{:doubled_amount, fn -> dynamic([p], p.amount * 2) end}, :id],
+        fetch_cursor_value_fun: fetch_cursor_value_fun,
+        limit: 1
+      ]
+
+      assert paginate_as_list(query, opts) == to_ids([p6, p5, p7, p8])
+    end
+  end
+
   describe "paginate a collection of payments, sorting by customer name" do
     test "raises error when binding not found", %{
       payments: {_p1, _p2, _p3, _p4, _p5, _p6, _p7, _p8, _p9, _p10, p11, _p12}
@@ -1111,6 +1170,15 @@ defmodule PaginatorTest do
       p in Payment,
       where: p.customer_id == ^customer.id,
       order_by: [{^direction, p.charged_at}, {^direction, p.amount}, {^direction, p.id}]
+    )
+  end
+
+  defp customer_payments_by_doubled_amount(customer, direction) do
+    from(
+      p in Payment,
+      where: p.customer_id == ^customer.id,
+      order_by: [{^direction, p.amount * 2}, {:asc, p.id}],
+      select: p
     )
   end
 
