@@ -18,23 +18,29 @@ defmodule Paginator.Ecto.Query do
     paginate(queryable, config)
   end
 
-  defp get_operator(:asc, :before), do: :lt
-  defp get_operator(:desc, :before), do: :gt
-  defp get_operator(:asc, :after), do: :gt
-  defp get_operator(:desc, :after), do: :lt
+  @nulls_orders [:asc_nulls_first, :asc_nulls_last, :desc_nulls_first, :desc_nulls_last]
+  @sort_orders [:asc, :desc | @nulls_orders]
 
-  defp get_operator(direction, _),
-    do: raise("Invalid sorting value :#{direction}, please use either :asc or :desc")
+  # Paginating `:before` a cursor is the same as paginating `:after` it in the
+  # reversed sort order, so every filter is expressed as an `:after` filter.
+  defp after_order(order, :after), do: order
+  defp after_order(order, :before), do: reverse_sort_order(order)
 
-  defp get_operator_for_field(cursor_fields, key, direction) do
-    {_, order} =
-      cursor_fields
-      |> Enum.find(fn {field_key, _order} ->
-        field_key == key
-      end)
+  defp reverse_sort_order(:asc), do: :desc
+  defp reverse_sort_order(:desc), do: :asc
+  defp reverse_sort_order(:asc_nulls_first), do: :desc_nulls_last
+  defp reverse_sort_order(:asc_nulls_last), do: :desc_nulls_first
+  defp reverse_sort_order(:desc_nulls_first), do: :asc_nulls_last
+  defp reverse_sort_order(:desc_nulls_last), do: :asc_nulls_first
 
-    get_operator(order, direction)
-  end
+  defp validate_order!(order) when order in @sort_orders, do: order
+
+  defp validate_order!(order),
+    do:
+      raise(
+        "Invalid sorting value :#{order}, please use one of " <>
+          Enum.map_join(@sort_orders, ", ", &":#{&1}")
+      )
 
   # This clause is responsible for transforming legacy list cursors into map cursors
   defp filter_values(query, fields, values, cursor_direction) when is_list(values) do
@@ -50,42 +56,75 @@ defmodule Paginator.Ecto.Query do
   defp filter_values(query, fields, values, cursor_direction) when is_map(values) do
     sorts =
       fields
-      |> Enum.map(fn {column, _order} -> {column, Map.get(values, column)} end)
-      |> Enum.reject(fn val -> match?({_column, nil}, val) end)
+      |> Enum.map(fn {column, order} ->
+        {column, Map.get(values, column), after_order(validate_order!(order), cursor_direction)}
+      end)
+      # Plain :asc/:desc columns ignore nil cursor values; the explicit nulls
+      # orders know where NULLs sort and filter on them.
+      |> Enum.reject(fn {_column, value, order} -> is_nil(value) and order in [:asc, :desc] end)
 
     dynamic_sorts =
-      sorts
-      |> Enum.with_index()
-      |> Enum.reduce(true, fn {{bound_column, value}, i}, dynamic_sorts ->
-        {position, column} = column_position(query, bound_column)
-
-        dynamic = true
-
-        dynamic =
-          case get_operator_for_field(fields, bound_column, cursor_direction) do
-            :lt ->
-              dynamic([{q, position}], field(q, ^column) < ^value and ^dynamic)
-
-            :gt ->
-              dynamic([{q, position}], field(q, ^column) > ^value and ^dynamic)
-          end
-
-        dynamic =
-          sorts
-          |> Enum.take(i)
-          |> Enum.reduce(dynamic, fn {prev_column, prev_value}, dynamic ->
-            {position, prev_column} = column_position(query, prev_column)
-            dynamic([{q, position}], field(q, ^prev_column) == ^prev_value and ^dynamic)
-          end)
-
-        if i == 0 do
-          dynamic([{q, position}], ^dynamic and ^dynamic_sorts)
-        else
-          dynamic([{q, position}], ^dynamic or ^dynamic_sorts)
-        end
-      end)
+      case sorts do
+        [] -> true
+        sorts -> build_filters(query, sorts)
+      end
 
     where(query, [{q, 0}], ^dynamic_sorts)
+  end
+
+  # Builds the lexicographic "strictly after" condition for the given sorts,
+  # where `next` is the condition for the remaining sorts (`false` once none are
+  # left, as a row equal on every column is not after the cursor).
+  defp build_filters(_query, []), do: false
+
+  defp build_filters(query, [{bound_column, value, order} | rest]) do
+    {position, column} = column_position(query, bound_column)
+    next = build_filters(query, rest)
+
+    after_filter(position, column, value, order, next)
+  end
+
+  defp after_filter(position, column, nil, order, next)
+       when order in [:asc_nulls_last, :desc_nulls_last] do
+    if next == false do
+      false
+    else
+      dynamic([{q, position}], is_nil(field(q, ^column)) and ^next)
+    end
+  end
+
+  defp after_filter(position, column, nil, order, next)
+       when order in [:asc_nulls_first, :desc_nulls_first] do
+    if next == false do
+      dynamic([{q, position}], not is_nil(field(q, ^column)))
+    else
+      dynamic(
+        [{q, position}],
+        not is_nil(field(q, ^column)) or (is_nil(field(q, ^column)) and ^next)
+      )
+    end
+  end
+
+  defp after_filter(position, column, value, order, next) do
+    dynamic =
+      if order in [:asc, :asc_nulls_first, :asc_nulls_last] do
+        dynamic([{q, position}], field(q, ^column) > ^value)
+      else
+        dynamic([{q, position}], field(q, ^column) < ^value)
+      end
+
+    dynamic =
+      if order in [:asc_nulls_last, :desc_nulls_last] do
+        dynamic([{q, position}], ^dynamic or is_nil(field(q, ^column)))
+      else
+        dynamic
+      end
+
+    if next == false do
+      dynamic
+    else
+      dynamic([{q, position}], ^dynamic or (field(q, ^column) == ^value and ^next))
+    end
   end
 
   defp maybe_where(query, %Config{
@@ -157,11 +196,7 @@ defmodule Paginator.Ecto.Query do
         for %{expr: expr} = order_by <- order_bys do
           %{
             order_by
-            | expr:
-                Enum.map(expr, fn
-                  {:desc, ast} -> {:asc, ast}
-                  {:asc, ast} -> {:desc, ast}
-                end)
+            | expr: Enum.map(expr, fn {order, ast} -> {reverse_sort_order(order), ast} end)
           }
         end
     end)
