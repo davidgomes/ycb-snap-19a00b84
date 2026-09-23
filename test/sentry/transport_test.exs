@@ -4,7 +4,17 @@ defmodule Sentry.TransportTest do
   import Sentry.TestHelpers
   import ExUnit.CaptureLog
 
-  alias Sentry.{ClientError, Envelope, Event, FinchClient, HackneyClient, Transport}
+  alias Sentry.{
+    ClientError,
+    ClientReport,
+    Envelope,
+    Event,
+    FinchClient,
+    HackneyClient,
+    LogEvent,
+    Metric,
+    Transport
+  }
 
   describe "encode_and_post_envelope/2" do
     setup do
@@ -393,6 +403,108 @@ defmodule Sentry.TransportTest do
       # Other categories should not be rate-limited
       refute Transport.RateLimiter.rate_limited?("session")
     end
+
+    test "drops log envelopes before sending while log_byte is rate limited", %{bypass: bypass} do
+      test_pid = self()
+      ref = make_ref()
+
+      Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+        send(test_pid, {:request, ref})
+        Plug.Conn.resp(conn, 200, ~s<{"id":"123"}>)
+      end)
+
+      Transport.RateLimiter.update_rate_limits("60:log_byte:organization")
+
+      log_envelope = Envelope.from_log_events([make_log_event("dropped")])
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(log_envelope, FinchClient, _retries = [])
+
+      refute_received {:request, ^ref}
+
+      error_envelope = Envelope.from_event(Event.create_event(message: "Hello"))
+      assert {:ok, "123"} = Transport.encode_and_post_envelope(error_envelope, FinchClient)
+      assert_received {:request, ^ref}
+    end
+
+    test "drops metric envelopes before sending while trace_metric_byte is rate limited",
+         %{bypass: bypass} do
+      test_pid = self()
+      ref = make_ref()
+
+      Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+        send(test_pid, {:request, ref})
+        Plug.Conn.resp(conn, 200, ~s<{"id":"123"}>)
+      end)
+
+      Transport.RateLimiter.update_rate_limits("60:trace_metric_byte:organization")
+
+      metric_envelope = Envelope.from_metric_events([make_metric("dropped.metric")])
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(metric_envelope, FinchClient, _retries = [])
+
+      refute_received {:request, ^ref}
+
+      log_envelope = Envelope.from_log_events([make_log_event("sent")])
+      assert {:ok, "123"} = Transport.encode_and_post_envelope(log_envelope, FinchClient)
+      assert_received {:request, ^ref}
+    end
+
+    test "records log_item and log_byte outcomes when a log envelope is rejected with 429",
+         %{bypass: bypass} do
+      test_pid = self()
+      ref = make_ref()
+
+      Bypass.stub(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+
+        if body =~ ~s("type":"log") do
+          send(test_pid, {:log_envelope, ref})
+
+          conn
+          |> Plug.Conn.put_resp_header("retry-after", "60")
+          |> Plug.Conn.resp(429, ~s<{}>)
+        else
+          Plug.Conn.resp(conn, 200, ~s<{"id":"123"}>)
+        end
+      end)
+
+      ClientReport.Sender.flush()
+
+      log_events = for body <- ["first", "second", "third", "fourth"], do: make_log_event(body)
+      envelope = Envelope.from_log_events(log_events)
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(envelope, FinchClient, _retries = [])
+
+      assert_received {:log_envelope, ^ref}
+
+      expected_bytes = log_events |> Enum.map(&Envelope.item_byte_size/1) |> Enum.sum()
+      discarded = :sys.get_state(ClientReport.Sender)
+
+      assert discarded[{:ratelimit_backoff, "log_item"}] == 4
+      assert discarded[{:ratelimit_backoff, "log_byte"}] == expected_bytes
+
+      ClientReport.Sender.flush()
+    end
+  end
+
+  defp make_log_event(body) do
+    %LogEvent{
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+      level: :info,
+      body: body
+    }
+  end
+
+  defp make_metric(name) do
+    %Metric{
+      type: :counter,
+      name: name,
+      value: 1,
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000
+    }
   end
 
   defp error(fun) do

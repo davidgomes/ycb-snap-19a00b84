@@ -336,4 +336,46 @@ defmodule Sentry.EnvelopeTest do
       assert Envelope.get_data_category(metric_batch) == "trace_metric"
     end
   end
+
+  describe "item_byte_size/1" do
+    test "returns the size of a log event as serialized in a log envelope" do
+      log_event = %LogEvent{
+        timestamp: 1_588_601_261.535_386,
+        level: :info,
+        body: "a log message"
+      }
+
+      assert {:ok, encoded} = Envelope.to_binary(Envelope.from_log_events([log_event]))
+      assert [_id_line, _header_line, payload_line] = String.split(encoded, "\n", trim: true)
+
+      # The payload is {"items":[<log event>]}
+      assert byte_size(payload_line) == Envelope.item_byte_size(log_event) + 12
+      assert Envelope.item_byte_size(log_event) == byte_size(encode!(LogEvent.to_map(log_event)))
+    end
+
+    test "returns the size of a metric as serialized in a metric envelope" do
+      metric = %Metric{
+        type: :counter,
+        name: "test.counter",
+        value: 1,
+        timestamp: 1_588_601_261.535_386,
+        unit: "request"
+      }
+
+      assert {:ok, encoded} = Envelope.to_binary(Envelope.from_metric_events([metric]))
+      assert [_id_line, _header_line, payload_line] = String.split(encoded, "\n", trim: true)
+
+      # The payload is {"items":[<metric>]}
+      assert byte_size(payload_line) == Envelope.item_byte_size(metric) + 12
+      assert Envelope.item_byte_size(metric) == byte_size(encode!(Metric.to_map(metric)))
+    end
+
+    test "grows with the content of the item" do
+      short = %LogEvent{timestamp: 1_588_601_261.535_386, level: :info, body: "short"}
+      long = %LogEvent{short | body: String.duplicate("long", 100)}
+
+      assert Envelope.item_byte_size(long) - Envelope.item_byte_size(short) ==
+               byte_size(long.body) - byte_size(short.body)
+    end
+  end
 end

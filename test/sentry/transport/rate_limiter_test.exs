@@ -134,5 +134,54 @@ defmodule Sentry.Transport.RateLimiterTest do
     end
   end
 
+  describe "rate_limited_for_category?/1" do
+    test "returns false when neither the category nor its byte category is limited" do
+      assert RateLimiter.rate_limited_for_category?("log_item") == false
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == false
+      assert RateLimiter.rate_limited_for_category?("error") == false
+    end
+
+    test "returns true when the category itself is limited" do
+      RateLimiter.update_rate_limits("60:log_item;trace_metric;error")
+
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == true
+      assert RateLimiter.rate_limited_for_category?("error") == true
+    end
+
+    test "limits log items when only log_byte is limited" do
+      RateLimiter.update_rate_limits("60:log_byte:organization")
+
+      assert RateLimiter.rate_limited?("log_item") == false
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == false
+      assert RateLimiter.rate_limited_for_category?("error") == false
+    end
+
+    test "limits metrics when only trace_metric_byte is limited" do
+      RateLimiter.update_rate_limits("60:trace_metric_byte:organization")
+
+      assert RateLimiter.rate_limited?("trace_metric") == false
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == true
+      assert RateLimiter.rate_limited_for_category?("log_item") == false
+      assert RateLimiter.rate_limited_for_category?("error") == false
+    end
+
+    test "ignores expired byte category limits" do
+      now = System.system_time(:second)
+      :ets.insert(table_name(), {"log_byte", now - 10})
+
+      assert RateLimiter.rate_limited_for_category?("log_item") == false
+    end
+
+    test "returns true when global limit is active" do
+      RateLimiter.update_global_rate_limit(60)
+
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == true
+      assert RateLimiter.rate_limited_for_category?("error") == true
+    end
+  end
+
   defp table_name, do: Process.get(:rate_limiter_table_name)
 end

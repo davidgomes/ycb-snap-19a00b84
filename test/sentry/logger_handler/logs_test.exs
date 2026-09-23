@@ -578,6 +578,28 @@ defmodule Sentry.LoggerHandler.LogsTest do
     end
   end
 
+  describe "rate limiting" do
+    test "records log_item and log_byte outcomes for logs dropped by a log_byte rate limit" do
+      Sentry.ClientReport.Sender.flush()
+
+      :ets.insert(
+        Process.get(:rate_limiter_table_name),
+        {"log_byte", System.system_time(:second) + 60}
+      )
+
+      message = "Rate limited log message"
+      Logger.info(message)
+
+      assert TelemetryProcessor.buffer_size(:log) == 0
+
+      discarded = :sys.get_state(Sentry.ClientReport.Sender)
+      assert discarded[{:ratelimit_backoff, "log_item"}] == 1
+      assert discarded[{:ratelimit_backoff, "log_byte"}] > byte_size(message)
+
+      Sentry.ClientReport.Sender.flush()
+    end
+  end
+
   def before_send_log_callback(log_event) do
     %{log_event | attributes: Map.put(log_event.attributes, "mfa_added", "true")}
   end
