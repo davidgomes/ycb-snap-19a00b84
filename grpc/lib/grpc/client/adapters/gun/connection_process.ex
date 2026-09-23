@@ -62,7 +62,6 @@ if Code.ensure_loaded?(:gun) do
       GenServer.cast(pid, {:cancel, stream_ref})
     end
 
-    @doc false
     @spec start_link(GRPC.Channel.t(), map()) :: GenServer.on_start()
     def start_link(channel, open_opts) do
       case registry_key(channel) do
@@ -90,10 +89,7 @@ if Code.ensure_loaded?(:gun) do
     # Waiting for the connection to come up happens here rather than in `init/1`
     # so that slow or unreachable servers don't block `GRPC.Client.Supervisor`.
     defp await_up(pid) do
-      case GenServer.call(pid, :await_up, :infinity) do
-        :ok -> {:ok, pid}
-        {:error, reason} -> {:error, reason}
-      end
+      with :ok <- GenServer.call(pid, :await_up, :infinity), do: {:ok, pid}
     catch
       :exit, {reason, _} ->
         {:error, reason}
@@ -101,8 +97,8 @@ if Code.ensure_loaded?(:gun) do
 
     @impl GenServer
     def init({%{host: host, port: port}, open_opts, registry_key}) do
-      # Response processes are linked so they die with this process, but one of
-      # them crashing must not take the whole connection down.
+      # Response processes are linked to this one; a crashing stream must not take
+      # the whole connection down with it.
       Process.flag(:trap_exit, true)
 
       case open(host, port, open_opts) do
@@ -167,7 +163,10 @@ if Code.ensure_loaded?(:gun) do
       {:noreply, %{state | status: :up, up_waiters: [], up_timer: nil}}
     end
 
-    def handle_info({:gun_up, gun_pid, protocol}, %{gun_pid: gun_pid, status: :connecting} = state) do
+    def handle_info(
+          {:gun_up, gun_pid, protocol},
+          %{gun_pid: gun_pid, status: :connecting} = state
+        ) do
       fail_connect(state, "Error when opening connection: protocol #{protocol} is not http2")
     end
 
@@ -181,7 +180,10 @@ if Code.ensure_loaded?(:gun) do
 
     def handle_info(:up_timeout, state), do: {:noreply, state}
 
-    def handle_info({:gun_down, gun_pid, _protocol, reason, killed_streams}, %{gun_pid: gun_pid} = state) do
+    def handle_info(
+          {:gun_down, gun_pid, _protocol, reason, killed_streams},
+          %{gun_pid: gun_pid} = state
+        ) do
       killed_streams = MapSet.new(killed_streams)
 
       for {response_pid, stream_ref} <- state.streams,
