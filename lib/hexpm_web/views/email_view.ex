@@ -40,6 +40,17 @@ defmodule HexpmWeb.EmailView do
       "If you have any problems don't hesitate to contact support at #{support_link(format)}."
     end
 
+    def questions_notice(format) do
+      "If you have any questions about why this action was taken, please contact support at #{support_link(format)}."
+    end
+
+    def paragraphs(body) do
+      body
+      |> String.split(~r/\n\s*\n/, trim: true)
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+    end
+
     # Common labels for build tools
     def for_mix_label(), do: "For mix:"
     def for_rebar3_label(), do: "For rebar3:"
@@ -87,12 +98,41 @@ defmodule HexpmWeb.EmailView do
   defmodule Announcement do
     def title("Hex.pm - " <> title), do: title
     def title(subject), do: subject
+  end
 
-    def paragraphs(body) do
-      body
-      |> String.split(~r/\n\s*\n/, trim: true)
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
+  defmodule PackageRemoved do
+    def title(package) do
+      "Package #{package} has been removed"
+    end
+
+    def message(package) do
+      "The package #{package} and all of its releases have been removed from Hex.pm by the Hex.pm team."
+    end
+  end
+
+  defmodule ReleaseRemoved do
+    def title(package, version) do
+      "Release #{package} v#{version} has been removed"
+    end
+
+    def message(package, version) do
+      "Version #{version} of the package #{package} has been removed from Hex.pm by the Hex.pm team. " <>
+        "Other releases of the package are not affected."
+    end
+  end
+
+  defmodule AccountRemoved do
+    def title() do
+      "Your account has been removed"
+    end
+
+    def message(username) do
+      "The Hex.pm account \"#{username}\" has been removed by the Hex.pm team. " <>
+        "The username has been retired and cannot be registered again."
+    end
+
+    def packages_intro() do
+      "The following packages, of which you were the only owner, were removed along with the account:"
     end
   end
 
@@ -188,10 +228,6 @@ defmodule HexpmWeb.EmailView do
 
     def expired_instruction(reset_url, :text) do
       "If the link above has expired, you can request a new password reset at #{reset_url}."
-    end
-
-    def questions_notice(format) do
-      "If you have any questions about why this action was taken, please contact support at #{Common.support_link(format)}."
     end
 
     defdelegate mix_code(), to: BuildTools, as: :mix_hex_user_auth

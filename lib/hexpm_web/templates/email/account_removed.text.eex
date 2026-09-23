@@ -1,0 +1,13 @@
+<%= AccountRemoved.title() %>
+
+<%= AccountRemoved.message(@username) %>
+<%= if @packages != [] do %>
+<%= AccountRemoved.packages_intro() %>
+
+<%= Enum.map_join(@packages, "\n", &"* #{&1}") %>
+<% end %>
+Reason:
+
+<%= @reason %>
+
+<%= Common.questions_notice(:text) %>
