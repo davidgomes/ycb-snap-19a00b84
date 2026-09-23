@@ -10,6 +10,9 @@ defmodule Hexpm.Repository.Release do
     field :inner_checksum, :binary
     field :outer_checksum, :binary
     field :has_docs, :boolean, default: false
+    # Set by a database trigger from the version
+    field :semver_sort_key, :binary, load_in_query: false
+    field :stable, :boolean, load_in_query: false
     field :vulnerable?, :boolean, virtual: true, default: false
     timestamps()
 
