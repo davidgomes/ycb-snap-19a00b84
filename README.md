@@ -5,13 +5,15 @@ Rails compatible Plug session store.
 
 This allows you to share session information between Rails and a Plug-based framework like Phoenix.
 
+It supports Rails 4 and Rails 5 encrypted cookies (and Rails 3.2 signed cookies, see below).
+
 ## Installation
 
 Add PlugRailsCookieSessionStore as a dependency to your `mix.exs` file:
 
 ```elixir
 def deps do
-  [{:plug_rails_cookie_session_store, "~> 0.1"}]
+  [{:plug_rails_cookie_session_store, "~> 1.0"}]
 end
 ```
 
@@ -29,12 +31,24 @@ There are 4 things to copy:
  
 The `secret_key_base` can be found usually in the Rails' `secrets.yml` file and should be copied to Phoenix's `config.exs` file. There should already be a key named like that and you should override it.
 
+Since Rails 5.2, `secret_key_base` in development and test is generated automatically as an MD5 hash of the application's name (32 bytes long), so it isn't in `secrets.yml`. You can print it from a Rails console:
+
+```ruby
+Rails.application.secret_key_base
+```
+
 The other three values can be found somewhere in the initializers directory of your Rails project. Some people don't set the `signing_salt` and `encryption_salt`. If you don't find them, set them like so:
 
 ```ruby
 Rails.application.config.session_store :cookie_store, key: '_SOMETHING_HERE_session'
 Rails.application.config.action_dispatch.encrypted_cookie_salt =  'encryption salt'
 Rails.application.config.action_dispatch.encrypted_signed_cookie_salt = 'signing salt'
+```
+
+__Rails 5.2__: new Rails 5.2 applications encrypt cookies with AES-256-GCM (authenticated encryption), which this store does not support. Switch Rails back to the AES-256-CBC encrypted and signed cookies used by Rails 4 and Rails 5.0/5.1:
+
+```ruby
+Rails.application.config.action_dispatch.use_authenticated_cookie_encryption = false
 ```
 
 #### Configure the Cookie Store in Phoenix. 
