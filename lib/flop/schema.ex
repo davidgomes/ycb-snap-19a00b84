@@ -377,13 +377,18 @@ defprotocol Flop.Schema do
   Both callbacks are referenced by a tuple
   `{mod :: module, function :: atom, opts :: keyword}`.
 
+  - `field_dynamic` returns the field as an `Ecto.Query.dynamic_expr`. It
+    receives an options keyword list, but neither the query, the order
+    direction nor the filter. Flop applies the order direction and the filter
+    operators to the expression. A custom field needs it to be sortable, and it
+    is the simplest way to make a custom field filterable.
   - `filter` is called to filter by the field. It receives the Ecto query, the
-    Flop filter and an options keyword list, and returns the updated query. A
-    custom field needs it to be filterable.
-  - `field_dynamic` is called to order by the field. It receives an options
-    keyword list and returns an `Ecto.Query.dynamic_expr`, which Flop applies
-    the order direction to. It receives neither the query nor the direction. A
-    custom field needs it to be sortable.
+    Flop filter and an options keyword list, and returns the updated query. It
+    has to handle each allowed operator itself, which allows filters that are
+    not an operator applied to a single expression.
+
+  A custom field needs one of the two to be filterable. If both are configured,
+  `filter` is used for filtering.
 
   If runtime options are necessary (like the timezone of the request or the user
   ID of the current user), use the `extra_opts` option when calling Flop
@@ -400,7 +405,6 @@ defprotocol Flop.Schema do
         adapter_opts: [
           custom_fields: [
             inserted_at_date: [
-              filter: {CustomFields, :date_filter, [source: :inserted_at]},
               field_dynamic: {CustomFields, :date_field, [source: :inserted_at]},
               ecto_type: :date,
               operators: [:<=, :>=]
@@ -416,25 +420,6 @@ defprotocol Flop.Schema do
 
       defmodule CustomFields do
         import Ecto.Query
-
-        def date_filter(query, %Flop.Filter{value: value, op: op}, opts) do
-          source = Keyword.fetch!(opts, :source)
-          timezone = Keyword.fetch!(opts, :timezone)
-
-          expr = dynamic(
-            [r],
-            fragment("((? AT TIME ZONE 'utc') AT TIME ZONE ?)::date",
-            field(r, ^source), ^timezone)
-          )
-
-          conditions =
-            case op do
-              :>= -> dynamic([r], ^expr >= ^value)
-              :<= -> dynamic([r], ^expr <= ^value)
-            end
-
-          where(query, ^conditions)
-        end
 
         def date_field(opts) do
           source = Keyword.fetch!(opts, :source)
@@ -624,11 +609,13 @@ defprotocol Flop.Schema do
   - `:filter` - A module/function/options tuple referencing a custom filter
     function. The function must take the Ecto query, the `Flop.Filter` struct,
     and the options from the tuple as arguments, and return the updated query.
-    Required if the field is filterable.
+    Takes precedence over `:field_dynamic` for filtering.
   - `:field_dynamic` - A module/function/options tuple referencing a function
     that returns the field expression as an `Ecto.Query.dynamic_expr`. The
     function takes the options from the tuple as its only argument. Flop applies
-    the order direction to the expression. Required if the field is sortable.
+    the order direction and the filter operators to the expression. Required if
+    the field is sortable. Either `:field_dynamic` or `:filter` is required if
+    the field is filterable.
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator
     and value validation is based on this option.
   - `:bindings` - If either callback requires certain named bindings to be
