@@ -186,4 +186,24 @@ defmodule Sentry.Telemetry.Category do
   def data_category(:transaction), do: "transaction"
   def data_category(:log), do: "log_item"
   def data_category(:metric), do: "trace_metric"
+
+  @doc """
+  Returns the byte-based Sentry data category string for a given telemetry category.
+
+  Byte categories are reported in client reports alongside the count-based category
+  returned by `data_category/1`, and Sentry may rate limit them independently.
+  Only `:log` and `:metric` have a byte category.
+
+  ## Examples
+
+      iex> Sentry.Telemetry.Category.byte_data_category(:log)
+      "log_byte"
+
+      iex> Sentry.Telemetry.Category.byte_data_category(:metric)
+      "trace_metric_byte"
+
+  """
+  @spec byte_data_category(:log | :metric) :: String.t()
+  def byte_data_category(:log), do: "log_byte"
+  def byte_data_category(:metric), do: "trace_metric_byte"
 end

@@ -6,7 +6,19 @@ defmodule Sentry.ClientReport.Sender do
 
   use GenServer
 
-  alias Sentry.{Client, ClientReport, Config, Envelope, Transaction}
+  alias Sentry.{
+    Client,
+    ClientReport,
+    Config,
+    Envelope,
+    LogBatch,
+    LogEvent,
+    Metric,
+    MetricBatch,
+    Transaction
+  }
+
+  alias Sentry.Telemetry.Category
 
   @send_interval 30_000
 
@@ -39,17 +51,19 @@ defmodule Sentry.ClientReport.Sender do
                | Sentry.CheckIn.t()
                | ClientReport.t()
                | Sentry.Event.t()
+               | LogBatch.t()
+               | LogEvent.t()
+               | Metric.t()
+               | MetricBatch.t()
                | Sentry.Transaction.t()
   def record_discarded_events(reason, event_items, genserver)
       when is_list(event_items) do
     # We silently ignore events whose reasons aren't valid because we have to add it to the allowlist in Snuba
     # https://develop.sentry.dev/sdk/client-reports/
-    if Enum.member?(@client_report_reasons, reason) do
-      Enum.each(event_items, fn item ->
-        for {category, quantity} <- data_categories(item) do
-          GenServer.cast(genserver, {:record_discarded_events, reason, category, quantity})
-        end
-      end)
+    if Enum.member?(@client_report_reasons, reason) and event_items != [] do
+      # Outcomes are computed in the Sender because byte-based categories require
+      # encoding items, which must not slow down the process that dropped them.
+      GenServer.cast(genserver, {:record_discarded_items, reason, event_items})
     end
 
     :ok
@@ -65,8 +79,21 @@ defmodule Sentry.ClientReport.Sender do
     [{Envelope.get_data_category(transaction), 1}, {"span", span_count}]
   end
 
+  defp data_categories(%LogEvent{} = log_event), do: data_categories(:log, [log_event])
+  defp data_categories(%LogBatch{log_events: log_events}), do: data_categories(:log, log_events)
+  defp data_categories(%Metric{} = metric), do: data_categories(:metric, [metric])
+  defp data_categories(%MetricBatch{metrics: metrics}), do: data_categories(:metric, metrics)
+
   defp data_categories(item) do
     [{Envelope.get_data_category(item), 1}]
+  end
+
+  defp data_categories(category, items) do
+    [
+      {Category.data_category(category), length(items)},
+      {Category.byte_data_category(category),
+       Enum.reduce(items, 0, &(Envelope.item_byte_size(&1) + &2))}
+    ]
   end
 
   ## Callbacks
@@ -84,7 +111,23 @@ defmodule Sentry.ClientReport.Sender do
 
   @impl true
   def handle_cast({:record_discarded_events, reason, category, quantity}, discarded_events) do
-    {:noreply, Map.update(discarded_events, {reason, category}, quantity, &(&1 + quantity))}
+    {:noreply, add_discarded(discarded_events, reason, category, quantity)}
+  end
+
+  def handle_cast({:record_discarded_items, reason, items}, discarded_events) do
+    discarded_events =
+      for item <- items,
+          {category, quantity} <- data_categories(item),
+          quantity > 0,
+          reduce: discarded_events do
+        acc -> add_discarded(acc, reason, category, quantity)
+      end
+
+    {:noreply, discarded_events}
+  end
+
+  defp add_discarded(discarded_events, reason, category, quantity) do
+    Map.update(discarded_events, {reason, category}, quantity, &(&1 + quantity))
   end
 
   @impl true

@@ -23,6 +23,8 @@ defmodule Sentry.Transport.RateLimiter do
 
   use GenServer
 
+  alias Sentry.Telemetry.Category
+
   @default_sweep_interval_ms 60_000
 
   defstruct [:table_name]
@@ -91,6 +93,30 @@ defmodule Sentry.Transport.RateLimiter do
   end
 
   @doc """
+  Checks if items of the given data category should be dropped because of rate limits.
+
+  Like `rate_limited?/1`, but also takes into account the companion byte category
+  of the given category (such as `"log_byte"` for `"log_item"`), since Sentry can
+  rate limit on the byte category alone.
+
+  ## Examples
+
+      iex> :ets.insert(RateLimiter, {"log_byte", System.system_time(:second) + 60})
+      iex> RateLimiter.rate_limited?("log_item")
+      false
+      iex> RateLimiter.rate_limited_for_category?("log_item")
+      true
+
+  """
+  @spec rate_limited_for_category?(String.t()) :: boolean()
+  def rate_limited_for_category?(category) when is_binary(category) do
+    case byte_category(category) do
+      nil -> rate_limited?(category)
+      byte_category -> rate_limited?(category) or rate_limited?(byte_category)
+    end
+  end
+
+  @doc """
   Updates global rate limit from a `Retry-After` header value.
 
   This is a fallback for when `X-Sentry-Rate-Limits` is not present.
@@ -136,6 +162,10 @@ defmodule Sentry.Transport.RateLimiter do
   end
 
   ## Private Helpers
+
+  defp byte_category("log_item"), do: Category.byte_data_category(:log)
+  defp byte_category("trace_metric"), do: Category.byte_data_category(:metric)
+  defp byte_category(_category), do: nil
 
   defp rate_limited?(category, now) do
     case :ets.lookup(name(), category) do
