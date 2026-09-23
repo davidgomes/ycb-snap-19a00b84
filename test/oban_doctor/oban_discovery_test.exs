@@ -602,6 +602,79 @@ defmodule ObanDoctor.ObanDiscoveryTest do
       # repo from config.exs should be preserved
       assert config.repo == MyApp.Repo
     end
+
+    test "extracts engine from config" do
+      tmp_dir = create_temp_project()
+
+      config_content = """
+      import Config
+
+      config :my_app, Oban,
+        engine: Oban.Pro.Engines.Smart,
+        repo: MyApp.Repo,
+        queues: [default: 10],
+        plugins: []
+      """
+
+      write_config(tmp_dir, "config/config.exs", config_content)
+
+      configs = ObanDiscovery.discover_oban_configs(tmp_dir)
+
+      assert length(configs) == 1
+      [config] = configs
+      assert config.engine == Oban.Pro.Engines.Smart
+    end
+
+    test "returns nil engine when not set" do
+      tmp_dir = create_temp_project()
+
+      config_content = """
+      import Config
+
+      config :my_app, Oban,
+        queues: [default: 10],
+        plugins: []
+      """
+
+      write_config(tmp_dir, "config/config.exs", config_content)
+
+      configs = ObanDiscovery.discover_oban_configs(tmp_dir)
+
+      assert length(configs) == 1
+      [config] = configs
+      assert config.engine == nil
+    end
+
+    test "merges engine across config files" do
+      tmp_dir = create_temp_project()
+
+      config_content = """
+      import Config
+
+      config :my_app, Oban,
+        repo: MyApp.Repo,
+        queues: [default: 10],
+        plugins: []
+      """
+
+      runtime_content = """
+      import Config
+
+      config :my_app, Oban,
+        engine: Oban.Pro.Engines.Smart
+      """
+
+      write_config(tmp_dir, "config/config.exs", config_content)
+      write_config(tmp_dir, "config/runtime.exs", runtime_content)
+
+      configs = ObanDiscovery.discover_oban_configs(tmp_dir)
+
+      assert length(configs) == 1
+      [config] = configs
+      # engine from runtime.exs should be picked up
+      assert config.engine == Oban.Pro.Engines.Smart
+      assert config.repo == MyApp.Repo
+    end
   end
 
   # Helper functions
