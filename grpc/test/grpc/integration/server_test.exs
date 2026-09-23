@@ -180,7 +180,7 @@ defmodule GRPC.Integration.ServerTest do
     use GRPC.Server, service: Routeguide.RouteGuide.Service
 
     def list_features(_rectangle, _stream) do
-      Process.sleep(600)
+      Process.sleep(200)
     end
   end
 
@@ -188,7 +188,7 @@ defmodule GRPC.Integration.ServerTest do
     use GRPC.Server, service: Routeguide.RouteGuide.Service
 
     def list_features(rectangle, materializer) do
-      Process.sleep(400)
+      Process.sleep(50)
       server_stream = Stream.each([rectangle.lo, rectangle.hi], fn point -> point end)
 
       server_stream
@@ -423,7 +423,7 @@ defmodule GRPC.Integration.ServerTest do
           error = %GRPC.RPCError{message: "Deadline expired", status: 4}
 
           assert {:error, ^error} =
-                   channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 500)
+                   channel |> Routeguide.RouteGuide.Stub.list_features(rect, timeout: 100)
         end)
       end)
 
