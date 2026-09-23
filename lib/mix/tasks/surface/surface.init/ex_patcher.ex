@@ -292,7 +292,7 @@ defmodule Mix.Tasks.Surface.Init.ExPatcher do
     end
   end
 
-  def set_result(patcher, status) do
+  def set_result(%__MODULE__{} = patcher, status) do
     %__MODULE__{patcher | result: status}
   end
 
@@ -391,7 +391,7 @@ defmodule Mix.Tasks.Surface.Init.ExPatcher do
     patcher
   end
 
-  def patch(patcher, opts, fun) do
+  def patch(%__MODULE__{} = patcher, opts, fun) do
     zipper = zipper(patcher)
 
     patch =
