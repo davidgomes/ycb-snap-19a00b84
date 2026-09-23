@@ -273,22 +273,29 @@ instead of
 def can?(%User{}, :index, %Post{}), do: true
 ```
 
-You can specify additional actions for which Canary will authorize based on the model name, by passing the `non_id_actions` opt to the plug.
+You can specify additional actions for which Canary will authorize based on the model name, by using a separate
+`:authorize_resource` plug with `required: false`, and excluding them from other plugs with `:except`.
 
 For example,
 ```elixir
-plug :authorize_resource, model: Post, non_id_actions: [:find_by_name]
+plug :authorize_resource, model: Post, only: [:find_by_name], required: false
+plug :load_and_authorize_resource, model: Post, except: [:find_by_name]
 ```
+
+> ### Info {: .info}
+>
+> The `:non_id_actions` option is deprecated as of 2.0.0-dev and will be removed in Canary 2.1.0.
+> Please check the [Upgrade guide](docs/upgrade.md) for more details.
 
 ### Nested associations
 
 > ### Info {: .info}
 >
-> The `:persisted` is deprecated as of 2.0.0-dev
+> The `:persisted` is deprecated as of 2.0.0-dev and will be removed in Canary 2.1.0.
 > Please use `:required` instead, check the [Getting started - Nested associations](docs/getting-started.md#nested-resources) for more details.
 
 Sometimes you need to load and authorize a parent resource when you have a relationship between two resources and you are
-creating a new one or listing all the children of that parent.  By specifying the `:persisted` option with `true`
+creating a new one or listing all the children of that parent.  By specifying the `:required` option with `true`
 you can load and/or authorize a nested resource.  Specifying this option overrides the default loading behavior of the
 `:index`, `:new`, and `:create` actions by loading an individual resource.  It also overrides the default
 authorization behavior of the `:index`, `:new`, and `create` actions by loading a struct instead of a module
@@ -297,11 +304,11 @@ name for the call to `Canada.can?`.
 For example, when loading and authorizing a `Post` resource which can have one or more `Comment` resources, use
 
 ```elixir
-plug :load_and_authorize_resource, model: Post, id_name: "post_id", persisted: true, only: [:create]
+plug :load_and_authorize_resource, model: Post, id_name: "post_id", required: true, only: [:create]
 ```
 
 to load and authorize the parent `Post` resource using the `post_id` in /posts/:post_id/comments before you
-create the `Comment` resource using its parent.
+create the `Comment` resource using its parent. The not found handler is called when the parent `Post` is not found.
 
 ### Implementing Canada.Can for an anonymous user
 

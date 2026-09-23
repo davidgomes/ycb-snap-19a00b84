@@ -1,13 +1,20 @@
 ## Changelog
 
 ## v2.0.0-dev
+  Plugs and hooks share the same options. Please follow the [Upgrade guide to 2.0.0](docs/upgrade.md#upgrading-from-canary-1-2-0-to-2-0-0) for more details.
+
   * Enhancements
     * added support for authorization LiveView
     * added `:error_handler` and ErrorHandler behaviour
-    * aded  `:required` option
+    * aded  `:required` option, defaults to true for `Canary.Hooks`
+    * `authorize_resource` plug uses the model name when `required: false` is set and the resource is not found
 
   * Dependency changes
     * Elixir ~> 1.14 is now required
+
+  * Deprecations
+    * The `:non_id_actions` option is deprecated and will be removed in Canary 2.1.0. Use a separate `:authorize_resource` plug with `required: false` for non-id actions and `:except` to exclude them from other plugs.
+    * The `:persisted` option is deprecated and will be removed in Canary 2.1.0. Use `:required` instead.
 
 
 ## v1.2.0

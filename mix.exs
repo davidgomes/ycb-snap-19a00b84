@@ -21,6 +21,7 @@ defmodule Canary.Mixfile do
       docs: [
         extras: [
           "docs/getting-started.md",
+          "docs/upgrade.md",
           "README.md",
           "CHANGELOG.md",
         ],
