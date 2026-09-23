@@ -35,9 +35,10 @@ defmodule GRPC.Integration.StubTest do
       {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
       Process.sleep(100)
 
-      %{adapter_payload: %{conn_pid: gun_conn_pid}} = channel
+      %{adapter_payload: %{conn_pid: conn_pid}} = channel
+      %{gun_pid: gun_pid} = :sys.get_state(conn_pid)
 
-      gun_port = port_for(gun_conn_pid)
+      gun_port = port_for(gun_pid)
       # Using :erlang.monitor to be compatible with <= 1.5
       ref = :erlang.monitor(:port, gun_port)
 
@@ -45,7 +46,8 @@ defmodule GRPC.Integration.StubTest do
 
       assert %{adapter_payload: %{conn_pid: nil}} = channel
       assert_receive {:DOWN, ^ref, :port, ^gun_port, _}
-      assert port_for(gun_conn_pid) == nil
+      assert port_for(gun_pid) == nil
+      refute Process.alive?(conn_pid)
     end)
   end
 
