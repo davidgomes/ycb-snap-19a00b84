@@ -180,6 +180,32 @@ defmodule ErrorTracker do
   end
 
   @doc """
+  Mutes the error so new occurrences won't send telemetry events.
+
+  When an error is muted:
+  - New occurrences are still tracked and stored in the database
+  - No telemetry events are sent for new occurrences
+  - The error's status remains unchanged
+  - The error can still be resolved or unresolved
+  """
+  @spec mute(Error.t()) :: {:ok, Error.t()} | {:error, Ecto.Changeset.t()}
+  def mute(error = %Error{}) do
+    changeset = Ecto.Changeset.change(error, muted: true)
+
+    Repo.update(changeset)
+  end
+
+  @doc """
+  Unmutes the error so new occurrences will send telemetry events again.
+  """
+  @spec unmute(Error.t()) :: {:ok, Error.t()} | {:error, Ecto.Changeset.t()}
+  def unmute(error = %Error{}) do
+    changeset = Ecto.Changeset.change(error, muted: false)
+
+    Repo.update(changeset)
+  end
+
+  @doc """
   Sets the current process context.
 
   The given context will be merged into the current process context. The given context
@@ -342,8 +368,8 @@ defmodule ErrorTracker do
       nil -> Telemetry.new_error(error)
     end
 
-    # Always send a new occurrence Telemetry event
-    Telemetry.new_occurrence(occurrence)
+    # Send a new occurrence Telemetry event unless the error is muted
+    unless error.muted, do: Telemetry.new_occurrence(occurrence)
 
     {error, occurrence}
   end
