@@ -28,4 +28,9 @@ defmodule Sqlite.Ecto2.RepoTest do
     assert [%MiscTypes{name: "hello", cost: ^pi_ish}] =
       TestRepo.all from mt in MiscTypes
   end
+
+  test "loads whole number as float" do
+    TestRepo.insert!(%MiscTypes{name: "hello", start_time: ~T(09:33:51.130422), cost: 1})
+    assert [1.0] = TestRepo.all from mt in MiscTypes, select: type(sum(mt.cost), :float)
+  end
 end
