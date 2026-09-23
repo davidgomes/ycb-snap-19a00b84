@@ -646,6 +646,12 @@ if Code.ensure_loaded?(Sqlitex.Server) do
     def execute_ddl(keyword) when is_list(keyword),
       do: error!(nil, "SQLite adapter does not support keyword lists in execute")
 
+    def ddl_logs(_result), do: []
+
+    def table_exists_query(table) do
+      {"SELECT name FROM sqlite_master WHERE type='table' AND name=? LIMIT 1", [table]}
+    end
+
     defp column_definitions(table, columns) do
       intersperse_map(columns, ", ", &column_definition(table, &1))
     end
