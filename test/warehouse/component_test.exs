@@ -3,7 +3,7 @@ defmodule Warehouse.ComponentTest do
 
   import Mox
 
-  alias Warehouse.{AdditiveMap, Component}
+  alias Warehouse.{AdditiveMap, Component, Sku}
 
   def demand_fixture(sku, kit_quantity, component_demand, parts_available) do
     component = insert(:component)
@@ -52,5 +52,44 @@ defmodule Warehouse.ComponentTest do
   test "update_component_demand/2 updates the component demand" do
     component = :component |> insert() |> supervise()
     assert :ok = Component.update_component_demand(component.id, 5)
+  end
+
+  describe "update_component_kits/1" do
+    setup do
+      stub(Warehouse.MockEvents, :broadcast_component_quantities, fn _, _ -> :ok end)
+      stub(Warehouse.MockEvents, :broadcast_sku_quantities, fn _, _ -> :ok end)
+
+      sku = :sku |> insert() |> supervise()
+      component = insert(:component)
+      kit = insert(:kit, component: component, sku: sku, quantity: 2)
+      supervise(component)
+
+      Component.update_component_demand(component.id, 5)
+      assert_eventually(fn -> assert %{demand: 10} = Sku.get_sku_quantity(sku.id) end)
+
+      %{component: component, kit: kit, sku: sku}
+    end
+
+    test "updates the demand of the new kits from assembly", %{component: component, kit: kit, sku: sku} do
+      new_sku = :sku |> insert() |> supervise()
+      kit |> Changeset.change(%{sku_id: new_sku.id}) |> Repo.update!()
+
+      stub(Warehouse.Clients.Assembly.Mock, :request_component_demands, fn ->
+        [%{component_id: to_string(component.id), demand_quantity: 3}]
+      end)
+
+      Component.update_component_kits(component.id)
+
+      assert_eventually(fn -> assert %{demand: 6} = Sku.get_sku_quantity(new_sku.id) end)
+      assert_eventually(fn -> assert %{demand: 0} = Sku.get_sku_quantity(sku.id) end)
+    end
+
+    test "resets demand if assembly has no demand for the component", %{component: component, sku: sku} do
+      stub(Warehouse.Clients.Assembly.Mock, :request_component_demands, fn -> [] end)
+
+      Component.update_component_kits(component.id)
+
+      assert_eventually(fn -> assert %{demand: 0} = Sku.get_sku_quantity(sku.id) end)
+    end
   end
 end

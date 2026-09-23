@@ -38,4 +38,20 @@ defmodule Warehouse.DataCase do
 
     :ok
   end
+
+  @doc """
+  Retries an assertion until it passes or the timeout (in ms) runs out. Used
+  for state that is updated by asynchronous tasks.
+  """
+  def assert_eventually(fun, timeout \\ 1_000) do
+    fun.()
+  rescue
+    error in [ExUnit.AssertionError] ->
+      if timeout > 0 do
+        Process.sleep(10)
+        assert_eventually(fun, timeout - 10)
+      else
+        reraise error, __STACKTRACE__
+      end
+  end
 end

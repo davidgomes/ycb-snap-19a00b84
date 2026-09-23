@@ -3,6 +3,7 @@ defmodule Warehouse.GenServers.InsertMonitorTest do
 
   import Mox
 
+  alias Warehouse.{Component, Sku}
   alias Warehouse.GenServers.InsertMonitor
 
   describe "init/0" do
@@ -27,6 +28,32 @@ defmodule Warehouse.GenServers.InsertMonitorTest do
       start_and_wait_for_handle_continue({InsertMonitor, name: context.test})
 
       assert Warehouse.ComponentRegistry |> Registry.lookup(to_string(component.id)) |> length() == 1
+    end
+
+    test "resets demand of components assembly has no demand for", context do
+      stub(Warehouse.MockEvents, :broadcast_component_quantities, fn _, _ -> :ok end)
+      stub(Warehouse.MockEvents, :broadcast_sku_quantities, fn _, _ -> :ok end)
+
+      old_sku = :sku |> insert() |> supervise()
+      old_component = insert(:component)
+      insert(:kit, component: old_component, sku: old_sku)
+      supervise(old_component)
+
+      Component.update_component_demand(old_component.id, 5)
+      assert_eventually(fn -> assert %{demand: 5} = Sku.get_sku_quantity(old_sku.id) end)
+
+      new_sku = :sku |> insert() |> supervise()
+      new_component = insert(:component)
+      insert(:kit, component: new_component, sku: new_sku)
+
+      stub(Warehouse.Clients.Assembly.Mock, :request_component_demands, fn ->
+        [%{component_id: to_string(new_component.id), demand_quantity: 3}]
+      end)
+
+      start_and_wait_for_handle_continue({InsertMonitor, name: context.test})
+
+      assert_eventually(fn -> assert %{demand: 0} = Sku.get_sku_quantity(old_sku.id) end)
+      assert_eventually(fn -> assert %{demand: 3} = Sku.get_sku_quantity(new_sku.id) end)
     end
 
     defp start_and_wait_for_handle_continue(childspec) do
