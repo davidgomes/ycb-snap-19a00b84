@@ -388,7 +388,7 @@ defmodule Flop.SchemaTest do
              )
   end
 
-  test "raises error if custom field is added to sortable list" do
+  test "raises error if a sortable custom field has no field_dynamic" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Parsley do
@@ -407,6 +407,110 @@ defmodule Flop.SchemaTest do
         end
       end
 
-    assert error.message =~ "cannot sort by custom field"
+    assert error.message =~
+             "custom field without field_dynamic function marked as sortable"
+
+    assert error.message =~ ":inserted_at"
+  end
+
+  test "raises error if a filterable custom field has no callback at all" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Sage do
+          @derive {
+            Flop.Schema,
+            filterable: [:inserted_at],
+            sortable: [],
+            custom_fields: [inserted_at: [ecto_type: :utc_datetime]]
+          }
+          defstruct [:id, :inserted_at]
+        end
+      end
+
+    assert error.message =~
+             "custom field without a callback marked as filterable"
+
+    assert error.message =~ ":inserted_at"
+  end
+
+  test "allows a filterable custom field with only field_dynamic" do
+    defmodule Sorrel do
+      @derive {
+        Flop.Schema,
+        filterable: [:inserted_at],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [
+            field_dynamic: {__MODULE__, :field_dynamic, []},
+            ecto_type: :utc_datetime
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    assert Schema.filterable(struct(Sorrel)) == [:inserted_at]
+    assert Schema.sortable(struct(Sorrel)) == [:inserted_at]
+  end
+
+  test "allows a custom field with only the callback it needs" do
+    defmodule Thyme do
+      @derive {
+        Flop.Schema,
+        filterable: [:filtered],
+        sortable: [:sorted],
+        custom_fields: [
+          filtered: [
+            filter: {__MODULE__, :filter, []},
+            ecto_type: :string
+          ],
+          sorted: [
+            field_dynamic: {__MODULE__, :field_dynamic, []},
+            ecto_type: :string,
+            path: [:computed]
+          ]
+        ]
+      }
+      defstruct [:id, :computed]
+    end
+
+    assert %Flop.FieldInfo{
+             extra: %{type: :custom, field_dynamic: nil, path: [:filtered]}
+           } = Schema.field_info(struct(Thyme), :filtered)
+
+    assert %Flop.FieldInfo{
+             extra: %{
+               type: :custom,
+               filter: nil,
+               path: [:computed],
+               field_dynamic: {Thyme, :field_dynamic, []}
+             }
+           } = Schema.field_info(struct(Thyme), :sorted)
+
+    assert Schema.get_field(struct(Thyme, computed: "x"), :sorted) == "x"
+  end
+
+  test "ordering by a custom field without field_dynamic raises" do
+    assert_raise ArgumentError,
+                 ~r/ordering by a custom field requires a field_dynamic/,
+                 fn ->
+                   Flop.query(MyApp.Pet, %Flop{order_by: [:custom]},
+                     for: MyApp.Pet
+                   )
+                 end
+  end
+
+  test "cursor pagination by a custom field without field_dynamic raises" do
+    cursor = Flop.Cursor.encode(%{custom: "x"})
+
+    assert_raise ArgumentError,
+                 ~r/cursor pagination by a custom field requires a field_dynamic/,
+                 fn ->
+                   Flop.paginate(
+                     MyApp.Pet,
+                     %Flop{first: 1, after: cursor, order_by: [:custom]},
+                     for: MyApp.Pet
+                   )
+                 end
   end
 end
