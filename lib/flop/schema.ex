@@ -613,6 +613,10 @@ defprotocol Flop.Schema do
     is used.
   - `:operators` - Defines which filter operators are allowed for this field.
     If omitted, all operators will be accepted.
+  - `:field_dynamic` - A `{module, function, args}` tuple referencing a function
+    that returns an `Ecto.Query.dynamic/2` expression. It is used for ordering.
+    Custom fields can only be added to the `:sortable` list if this option is
+    set.
 
   If both the `:ecto_type` and the `:operators` option are set, the `:operators`
   option takes precedence and only the filter value validation is based on the
@@ -623,6 +627,7 @@ defprotocol Flop.Schema do
           | {:ecto_type, ecto_type()}
           | {:bindings, [atom]}
           | {:operators, [Flop.Filter.op()]}
+          | {:field_dynamic, {module, atom, list}}
 
   @typedoc """
   Either an Ecto type, or reference to the type of an existing schema field, or

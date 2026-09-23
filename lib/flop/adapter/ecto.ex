@@ -113,6 +113,7 @@ defmodule Flop.Adapter.Ecto do
               required: true
             ],
             ecto_type: [type: :any, required: true],
+            field_dynamic: [type: {:tuple, [:atom, :atom, :list]}],
             bindings: [type: {:list, :atom}],
             operators: [type: {:list, :atom}]
           ]
@@ -362,6 +363,17 @@ defmodule Flop.Adapter.Ecto do
       field_info = Flop.Schema.field_info(struct, field)
       apply_order_by_field(acc_query, {direction, field}, field_info, struct)
     end)
+  end
+
+  defp apply_order_by_field(
+         q,
+         {order_direction, _},
+         %FieldInfo{
+           extra: %{type: :custom, field_dynamic: {mod, fun, args}}
+         },
+         _
+       ) do
+    order_by_direction(q, order_direction, apply(mod, fun, args))
   end
 
   defp apply_order_by_field(
@@ -986,19 +998,21 @@ defmodule Flop.Adapter.Ecto do
 
     illegal_fields =
       custom_fields
-      |> Map.keys()
+      |> Enum.reject(fn {_, field_opts} -> Map.has_key?(field_opts, :field_dynamic) end)
+      |> Enum.map(fn {field, _} -> field end)
       |> Enum.filter(&(&1 in sortable))
 
     if illegal_fields != [] do
       raise ArgumentError, """
       cannot sort by custom fields
 
-      Custom fields are not allowed to be sortable. These custom fields were
-      configured as sortable:
+      Custom fields can only be sortable if the `:field_dynamic` option is
+      set. These custom fields were configured as sortable without it:
 
           #{inspect(illegal_fields)}
 
-      Use alias fields if you want to implement custom sorting.
+      Set `field_dynamic: {module, function, args}` to a function returning an
+      `Ecto.Query.dynamic/2` expression to enable sorting.
       """
     end
 
