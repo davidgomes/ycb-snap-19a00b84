@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Enhancement
+
+* `Guardian.Plug.VerifyHeader`, `Guardian.Plug.VerifySession` and
+  `Guardian.Plug.VerifyCookie` (including the `:refresh_from_cookie` option)
+  accept a one argument function as `:secret`. It is called with the connection
+  once a token has been found and returns the secret to verify that token with,
+  so the secret can be selected per request, for example per tenant, without
+  wrapping the plug. `{m, f, a}` secrets keep their existing meaning and are not
+  given the connection. See `Guardian.Plug.resolve_secret/2` and the Runtime
+  Secrets guide [#690](https://github.com/ueberauth/guardian/issues/690).
+
+### Behaviour Changes
+
+* An explicit `nil` secret no longer falls back to the configured `secret_key`.
+  The default `Guardian.Token.Jwt` secret fetcher treated `secret: nil`, or a
+  `:secret` resolving to `nil`, as if the option were absent, so a failed
+  per-request secret lookup would sign or verify with the application wide
+  secret. It now returns `{:error, :secret_not_found}`. Omitting `:secret` still
+  uses `secret_key`.
+* `Guardian.Token.Jwt.decode_token/3` returns `{:error, :secret_not_found}`
+  instead of `{:error, :invalid_token}` when no verifying secret can be found.
+  Error handlers of the verify plugs now receive
+  `{:invalid_token, :secret_not_found}` in that case.
+
 ## v2.4.1
 
 ### Security
