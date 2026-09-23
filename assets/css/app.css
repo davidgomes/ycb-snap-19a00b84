@@ -2,6 +2,40 @@
 @import "tailwindcss/components";
 @import "tailwindcss/utilities";
 
+:root {
+  color-scheme: dark;
+  --white: 255 255 255;
+  --gray-50: 249 250 251;
+  --gray-100: 243 244 246;
+  --gray-200: 229 231 235;
+  --gray-300: 209 213 219;
+  --gray-400: 156 163 175;
+  --gray-500: 107 114 128;
+  --gray-600: 75 85 99;
+  --gray-700: 55 65 81;
+  --gray-800: 31 41 55;
+  --gray-900: 17 24 39;
+  --gray-950: 3 7 18;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --white: 17 24 39;
+    --gray-50: 3 7 18;
+    --gray-100: 17 24 39;
+    --gray-200: 31 41 55;
+    --gray-300: 55 65 81;
+    --gray-400: 75 85 99;
+    --gray-500: 107 114 128;
+    --gray-600: 156 163 175;
+    --gray-700: 209 213 219;
+    --gray-800: 229 231 235;
+    --gray-900: 243 244 246;
+    --gray-950: 249 250 251;
+  }
+}
+
 ::-webkit-scrollbar {
   height: 6px;
   width: 6px;
