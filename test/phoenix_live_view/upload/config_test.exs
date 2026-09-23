@@ -208,6 +208,57 @@ defmodule Phoenix.LiveView.UploadConfigTest do
     end
   end
 
+  describe "fail_entry/3" do
+    test "retains the entry with its error and rejects further registration" do
+      socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any)
+      %{"ref" => ref} = entry = build_client_entry(:avatar)
+      assert {:ok, avatar} = UploadConfig.put_entries(socket.assigns.uploads.avatar, [entry])
+      assert {:ok, avatar} = UploadConfig.register_entry_upload(avatar, self(), ref)
+
+      avatar = UploadConfig.fail_entry(avatar, ref, {:writer_failure, :custom_error})
+
+      assert [%UploadEntry{ref: ^ref} = failed_entry] = avatar.entries
+      assert avatar.errors == [{ref, {:writer_failure, :custom_error}}]
+      assert UploadConfig.entry_pid(avatar, failed_entry) == nil
+      assert UploadConfig.register_entry_upload(avatar, self(), ref) == {:error, :disallowed}
+
+      # the upload channel exiting must not drop the failed entry
+      assert UploadConfig.unregister_completed_entry(avatar, ref) == avatar
+
+      assert UploadConfig.cancel_entry(avatar, failed_entry).entries == []
+    end
+
+    test "does not duplicate the same error for the entry" do
+      socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any)
+      %{"ref" => ref} = entry = build_client_entry(:avatar)
+      assert {:ok, avatar} = UploadConfig.put_entries(socket.assigns.uploads.avatar, [entry])
+
+      avatar =
+        avatar
+        |> UploadConfig.fail_entry(ref, {:writer_failure, :custom_error})
+        |> UploadConfig.fail_entry(ref, {:writer_failure, :custom_error})
+
+      assert avatar.errors == [{ref, {:writer_failure, :custom_error}}]
+
+      avatar = UploadConfig.fail_entry(avatar, ref, {:writer_failure, :other_error})
+
+      assert avatar.errors == [
+               {ref, {:writer_failure, :custom_error}},
+               {ref, {:writer_failure, :other_error}}
+             ]
+    end
+
+    test "ignores an entry that is already gone" do
+      socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any)
+      %{"ref" => ref} = entry = build_client_entry(:avatar)
+      assert {:ok, avatar} = UploadConfig.put_entries(socket.assigns.uploads.avatar, [entry])
+      avatar = drop_entry(avatar, ref)
+
+      assert UploadConfig.fail_entry(avatar, ref, {:writer_failure, :custom_error}) == avatar
+      assert UploadConfig.unregister_completed_entry(avatar, ref) == avatar
+    end
+  end
+
   describe "put_entries/2" do
     test "does not overwrite existing refs" do
       socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any, max_entries: 1)
