@@ -391,7 +391,7 @@ end
 defmodule CustomFields do
   import Ecto.Query
 
-  # for ordering
+  # for ordering, and for filtering if no filter function is set
   def human_age(_opts) do
     dynamic([p], fragment("? * 7", p.age))
   end
