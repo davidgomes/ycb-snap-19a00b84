@@ -2,6 +2,9 @@
 
 ## Master
 
+## 0.7.0
+* Prepare 0.7.0 release
+
 
 ## 0.6.0
 * Extra configration that allows control of logging debug fields.
