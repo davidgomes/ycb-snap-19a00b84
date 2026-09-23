@@ -1,7 +1,8 @@
 use Mix.Config
 
 config :warehouse,
-  producer: {Broadway.DummyProducer, []}
+  producer: {Broadway.DummyProducer, []},
+  exluded_picking_locations: []
 
 config :warehouse, Warehouse.Repo,
   username: "root",

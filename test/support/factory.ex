@@ -4,7 +4,7 @@ defmodule Warehouse.Factory do
   alias Warehouse.Schemas.{Component, Configuration, Location, Part, Sku}
 
   def component_factory do
-    %Component{}
+    %Component{removed: 0}
   end
 
   def configuration_factory do
