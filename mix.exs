@@ -54,6 +54,7 @@ defmodule ObanChore.MixProject do
       {:phoenix_html, "~> 3.3 or ~> 4.0"},
       {:ecto, "~> 3.10"},
       {:ex_doc, "~> 0.31", runtime: false, only: :dev},
+      {:phoenix_ecto, "~> 4.4", only: :test},
       {:postgrex, "~> 0.20", only: :test},
       {:jason, "~> 1.4", only: :test},
       {:lazy_html, ">= 0.1.0", only: :test}
