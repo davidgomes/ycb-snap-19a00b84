@@ -45,6 +45,9 @@ if Code.ensure_loaded?(Plug) do
       implementation modules `default_type`
     * `:ttl` - The time to live of the exchanged token. Defaults to configured values.
     * `:halt` - Whether to halt the connection in case of error. Defaults to `true`
+    * `:secret_from_conn` - Selects the secret used for the exchange from the connection.
+      A 1-arity function, `{module, function}` or `{module, function, args}` called with the
+      connection as its first argument. Returning `nil` falls back to the configured secret.
     """
 
     import Plug.Conn
@@ -82,8 +85,9 @@ if Code.ensure_loaded?(Plug) do
            default_type <- module.default_token_type(),
            exchange_to <- Keyword.get(opts, :exchange_to, default_type),
            active_session? <- Guardian.Plug.session_active?(conn),
+           exchange_opts <- Guardian.Plug.put_secret_from_conn(conn, opts),
            {:ok, _old, {new_t, new_c}} <-
-             Guardian.exchange(module, token, exchange_from, exchange_to, opts) do
+             Guardian.exchange(module, token, exchange_from, exchange_to, exchange_opts) do
         conn
         |> Guardian.Plug.put_current_token(new_t, key: key)
         |> Guardian.Plug.put_current_claims(new_c, key: key)

@@ -354,4 +354,96 @@ defmodule Guardian.Plug.VerifyHeaderTest do
       assert %{"sub" => "User:jane", "typ" => "access"} = Guardian.Plug.current_claims(conn)
     end
   end
+
+  describe "with secret_from_conn option" do
+    @tenant_secrets %{"acme" => "acme-secret", "globex" => "globex-secret"}
+
+    def tenant_secret(conn, secrets \\ @tenant_secrets) do
+      case get_req_header(conn, "x-tenant") do
+        [tenant] -> Map.get(secrets, tenant)
+        _ -> nil
+      end
+    end
+
+    setup do
+      impl = __MODULE__.ImplJwt
+      {:ok, acme_token, acme_claims} = impl.encode_and_sign(%{id: "jane"}, %{}, secret: "acme-secret")
+      {:ok, default_token, _} = impl.encode_and_sign(%{id: "jane"})
+      {:ok, %{jwt: impl, acme_token: acme_token, acme_claims: acme_claims, default_token: default_token}}
+    end
+
+    test "verifies with the secret selected by a function", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_header("x-tenant", "acme")
+        |> put_req_header("authorization", ctx.acme_token)
+        |> VerifyHeader.call(
+          module: ctx.jwt,
+          error_handler: ctx.handler,
+          secret_from_conn: &__MODULE__.tenant_secret/1
+        )
+
+      refute conn.halted
+      assert Guardian.Plug.current_token(conn) == ctx.acme_token
+      assert Guardian.Plug.current_claims(conn) == ctx.acme_claims
+    end
+
+    test "verifies with the secret selected by an mfa", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_header("x-tenant", "acme")
+        |> put_req_header("authorization", ctx.acme_token)
+        |> VerifyHeader.call(
+          module: ctx.jwt,
+          error_handler: ctx.handler,
+          secret_from_conn: {__MODULE__, :tenant_secret, [@tenant_secrets]}
+        )
+
+      refute conn.halted
+      assert Guardian.Plug.current_claims(conn) == ctx.acme_claims
+    end
+
+    test "rejects a token signed for another tenant", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_header("x-tenant", "globex")
+        |> put_req_header("authorization", ctx.acme_token)
+        |> VerifyHeader.call(
+          module: ctx.jwt,
+          error_handler: ctx.handler,
+          secret_from_conn: {__MODULE__, :tenant_secret}
+        )
+
+      assert conn.status == 401
+      assert conn.halted
+      assert Guardian.Plug.current_token(conn) == nil
+    end
+
+    test "falls back to the configured secret when nil is selected", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_header("authorization", ctx.default_token)
+        |> VerifyHeader.call(
+          module: ctx.jwt,
+          error_handler: ctx.handler,
+          secret_from_conn: {__MODULE__, :tenant_secret}
+        )
+
+      refute conn.halted
+      assert Guardian.Plug.current_token(conn) == ctx.default_token
+    end
+
+    test "raises on an invalid selector", ctx do
+      assert_raise ArgumentError, fn ->
+        :get
+        |> conn("/")
+        |> put_req_header("authorization", ctx.default_token)
+        |> VerifyHeader.call(module: ctx.jwt, error_handler: ctx.handler, secret_from_conn: "nope")
+      end
+    end
+  end
 end

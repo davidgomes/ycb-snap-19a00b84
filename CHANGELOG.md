@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Enhancements
+
+* Add a `:secret_from_conn` option to `Guardian.Plug.VerifyHeader`,
+  `Guardian.Plug.VerifySession` and `Guardian.Plug.VerifyCookie` to select the
+  verifying secret from the connection (e.g. per tenant).
+
 ## v2.4.1
 
 ### Security

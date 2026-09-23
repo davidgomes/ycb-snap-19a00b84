@@ -308,6 +308,41 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
+    @doc """
+    Resolves the `:secret_from_conn` option against the connection.
+
+    The option may be a function of arity 1, `{module, function}` or
+    `{module, function, args}`. It is invoked with the connection
+    (prepended to `args`) and the returned value is placed into the
+    `:secret` option. Returning `nil` leaves the options unchanged so the
+    configured secret is used.
+    """
+    @spec put_secret_from_conn(Plug.Conn.t(), Keyword.t()) :: Keyword.t()
+    def put_secret_from_conn(conn, opts) do
+      case Keyword.fetch(opts, :secret_from_conn) do
+        {:ok, selector} ->
+          case select_secret(selector, conn) do
+            nil -> opts
+            secret -> Keyword.put(opts, :secret, secret)
+          end
+
+        :error ->
+          opts
+      end
+    end
+
+    defp select_secret(fun, conn) when is_function(fun, 1), do: fun.(conn)
+    defp select_secret({m, f}, conn) when is_atom(m) and is_atom(f), do: apply(m, f, [conn])
+
+    defp select_secret({m, f, a}, conn) when is_atom(m) and is_atom(f) and is_list(a),
+      do: apply(m, f, [conn | a])
+
+    defp select_secret(other, _conn) do
+      raise ArgumentError,
+            "expected :secret_from_conn to be a 1-arity function, {module, function} or " <>
+              "{module, function, args}, got: #{inspect(other)}"
+    end
+
     @spec find_token_from_cookies(conn :: Plug.Conn.t(), Keyword.t()) :: {:ok, String.t()} | :no_token_found
     def find_token_from_cookies(conn, opts \\ []) do
       key =
