@@ -357,6 +357,15 @@ export default (
     },
     navigate(href, opts = {}) {
       ensureSameOrigin(href, "navigate");
+      const allowed = liveSocket.beforeNavigate({
+        href,
+        patch: false,
+        pop: false,
+        direction: "forward",
+      });
+      if (!allowed) {
+        return;
+      }
       const customEvent = new CustomEvent("phx:exec");
       liveSocket.historyRedirect(
         customEvent,
@@ -368,6 +377,15 @@ export default (
     },
     patch(href, opts = {}) {
       ensureSameOrigin(href, "patch");
+      const allowed = liveSocket.beforeNavigate({
+        href,
+        patch: true,
+        pop: false,
+        direction: "forward",
+      });
+      if (!allowed) {
+        return;
+      }
       const customEvent = new CustomEvent("phx:exec");
       liveSocket.pushHistoryPatch(
         customEvent,

@@ -159,6 +159,15 @@ const JS = {
   },
 
   exec_navigate(e, eventType, phxEvent, view, sourceEl, el, { href, replace }) {
+    const allowed = view.liveSocket.beforeNavigate({
+      href,
+      patch: false,
+      pop: false,
+      direction: "forward",
+    });
+    if (!allowed) {
+      return;
+    }
     view.liveSocket.historyRedirect(
       e,
       href,
@@ -169,6 +178,15 @@ const JS = {
   },
 
   exec_patch(e, eventType, phxEvent, view, sourceEl, el, { href, replace }) {
+    const allowed = view.liveSocket.beforeNavigate({
+      href,
+      patch: true,
+      pop: false,
+      direction: "forward",
+    });
+    if (!allowed) {
+      return;
+    }
     view.liveSocket.pushHistoryPatch(
       e,
       href,

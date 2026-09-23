@@ -1424,7 +1424,7 @@ export default class LiveSocket {
     window.addEventListener(
       "popstate",
       (event) => {
-        if (!this.registerNewLocation(window.location)) {
+        if (!this.isNewLocation(window.location)) {
           return;
         }
         const { type, backType, id, scroll, position } = event.state || {};
@@ -1433,6 +1433,24 @@ export default class LiveSocket {
         // Compare positions to determine direction
         const isForward = position > this.currentHistoryPosition;
         const navType = isForward ? type : backType || type;
+
+        const allowed = this.beforeNavigate({
+          href,
+          patch: navType === "patch",
+          pop: true,
+          direction: isForward ? "forward" : "backward",
+        });
+        if (!allowed) {
+          // Go back to the entry we came from. Since currentLocation is left
+          // untouched, the popstate triggered by this is ignored above.
+          const delta =
+            typeof position === "number"
+              ? this.currentHistoryPosition - position
+              : 0;
+          history.go(delta || (isForward ? -1 : 1));
+          return;
+        }
+        this.registerNewLocation(window.location);
 
         // Update current position
         this.currentHistoryPosition = position || 0;
@@ -1500,6 +1518,15 @@ export default class LiveSocket {
         if (this.pendingLink === href) {
           return;
         }
+        const allowed = this.beforeNavigate({
+          href,
+          patch: type === "patch",
+          pop: false,
+          direction: "forward",
+        });
+        if (!allowed) {
+          return;
+        }
 
         this.requestDOMUpdate(() => {
           if (type === "patch") {
@@ -1538,6 +1565,21 @@ export default class LiveSocket {
   /** @internal */
   dispatchEvents(events) {
     events.forEach(([event, payload]) => this.dispatchEvent(event, payload));
+  }
+
+  /**
+   * Dispatches the cancelable `phx:before-navigate` event on window.
+   * Returns `false` if a listener called `preventDefault()`.
+   *
+   * @internal
+   */
+  beforeNavigate(detail: {
+    href: string;
+    patch: boolean;
+    pop: boolean;
+    direction: "forward" | "backward";
+  }): boolean {
+    return DOM.dispatchEvent(window, "phx:before-navigate", { detail });
   }
 
   /** @internal */
@@ -1659,14 +1701,18 @@ export default class LiveSocket {
   }
 
   /** @internal */
-  registerNewLocation(newLocation) {
+  isNewLocation(newLocation) {
     const { pathname, search } = this.currentLocation;
-    if (pathname + search === newLocation.pathname + newLocation.search) {
+    return pathname + search !== newLocation.pathname + newLocation.search;
+  }
+
+  /** @internal */
+  registerNewLocation(newLocation) {
+    if (!this.isNewLocation(newLocation)) {
       return false;
-    } else {
-      this.currentLocation = clone(newLocation);
-      return true;
     }
+    this.currentLocation = clone(newLocation);
+    return true;
   }
 
   /** @internal */
