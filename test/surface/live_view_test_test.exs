@@ -102,8 +102,18 @@ defmodule Surface.LiveViewTestTest do
       end
       """
 
-      assert capture_io(:stderr, fn -> Code.eval_string(code, [], __ENV__) end) =~
-               "module Surface.LiveViewTestTest.UndefinedModule could not be loaded"
+      # Elixir 1.19 raises if a Case module is registered after the suite starts.
+      # The warning is emitted while the module expands, before that registration.
+      output =
+        capture_io(:stderr, fn ->
+          try do
+            Code.eval_string(code, [], __ENV__)
+          rescue
+            RuntimeError -> :ok
+          end
+        end)
+
+      assert output =~ "module Surface.LiveViewTestTest.UndefinedModule could not be loaded"
     end
 
     test "warns when passing a module that isn't a component :all with the :except option" do
@@ -118,8 +128,16 @@ defmodule Surface.LiveViewTestTest do
       end
       """
 
-      assert capture_io(:stderr, fn -> Code.eval_string(code, [], __ENV__) end) =~
-               "module String is not a component"
+      output =
+        capture_io(:stderr, fn ->
+          try do
+            Code.eval_string(code, [], __ENV__)
+          rescue
+            RuntimeError -> :ok
+          end
+        end)
+
+      assert output =~ "module String is not a component"
     end
   end
 
