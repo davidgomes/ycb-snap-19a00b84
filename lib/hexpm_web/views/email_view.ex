@@ -96,6 +96,56 @@ defmodule HexpmWeb.EmailView do
     end
   end
 
+  defmodule AccountRemoved do
+    def title() do
+      "Your account has been removed"
+    end
+
+    def message(username) do
+      "The Hex.pm account \"#{username}\" has been removed by the Hex.pm administrators. " <>
+        "The username has been retired and cannot be registered again."
+    end
+
+    def reason_intro() do
+      "The account was removed for the following reason:"
+    end
+
+    defdelegate reason_paragraphs(reason), to: Announcement, as: :paragraphs
+
+    def packages_notice(packages) do
+      "The following packages, where this account was the only owner, were also removed: " <>
+        Enum.join(packages, ", ") <> "."
+    end
+
+    def questions_notice(format) do
+      "If you believe this was a mistake or have any questions, please contact support at #{Common.support_link(format)}."
+    end
+  end
+
+  defmodule PackageRemoved do
+    def title(package) do
+      "Package #{package} has been removed"
+    end
+
+    def message(package, "hexpm") do
+      "The package #{package}, which you own, has been removed from Hex.pm by the Hex.pm administrators."
+    end
+
+    def message(package, repository) do
+      "The package #{package} in the #{repository} repository, which you own, has been removed by the Hex.pm administrators."
+    end
+
+    def reason_intro() do
+      "The package was removed for the following reason:"
+    end
+
+    defdelegate reason_paragraphs(reason), to: Announcement, as: :paragraphs
+
+    def questions_notice(format) do
+      "If you believe this was a mistake or have any questions, please contact support at #{Common.support_link(format)}."
+    end
+  end
+
   defmodule BuildTools do
     def mix_hex_user_auth(), do: "mix hex.user auth"
     def rebar3_hex_user_auth(), do: "rebar3 hex user auth"
