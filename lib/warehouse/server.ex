@@ -6,7 +6,15 @@ defmodule Warehouse.Server do
   import Ecto.Query
 
   alias Warehouse.{Repo, Components, Schemas}
-  alias Bottle.Inventory.V1.{Component, ListComponentAvailabilityRequest, ListComponentAvailabilityResponse, Location, Sku}
+
+  alias Bottle.Inventory.V1.{
+    Component,
+    ListComponentAvailabilityRequest,
+    ListComponentAvailabilityResponse,
+    Location,
+    Sku
+  }
+
   alias Bottle.Inventory.V1.ListComponentAvailabilityResponse.PickingOption
   alias Bottle.Inventory.V1.ListComponentAvailabilityResponse.PickingOption.AvailableLocation
   alias GRPC.Server
