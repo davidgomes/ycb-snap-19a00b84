@@ -74,8 +74,8 @@ defmodule Mix.Tasks.Phx.Gen.Html.SlimeTest do
 
       assert_file "lib/phoenix_slime_web/templates/post/edit.html.slime", fn file ->
         assert file =~ "h2 Edit Post"
-        assert file =~ ~s(= render "form.html", Map.put(assigns, :action, post_path(@conn, :update, @post)))
-        assert file =~ ~s(= link "Back", to: post_path(@conn, :index))
+        assert file =~ ~s|= render "form.html", Map.put(assigns, :action, post_path(@conn, :update, @post))|
+        assert file =~ ~s|= link "Back", to: post_path(@conn, :index)|
       end
 
       assert_file "lib/phoenix_slime_web/templates/post/form.html.slime", fn file ->
@@ -107,20 +107,20 @@ defmodule Mix.Tasks.Phx.Gen.Html.SlimeTest do
         assert file =~ "th Title"
         assert file =~ "= for post <- @posts do"
         assert file =~ "td= post.title"
-        assert file =~ ~s(= link "Show", to: post_path(@conn, :show, post))
-        assert file =~ ~s(= link "New Post", to: post_path(@conn, :new))
+        assert file =~ ~s|= link "Show", to: post_path(@conn, :show, post)|
+        assert file =~ ~s|= link "New Post", to: post_path(@conn, :new)|
       end
 
       assert_file "lib/phoenix_slime_web/templates/post/new.html.slime", fn file ->
         assert file =~ "h2 New Post"
-        assert file =~ ~s(= render "form.html", Map.put(assigns, :action, post_path(@conn, :create)))
+        assert file =~ ~s|= render "form.html", Map.put(assigns, :action, post_path(@conn, :create))|
       end
 
       assert_file "lib/phoenix_slime_web/templates/post/show.html.slime", fn file ->
         assert file =~ "h2 Show Post"
         assert file =~ "strong Title:"
         assert file =~ "= @post.title"
-        assert file =~ ~s(= link "Edit", to: post_path(@conn, :edit, @post))
+        assert file =~ ~s|= link "Edit", to: post_path(@conn, :edit, @post)|
       end
 
       Gen.Html.Slime.run(~w(Blog Comment comments title:string))
