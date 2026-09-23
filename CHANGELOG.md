@@ -115,6 +115,12 @@ by setting `phx-ignore-missing-id` or disable it globally with the `:missing_for
 
 See the module documentation or `Phoenix.LiveViewTest` for more information.
 
+## Unreleased
+
+### Enhancements
+
+* Allow cancelling client-side navigation ([#4332](https://github.com/phoenixframework/phoenix_live_view/pull/4332)). Listen for the `phx:before-navigate` event and call `event.preventDefault()` to cancel the navigation synchronously. This is useful for a "do you really want to leave" prompt when a user has unsaved changes, combined with a `beforeunload` listener.
+
 ## v1.2.7 (2026-07-13)
 
 ### Security fixes
