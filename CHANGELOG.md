@@ -3,6 +3,14 @@
 
 #### Fixed
 
+- **`dropdown` panel flips upward when the viewport leaves no room
+  below.** A dropdown near the bottom of the screen used to open its
+  menu off-screen. The new `PetalDropdown` hook measures as the panel
+  opens (and on resize) and sets `data-flip` when the panel does not fit
+  below the trigger and there is more room above, the same rule
+  `combo_box` uses. Register the hook if you pick hooks individually
+  rather than spreading the default export.
+
 - **`command_dialog` now locks background scroll while the palette is
   open.** A native modal `<dialog>` hands you the top layer, the focus
   trap and Escape, but it does not stop the page underneath from

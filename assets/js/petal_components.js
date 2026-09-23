@@ -5444,6 +5444,49 @@ export const PetalDataTable = {
   },
 };
 
+// Dropdown panel: opens below its trigger, flips above when the viewport
+// has no room below AND more room above. JS.toggle shows the panel by
+// setting inline `display`, so a style observer measures in the same task
+// the panel becomes visible - before it paints. offsetHeight ignores the
+// scale-95 enter transform, so the measurement is the settled size.
+export const PetalDropdown = {
+  mounted() {
+    this.observer = new MutationObserver(() => this.position());
+    this.observer.observe(this.el, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+    this.onResize = () => this.position();
+    window.addEventListener("resize", this.onResize);
+  },
+
+  // a patch drops the data-flip the server never rendered
+  updated() {
+    this.position();
+  },
+
+  destroyed() {
+    this.observer.disconnect();
+    window.removeEventListener("resize", this.onResize);
+  },
+
+  position() {
+    const shown = this.el.style.display !== "none";
+    const trigger = this.el.previousElementSibling;
+    if (!shown || !trigger) {
+      this.el.removeAttribute("data-flip");
+      return;
+    }
+    const t = trigger.getBoundingClientRect();
+    const panelH = this.el.offsetHeight;
+    if (!panelH || (!t.top && !t.bottom)) return; // jsdom / unrendered
+    const gap = 8;
+    const below = window.innerHeight - t.bottom - gap;
+    const above = t.top - gap;
+    this.el.toggleAttribute("data-flip", panelH > below && above > below);
+  },
+};
+
 export default {
   PetalChart,
   PetalColorScheme,
@@ -5474,4 +5517,5 @@ export default {
   PetalCommandDialog,
   PetalComboBox,
   PetalDataTable,
+  PetalDropdown,
 };
