@@ -37,7 +37,6 @@ defmodule ObanNotifiersPhoenix.MixProject do
     [
       main: "Oban.Notifiers.Phoenix",
       source_ref: "v#{@version}",
-      source_url: @source_url,
       formatters: ["html"],
       extras: ["CHANGELOG.md"]
     ]
