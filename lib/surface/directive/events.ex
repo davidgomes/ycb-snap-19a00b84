@@ -2,19 +2,27 @@ defmodule Surface.Directive.Events do
   use Surface.Directive
 
   @events [
+    # Click events
     "click",
     "click-away",
+    # TODO: Remove when the minimum supported LiveView version is >= v0.20.15
     "capture-click",
-    "blur",
-    "focus",
+    # Form events
     "change",
     "submit",
+    # Focus events
+    "blur",
+    "focus",
+    "window-blur",
+    "window-focus",
+    # Key events
     "keydown",
     "keyup",
-    "window-focus",
-    "window-blur",
     "window-keydown",
-    "window-keyup"
+    "window-keyup",
+    # Scroll events
+    "viewport-top",
+    "viewport-bottom"
   ]
 
   @phx_events Enum.map(@events, &"phx-#{&1}")

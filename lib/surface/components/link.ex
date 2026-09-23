@@ -35,9 +35,26 @@ defmodule Surface.Components.Link do
   @moduledoc deprecated: "Use liveview's built-in `<.link>` instead"
 
   use Surface.Component
-  use Surface.Components.Events
 
-  import Surface.Components.Utils
+  @valid_uri_schemes [
+    "http:",
+    "https:",
+    "ftp:",
+    "ftps:",
+    "mailto:",
+    "news:",
+    "irc:",
+    "gopher:",
+    "nntp:",
+    "feed:",
+    "telnet:",
+    "mms:",
+    "rtsp:",
+    "svn:",
+    "tel:",
+    "fax:",
+    "xmpp:"
+  ]
 
   @doc "The page to link to"
   prop to, :any, required: true
@@ -77,9 +94,8 @@ defmodule Surface.Components.Link do
     end
 
     to = valid_destination!(assigns.to, "<Link />")
-    events = events_to_opts(assigns)
     opts = link_method(assigns.method, to, assigns.opts)
-    assigns = assign(assigns, to: to, opts: events ++ opts)
+    assigns = assign(assigns, to: to, opts: opts)
 
     ~F"""
     <a id={@id} class={@class} href={@to} :attrs={@opts}><#slot>{@label}</#slot></a>
@@ -100,5 +116,58 @@ defmodule Surface.Components.Link do
 
       Keyword.merge(opts, data: data, rel: "nofollow")
     end
+  end
+
+  defp valid_destination!(%URI{} = uri, context) do
+    valid_destination!(URI.to_string(uri), context)
+  end
+
+  defp valid_destination!({:safe, to}, context) do
+    {:safe, valid_string_destination!(IO.iodata_to_binary(to), context)}
+  end
+
+  defp valid_destination!({other, to}, _context) when is_atom(other) do
+    [Atom.to_string(other), ?:, to]
+  end
+
+  defp valid_destination!(to, context) do
+    valid_string_destination!(IO.iodata_to_binary(to), context)
+  end
+
+  for scheme <- @valid_uri_schemes do
+    defp valid_string_destination!(unquote(scheme) <> _ = string, _context), do: string
+  end
+
+  defp valid_string_destination!(to, context) do
+    if not match?("/" <> _, to) and String.contains?(to, ":") do
+      raise ArgumentError, """
+      unsupported scheme given to #{context}. In case you want to link to an
+      unknown or unsafe scheme, such as javascript, use a tuple: {:javascript, rest}
+      """
+    else
+      to
+    end
+  end
+
+  defp csrf_data(to, opts) do
+    case Keyword.pop(opts, :csrf_token, true) do
+      {csrf, opts} when is_binary(csrf) ->
+        {[csrf: csrf], opts}
+
+      {true, opts} ->
+        {[csrf: csrf_token(to)], opts}
+
+      {false, opts} ->
+        {[], opts}
+    end
+  end
+
+  defp csrf_token(to) do
+    {mod, fun, args} = Application.fetch_env!(:surface, :csrf_token_reader)
+    apply(mod, fun, [to | args])
+  end
+
+  defp skip_csrf(opts) do
+    Keyword.delete(opts, :csrf_token)
   end
 end

@@ -25,7 +25,7 @@ defmodule Surface.Components.LinkTest do
     def render(assigns) do
       ~F"""
       <div>
-        <Link label="user" to="/users/1" capture_click="my_click" />
+        <Link label="user" to="/users/1" />
       </div>
       """
     end
@@ -102,11 +102,11 @@ defmodule Surface.Components.LinkTest do
            """
   end
 
-  test "events with parent live view as target" do
+  test "events passed as opts" do
     html =
       render_surface do
         ~F"""
-        <Link label="user" to="/users/1" click="my_click" />
+        <Link label="user" to="/users/1" opts={"phx-click": "my_click"} />
         """
       end
 

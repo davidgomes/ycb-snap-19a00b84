@@ -889,6 +889,20 @@ defmodule Surface.DirectivesTest do
       assert js_attribute(doc, "div > button", "phx-click") == [["push", %{"event" => "ok"}]]
     end
 
+    test "viewport events" do
+      html =
+        render_surface do
+          ~F"""
+          <ul :on-viewport-top="prev_page" :on-viewport-bottom="next_page"></ul>
+          """
+        end
+
+      doc = parse_document!(html)
+
+      assert attribute(doc, "phx-viewport-top") == ["prev_page"]
+      assert attribute(doc, "phx-viewport-bottom") == ["next_page"]
+    end
+
     test "do not translate invalid events" do
       html =
         render_surface do
