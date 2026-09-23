@@ -62,6 +62,83 @@ defmodule Oban.Web.Pages.Jobs.DetailTest do
     end)
   end
 
+  describe "signals" do
+    test "displaying a received signal payload", %{live: live} do
+      signal = encode_signal(%{decision: "approved"})
+
+      job = insert_job!([ref: 1], state: "available", worker: WorkerA, meta: %{signal: signal})
+
+      open_state(live, "available")
+      open_details(live, job)
+
+      assert has_element?(live, "#job-signal", "Received Signal")
+      assert has_element?(live, "#job-signal pre", ~s(%{decision: "approved"}))
+      refute has_element?(live, "#signal-deadline")
+      refute render(live) =~ signal
+    end
+
+    test "displaying the deadline while awaiting a signal", %{live: live} do
+      deadline =
+        DateTime.utc_now()
+        |> DateTime.add(3 * 60 * 60 + 60, :second)
+        |> DateTime.truncate(:second)
+
+      job =
+        insert_job!([ref: 1],
+          state: "scheduled",
+          worker: WorkerA,
+          meta: %{signal_deadline: DateTime.to_iso8601(deadline)}
+        )
+
+      open_state(live, "scheduled")
+      open_details(live, job)
+
+      assert has_element?(live, "#job-signal", "Awaiting Signal")
+      assert has_element?(live, "#signal-deadline", "Deadline in 3h")
+      assert has_element?(live, "#signal-deadline", to_string(deadline))
+    end
+
+    test "displaying an indefinite wait for a signal", %{live: live} do
+      job =
+        insert_job!([ref: 1],
+          state: "scheduled",
+          worker: WorkerA,
+          meta: %{signal_deadline: "infinity"}
+        )
+
+      open_state(live, "scheduled")
+      open_details(live, job)
+
+      assert has_element?(live, "#job-signal", "Awaiting Signal")
+      assert has_element?(live, "#signal-deadline", "Waiting indefinitely")
+    end
+
+    test "omitting the signal section for finished jobs without a signal", %{live: live} do
+      job =
+        insert_job!([ref: 1],
+          state: "cancelled",
+          worker: WorkerA,
+          meta: %{signal_deadline: "infinity"}
+        )
+
+      open_state(live, "cancelled")
+      open_details(live, job)
+
+      assert has_element?(live, "#job-details")
+      refute has_element?(live, "#job-signal")
+    end
+
+    test "omitting the signal section for jobs without signals", %{live: live} do
+      job = insert_job!([ref: 1], state: "available", worker: WorkerA)
+
+      open_state(live, "available")
+      open_details(live, job)
+
+      assert has_element?(live, "#job-details")
+      refute has_element?(live, "#job-signal")
+    end
+  end
+
   describe "editing jobs" do
     test "edit form is visible for editable jobs", %{live: live} do
       job = insert_job!([ref: 1], state: "available", worker: WorkerA)
@@ -163,5 +240,11 @@ defmodule Oban.Web.Pages.Jobs.DetailTest do
     live
     |> element("#detail-retry")
     |> render_click()
+  end
+
+  defp encode_signal(payload) do
+    payload
+    |> :erlang.term_to_binary()
+    |> Base.encode64(padding: false)
   end
 end

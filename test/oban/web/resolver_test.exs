@@ -34,6 +34,17 @@ defmodule Oban.Web.ResolverTest do
     end
   end
 
+  describe "format_signal/2" do
+    test "decoding and inspecting signal payloads" do
+      formatted =
+        %{decision: "approved"}
+        |> encode_recorded()
+        |> Resolver.format_signal(%Oban.Job{})
+
+      assert formatted == ~s(%{decision: "approved"})
+    end
+  end
+
   describe "decode_recorded/2" do
     test "guarding against executable terms in safe mode" do
       assert_raise ArgumentError, fn ->
