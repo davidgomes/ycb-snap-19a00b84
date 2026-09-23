@@ -87,6 +87,11 @@ config :my_app, Oban,
   queues: [default: 10]
 ```
 
+By default the plugin discovers every module using `ObanChore.Worker` in the given `otp_app`. To list the chores explicitly instead, pass the `:chores` option:
+
+```elixir
+{ObanChore.Plugin, chores: [MyApp.Chores.UserBackfill], pubsub_server: MyApp.PubSub}
+```
 
 ### 4. Define a Chore
 
@@ -236,6 +241,14 @@ end
     * **Unique Execution Toggle:** Manually enforce single-job execution via the dashboard UI. (you can override this from the job definition)
     * **Validation:** Full Ecto-backed validation for all chore arguments.
 * 🚦 **Concurrency Control:** Piggyback on Oban's powerful concurrency and unique job features to control your operational load.
+
+## 🧪 Running the Tests
+
+The test suite runs against a real PostgreSQL database (`oban_chore_test`), which is created and migrated automatically. Connection settings default to `postgres:postgres@localhost` and can be overridden with `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_HOST`.
+
+```bash
+mix test
+```
 
 ## 🏗️ Architectural Philosophy
 
