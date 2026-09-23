@@ -715,6 +715,42 @@ defmodule Guardian.PlugTest do
     end
   end
 
+  describe "resolve_secret" do
+    def secret_from_assigns(conn), do: conn.assigns[:tenant_secret]
+    def static_secret(value), do: value
+
+    test "calls a one argument function with the connection", ctx do
+      conn = assign(ctx.conn, :tenant_secret, "tenant-secret")
+      opts = Guardian.Plug.resolve_secret(conn, secret: &secret_from_assigns/1, key: :bob)
+
+      assert opts[:secret] == "tenant-secret"
+      assert opts[:key] == :bob
+    end
+
+    test "keeps an explicit nil from the function", ctx do
+      opts = Guardian.Plug.resolve_secret(ctx.conn, secret: &secret_from_assigns/1)
+
+      assert Keyword.fetch(opts, :secret) == {:ok, nil}
+    end
+
+    test "does not call an {m, f, a} tuple with the connection", ctx do
+      mfa = {__MODULE__, :static_secret, ["static"]}
+
+      assert Guardian.Plug.resolve_secret(ctx.conn, secret: mfa) == [secret: mfa]
+    end
+
+    test "leaves other secrets untouched", ctx do
+      assert Guardian.Plug.resolve_secret(ctx.conn, secret: "plain") == [secret: "plain"]
+      assert Guardian.Plug.resolve_secret(ctx.conn, key: :bob) == [key: :bob]
+    end
+
+    test "ignores functions of other arities", ctx do
+      fun = fn -> "no-conn" end
+
+      assert Guardian.Plug.resolve_secret(ctx.conn, secret: fun) == [secret: fun]
+    end
+  end
+
   describe "#keys" do
     alias Guardian.Plug.Keys
 

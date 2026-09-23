@@ -336,4 +336,74 @@ defmodule Guardian.Plug.VerifySessionTest do
       assert %{"sub" => "User:jane", "typ" => "access"} = Guardian.Plug.current_claims(conn)
     end
   end
+
+  describe "with a :secret function" do
+    defmodule TenantImpl do
+      @moduledoc false
+
+      use Guardian,
+        otp_app: :guardian,
+        token_module: Guardian.Token.Jwt,
+        issuer: "MyApp",
+        secret_key: "application-wide-secret"
+
+      def subject_for_token(%{id: id}, _claims), do: {:ok, "User:#{id}"}
+      def resource_from_claims(%{"sub" => "User:" <> sub}), do: {:ok, %{id: sub}}
+    end
+
+    @tenant_secret "tenant-a-secret"
+
+    def secret_from_assigns(conn), do: conn.assigns[:tenant_secret]
+
+    setup do
+      impl = __MODULE__.TenantImpl
+      {:ok, tenant_token, tenant_claims} = impl.encode_and_sign(@resource, %{}, secret: @tenant_secret)
+      {:ok, app_token, _} = impl.encode_and_sign(@resource)
+
+      {:ok, %{impl: impl, tenant_token: tenant_token, tenant_claims: tenant_claims, app_token: app_token}}
+    end
+
+    test "verifies with the secret selected from the connection", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> init_test_session(%{guardian_default_token: ctx.tenant_token})
+        |> Plug.Conn.assign(:tenant_secret, @tenant_secret)
+        |> Pipeline.put_module(ctx.impl)
+        |> Pipeline.put_error_handler(ctx.handler)
+        |> VerifySession.call(secret: &secret_from_assigns/1)
+
+      refute conn.halted
+      assert Guardian.Plug.current_token(conn) == ctx.tenant_token
+      assert Guardian.Plug.current_claims(conn) == ctx.tenant_claims
+    end
+
+    test "rejects a token signed with a different secret", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> init_test_session(%{guardian_default_token: ctx.tenant_token})
+        |> Plug.Conn.assign(:tenant_secret, "tenant-b-secret")
+        |> Pipeline.put_module(ctx.impl)
+        |> Pipeline.put_error_handler(ctx.handler)
+        |> VerifySession.call(secret: &secret_from_assigns/1)
+
+      assert conn.halted
+      assert {401, _, "{:invalid_token, :invalid_token}"} = sent_resp(conn)
+    end
+
+    test "fails closed when the function returns nil", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> init_test_session(%{guardian_default_token: ctx.app_token})
+        |> Pipeline.put_module(ctx.impl)
+        |> Pipeline.put_error_handler(ctx.handler)
+        |> VerifySession.call(secret: &secret_from_assigns/1)
+
+      assert conn.halted
+      assert {401, _, "{:invalid_token, :secret_not_found}"} = sent_resp(conn)
+      refute Guardian.Plug.current_token(conn)
+    end
+  end
 end

@@ -174,4 +174,80 @@ defmodule Guardian.Plug.VerifyCookieTest do
       refute new_conn.status == 401
     end
   end
+
+  describe "with a :secret function" do
+    defmodule TenantImpl do
+      @moduledoc false
+
+      use Guardian,
+        otp_app: :guardian,
+        token_module: Guardian.Token.Jwt,
+        issuer: "MyApp",
+        secret_key: "application-wide-secret"
+
+      def subject_for_token(%{id: id}, _claims), do: {:ok, "User:#{id}"}
+      def resource_from_claims(%{"sub" => "User:" <> sub}), do: {:ok, %{id: sub}}
+    end
+
+    @tenant_secret "tenant-a-secret"
+
+    def secret_from_assigns(conn), do: conn.assigns[:tenant_secret]
+
+    setup %{handler: handler} do
+      impl = __MODULE__.TenantImpl
+
+      {:ok, refresh_token, _} = impl.encode_and_sign(@resource, %{}, token_type: "refresh", secret: @tenant_secret)
+
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_cookie("guardian_default_token", refresh_token)
+        |> fetch_cookies()
+        |> Pipeline.put_module(impl)
+        |> Pipeline.put_error_handler(handler)
+
+      {:ok, %{impl: impl, conn: conn}}
+    end
+
+    test "verifies and signs the exchanged token with the selected secret", ctx do
+      conn =
+        ctx.conn
+        |> assign(:tenant_secret, @tenant_secret)
+        |> VerifyCookie.call(secret: &secret_from_assigns/1)
+
+      refute conn.halted
+      assert new_t = Guardian.Plug.current_token(conn)
+      assert %{"typ" => "access"} = Guardian.Plug.current_claims(conn)
+
+      assert {:ok, _} = ctx.impl.decode_and_verify(new_t, %{}, secret: @tenant_secret)
+      assert {:error, :invalid_token} = ctx.impl.decode_and_verify(new_t)
+    end
+
+    test "rejects a cookie signed with a different secret", ctx do
+      conn =
+        ctx.conn
+        |> assign(:tenant_secret, "tenant-b-secret")
+        |> VerifyCookie.call(secret: &secret_from_assigns/1)
+
+      assert conn.halted
+      assert {401, _, "{:invalid_token, :invalid_token}"} = sent_resp(conn)
+    end
+
+    test "fails closed when the function returns nil", ctx do
+      {:ok, app_refresh_token, _} = ctx.impl.encode_and_sign(@resource, %{}, token_type: "refresh")
+
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_cookie("guardian_default_token", app_refresh_token)
+        |> fetch_cookies()
+        |> Pipeline.put_module(ctx.impl)
+        |> Pipeline.put_error_handler(ctx.handler)
+        |> VerifyCookie.call(secret: &secret_from_assigns/1)
+
+      assert conn.halted
+      assert {401, _, "{:invalid_token, :secret_not_found}"} = sent_resp(conn)
+      refute Guardian.Plug.current_token(conn)
+    end
+  end
 end
