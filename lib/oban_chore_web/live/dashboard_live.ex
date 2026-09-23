@@ -71,6 +71,17 @@ defmodule ObanChoreWeb.DashboardLive do
               >
                 New Execution
               </button>
+              <button
+                phx-click="select_tab"
+                phx-value-tab="history"
+                data-role="history-tab"
+                class={[
+                  "oc-tab-item",
+                  if(@selected_tab == :history, do: "oc-tab-item--active", else: "")
+                ]}
+              >
+                History
+              </button>
               <%= for job_id <- Map.get(@chore_jobs, @selected_chore_module, []), job = @jobs[job_id] do %>
                 <button
                   phx-click="select_tab"
@@ -113,6 +124,13 @@ defmodule ObanChoreWeb.DashboardLive do
                   selected={@selected_chore_module == chore_item.module and @selected_tab == :new}
                 />
               <% end %>
+
+              <.live_component
+                module={ObanChoreWeb.HistoryComponent}
+                id={history_component_id(chore.module)}
+                chore={chore}
+                selected={@selected_tab == :history}
+              />
 
               <%= for {module, job_ids} <- @chore_jobs, job_id <- job_ids, job = @jobs[job_id] do %>
                   <%= if @selected_chore_module == module do %>
@@ -227,6 +245,11 @@ defmodule ObanChoreWeb.DashboardLive do
   end
 
   @impl true
+  def handle_event("select_tab", %{"tab" => "history"}, socket) do
+    {:noreply, assign(socket, selected_tab: :history)}
+  end
+
+  @impl true
   def handle_event("select_tab", %{"tab" => "job_" <> id_str}, socket) do
     id = String.to_integer(id_str)
     {:noreply, assign(socket, selected_tab: {:job, id})}
@@ -285,6 +308,8 @@ defmodule ObanChoreWeb.DashboardLive do
       # Forward to JobComponent
       send_update(ObanChoreWeb.JobComponent, id: job_id, new_state: state)
 
+      maybe_refresh_history(socket, job_id, state)
+
       {:noreply, assign(socket, jobs: new_jobs)}
     else
       {:noreply, socket}
@@ -301,6 +326,19 @@ defmodule ObanChoreWeb.DashboardLive do
   def handle_info(:tick, socket) do
     {:noreply, assign(socket, now: DateTime.utc_now())}
   end
+
+  defp maybe_refresh_history(socket, job_id, state)
+       when state in [:completed, :discarded, :cancelled, :retryable] do
+    %{selected_chore_module: module, selected_tab: tab, chore_jobs: chore_jobs} = socket.assigns
+
+    if tab == :history and job_id in Map.get(chore_jobs, module, []) do
+      send_update(ObanChoreWeb.HistoryComponent, id: history_component_id(module), refresh: true)
+    end
+  end
+
+  defp maybe_refresh_history(_socket, _job_id, _state), do: :ok
+
+  defp history_component_id(module), do: "history-#{module}"
 
   defp fetch_counts(chores) do
     Map.new(chores, fn chore -> {chore.module, ObanChore.count_running(chore.module, Oban)} end)
