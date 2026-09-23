@@ -39,6 +39,10 @@ defmodule PetalComponents.Dropdown do
   slot :inner_block, required: false
 
   @doc """
+  The panel opens below the trigger, and flips above it when the viewport
+  has no room below and more room above. The flip rides the `PetalDropdown`
+  hook; without it the panel always opens downward.
+
     <.dropdown label="Dropdown">
       <.dropdown_menu_item link_type="button">
         <.icon name="hero-home" class="w-5 h-5 text-gray-500" />
@@ -96,6 +100,7 @@ defmodule PetalComponents.Dropdown do
         ]}
         role="menu"
         id={@options_container_id}
+        phx-hook="PetalDropdown"
         aria-orientation="vertical"
         aria-labelledby="options-menu"
       >

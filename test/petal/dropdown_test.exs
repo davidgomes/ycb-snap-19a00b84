@@ -87,6 +87,20 @@ defmodule PetalComponents.DropdownTest do
       refute html =~ "x-show"
       assert_attribute(html, "phx-click")
     end
+
+    test "the panel carries the PetalDropdown hook that flips it upward", %{assigns: assigns} do
+      html =
+        rendered_to_string(~H"""
+        <.dropdown label="Dropdown" options_container_id="menu">
+          <.dropdown_menu_item label="Option" />
+        </.dropdown>
+        """)
+
+      # on the panel itself: JS.toggle's phx:show-start does not bubble
+      panel = html |> parse_html() |> LazyHTML.query("#menu")
+      assert LazyHTML.attribute(panel, "phx-hook") == ["PetalDropdown"]
+      assert LazyHTML.attribute(panel, "role") == ["menu"]
+    end
   end
 
   describe "dropdown/1 - placement options" do

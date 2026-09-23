@@ -1662,6 +1662,63 @@ export const PetalPopover = {
   },
 };
 
+// Dropdown panel side. LiveView.JS owns open and close; this hook only
+// decides where the panel opens: below the trigger by default, above it
+// when the viewport has no room below AND more room above.
+export const PetalDropdown = {
+  mounted() {
+    this.flipped = false;
+    // JS.toggle fires show-start on the panel while it is still
+    // display:none, before it reveals it - deciding here means the first
+    // painted frame is already on the chosen side
+    this.onShowStart = () => this.place();
+    this.el.addEventListener("phx:show-start", this.onShowStart);
+  },
+
+  // a patch drops the attribute this hook owns (the server never renders
+  // it), which would snap an open, flipped panel back below its trigger
+  updated() {
+    this.apply();
+  },
+
+  destroyed() {
+    this.el.removeEventListener("phx:show-start", this.onShowStart);
+  },
+
+  place() {
+    const anchor = this.el.parentElement;
+    if (!anchor) return;
+
+    const vv = window.visualViewport;
+    const view = vv
+      ? { top: vv.offsetTop, height: vv.height }
+      : { top: 0, height: window.innerHeight };
+
+    // Lay the hidden panel out for one synchronous read. Nothing paints
+    // before display is handed back, and offsetHeight ignores the
+    // scale-95 the open transition starts from.
+    const { display, visibility } = this.el.style;
+    this.el.style.visibility = "hidden";
+    this.el.style.display = "block";
+    const height = this.el.offsetHeight;
+    this.el.style.display = display;
+    this.el.style.visibility = visibility;
+
+    // the panel's mt-2, or mb-2 once flipped
+    const gap = 8;
+    const a = anchor.getBoundingClientRect();
+    const below = view.top + view.height - a.bottom;
+    const above = a.top - view.top;
+    this.flipped = height + gap > below && above > below;
+    this.apply();
+  },
+
+  apply() {
+    if (this.flipped) this.el.setAttribute("data-pc-flip", "top");
+    else this.el.removeAttribute("data-pc-flip");
+  },
+};
+
 // Command palette: client-side filtering + WAI-ARIA combobox keyboard model.
 // Items are hidden, never reordered - the server owns DOM order, so the
 // palette stays safe under LiveView patches. Scoring: value prefix beats
@@ -5467,6 +5524,7 @@ export default {
   PetalTypingEffect,
   PetalInputOTP,
   PetalPopover,
+  PetalDropdown,
   PetalCommand,
   PetalCommandTrigger,
   PetalAurora,
