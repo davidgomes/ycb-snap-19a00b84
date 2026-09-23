@@ -1,5 +1,6 @@
 defmodule SpiderMan.Stats do
   @moduledoc false
+  @components [:downloader, :spider, :item_processor]
   @events [
     [:spider_man, :downloader, :start],
     [:spider_man, :downloader, :stop],
@@ -25,35 +26,41 @@ defmodule SpiderMan.Stats do
   end
 
   if Mix.env() != :test do
-    def print_spider_stats(tid), do: IO.write("\e[2K\r#{format_stats(tid)} ")
+    def print_spider_stats(tid, true),
+      do: IO.write("\e[2K\r#{tid |> get_stats() |> format_stats()} ")
   else
-    def print_spider_stats(tid), do: format_stats(tid)
+    def print_spider_stats(tid, true), do: tid |> get_stats() |> format_stats()
   end
 
-  defp format_stats(tid) do
-    [downloader, item_processor, spider] = :ets.tab2list(tid) |> Enum.sort()
+  def print_spider_stats(tid, fun) when is_function(fun, 1), do: tid |> get_stats() |> fun.()
 
-    [downloader, spider, item_processor]
-    |> Enum.map(&format_component_stats/1)
-    |> Enum.join(" ")
+  def get_stats(tid) do
+    Enum.map(@components, fn component ->
+      [{^component, total, success, fail, duration}] = :ets.lookup(tid, component)
+      ms = System.convert_time_unit(duration, :native, :millisecond)
+      tps = if ms == 0, do: 0, else: Float.floor(success / (ms / 1000), 2)
+
+      %{
+        component: component,
+        total: total,
+        success: success,
+        fail: fail,
+        duration: ms,
+        tps: tps
+      }
+    end)
   end
 
-  defp format_component_stats({component, total, success, fail, duration}) do
-    tps =
-      case System.convert_time_unit(duration, :native, :millisecond) do
-        0 ->
-          0
+  def format_stats(stats), do: Enum.map_join(stats, " ", &format_component_stats/1)
 
-        ms ->
-          tps = Float.floor(success / (ms / 1000), 2)
-
-          if tps > 999 do
-            "999+"
-          else
-            tps
-          end
-      end
-
+  defp format_component_stats(%{
+         component: component,
+         total: total,
+         success: success,
+         fail: fail,
+         tps: tps
+       }) do
+    tps = if tps > 999, do: "999+", else: tps
     component = Atom.to_string(component) |> Macro.camelize()
     "#{component}:[#{success}/#{total} #{tps}/s F:#{fail}]"
   end
@@ -101,7 +108,7 @@ defmodule SpiderMan.Stats.Task do
 
   def handle_info(:refresh, %{status: :running, refresh_interval: interval, tid: tid} = state) do
     Process.send_after(self(), :refresh, interval)
-    SpiderMan.Stats.print_spider_stats(tid)
+    SpiderMan.Stats.print_spider_stats(tid, state.print_stats)
     {:noreply, state}
   end
 
