@@ -57,6 +57,46 @@ defmodule ObanChore.WorkerTest do
     assert info.description == nil
   end
 
+  defmodule UnnamedWorker do
+    use ObanChore.Worker, fields: [note: [type: :string, default: "hi"]]
+
+    @impl Oban.Worker
+    def perform(_), do: :ok
+  end
+
+  defmodule UniqueWorker do
+    use ObanChore.Worker, name: "Unique Chore", unique: [period: 60], fields: []
+
+    @impl Oban.Worker
+    def perform(_), do: :ok
+  end
+
+  test "defaults the chore name to the module name" do
+    assert UnnamedWorker.__chore_info__().name == "ObanChore.WorkerTest.UnnamedWorker"
+  end
+
+  test "exposes module and fields in __chore_info__" do
+    info = UnnamedWorker.__chore_info__()
+    assert info.module == UnnamedWorker
+    assert info.fields == [note: [type: :string, default: "hi"]]
+  end
+
+  test "flags workers that define Oban unique options" do
+    assert UniqueWorker.__chore_info__().unique == true
+    assert MyTestChore.__chore_info__().unique == false
+  end
+
+  test "passes Oban options through to the underlying worker" do
+    assert UniqueWorker.new(%{}).changes.unique.period == 60
+    assert MyTestChore.__opts__()[:queue] == :default
+  end
+
+  test "does not add a required error when the field fails to cast" do
+    changeset = MyTestChore.changeset(%{"user_id" => "not-a-number"})
+    refute changeset.valid?
+    assert errors_on(changeset).user_id == ["is invalid"]
+  end
+
   test "correctly maps UI types to Ecto types and casts them" do
     params = %{
       "my_string" => "hello",
