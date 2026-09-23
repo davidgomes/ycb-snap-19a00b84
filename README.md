@@ -56,10 +56,12 @@ Implement the `ObanEvents.Handler` behaviour:
 defmodule MyApp.EmailHandler do
   use ObanEvents.Handler
 
+  alias ObanEvents.Event
+
   require Logger
 
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, %Event{data: data}) do
     %{"user_id" => user_id, "email" => email} = data
 
     Logger.info("Sending welcome email to #{email}")
@@ -69,7 +71,7 @@ defmodule MyApp.EmailHandler do
   end
 
   @impl true
-  def handle_event(_event, _data), do: :ok
+  def handle_event(_event_name, _event), do: :ok
 end
 ```
 
@@ -93,6 +95,12 @@ defmodule MyApp.Accounts do
     end)
   end
 end
+```
+
+Optionally attach metadata, such as who triggered the event:
+
+```elixir
+Events.emit(:user_created, %{user_id: user.id}, metadata: %{actor_id: current_user.id})
 ```
 
 ## How It Works
@@ -133,16 +141,25 @@ end
 
 Your event bus module provides these functions:
 
-### `emit/2`
+### `emit/3`
 
 Emit an event to all registered handlers.
 
 ```elixir
-@spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+@spec emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
 
 # Raises ArgumentError if event is not registered
 MyApp.Events.emit(:user_created, %{user_id: 123, email: "user@example.com"})
+
+# With additional metadata
+MyApp.Events.emit(:user_created, %{user_id: 123},
+  metadata: %{actor_id: 456, request_id: "req-abc"}
+)
 ```
+
+Options:
+
+- `:metadata` - Map of additional context for the event, e.g. the acting user or a request/correlation ID (default: `%{}`). Must be JSON-serializable.
 
 ### `get_handlers!/1`
 
@@ -179,31 +196,57 @@ MyApp.Events.registered?(:user_created)
 
 ## Handler Implementation
 
-Handlers must implement the `handle_event/2` callback:
+Handlers must implement the `handle_event/2` callback, which receives the event name and an `ObanEvents.Event` struct:
 
 ```elixir
 defmodule MyApp.AnalyticsHandler do
   use ObanEvents.Handler
 
+  alias ObanEvents.Event
+
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, %Event{data: data}) do
     %{"user_id" => user_id} = data
     MyApp.Analytics.track("User Created", user_id: user_id)
     :ok
   end
 
   @impl true
-  def handle_event(:user_updated, data) do
+  def handle_event(:user_updated, %Event{data: data, metadata: metadata}) do
     %{"user_id" => user_id, "changes" => changes} = data
-    MyApp.Analytics.track("User Updated", user_id: user_id, changes: changes)
+    MyApp.Analytics.track("User Updated", user_id: user_id, changes: changes, actor_id: metadata["actor_id"])
     :ok
   end
 
   # Ignore other events
   @impl true
-  def handle_event(_event, _data), do: :ok
+  def handle_event(_event_name, _event), do: :ok
 end
 ```
+
+### The Event Struct
+
+Every emission produces one `%ObanEvents.Event{}`, delivered to each handler through its own Oban job:
+
+| Field         | Description                                                                             |
+| ------------- | --------------------------------------------------------------------------------------- |
+| `:id`         | UUID generated at emit time, shared by all handlers of the same emission                |
+| `:name`       | Event name atom, e.g. `:user_created`                                                   |
+| `:data`       | Event data (string keys)                                                                |
+| `:metadata`   | Metadata passed via `emit/3`'s `:metadata` option (string keys, defaults to `%{}`)      |
+| `:emitted_at` | UTC `DateTime` of the emission                                                          |
+| `:job_id`     | ID of the Oban job delivering the event to this handler                                 |
+| `:attempt`    | Delivery attempt for this handler, starting at `1`                                      |
+
+The shared `id` makes a natural idempotency or correlation key:
+
+```elixir
+def handle_event(:order_placed, %Event{id: event_id, data: %{"order_id" => order_id}}) do
+  MyApp.Billing.charge(order_id, idempotency_key: event_id)
+end
+```
+
+Jobs enqueued before these fields existed are still delivered: `id` is `nil`, `metadata` is `%{}`, and `emitted_at` falls back to the job's `inserted_at`.
 
 ### Return Values
 
@@ -237,7 +280,7 @@ end)
 Handlers may be retried. Design them to be safe to run multiple times:
 
 ```elixir
-def handle_event(:user_created, %{"user_id" => user_id}) do
+def handle_event(:user_created, %Event{data: %{"user_id" => user_id}}) do
   # Use upsert instead of insert to handle retries
   %UserProfile{user_id: user_id}
   |> Repo.insert(
@@ -288,15 +331,15 @@ Events.emit(:user_created, %{user: user})
 Only handle events you care about:
 
 ```elixir
-def handle_event(:user_created, data), do: # handle
-def handle_event(:user_updated, data), do: # handle
-def handle_event(_other, _data), do: :ok  # ignore rest
+def handle_event(:user_created, event), do: # handle
+def handle_event(:user_updated, event), do: # handle
+def handle_event(_other, _event), do: :ok  # ignore rest
 ```
 
 ### 6. Return Errors for Retriable Failures
 
 ```elixir
-def handle_event(:send_notification, data) do
+def handle_event(:send_notification, %Event{data: data}) do
   case NotificationService.send(data) do
     {:ok, _} -> :ok
     {:error, :rate_limited} -> {:error, :rate_limited}  # Will retry
@@ -323,7 +366,7 @@ defmodule MyApp.Notifications.EmailHandler do
   use ObanEvents.Handler
 
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, event) do
     # Your handler logic
     :ok
   end
@@ -332,7 +375,7 @@ end
 # 2. Keep the old module as an alias
 defmodule MyApp.EmailHandler do
   @moduledoc false
-  defdelegate handle_event(event, data), to: MyApp.Notifications.EmailHandler
+  defdelegate handle_event(event_name, event), to: MyApp.Notifications.EmailHandler
 end
 
 # 3. Update your event registry to use the new name
@@ -359,35 +402,64 @@ After all old jobs have processed (check Oban Web UI), you can safely remove the
 
 ## Testing
 
-### Testing Event Emission
+`ObanEvents.Testing` provides helpers for testing handlers and event emission. Use it with the same repo options you would pass to `Oban.Testing` (the two can be used together):
 
 ```elixir
-use Oban.Testing, repo: MyApp.Repo
-
-test "emits user_created event" do
-  {:ok, user} = Accounts.create_user(%{email: "test@example.com"})
-
-  assert_enqueued(
-    worker: ObanEvents.DispatchWorker,
-    args: %{
-      "event" => "user_created",
-      "handler" => "Elixir.MyApp.EmailHandler",
-      "data" => %{"user_id" => user.id}
-    }
-  )
+defmodule MyApp.AccountsTest do
+  use MyApp.DataCase, async: true
+  use ObanEvents.Testing, repo: MyApp.Repo
 end
 ```
+
+This imports `build_event/3` and defines `perform_event/4`, `assert_event_emitted/2`, `refute_event_emitted/2`, and `all_emitted_events/2` in your test module.
 
 ### Testing Handlers
 
+Build an event exactly as a handler would receive it (data and metadata are normalized to string keys) and call the handler directly:
+
 ```elixir
 test "EmailHandler sends welcome email" do
-  data = %{"user_id" => 123, "email" => "test@example.com"}
+  event = build_event(:user_created, %{user_id: 123, email: "test@example.com"})
 
-  assert :ok = MyApp.EmailHandler.handle_event(:user_created, data)
+  assert :ok = MyApp.EmailHandler.handle_event(:user_created, event)
   assert_email_sent(to: "test@example.com", subject: "Welcome!")
 end
 ```
+
+`build_event/3` accepts `:metadata`, `:event_id`, `:emitted_at`, `:job_id`, and `:attempt` options.
+
+Or run the handler through `ObanEvents.DispatchWorker` to exercise the full job serialization path:
+
+```elixir
+test "EmailHandler sends welcome email" do
+  assert :ok = perform_event(MyApp.EmailHandler, :user_created, %{user_id: 123, email: "test@example.com"})
+end
+
+test "EmailHandler gives up on the last attempt" do
+  assert :ok = perform_event(MyApp.EmailHandler, :user_created, %{user_id: 123}, attempt: 3)
+end
+```
+
+### Testing Event Emission
+
+Emission assertions look at enqueued jobs, so Oban must run in `:manual` testing mode. If your test config uses `:inline`, wrap the code under test in `Oban.Testing.with_testing_mode/2`:
+
+```elixir
+test "emits user_created event" do
+  Oban.Testing.with_testing_mode(:manual, fn ->
+    {:ok, user} = Accounts.create_user(%{email: "test@example.com"})
+
+    assert_event_emitted(:user_created, data: %{user_id: user.id})
+    assert_event_emitted(:user_created, handler: MyApp.EmailHandler, metadata: %{actor_id: 1})
+    refute_event_emitted(:user_deleted)
+
+    assert [%ObanEvents.Event{data: %{"email" => "test@example.com"}} | _] =
+             all_emitted_events(:user_created)
+  end)
+end
+```
+
+`:data` and `:metadata` match partially (only the given keys are checked). Other options such as `:queue` are passed through to `Oban.Testing`.
 
 ### Testing with Oban Inline Mode
 
