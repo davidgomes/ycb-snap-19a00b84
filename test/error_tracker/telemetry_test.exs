@@ -42,4 +42,17 @@ defmodule ErrorTracker.TelemetryTest do
     assert_receive {:telemetry_event, [:error_tracker, :error, :unresolved], _,
                     %{error: %Error{}}}
   end
+
+  test "occurrence events include the muted flag" do
+    %Occurrence{error: error = %Error{}} = report_error(fn -> raise "This is a test" end)
+
+    assert_receive {:telemetry_event, [:error_tracker, :occurrence, :new], _,
+                    %{occurrence: %Occurrence{}, muted: false}}
+
+    {:ok, _muted} = ErrorTracker.mute(error)
+    report_error(fn -> raise "This is a test" end)
+
+    assert_receive {:telemetry_event, [:error_tracker, :occurrence, :new], _,
+                    %{occurrence: %Occurrence{}, muted: true}}
+  end
 end
