@@ -13,15 +13,19 @@ defmodule ObanEvents.Handler do
         use ObanEvents.Handler
 
         @impl true
-        def handle_event(:user_created, data) do
+        def handle_event(:user_created, %Event{data: data}) do
           %{"user_id" => user_id} = data
           # Process the event
           :ok
         end
 
         # Ignore other events
-        def handle_event(_event, _data), do: :ok
+        def handle_event(_event, %Event{}), do: :ok
       end
+
+  `use ObanEvents.Handler` aliases `ObanEvents.Event`, so handlers can match
+  on `%Event{}` directly. Besides `data`, the struct carries metadata such as
+  `event_id` and `idempotency_key`; see `ObanEvents.Event`.
 
   ## Return Values
 
@@ -47,26 +51,28 @@ defmodule ObanEvents.Handler do
   @doc """
   Handle an event.
 
-  Receives the event name (atom) and event-specific data (map).
+  Receives the event name (atom) and an `ObanEvents.Event` struct.
   Should process the event and return an ok/error tuple.
 
   ## Parameters
 
   - `event_name`: Atom representing the event (e.g., `:user_created`)
-  - `data`: Map containing event-specific data
+  - `event`: `ObanEvents.Event` with the event data (string keys) and metadata
 
   ## Return Values
 
   - `:ok` | `{:ok, any()}` - Success
   - `{:error, any()}` - Failure (will trigger retry)
   """
-  @callback handle_event(event_name :: atom(), data :: map()) ::
+  @callback handle_event(event_name :: atom(), event :: ObanEvents.Event.t()) ::
               :ok | {:ok, any()} | {:error, any()}
 
   @doc false
   defmacro __using__(_opts) do
     quote do
       @behaviour ObanEvents.Handler
+
+      alias ObanEvents.Event
     end
   end
 end

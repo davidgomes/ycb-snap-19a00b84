@@ -45,14 +45,18 @@ defmodule ObanEvents do
         end
       end)
 
+  Attach optional metadata to link related events:
+
+      MyApp.Events.emit(:welcome_email_requested, data, causation_id: parent_event_id)
+
   ## Event Flow
 
-  1. `emit/2` is called with an event name and data
+  1. `emit/2` or `emit/3` is called with an event name, data, and optional metadata
   2. Registry looks up all handlers for that event
   3. Oban jobs are created (one per handler)
   4. Jobs are persisted to the database within the transaction
   5. `DispatchWorker` processes each job asynchronously
-  6. Each handler's `handle_event/2` callback is invoked
+  6. Each handler's `handle_event/2` callback is invoked with an `ObanEvents.Event`
 
   ## Configuration Options
 
@@ -64,7 +68,7 @@ defmodule ObanEvents do
   ## API
 
   Using this module provides:
-  - `emit/2` - Dispatch events to handlers via Oban jobs
+  - `emit/2` and `emit/3` - Dispatch events to handlers via Oban jobs
   - `get_handlers!/1` - Get handlers for an event
   - `all_events/0` - List all registered events
   - `registered?/1` - Check if an event exists
@@ -77,13 +81,13 @@ defmodule ObanEvents do
         use ObanEvents.Handler
 
         @impl true
-        def handle_event(:user_created, data) do
+        def handle_event(:user_created, %Event{data: data}) do
           %{"user_id" => user_id, "email" => email} = data
           # Send welcome email
           :ok
         end
 
-        def handle_event(_event, _data), do: :ok
+        def handle_event(_event, %Event{}), do: :ok
       end
   """
 
@@ -96,6 +100,13 @@ defmodule ObanEvents do
   Returns `{:ok, jobs}` on success. Raises `ArgumentError` if event is not registered.
   """
   @callback emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+
+  @doc """
+  Emit an event with metadata (`:causation_id`, `:correlation_id`).
+
+  See `emit/2`.
+  """
+  @callback emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
 
   @doc """
   Get all handler modules registered for a given event.
@@ -148,6 +159,12 @@ defmodule ObanEvents do
 
       - `event_name`: Atom representing the event (e.g., `:user_created`)
       - `data`: Map of event-specific data (atom or string keys both work, must be JSON-serializable)
+      - `opts`: Optional event metadata:
+        - `:causation_id` - The `event_id` of the event that caused this emit
+        - `:correlation_id` - Groups related events from the same business operation
+
+      Each emit generates an `event_id` shared by all of its handler jobs, and
+      each handler job gets its own `idempotency_key`. See `ObanEvents.Event`.
 
       ## Examples
 
@@ -172,15 +189,30 @@ defmodule ObanEvents do
             "new_email" => "new@example.com"
           })
 
-      Note: Handlers always receive data with string keys, regardless of how you emit.
+          # Emit a follow-up event from a handler, linking it to its cause
+          def handle_event(:user_created, %ObanEvents.Event{event_id: event_id, data: data}) do
+            #{inspect(__MODULE__)}.emit(:welcome_email_requested, data, causation_id: event_id)
+          end
+
+          # Group related events from one business operation
+          correlation_id = UUIDv7.generate()
+          #{inspect(__MODULE__)}.emit(:order_placed, %{order_id: 1}, correlation_id: correlation_id)
+          #{inspect(__MODULE__)}.emit(:payment_processed, %{order_id: 1}, correlation_id: correlation_id)
+
+      Note: Handlers receive an `ObanEvents.Event` struct whose `data` always has
+      string keys, regardless of how you emit.
 
       ## Errors
 
-      Raises `ArgumentError` if the event is not registered.
+      Raises `ArgumentError` if the event is not registered or if `opts`
+      contains an unknown option.
       """
-      @spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
-      def emit(event_name, data) when is_atom(event_name) and is_map(data) do
+      @spec emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
+      def emit(event_name, data, opts \\ [])
+          when is_atom(event_name) and is_map(data) and is_list(opts) do
+        opts = Keyword.validate!(opts, [:causation_id, :correlation_id])
         handlers = get_handlers!(event_name)
+        event_id = UUIDv7.generate()
 
         jobs =
           Enum.map(handlers, fn handler_module ->
@@ -188,7 +220,11 @@ defmodule ObanEvents do
               %{
                 event: Atom.to_string(event_name),
                 handler: Atom.to_string(handler_module),
-                data: data
+                data: data,
+                event_id: event_id,
+                idempotency_key: UUIDv7.generate(),
+                causation_id: opts[:causation_id],
+                correlation_id: opts[:correlation_id]
               },
               queue: @oban_queue,
               max_attempts: @oban_max_attempts,
