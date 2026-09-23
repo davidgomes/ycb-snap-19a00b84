@@ -359,10 +359,7 @@ defmodule Flop.Validation do
 
   defp unsupported_cursor_field?(struct, field) do
     case Flop.Schema.field_info(struct, field) do
-      %FieldInfo{extra: %{type: type}}
-      when type in [:compound, :alias, :custom] ->
-        true
-
+      %FieldInfo{extra: %{type: type}} -> type in [:compound, :alias, :custom]
       _ -> false
     end
   end
