@@ -171,6 +171,10 @@ end
 > Currently, to maintain simplicity, the logs are ephemeral. However, storing them in an ETS table to survive Phoenix LiveView tab restarts it could be considered for future iterations.
 
 
+### Execution History
+
+Each chore has a **History** tab listing its most recent finished executions (completed, discarded, or cancelled), including their arguments, attempts, and finish time.
+
 ---
 
 ## 🕒 Future Scheduling & Countdown
