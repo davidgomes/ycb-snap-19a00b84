@@ -60,7 +60,7 @@ defmodule Phoenix.LiveView.UploadChannel do
          {:ok, config} <- Channel.register_upload(pid, ref, cid),
          %{max_file_size: max_file_size, chunk_timeout: chunk_timeout} = config,
          {writer, writer_opts} <- config.writer,
-         {:ok, writer_state} <- writer.init(writer_opts) do
+         {:ok, writer_state} <- init_writer(pid, writer, writer_opts) do
       Process.monitor(pid)
       Process.flag(:trap_exit, true)
 
@@ -91,6 +91,19 @@ defmodule Phoenix.LiveView.UploadChannel do
     end
   end
 
+  # the entry is already registered with the LiveView at this point, so an init
+  # failure is reported just like a write_chunk/2 or close/2 failure
+  defp init_writer(live_view_pid, writer, writer_opts) do
+    case writer.init(writer_opts) do
+      {:ok, writer_state} ->
+        {:ok, writer_state}
+
+      {:error, reason} ->
+        :ok = Channel.report_writer_error(live_view_pid, reason)
+        {:error, :writer_error}
+    end
+  end
+
   @impl true
   def handle_in("chunk", {:binary, payload}, socket) do
     %{uploaded_size: uploaded_size, max_file_size: max_file_size} = socket.assigns
@@ -113,7 +126,7 @@ defmodule Phoenix.LiveView.UploadChannel do
               end
             end
 
-          Channel.report_writer_error(socket.assigns.live_view_pid, reason)
+          :ok = Channel.report_writer_error(socket.assigns.live_view_pid, reason)
 
           {:stop, {:shutdown, :closed}, {:error, %{reason: :writer_error}}, new_socket}
       end

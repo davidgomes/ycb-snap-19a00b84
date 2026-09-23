@@ -20,6 +20,11 @@ export default class EntryUploader {
     this.uploadChannel.leave();
     this.errored = true;
     this.chunkTimer != null && clearTimeout(this.chunkTimer);
+    if (reason === "writer_error") {
+      // The server already recorded the writer failure and retains the entry,
+      // so keep it pending until cancelling removes it from the DOM.
+      return;
+    }
     this.entry.error(reason);
   }
 
