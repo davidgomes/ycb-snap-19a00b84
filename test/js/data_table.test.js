@@ -135,8 +135,8 @@ describe("PetalDataTable", () => {
     expect(patched).toEqual(["/orders?search=amy&page_size=20"]);
   });
 
-  it("filter apply replaces this field's committed entry and closes the popover", () => {
-    const { el, patched, form } = mountWithFilter({
+  it("filter apply replaces this field's committed entry", () => {
+    const { patched, form } = mountWithFilter({
       navTemplate: "/orders?:filters",
       filters: [
         { field: "email", op: "contains", value: "d" },
@@ -161,7 +161,6 @@ describe("PetalDataTable", () => {
     expect(url).toContain("filters[1][field]=email");
     expect(url).toContain("filters[1][op]=starts_with");
     expect(url).toContain("filters[1][value]=amy");
-    expect(el.querySelector(".pc-popover__panel").style.display).toBe("none");
   });
 
   it("a select editor posts checked values as :in; none checked removes the filter", () => {
@@ -221,7 +220,10 @@ describe("PetalDataTable", () => {
     expect(url).toContain("filters[0][field]=email");
   });
 
-  it("closes a top-layer panel through the native popover API", () => {
+  // The panel was opened by JS.toggle, whose sticky display LiveView
+  // re-applies on every patch - a hand-set display would pop it back open,
+  // so closing belongs to the form's phx-submit (LiveView JS), not here.
+  it("link mode: apply navigates but never hand-closes the panel", () => {
     const { el, patched, form } = mountWithFilter({
       navTemplate: "/orders?:filters",
       filters: [],
@@ -234,20 +236,19 @@ describe("PetalDataTable", () => {
     });
 
     const panel = el.querySelector(".pc-popover__panel");
-    panel.setAttribute("popover", "auto");
-    const hidden = [];
-    panel.hidePopover = () => hidden.push(true);
+    panel.style.display = "block";
 
     submit(form);
-    expect(hidden).toEqual([true]);
     expect(patched).toHaveLength(1);
+    expect(panel.style.display).toBe("block");
   });
 
-  it("event mode: submit only closes the popover - no interception, no navigation", () => {
+  it("event mode: submit is LiveView's - no interception, no navigation, no hand-closing", () => {
     const { el, patched } = mountBase({});
     delete el.dataset.navTemplate;
     const wrap = document.createElement("div");
     wrap.className = "pc-popover__panel";
+    wrap.style.display = "block";
     wrap.innerHTML = `
       <form class="pc-data-table__filter-form" phx-submit="table">
         <input name="value" value="x" />
@@ -261,7 +262,7 @@ describe("PetalDataTable", () => {
 
     expect(e.defaultPrevented).toBe(false);
     expect(patched).toEqual([]);
-    expect(wrap.style.display).toBe("none");
+    expect(wrap.style.display).toBe("block");
   });
 
   it("mirrors the indeterminate stamp onto the DOM property on mount and update", () => {

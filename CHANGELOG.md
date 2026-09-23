@@ -3,6 +3,19 @@
 
 #### Fixed
 
+- **`data_table` menus live in the page.** The filter editors and the
+  Columns dropdown were top-layer popovers: fixed-position panels the
+  hook re-anchored on every scroll, resize and visual-viewport change,
+  always a step behind the page they belong to. The toolbar is never
+  clipped, so they don't need the top layer - they are now in-page
+  popovers, absolutely positioned under their trigger, and the browser
+  scrolls them with the page (and keeps a focused editor above a mobile
+  keyboard) with no positioning script at all. Apply closes the editor
+  through `LiveView.JS` and hands focus back to its trigger, so event
+  mode no longer mounts the `PetalDataTable` hook just to close them.
+  Below `sm`, where the toolbar wraps, the menus hang off the toolbar's
+  edge instead of their trigger's so they can't run off-screen. Like
+  any in-page content, an `overflow: hidden` ancestor now clips them.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to

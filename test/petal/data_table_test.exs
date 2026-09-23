@@ -14,6 +14,24 @@ defmodule PetalComponents.DataTableTest do
     Map.merge(%{rows: @rows, state: %State{total: 74}, path: "/orders"}, assigns)
   end
 
+  defp filter_submit_attr(html, field) do
+    [js] =
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(~s(form[data-field="#{field}"]))
+      |> LazyHTML.attribute("phx-submit")
+
+    js
+  end
+
+  # a filter editor's phx-submit as {op, selector} pairs
+  defp filter_submit_ops(html, field) do
+    html
+    |> filter_submit_attr(field)
+    |> Jason.decode!()
+    |> Enum.map(fn [op, args] -> {op, args["to"]} end)
+  end
+
   test "searchable event mode: a phx-change form posts the search op with debounce" do
     assigns = base(%{state: %State{total: 74, search: "amy"}})
 
@@ -108,11 +126,21 @@ defmodule PetalComponents.DataTableTest do
     # active trigger reads the predicate; its clear button posts removal
     assert html =~ "Status is any of Pending, Paid"
     assert html =~ ~s(aria-label="Clear Status filter")
-    # event mode carries the op grammar in hidden inputs; the hook mounts
-    # only to close top-layer popovers - no URL wiring
+    # event mode carries the op grammar in hidden inputs and needs no hook:
+    # the editors are in-page popovers, and Apply pushes the form, then
+    # closes its editor through LiveView.JS, handing focus back
     assert html =~ ~s(name="op" value="filter")
-    assert html =~ ~s(phx-hook="PetalDataTable")
-    assert html =~ ~s(popover="auto")
+    refute html =~ "PetalDataTable"
+    refute html =~ "popover="
+    assert html =~ "pc-popover__panel--bottom-start"
+
+    assert filter_submit_ops(html, "email") == [
+             {"push", nil},
+             {"hide", "#t-filter-email"},
+             {"set_attr", "#t-filter-email-trigger"},
+             {"focus", "#t-filter-email-trigger"}
+           ]
+
     refute html =~ "data-nav-template"
     refute html =~ "data-filters="
   end
@@ -139,6 +167,26 @@ defmodule PetalComponents.DataTableTest do
     # the clear affordance patches to a filterless URL
     assert html =~ ~s(aria-label="Clear Email filter")
     refute html =~ ~s(href="/orders?filters)
+    # Apply only closes the editor - the hook turns the submit into a patch
+    assert filter_submit_ops(html, "email") == [
+             {"hide", "#t-filter-email"},
+             {"set_attr", "#t-filter-email-trigger"},
+             {"focus", "#t-filter-email-trigger"}
+           ]
+  end
+
+  test "an event-mode target rides the filter editor's push" do
+    assigns = base()
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" target="#orders">
+        <:col :let={row} field={:email} filterable="text">{row.email}</:col>
+      </.data_table>
+      """)
+
+    assert [["push", %{"event" => "table", "target" => "#orders"}] | _] =
+             html |> filter_submit_attr("email") |> Jason.decode!()
   end
 
   test "selectable renders the checkbox column with tri-state header and morphing toolbar" do
@@ -332,8 +380,11 @@ defmodule PetalComponents.DataTableTest do
       </.data_table>
       """)
 
-    # the hidden column leaves the table but stays listed in the dropdown
+    # the hidden column leaves the table but stays listed in the dropdown,
+    # an in-page popover end-aligned under its trigger
     refute html =~ "amy@x.com"
+    refute html =~ "popover="
+    assert html =~ "pc-popover__panel--bottom-end"
     assert html =~ ~s(phx-value-op="toggle_column")
     assert html =~ ~s(phx-value-field="email")
     # the last visible column's checkbox is disabled - a table needs one

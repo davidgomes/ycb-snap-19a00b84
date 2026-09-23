@@ -2605,7 +2605,20 @@
     @apply min-w-0 max-w-full;
   }
   .pc-data-table__toolbar {
-    @apply mb-3 flex flex-wrap items-center gap-2;
+    @apply mb-3 flex flex-wrap items-center gap-2 max-sm:relative;
+  }
+  /* The menus are in-page popovers, hung off their triggers. On a phone
+     the toolbar wraps and a trigger can land anywhere along a row, where
+     a panel aligned to it runs off the screen edge (a filter editor near
+     the right, Columns near the left) - so below sm they hang off the
+     toolbar instead: flush with its edge, never wider than it. */
+  .pc-data-table__filter-popover,
+  .pc-data-table__columns {
+    @apply max-sm:static;
+  }
+  .pc-data-table__filter-popover > .pc-popover__panel,
+  .pc-data-table__columns > .pc-popover__panel {
+    @apply max-sm:max-w-full;
   }
   .pc-data-table__scroll {
     @apply overflow-x-auto;
