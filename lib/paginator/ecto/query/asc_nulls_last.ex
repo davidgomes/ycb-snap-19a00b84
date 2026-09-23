@@ -9,25 +9,19 @@ defmodule Paginator.Ecto.Query.AscNullsLast do
   end
 
   def build_dynamic_filter(args = %{direction: :after, value: nil}) do
-    dynamic(
-      [{query, args.entity_position}],
-      is_nil(field(query, ^args.column)) and ^args.next_filters
+    dynamic(is_nil(^args.column_expr) and ^args.next_filters
     )
   end
 
   def build_dynamic_filter(args = %{direction: :after, next_filters: true}) do
-    dynamic(
-      [{query, args.entity_position}],
-      field(query, ^args.column) > ^args.value or is_nil(field(query, ^args.column))
+    dynamic(^args.column_expr > ^args.value or is_nil(^args.column_expr)
     )
   end
 
   def build_dynamic_filter(args = %{direction: :after}) do
-    dynamic(
-      [{query, args.entity_position}],
-      (field(query, ^args.column) == ^args.value and ^args.next_filters) or
-        field(query, ^args.column) > ^args.value or
-        is_nil(field(query, ^args.column))
+    dynamic((^args.column_expr == ^args.value and ^args.next_filters) or
+        ^args.column_expr > ^args.value or
+        is_nil(^args.column_expr)
     )
   end
 
@@ -36,22 +30,18 @@ defmodule Paginator.Ecto.Query.AscNullsLast do
   end
 
   def build_dynamic_filter(args = %{direction: :before, value: nil}) do
-    dynamic(
-      [{query, args.entity_position}],
-      (is_nil(field(query, ^args.column)) and ^args.next_filters) or
-        not is_nil(field(query, ^args.column))
+    dynamic((is_nil(^args.column_expr) and ^args.next_filters) or
+        not is_nil(^args.column_expr)
     )
   end
 
   def build_dynamic_filter(args = %{direction: :before, next_filters: true}) do
-    dynamic([{query, args.entity_position}], field(query, ^args.column) < ^args.value)
+    dynamic(^args.column_expr < ^args.value)
   end
 
   def build_dynamic_filter(args = %{direction: :before}) do
-    dynamic(
-      [{query, args.entity_position}],
-      (field(query, ^args.column) == ^args.value and ^args.next_filters) or
-        field(query, ^args.column) < ^args.value
+    dynamic((^args.column_expr == ^args.value and ^args.next_filters) or
+        ^args.column_expr < ^args.value
     )
   end
 end

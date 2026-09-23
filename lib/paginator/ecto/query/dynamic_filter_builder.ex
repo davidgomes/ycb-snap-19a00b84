@@ -10,7 +10,7 @@ defmodule Paginator.Ecto.Query.DynamicFilterBuilder do
 
   @callback build_dynamic_filter(%{
               direction: :after | :before,
-              entity_position: integer(),
+              column_expr: Ecto.Query.dynamic_expr(),
               column: term(),
               value: term(),
               next_filters: Ecto.Query.dynamic() | boolean()
@@ -29,7 +29,7 @@ defmodule Paginator.Ecto.Query.DynamicFilterBuilder do
   @spec build!(%{
           sort_order: sort_order(),
           direction: direction(),
-          entity_position: integer(),
+          column_expr: Ecto.Query.dynamic_expr(),
           column: term(),
           value: term(),
           next_filters: Ecto.Query.dynamic() | boolean()

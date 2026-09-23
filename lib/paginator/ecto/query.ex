@@ -36,23 +36,22 @@ defmodule Paginator.Ecto.Query do
     where(query, [{q, 0}], ^filters)
   end
 
-  defp build_where_expression(query, [{column, order}], values, cursor_direction) do
+  defp build_where_expression(query, [field], values, cursor_direction) do
+    {column, order, column_expr} = normalize_field(query, field)
     value = Map.get(values, column)
-    {q_position, q_binding} = column_position(query, column)
 
     DynamicFilterBuilder.build!(%{
       sort_order: order,
       direction: cursor_direction,
       value: value,
-      entity_position: q_position,
-      column: q_binding,
+      column_expr: column_expr,
       next_filters: true
     })
   end
 
-  defp build_where_expression(query, [{column, order} | fields], values, cursor_direction) do
+  defp build_where_expression(query, [field | fields], values, cursor_direction) do
+    {column, order, column_expr} = normalize_field(query, field)
     value = Map.get(values, column)
-    {q_position, q_binding} = column_position(query, column)
 
     filters = build_where_expression(query, fields, values, cursor_direction)
 
@@ -60,8 +59,7 @@ defmodule Paginator.Ecto.Query do
       sort_order: order,
       direction: cursor_direction,
       value: value,
-      entity_position: q_position,
-      column: q_binding,
+      column_expr: column_expr,
       next_filters: filters
     })
   end
@@ -100,6 +98,14 @@ defmodule Paginator.Ecto.Query do
     query
     |> filter_values(cursor_fields, after_values, :after)
     |> filter_values(cursor_fields, before_values, :before)
+  end
+
+  defp normalize_field(_query, {column, order, %Ecto.Query.DynamicExpr{} = expr}),
+    do: {column, order, expr}
+
+  defp normalize_field(query, {column, order}) do
+    {position, binding} = column_position(query, column)
+    {column, order, dynamic([{q, position}], field(q, ^binding))}
   end
 
   # Lookup position of binding in query aliases

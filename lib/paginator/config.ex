@@ -89,6 +89,9 @@ defmodule Paginator.Config do
     sorted_cursor_fields =
       cursor_fields
       |> Enum.map(fn
+        {field, value, %Ecto.Query.DynamicExpr{}} when value in @order_directions ->
+          field
+
         {field, value} when is_atom(field) and value in @order_directions ->
           field
 
@@ -134,6 +137,7 @@ defmodule Paginator.Config do
 
   defp build_cursor_fields_from_sort_direction(fields, sorting_direction) do
     Enum.map(fields, fn
+      {_column, _direction, _expr} = field -> field
       {{_binding, _column}, _direction} = field -> field
       {_column, direction} = field when direction in @order_directions -> field
       {_binding, _column} = field -> {field, sorting_direction}

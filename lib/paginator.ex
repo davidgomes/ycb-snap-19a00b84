@@ -309,6 +309,9 @@ defmodule Paginator do
        }) do
     cursor_fields
     |> Enum.map(fn
+      {cursor_field, _order, _expr} ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
       {cursor_field, _order} ->
         {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
 
