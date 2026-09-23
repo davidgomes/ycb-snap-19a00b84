@@ -5,6 +5,40 @@ let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("
 let livePath = document.querySelector("meta[name='live-path']").getAttribute("content");
 let liveTransport = document .querySelector("meta[name='live-transport']") .getAttribute("content");
 
+const THEME_STORAGE_KEY = "error-tracker-theme";
+
+function storedTheme() {
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function preferredTheme() {
+  const theme = storedTheme();
+  if (theme === "light" || theme === "dark") return theme;
+
+  return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function applyTheme(theme) {
+  document.documentElement.classList.toggle("dark", theme === "dark");
+}
+
+applyTheme(preferredTheme());
+
+window.addEventListener("error-tracker:toggle-theme", () => {
+  const theme = document.documentElement.classList.contains("dark") ? "light" : "dark";
+  applyTheme(theme);
+
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch (_error) {
+    // Storage may be unavailable (e.g. privacy mode); the theme still applies for this page.
+  }
+});
+
 const Hooks = {
   JsonPrettyPrint: {
     mounted() {
