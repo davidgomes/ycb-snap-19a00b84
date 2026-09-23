@@ -6,7 +6,8 @@
 Mix.install([
   {:spider_man, "~> 0.5"},
   {:floki, "~> 0.34"},
-  {:nimble_csv, "~> 1.2"}
+  {:nimble_csv, "~> 1.2"},
+  {:kino, "~> 0.12"}
 ])
 ```
 
@@ -41,6 +42,7 @@ requester_options = [
 
 settings = [
   log2file: false,
+  print_stats: false,
   downloader_options: [requester: {SpiderMan.Requester.Finch, requester_options}],
   spider_options: [pipelines: []],
   item_processor_options: [
@@ -140,8 +142,37 @@ callbacks = [init: init, handle_response: handle_response]
 {:ok, settings} = SpiderMan.CommonSpider.check_callbacks_and_merge_settings(callbacks, settings)
 ```
 
-run ther spider
+run ther spider and show the throughput infos
 
 ```elixir
+frame = Kino.Frame.new() |> Kino.render()
+Kino.Frame.render(frame, Kino.Markdown.new("**Waiting...**"))
+
+render_throughput = fn seconds ->
+  infos =
+    SpiderMan.throughput(spider)
+    |> Enum.map(fn info ->
+      tps = if info.tps > 999, do: "999+", else: info.tps
+      component = Atom.to_string(info.component) |> Macro.camelize()
+      "- #{component}: Success/Total: #{info.success}/#{info.total} tps: #{tps}/s Failed: #{info.fail}"
+    end)
+    |> Enum.join("\n")
+
+  Kino.Frame.render(frame, Kino.Markdown.new("**Used: #{seconds} seconds**\n#{infos}"))
+end
+
+Kino.listen(1000, 0, fn _event, seconds ->
+  try do
+    if spider in SpiderMan.list_spiders() do
+      render_throughput.(seconds)
+      {:cont, seconds + 1}
+    else
+      if seconds == 0, do: {:cont, 0}, else: :halt
+    end
+  rescue
+    ArgumentError -> :halt
+  end
+end)
+
 SpiderMan.run_until_zero(spider, settings, 5_000)
 ```
