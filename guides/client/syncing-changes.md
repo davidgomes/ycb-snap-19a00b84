@@ -224,3 +224,34 @@ A lower level `phx:navigate` event is also triggered any time the browser's URL 
 
 For navigation-aware logic, prefer `phx:navigate` over hook callbacks like `updated()`,
 as hooks may fire before `window.location` is updated.
+
+### Cancelling navigation
+
+Before a client-side live navigation starts, a cancelable `phx:before-navigate` event is
+dispatched on window. Calling `preventDefault()` on the event cancels the navigation.
+The event is dispatched for:
+
+  - clicks on `<.link navigate={...}>` and `<.link patch={...}>`
+  - `Phoenix.LiveView.JS.navigate/1` and `Phoenix.LiveView.JS.patch/1`, as well as their
+    equivalents in the `this.js()` hook API
+  - forward and back navigation in the browser history (`popstate`). As the browser has
+    already changed the URL at that point, LiveView navigates back to the previous history
+    entry when the navigation is cancelled
+
+Server-side navigation via `push_navigate` and `push_patch` cannot be cancelled. Full page
+loads, such as regular links or `redirect/2`, do not dispatch this event either; use the
+browser's `beforeunload` event for those.
+
+The `info.detail` contains the same `"href"`, `"patch"` and `"pop"` keys as the `phx:navigate`
+event, as well as a `"direction"` key, which is either `"forward"` or `"backward"`.
+
+For example, to ask for confirmation before leaving a page with unsaved changes:
+
+```javascript
+window.addEventListener("phx:before-navigate", (e) => {
+  const form = document.querySelector("form[data-unsaved]")
+  if (form && !window.confirm("You have unsaved changes. Leave anyway?")) {
+    e.preventDefault()
+  }
+})
+```
