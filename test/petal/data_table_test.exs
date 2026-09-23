@@ -14,6 +14,29 @@ defmodule PetalComponents.DataTableTest do
     Map.merge(%{rows: @rows, state: %State{total: 74}, path: "/orders"}, assigns)
   end
 
+  @id_rows [%{id: 1, name: "Amy"}, %{id: 2, name: "Bea"}]
+
+  defp selection_html(assigns) do
+    ~H"""
+    <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+      <:col :let={row} field={:name}>{row.name}</:col>
+      <:bulk_action :let={ids}>
+        <button type="button" id="bulk-delete">Delete {Enum.join(ids, "+")}</button>
+      </:bulk_action>
+    </.data_table>
+    """
+    |> rendered_to_string()
+    |> LazyHTML.from_fragment()
+  end
+
+  defp push_value(doc, selector) do
+    [js] = doc |> LazyHTML.query(selector) |> LazyHTML.attribute("phx-click")
+    [["push", %{"event" => "table", "value" => value}]] = Jason.decode!(js)
+    value
+  end
+
+  defp count(doc, selector), do: doc |> LazyHTML.query(selector) |> Enum.count()
+
   test "searchable event mode: a phx-change form posts the search op with debounce" do
     assigns = base(%{state: %State{total: 74, search: "amy"}})
 
@@ -361,6 +384,173 @@ defmodule PetalComponents.DataTableTest do
 
     assert html =~ "Edit Amy"
     assert html =~ "pc-data-table__actions"
+  end
+
+  describe "selectable" do
+    test "some rows checked: row boxes mirror state.selected, header is mixed and selects the page" do
+      doc = selection_html(%{rows: @id_rows, state: %State{total: 2, selected: ["1"]}})
+
+      assert LazyHTML.attribute(LazyHTML.query(doc, ".pc-data-table"), "data-selection") ==
+               ["some"]
+
+      assert LazyHTML.attribute(LazyHTML.query(doc, ".pc-data-table"), "phx-hook") ==
+               ["PetalDataTable"]
+
+      # rows ride the op grammar with their id; only row 1 is checked
+      assert doc
+             |> LazyHTML.query(".pc-data-table__row-select")
+             |> LazyHTML.attribute("phx-value-id") ==
+               ["1", "2"]
+
+      assert doc
+             |> LazyHTML.query(".pc-data-table__row-select[checked]")
+             |> LazyHTML.attribute("phx-value-id") == ["1"]
+
+      assert doc
+             |> LazyHTML.query(".pc-data-table__row-select")
+             |> LazyHTML.attribute("phx-value-op") == ["select", "select"]
+
+      # the header lives in the table's th and selects every row on screen
+      assert count(doc, "th .pc-data-table__select-all[data-pc-dt-select-all]") == 1
+      assert count(doc, ".pc-data-table__select-all[checked]") == 0
+
+      assert push_value(doc, ".pc-data-table__select-all") ==
+               %{"op" => "select_all", "ids" => ["1", "2"]}
+    end
+
+    test "while rows are checked the toolbar morphs into the selection bar" do
+      doc = selection_html(%{rows: @id_rows, state: %State{total: 2, selected: ["1", "2"]}})
+
+      assert count(doc, ".pc-data-table__toolbar.pc-data-table__toolbar--selecting") == 1
+
+      assert doc |> LazyHTML.query(".pc-data-table__selection-count") |> LazyHTML.text() =~
+               "2 selected"
+
+      # bulk actions receive the selected ids
+      assert doc |> LazyHTML.query("#bulk-delete") |> LazyHTML.text() =~ "Delete 1+2"
+
+      assert doc
+             |> LazyHTML.query(".pc-data-table__selection-clear")
+             |> LazyHTML.attribute("phx-value-op") == ["clear_selection"]
+
+      # every row checked: the header is checked and unchecks to empty
+      assert LazyHTML.attribute(LazyHTML.query(doc, ".pc-data-table"), "data-selection") ==
+               ["all"]
+
+      assert count(doc, ".pc-data-table__select-all[checked]") == 1
+      assert push_value(doc, ".pc-data-table__select-all") == %{"op" => "clear_selection"}
+    end
+
+    test "nothing checked: no selection bar, the toolbar still reserves its height" do
+      doc = selection_html(%{rows: @id_rows, state: %State{total: 2}})
+
+      assert LazyHTML.attribute(LazyHTML.query(doc, ".pc-data-table"), "data-selection") ==
+               ["none"]
+
+      assert count(doc, ".pc-data-table__toolbar--selectable") == 1
+      assert count(doc, ".pc-data-table__toolbar--selecting") == 0
+      assert count(doc, ".pc-data-table__selection") == 0
+      assert count(doc, "#bulk-delete") == 0
+    end
+
+    test "loading: no row checkboxes and a disabled header" do
+      assigns = %{rows: @id_rows, state: %State{total: 2, page_size: 3}}
+
+      doc =
+        ~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable loading>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """
+        |> rendered_to_string()
+        |> LazyHTML.from_fragment()
+
+      assert count(doc, ".pc-data-table__row-select") == 0
+      assert count(doc, ".pc-data-table__select-all[disabled]") == 1
+    end
+
+    test "row_id picks the id and target carries through to every selection push" do
+      assigns = %{
+        rows: [%{uuid: "a-1", name: "Amy"}, %{uuid: "b-2", name: "Bea"}],
+        state: %State{total: 2}
+      }
+
+      doc =
+        ~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          on_change="table"
+          target="#comp"
+          row_id={& &1.uuid}
+          selectable
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """
+        |> rendered_to_string()
+        |> LazyHTML.from_fragment()
+
+      assert doc
+             |> LazyHTML.query(".pc-data-table__row-select")
+             |> LazyHTML.attribute("phx-value-id") == ["a-1", "b-2"]
+
+      assert doc
+             |> LazyHTML.query(".pc-data-table__row-select")
+             |> LazyHTML.attribute("phx-target") == ["#comp", "#comp"]
+
+      [js] =
+        doc |> LazyHTML.query(".pc-data-table__select-all") |> LazyHTML.attribute("phx-click")
+
+      assert [["push", %{"target" => "#comp", "value" => %{"ids" => ["a-1", "b-2"]}}]] =
+               Jason.decode!(js)
+    end
+
+    test "link mode sends selection to on_select and keeps navigation in the URL" do
+      assigns = base(%{rows: @id_rows, state: %State{total: 2, order_by: [name: :asc]}})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} on_select="select" selectable>
+          <:col :let={row} field={:name} sortable>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert html =~ ~s(phx-click="select" phx-value-op="select" phx-value-id="1")
+      assert html =~ "&quot;event&quot;:&quot;select&quot;"
+      assert html =~ "order_by=name%3Adesc"
+      # the hook mounts for the header only - no URL template to fill in
+      assert html =~ ~s(phx-hook="PetalDataTable")
+      refute html =~ "data-nav-template"
+    end
+
+    test "link mode without on_select raises" do
+      assigns = base(%{rows: @id_rows})
+
+      assert_raise ArgumentError, ~r/on_select/, fn ->
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+      end
+    end
+
+    test "not selectable: no checkbox column, no selection stamp" do
+      assigns = base(%{rows: @id_rows, state: %State{total: 2, selected: ["1"]}})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path}>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      refute html =~ "pc-data-table__row-select"
+      refute html =~ "data-selection"
+      refute html =~ "PetalDataTable"
+    end
   end
 
   test "raises without either wiring mode" do

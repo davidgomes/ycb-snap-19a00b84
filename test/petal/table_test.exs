@@ -222,6 +222,28 @@ defmodule PetalComponents.TableTest do
     assert html =~ "pc-table__sort-icon--active"
   end
 
+  test "a column's header renders in place of its label" do
+    assigns = %{}
+
+    header = ~H"""
+    <input type="checkbox" id="pick-all" />
+    """
+
+    assigns = %{header: header}
+
+    html =
+      rendered_to_string(~H"""
+      <.table rows={[%{name: "Ada"}]}>
+        <:col :let={u} label="ignored" header={@header}>{u.name}</:col>
+        <:col :let={u} label="Name">{u.name}</:col>
+      </.table>
+      """)
+
+    assert html =~ ~s(<input type="checkbox" id="pick-all">)
+    refute html =~ "ignored"
+    assert html =~ "Name"
+  end
+
   test "density, striped and sticky header classes" do
     assigns = %{}
 

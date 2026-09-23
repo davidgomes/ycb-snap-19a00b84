@@ -264,6 +264,43 @@ describe("PetalDataTable", () => {
     expect(wrap.style.display).toBe("none");
   });
 
+  it("mirrors data-selection onto the header's native indeterminate", () => {
+    const el = document.createElement("div");
+    el.dataset.selection = "some";
+    el.innerHTML = `
+      <table><thead><tr><th>
+        <input type="checkbox" class="pc-data-table__select-all" data-pc-dt-select-all />
+      </th></tr></thead></table>
+    `;
+    document.body.appendChild(el);
+
+    const hook = Object.create(hooks.PetalDataTable);
+    hook.el = el;
+    hook.mounted();
+    mounted.push(hook);
+
+    const header = el.querySelector("[data-pc-dt-select-all]");
+    expect(header.indeterminate).toBe(true);
+
+    // every row checked: the server re-renders checked and stamps "all"
+    el.dataset.selection = "all";
+    hook.updated();
+    expect(header.indeterminate).toBe(false);
+
+    el.dataset.selection = "some";
+    hook.updated();
+    expect(header.indeterminate).toBe(true);
+
+    el.dataset.selection = "none";
+    hook.updated();
+    expect(header.indeterminate).toBe(false);
+  });
+
+  it("a table without selection mounts and updates cleanly", () => {
+    const { hook } = mount({ navTemplate: "/orders?search=:term" });
+    expect(() => hook.updated()).not.toThrow();
+  });
+
   it("destroyed cancels a pending search patch", () => {
     const { hook, el, patched } = mount({
       navTemplate: "/orders?search=:term",

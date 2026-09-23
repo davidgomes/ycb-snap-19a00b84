@@ -240,6 +240,78 @@ defmodule PetalComponents.DataTable.StateTest do
 
       assert bogus == text
     end
+
+    test "selection ops toggle one row, select the page and clear" do
+      one = State.handle_op(%State{}, %{"op" => "select", "id" => "2"}, @opts)
+      assert one.selected == ["2"]
+      assert State.handle_op(one, %{"op" => "select", "id" => "2"}, @opts).selected == []
+
+      page = State.handle_op(one, %{"op" => "select_all", "ids" => ["1", "2", "3"]}, @opts)
+      assert page.selected == ["2", "1", "3"]
+
+      assert State.handle_op(page, %{"op" => "clear_selection"}, @opts).selected == []
+    end
+
+    test "malformed selection payloads leave the state unchanged" do
+      state = %State{selected: ["1"]}
+
+      assert State.handle_op(state, %{"op" => "select", "id" => %{"x" => "1"}}, @opts) == state
+      assert State.handle_op(state, %{"op" => "select", "id" => ""}, @opts) == state
+      assert State.handle_op(state, %{"op" => "select_all", "ids" => "1,2"}, @opts) == state
+    end
+
+    test "ops that change the visible rows drop the selection; rejected ops keep it" do
+      state = %State{selected: ["1"], page: 2}
+
+      for params <- [
+            %{"op" => "page", "page" => "3"},
+            %{"op" => "sort", "field" => "name"},
+            %{"op" => "search", "term" => "a"},
+            %{"op" => "page_size", "page_size" => "50"},
+            %{"op" => "filter", "field" => "name", "filter_op" => "contains", "value" => "a"},
+            %{"op" => "clear_filters"}
+          ] do
+        assert State.handle_op(state, params, @opts).selected == [], inspect(params)
+      end
+
+      assert State.handle_op(state, %{"op" => "sort", "field" => "secret"}, @opts) == state
+    end
+  end
+
+  describe "selection" do
+    test "toggle_selected/2 keeps ids as strings, so 3 and \"3\" are one row" do
+      state = State.toggle_selected(%State{}, 3)
+      assert state.selected == ["3"]
+
+      state = State.toggle_selected(state, "7")
+      assert state.selected == ["3", "7"]
+
+      assert State.toggle_selected(state, "3").selected == ["7"]
+    end
+
+    test "select_all/2 adds each id once and drops anything that isn't an id" do
+      state = State.select_all(%State{selected: ["1"]}, [1, "2", 3, %{}, nil, ""])
+      assert state.selected == ["1", "2", "3"]
+    end
+
+    test "clear_selection/1 empties it" do
+      assert State.clear_selection(%State{selected: ["1", "2"]}).selected == []
+    end
+
+    test "it is interaction state: to_params never encodes it" do
+      assert State.to_params(%State{selected: ["1", "2"]}) == %{}
+    end
+
+    test "every state change to the visible rows drops it" do
+      state = %State{selected: ["1"], page: 2}
+
+      assert State.toggle_sort(state, :email).selected == []
+      assert State.put_filter(state, :email, :contains, "a").selected == []
+      assert State.put_filter(state, :email, :contains, "").selected == []
+      assert State.put_search(state, "a").selected == []
+      assert State.put_page_size(state, 20).selected == []
+      assert State.clear_filters(state).selected == []
+    end
   end
 
   describe "toggle_sort/2" do
