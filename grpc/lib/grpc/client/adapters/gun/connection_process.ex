@@ -26,29 +26,41 @@ if Code.ensure_loaded?(:gun) do
       case open(host, port, open_opts) do
         {:ok, gun_pid} ->
           ref = Process.monitor(gun_pid)
-          {:ok, %{gun_pid: gun_pid, monitor_ref: ref}}
+          {:ok, %{gun_pid: gun_pid, monitor_ref: ref, up: nil}, {:continue, :await_up}}
 
         {:error, reason} ->
           {:stop, reason}
       end
     end
 
+    # Awaiting in handle_continue guarantees the `gun_up` message is consumed here
+    # rather than by handle_info, even if it arrives before the `:await_up` call.
     @impl true
-    def handle_call(:await_up, _from, %{gun_pid: gun_pid} = state) do
-      case :gun.await_up(gun_pid, state.monitor_ref) do
-        {:ok, :http2} ->
-          {:reply, {:ok, gun_pid}, state}
+    def handle_continue(:await_up, %{gun_pid: gun_pid} = state) do
+      up =
+        case :gun.await_up(gun_pid, state.monitor_ref) do
+          {:ok, :http2} ->
+            {:ok, gun_pid}
 
-        {:ok, proto} ->
-          :gun.shutdown(gun_pid)
+          {:ok, proto} ->
+            :gun.shutdown(gun_pid)
+            {:error, "Error when opening connection: protocol #{proto} is not http2"}
 
-          {:stop, :normal,
-           {:error, "Error when opening connection: protocol #{proto} is not http2"}, state}
+          {:error, reason} ->
+            :gun.shutdown(gun_pid)
+            {:error, reason}
+        end
 
-        {:error, reason} ->
-          :gun.shutdown(gun_pid)
-          {:stop, :normal, {:error, reason}, state}
-      end
+      {:noreply, %{state | up: up}}
+    end
+
+    @impl true
+    def handle_call(:await_up, _from, %{up: {:ok, _} = up} = state) do
+      {:reply, up, state}
+    end
+
+    def handle_call(:await_up, _from, %{up: error} = state) do
+      {:stop, :normal, error, state}
     end
 
     @impl true
