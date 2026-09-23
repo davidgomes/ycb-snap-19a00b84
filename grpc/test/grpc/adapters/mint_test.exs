@@ -52,9 +52,13 @@ defmodule GRPC.Client.Adapters.MintTest do
       channel = build(:channel, adapter: Mint, port: port, host: "localhost")
 
       assert {:ok, result} = Mint.connect(channel, [])
+      conn_pid = result.adapter_payload.conn_pid
       # wait for settings to be pushed
-      Process.sleep(50)
-      state = :sys.get_state(result.adapter_payload.conn_pid)
+      wait_until(fn ->
+        :sys.get_state(conn_pid).conn.client_settings.initial_window_size == 8_000_000
+      end)
+
+      state = :sys.get_state(conn_pid)
 
       assert %{initial_window_size: 8_000_000, max_frame_size: 8_000_000} =
                Map.get(state.conn, :client_settings)
@@ -71,9 +75,13 @@ defmodule GRPC.Client.Adapters.MintTest do
                  ]
                )
 
+      conn_pid = result.adapter_payload.conn_pid
       # wait for settings to be pushed
-      Process.sleep(50)
-      state = :sys.get_state(result.adapter_payload.conn_pid)
+      wait_until(fn ->
+        :sys.get_state(conn_pid).conn.client_settings.initial_window_size == 50_000
+      end)
+
+      state = :sys.get_state(conn_pid)
 
       assert %{initial_window_size: 50_000, max_frame_size: 50_000} =
                Map.get(state.conn, :client_settings)

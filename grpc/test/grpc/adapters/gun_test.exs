@@ -89,7 +89,7 @@ defmodule GRPC.Client.Adapters.GunTest do
       # Ensure that changing one of the options breaks things
       assert {:error, :timeout} ==
                Gun.connect(channel,
-                 await_timeout: 100,
+                 await_timeout: 10,
                  transport_opts: [
                    certfile: credential.ssl[:certfile] <> "invalidsuffix",
                    verify: :verify_peer,
