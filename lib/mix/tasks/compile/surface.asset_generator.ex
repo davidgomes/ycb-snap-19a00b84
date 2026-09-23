@@ -21,6 +21,31 @@ defmodule Mix.Tasks.Compile.Surface.AssetGenerator do
     end
   end
 
+  def output_files(opts) do
+    if Keyword.get(opts, :generate_assets, true) do
+      hooks_output_dir = Keyword.get(opts, :hooks_output_dir, @default_hooks_output_dir)
+      css_output_file = Keyword.get(opts, :css_output_file, @default_css_output_file)
+      variants_output_file = Keyword.get(opts, :variants_output_file, @default_variants_output_file)
+
+      files = [Path.join(hooks_output_dir, "index.js"), css_output_file]
+      files = if Keyword.get(opts, :enable_variants, false), do: files ++ [variants_output_file], else: files
+
+      Enum.map(files, &Path.join(File.cwd!(), &1))
+    else
+      []
+    end
+  end
+
+  def hooks_dirs(components) do
+    for mod <- components, module_loaded?(mod), uniq: true do
+      mod.module_info() |> get_in([:compile, :source]) |> to_string() |> Path.dirname()
+    end
+  end
+
+  def hooks_files(dirs) do
+    Enum.flat_map(dirs, &Path.wildcard(Path.join(&1, "*#{@hooks_extension}")))
+  end
+
   defp do_run(components, opts) do
     components = Enum.sort(components, :desc)
     hooks_output_dir = Keyword.get(opts, :hooks_output_dir, @default_hooks_output_dir)

@@ -15,6 +15,10 @@ defmodule Mix.Tasks.Compile.SurfaceTest do
   @css_rel_output_file "tmp/_components.css"
   @css_output_file Path.join(File.cwd!(), @css_rel_output_file)
 
+  @test_components_dir Path.join(File.cwd!(), "test/support/mix/tasks/compile/surface_test")
+  @link_src_hooks_file Path.join(@test_components_dir, "fake_link.hooks.js")
+  @link_dest_hooks_file Path.join(@hooks_output_dir, "Mix.Tasks.Compile.SurfaceTest.FakeLink.hooks.js")
+
   setup_all do
     conf_before = Application.get_env(:surface, :compiler, [])
 
@@ -31,6 +35,8 @@ defmodule Mix.Tasks.Compile.SurfaceTest do
   end
 
   setup do
+    clean()
+
     if File.exists?(@hooks_output_dir) do
       File.rm_rf!(@hooks_output_dir)
     end
@@ -40,8 +46,10 @@ defmodule Mix.Tasks.Compile.SurfaceTest do
     end
 
     on_exit(fn ->
+      clean()
       File.rm_rf!(@hooks_output_dir)
       File.rm_rf!(@css_output_file)
+      File.rm_rf!(@link_src_hooks_file)
     end)
 
     :ok
@@ -49,6 +57,86 @@ defmodule Mix.Tasks.Compile.SurfaceTest do
 
   test "do nothing when receivning --from-mix-deps-compile" do
     assert run(["--from-mix-deps-compile"]) == {:noop, []}
+  end
+
+  test "don't run again if nothing has changed since the last run" do
+    {_status, diagnostics} = run(["--return-errors"])
+    File.write!(@css_output_file, "EDITED")
+
+    assert run(["--return-errors"]) == {:noop, diagnostics}
+    assert File.read!(@css_output_file) == "EDITED"
+  end
+
+  test "run again when passing --force" do
+    run(["--return-errors"])
+    File.write!(@css_output_file, "EDITED")
+
+    run(["--return-errors", "--force"])
+    refute File.read!(@css_output_file) == "EDITED"
+  end
+
+  test "run again if any generated file is missing" do
+    run(["--return-errors"])
+    File.write!(@css_output_file, "EDITED")
+    File.rm!(@hooks_index_file)
+
+    run(["--return-errors"])
+    assert File.exists?(@hooks_index_file)
+    refute File.read!(@css_output_file) == "EDITED"
+  end
+
+  test "run again if the compiler config has changed" do
+    run(["--return-errors"])
+    File.write!(@css_output_file, "EDITED")
+
+    config = Application.get_env(:surface, :compiler)
+    Application.put_env(:surface, :compiler, Keyword.put(config, :variants_prefix, "s-"))
+    on_exit(fn -> Application.put_env(:surface, :compiler, config) end)
+
+    run(["--return-errors"])
+    refute File.read!(@css_output_file) == "EDITED"
+  end
+
+  test "run again if a colocated hooks file is added, changed or removed" do
+    run(["--return-errors"])
+    refute File.exists?(@link_dest_hooks_file)
+
+    File.write!(@link_src_hooks_file, "let FakeLink = {}\nexport { FakeLink }")
+    run(["--return-errors"])
+    assert File.read!(@link_dest_hooks_file) =~ "let FakeLink = {}"
+
+    File.write!(@link_src_hooks_file, "let FakeLink = { mounted() {} }\nexport { FakeLink }")
+    File.touch!(@link_src_hooks_file, System.os_time(:second) + 10)
+    run(["--return-errors"])
+    assert File.read!(@link_dest_hooks_file) =~ "let FakeLink = { mounted() {} }"
+
+    File.rm!(@link_src_hooks_file)
+    run(["--return-errors"])
+    refute File.exists?(@link_dest_hooks_file)
+  end
+
+  test "print and return diagnostics from the last run if nothing has changed" do
+    {_status, [_ | _] = diagnostics} = run(["--return-errors"])
+
+    output = capture_io(:standard_error, fn -> assert run([]) == {:noop, diagnostics} end)
+
+    for %Diagnostic{message: message} <- diagnostics do
+      assert output =~ message
+    end
+
+    assert capture_io(:standard_error, fn -> run(["--no-all-warnings"]) end) == ""
+    assert run(["--return-errors", "--warnings-as-errors"]) == {:error, diagnostics}
+  end
+
+  test "manifests/0 lists the manifest removed by clean/0" do
+    assert [manifest] = manifests()
+    refute File.exists?(manifest)
+
+    run(["--return-errors"])
+    assert File.exists?(manifest)
+
+    assert clean() == :ok
+    refute File.exists?(manifest)
   end
 
   test "generate index.js with empty object if there's no hooks available" do

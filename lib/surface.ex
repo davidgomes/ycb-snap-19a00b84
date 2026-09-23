@@ -258,6 +258,21 @@ defmodule Surface do
 
   @doc false
   def components(opts \\ []) do
+    opts
+    |> components_beam_files()
+    |> Enum.chunk_every(50)
+    |> Task.async_stream(fn files ->
+      for file <- files,
+          {:ok, {_, [{_, chunk} | _]}} = :beam_lib.chunks(file, [~c"Attr"]),
+          chunk |> :erlang.binary_to_term() |> Keyword.get(:component_type) do
+        file |> Path.basename(".beam") |> String.to_atom()
+      end
+    end)
+    |> Enum.flat_map(fn {:ok, result} -> result end)
+  end
+
+  @doc false
+  def components_beam_files(opts \\ []) do
     only_current_project = Keyword.get(opts, :only_current_project, false)
     project_app = Mix.Project.config()[:app]
 
@@ -278,15 +293,6 @@ defmodule Surface do
         List.starts_with?(file, ~c"Elixir.") do
       :filename.join(dir, file)
     end
-    |> Enum.chunk_every(50)
-    |> Task.async_stream(fn files ->
-      for file <- files,
-          {:ok, {_, [{_, chunk} | _]}} = :beam_lib.chunks(file, [~c"Attr"]),
-          chunk |> :erlang.binary_to_term() |> Keyword.get(:component_type) do
-        file |> Path.basename(".beam") |> String.to_atom()
-      end
-    end)
-    |> Enum.flat_map(fn {:ok, result} -> result end)
   end
 
   defp app_beams_dir_and_files(app) do

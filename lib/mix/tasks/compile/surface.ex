@@ -141,12 +141,18 @@ defmodule Mix.Tasks.Compile.Surface do
 
   """
 
-  use Mix.Task
+  use Mix.Task.Compiler
   @recursive true
 
   alias Mix.Task.Compiler.Diagnostic
+  alias Mix.Tasks.Compile.Surface.{AssetGenerator, ValidateComponents}
+
+  @manifest "compile.surface"
+  @manifest_vsn 1
 
   @switches [
+    force: :boolean,
+    all_warnings: :boolean,
     return_errors: :boolean,
     warnings_as_errors: :boolean
   ]
@@ -160,7 +166,7 @@ defmodule Mix.Tasks.Compile.Surface do
     :variants_prefix
   ]
 
-  @doc false
+  @impl true
   def run(args) do
     # Do nothing if it's a dependency. We only have to run it once for the main project
     if "--from-mix-deps-compile" in args do
@@ -169,16 +175,102 @@ defmodule Mix.Tasks.Compile.Surface do
       {compile_opts, _argv, _err} = OptionParser.parse(args, switches: @switches)
       opts = Application.get_env(:surface, :compiler, [])
       asset_opts = Keyword.take(opts, @assets_opts)
-      asset_components = Surface.components()
-      project_components = Surface.components(only_current_project: true)
+      manifest = read_manifest()
 
+      if !compile_opts[:force] and up_to_date?(manifest, asset_opts) do
+        noop(manifest.diagnostics, compile_opts)
+      else
+        compile(asset_opts, compile_opts)
+      end
+    end
+  end
+
+  @impl true
+  def manifests, do: [manifest()]
+
+  @impl true
+  def clean do
+    File.rm(manifest())
+    :ok
+  end
+
+  defp compile(asset_opts, compile_opts) do
+    beams = files_digest(Surface.components_beam_files())
+    asset_components = Surface.components()
+    project_components = Surface.components(only_current_project: true)
+    hooks_dirs = AssetGenerator.hooks_dirs(asset_components)
+    hooks = files_digest(AssetGenerator.hooks_files(hooks_dirs))
+
+    diagnostics =
       [
-        Mix.Tasks.Compile.Surface.ValidateComponents.validate(project_components),
-        Mix.Tasks.Compile.Surface.AssetGenerator.run(asset_components, asset_opts)
+        ValidateComponents.validate(project_components),
+        AssetGenerator.run(asset_components, asset_opts)
       ]
       |> List.flatten()
-      |> handle_diagnostics(compile_opts)
+
+    result = handle_diagnostics(diagnostics, compile_opts)
+
+    # Errors must be reported again on the next run, so we don't store the manifest
+    if elem(result, 0) != :error do
+      write_manifest(%{
+        vsn: @manifest_vsn,
+        asset_opts: asset_opts,
+        beams: beams,
+        hooks_dirs: hooks_dirs,
+        hooks: hooks,
+        diagnostics: diagnostics
+      })
     end
+
+    result
+  end
+
+  defp noop(diagnostics, compile_opts) do
+    if compile_opts[:all_warnings] != false and !compile_opts[:return_errors] do
+      print_diagnostics(diagnostics)
+    end
+
+    if status(compile_opts[:warnings_as_errors], diagnostics) == :error do
+      {:error, diagnostics}
+    else
+      {:noop, diagnostics}
+    end
+  end
+
+  defp up_to_date?(%{vsn: @manifest_vsn, asset_opts: asset_opts} = manifest, asset_opts) do
+    Enum.all?(AssetGenerator.output_files(asset_opts), &File.exists?/1) and
+      manifest.beams == files_digest(Surface.components_beam_files()) and
+      manifest.hooks == files_digest(AssetGenerator.hooks_files(manifest.hooks_dirs))
+  end
+
+  defp up_to_date?(_manifest, _asset_opts), do: false
+
+  defp files_digest(files) do
+    files
+    |> Enum.map(&to_string/1)
+    |> Enum.sort()
+    |> Enum.map(fn file ->
+      case File.stat(file, time: :posix) do
+        {:ok, %File.Stat{mtime: mtime, size: size}} -> {file, mtime, size}
+        {:error, _} -> {file, nil, nil}
+      end
+    end)
+    |> :erlang.term_to_binary()
+    |> :erlang.md5()
+  end
+
+  defp manifest, do: Path.join(Mix.Project.manifest_path(), @manifest)
+
+  defp read_manifest do
+    manifest() |> File.read!() |> :erlang.binary_to_term()
+  rescue
+    _ -> nil
+  end
+
+  defp write_manifest(data) do
+    path = manifest()
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, :erlang.term_to_binary(data))
   end
 
   @doc false
