@@ -1,7 +1,8 @@
 defmodule EctoJob.WorkerTest do
   # credo:disable-for-this-file
 
-  use ExUnit.Case, async: true
+  # Concurrent sandbox transactions deadlock on MySQL (InnoDB gap locks)
+  use ExUnit.Case, async: EctoJob.Test.Repo.__adapter__() == Ecto.Adapters.Postgres
   alias EctoJob.Test.Repo
   alias EctoJob.Worker
 

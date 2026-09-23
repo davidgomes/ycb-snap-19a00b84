@@ -1,5 +1,6 @@
 defmodule EctoJob.ProducerTest do
-  use ExUnit.Case, async: true
+  # Concurrent sandbox transactions deadlock on MySQL (InnoDB gap locks)
+  use ExUnit.Case, async: EctoJob.Test.Repo.__adapter__() == Ecto.Adapters.Postgres
   alias Ecto.Adapters.SQL.Sandbox
   alias EctoJob.Producer
   alias EctoJob.Test.{JobQueue, Repo}
