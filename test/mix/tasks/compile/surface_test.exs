@@ -80,7 +80,7 @@ defmodule Mix.Tasks.Compile.SurfaceTest do
       end)
 
     assert output =~ "warning:"
-    assert output =~ "test warning\n  file.ex:1: (file)\n\n"
+    assert output =~ "test warning\n└─ file.ex:1: (file)\n\n"
   end
 
   test "don't print and return `{:error, diagnostics}` on warning with `return_errors` and `warnings_as_errors`" do
