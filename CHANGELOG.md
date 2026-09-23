@@ -10,6 +10,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Support ordering by custom fields. Configure a `sorter` callback on the
+  custom field and add the field to `:sortable`. The callback receives the
+  query, the order direction, and the merged options.
 - Support SQLite.
 - Support MySQL.
 

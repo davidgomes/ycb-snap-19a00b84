@@ -58,7 +58,10 @@ defprotocol Flop.Schema do
       [
         order_by: [
           {"has an invalid entry",
-           [validation: :subset, enum: [:name, :age, :owner_name, :owner_age]]}
+           [
+             validation: :subset,
+             enum: [:name, :age, :owner_name, :owner_age, :dog_age]
+           ]}
         ]
       ]
 
@@ -384,7 +387,21 @@ defprotocol Flop.Schema do
   ID of the current user), use the `extra_opts` option when calling Flop
   functions.
 
-  Note that as of now, custom fields only support filtering, not sorting.
+  Custom fields support sorting when a `:sorter` function is configured. The
+  function receives the Ecto query, the order direction, and the options
+  keyword list, and must return the query with that order applied. Add the
+  field to `:sortable`. Custom fields cannot be used as cursor fields.
+
+      custom_fields: [
+        dog_age: [
+          sorter: {__MODULE__, :dog_age_sorter, []},
+          ecto_type: :integer
+        ]
+      ]
+
+      def dog_age_sorter(query, direction, _opts) do
+        order_by(query, [p], [{^direction, fragment("? * 7", p.age)}])
+      end
 
   Schema:
 
@@ -540,8 +557,8 @@ defprotocol Flop.Schema do
     Supports fields from the Ecto schema, join fields, compound fields and
     custom fields. Alias fields are not supported.
   - `:sortable` (required) - A list of fields that can be used for sorting.
-    Supports fields from the Ecto schema, join fields, and alias fields. Custom
-    fields and compound fields are not supported.
+    Supports fields from the Ecto schema, join fields, alias fields, compound
+    fields, and custom fields with a `:sorter`.
   - `:default_limit` - The default limit applied if no `limit`, `page_size`,
     `first` or `last` parameter is set. Set to `false` to not set any default
     limit.
@@ -602,9 +619,15 @@ defprotocol Flop.Schema do
   @typedoc """
   Defines the options for a custom field.
 
-  - `:filter` (required) - A module/function/options tuple referencing a
-    custom filter function. The function must take the Ecto query, the
-    `Flop.Filter` struct, and the options from the tuple as arguments.
+  - `:filter` - A module/function/options tuple referencing a custom filter
+    function. The function must take the Ecto query, the `Flop.Filter` struct,
+    and the options from the tuple as arguments. Required when the field is
+    filterable.
+  - `:sorter` - A module/function/options tuple referencing a custom sorter
+    function. The function must take the Ecto query, the order direction, and
+    the options from the tuple as arguments, and return the ordered query.
+    Required when the field is sortable. Runtime options passed with
+    `:extra_opts` are merged into the options.
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator
     and value validation is based on this option.
   - `:bindings` - If the custom filter function requires certain named bindings
@@ -620,6 +643,7 @@ defprotocol Flop.Schema do
   """
   @type custom_field_option ::
           {:filter, {module, atom, keyword}}
+          | {:sorter, {module, atom, keyword}}
           | {:ecto_type, ecto_type()}
           | {:bindings, [atom]}
           | {:operators, [Flop.Filter.op()]}
@@ -702,6 +726,7 @@ defprotocol Flop.Schema do
         extra: %{
           type: :custom,
           filter: {MyApp.Pet, :reverse_name_filter, []},
+          sorter: nil,
           bindings: []
         }
       }
@@ -782,7 +807,7 @@ defprotocol Flop.Schema do
   Returns the sortable fields of a schema.
 
       iex> Flop.Schema.sortable(%MyApp.Pet{})
-      [:name, :age, :owner_name, :owner_age]
+      [:name, :age, :owner_name, :owner_age, :dog_age]
   """
   @doc since: "0.1.0"
   @spec sortable(any) :: [atom]

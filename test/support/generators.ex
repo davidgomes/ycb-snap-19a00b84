@@ -148,9 +148,20 @@ defmodule Flop.Generators do
   defp operator_by_type(a) when is_number(a),
     do: member_of([:==, :!=, :<=, :<, :>=, :>])
 
-  def cursor_fields(%{} = schema) do
+  defp sortable_cursor_fields(schema) do
     schema
     |> Flop.Schema.sortable()
+    |> Enum.reject(fn field ->
+      %Flop.FieldInfo{extra: %{type: field_type}} =
+        Flop.Schema.field_info(schema, field)
+
+      field_type in [:alias, :compound, :custom]
+    end)
+  end
+
+  def cursor_fields(%{} = schema) do
+    schema
+    |> sortable_cursor_fields()
     |> Enum.shuffle()
     |> constant()
   end
@@ -158,7 +169,7 @@ defmodule Flop.Generators do
   def order_directions(%{} = schema) do
     field_count =
       schema
-      |> Flop.Schema.sortable()
+      |> sortable_cursor_fields()
       |> length()
 
     @order_directions

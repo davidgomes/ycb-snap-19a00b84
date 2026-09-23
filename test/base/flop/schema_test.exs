@@ -409,4 +409,54 @@ defmodule Flop.SchemaTest do
 
     assert error.message =~ "cannot sort by custom field"
   end
+
+  test "allows a custom field with a sorter to be sortable" do
+    defmodule Sage do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:dog_age],
+        custom_fields: [
+          dog_age: [
+            sorter: {__MODULE__, :dog_age_sorter, []},
+            ecto_type: :integer
+          ]
+        ]
+      }
+      defstruct [:id, :age]
+
+      def dog_age_sorter(query, _direction, _opts) do
+        query
+      end
+    end
+
+    sage = struct(Sage)
+    assert Schema.sortable(sage) == [:dog_age]
+
+    assert %Flop.FieldInfo{
+             extra: %{type: :custom, sorter: {Sage, :dog_age_sorter, []}}
+           } = Schema.field_info(sage, :dog_age)
+  end
+
+  test "raises if a filterable custom field has no filter" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Rosemary do
+          @derive {
+            Flop.Schema,
+            filterable: [:dog_age],
+            sortable: [],
+            custom_fields: [
+              dog_age: [
+                sorter: {__MODULE__, :dog_age_sorter, []},
+                ecto_type: :integer
+              ]
+            ]
+          }
+          defstruct [:id, :age]
+        end
+      end
+
+    assert error.message =~ "cannot filter by custom field"
+  end
 end
