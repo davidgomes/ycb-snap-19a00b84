@@ -5,6 +5,7 @@
 This version moves all Form helpers to a [separate library](https://github.com/surface-ui/surface_form). Form Helpers are no longer used in new apps from Surface v0.12. Older applications who wish to maintain compatibility, add `{:surface_form, "~> 0.1.0"}` to your `mix.exs`.
 
 * Add new events `:on-viewport-top`, `:on-viewport-bottom`, `:on-mounted`, `:on-remove`, `:on-connected` and `:on-disconnected`
+* Move form-specific event logic (`phx-trigger-action` handling) to `surface_form`
 
 ## v0.11.5 (2024-09-04)
 
