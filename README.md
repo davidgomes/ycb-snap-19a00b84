@@ -49,11 +49,11 @@ config :my_app, Enqueuer, [
 ## Starting Enqueuers
 
 By default, `gen_queue_oban` does not start Oban on application start. So we must add
-our new `Enqueuer` module to our supervision tree.
+our new `Enqueuer` module to our supervision tree, passing it our `Oban` config.
 
 ```elixir
   children = [
-    supervisor(Enqueuer, []),
+    {Enqueuer, Application.get_env(:my_app, Oban)},
   ]
 ```
 
