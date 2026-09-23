@@ -936,6 +936,80 @@ defmodule PaginatorTest do
            }
   end
 
+  describe "paginate on a nullable column" do
+    setup do
+      for amount <- [nil, 3, 1, nil, 2, 1, nil, 3] do
+        insert(:payment, amount: amount, status: "nullable")
+      end
+
+      :ok
+    end
+
+    for amount_direction <- [
+          :asc,
+          :desc,
+          :asc_nulls_first,
+          :asc_nulls_last,
+          :desc_nulls_first,
+          :desc_nulls_last
+        ],
+        id_direction <- [:asc, :desc],
+        limit <- [1, 2, 3] do
+      test "paginates forward and backward with amount: #{amount_direction}, id: #{id_direction}, limit: #{limit}" do
+        amount_direction = unquote(amount_direction)
+        id_direction = unquote(id_direction)
+        limit = unquote(limit)
+
+        query =
+          from(
+            p in Payment,
+            where: p.status == "nullable",
+            order_by: [{^amount_direction, p.amount}, {^id_direction, p.id}],
+            select: p
+          )
+
+        # Plain :asc/:desc don't handle NULLs, so only check them on non-NULL values.
+        query =
+          if amount_direction in [:asc, :desc],
+            do: where(query, [p], not is_nil(p.amount)),
+            else: query
+
+        cursor_fields = [amount: amount_direction, id: id_direction]
+        expected = query |> Repo.all() |> to_ids()
+
+        assert paginate_forward(query, cursor_fields, limit) == expected
+        assert paginate_backward(query, cursor_fields, limit) == expected
+      end
+    end
+  end
+
+  defp paginate_forward(query, cursor_fields, limit, cursor \\ nil) do
+    %Page{entries: entries, metadata: metadata} =
+      Repo.paginate(query, cursor_fields: cursor_fields, limit: limit, after: cursor)
+
+    case metadata.after do
+      nil -> to_ids(entries)
+      next -> to_ids(entries) ++ paginate_forward(query, cursor_fields, limit, next)
+    end
+  end
+
+  defp paginate_backward(query, cursor_fields, limit) do
+    last = query |> Repo.all() |> List.last()
+    cursor = Paginator.cursor_for_record(last, cursor_fields)
+
+    do_paginate_backward(query, cursor_fields, limit, cursor) ++ [last.id]
+  end
+
+  defp do_paginate_backward(query, cursor_fields, limit, cursor) do
+    %Page{entries: entries, metadata: metadata} =
+      Repo.paginate(query, cursor_fields: cursor_fields, limit: limit, before: cursor)
+
+    case metadata.before do
+      nil -> to_ids(entries)
+      previous -> do_paginate_backward(query, cursor_fields, limit, previous) ++ to_ids(entries)
+    end
+  end
+
   defp to_ids(entries), do: Enum.map(entries, & &1.id)
 
   defp create_customers_and_payments(_context) do

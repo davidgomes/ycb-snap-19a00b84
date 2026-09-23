@@ -106,6 +106,15 @@ defmodule Paginator do
 
       Repo.paginate(query, cursor_fields: [inserted_at: :asc, id: :desc], limit: 50)
 
+  Supported sort directions are `:asc`, `:asc_nulls_first`, `:asc_nulls_last`, `:desc`,
+  `:desc_nulls_first` and `:desc_nulls_last`. They must match the directions used in the
+  query's `order_by`. Only the `*_nulls_first` and `*_nulls_last` directions handle `NULL`
+  values in cursor fields correctly.
+
+      query = from(p in Post, order_by: [desc_nulls_last: p.charged_at, asc: p.id], select: p)
+
+      Repo.paginate(query, cursor_fields: [charged_at: :desc_nulls_last, id: :asc], limit: 50)
+
   ## Example with sorting on columns in joined tables
 
       from(
