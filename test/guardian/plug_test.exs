@@ -715,6 +715,30 @@ defmodule Guardian.PlugTest do
     end
   end
 
+  describe "resolve_secret" do
+    test "calls a one argument function with the connection", %{conn: conn} do
+      conn = assign(conn, :tenant_secret, "tenant-secret")
+      opts = Guardian.Plug.resolve_secret(conn, key: :admin, secret: & &1.assigns.tenant_secret)
+
+      assert opts[:secret] == "tenant-secret"
+      assert opts[:key] == :admin
+    end
+
+    test "keeps a nil selected by the function so it is not replaced by the configured secret", %{conn: conn} do
+      opts = Guardian.Plug.resolve_secret(conn, secret: fn _conn -> nil end)
+
+      assert Keyword.fetch(opts, :secret) == {:ok, nil}
+    end
+
+    test "leaves other secrets for the token module to resolve", %{conn: conn} do
+      mfa = {__MODULE__, :some_secret, []}
+
+      assert Guardian.Plug.resolve_secret(conn, secret: mfa) == [secret: mfa]
+      assert Guardian.Plug.resolve_secret(conn, secret: "static") == [secret: "static"]
+      assert Guardian.Plug.resolve_secret(conn, key: :admin) == [key: :admin]
+    end
+  end
+
   describe "#keys" do
     alias Guardian.Plug.Keys
 

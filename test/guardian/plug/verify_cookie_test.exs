@@ -117,6 +117,22 @@ defmodule Guardian.Plug.VerifyCookieTest do
       refute new_t == ctx.token
     end
 
+    test "verifies and exchanges the token with the secret selected from the connection", ctx do
+      conn =
+        ctx.conn
+        |> assign(:tenant_secret, "tenant-secret")
+        |> VerifyCookie.call(secret: &tenant_secret/1)
+
+      refute conn.halted
+      assert Guardian.Plug.current_claims(conn, [])["typ"] == "access"
+
+      assert_received {Guardian.Support.TokenModule, :decode_token, [_mod, _token, decode_opts]}
+      assert decode_opts[:secret] == "tenant-secret"
+
+      assert_received {Guardian.Support.TokenModule, :exchange, [_mod, _token, _from, _to, exchange_opts]}
+      assert exchange_opts[:secret] == "tenant-secret"
+    end
+
     test "in a different location", ctx do
       conn =
         :get
@@ -174,4 +190,6 @@ defmodule Guardian.Plug.VerifyCookieTest do
       refute new_conn.status == 401
     end
   end
+
+  defp tenant_secret(conn), do: conn.assigns[:tenant_secret]
 end

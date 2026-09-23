@@ -36,6 +36,11 @@ if Code.ensure_loaded?(Plug) do
       `:none` will not use a prefix.
     * `key` - The location to store the information in the connection. Defaults to: `default`
     * `halt` - Whether to halt the connection in case of error. Defaults to `true`.
+    * `secret` - The secret to verify the token with. Defaults to the implementation
+      module's configuration. Besides the values accepted by the token module, it may
+      be a one argument function which is called with the connection once a token is
+      found, to select the secret per request. Returning `nil` rejects the token with
+      `{:invalid_token, :secret_not_found}` rather than using the configured secret.
     * `:refresh_from_cookie` - Looks for and validates a token found in the request cookies. (default `false`)
 
     Refresh from cookie option
@@ -46,6 +51,8 @@ if Code.ensure_loaded?(Plug) do
       implementation modules `default_type`
     * `:ttl` - The time to live of the exchanged token. Defaults to configured values.
     * `:halt` - Whether to halt the connection in case of error. Defaults to `true`
+    * `:secret` - As above, used to verify the cookie and sign the exchanged token.
+      It is not inherited from the plug's own `secret` option.
 
     ### Example
 
@@ -65,6 +72,17 @@ if Code.ensure_loaded?(Plug) do
     OR
 
     `MyApp.ImplementationModule.current_token` and `MyApp.ImplementationModule.current_claims`.
+
+    ### Selecting the secret from the connection
+
+    ```elixir
+    plug Guardian.Plug.VerifyHeader, secret: &MyApp.Tenants.verifying_secret/1
+    ```
+
+    Here `MyApp.Tenants.verifying_secret/1` receives the connection, for example to
+    return the key of a tenant assigned by an upstream plug. Prefer a function capture
+    over an anonymous function, which cannot be used when plugs are initialized at compile time.
+    An `{m, f, a}` tuple keeps its meaning and is not given the connection.
     """
 
     alias Guardian.Plug.Pipeline
@@ -89,7 +107,8 @@ if Code.ensure_loaded?(Plug) do
            module <- Pipeline.fetch_module!(conn, opts),
            claims_to_check <- Keyword.get(opts, :claims, %{}),
            key <- storage_key(conn, opts),
-           {:ok, claims} <- Guardian.decode_and_verify(module, token, claims_to_check, opts) do
+           verify_opts <- Guardian.Plug.resolve_secret(conn, opts),
+           {:ok, claims} <- Guardian.decode_and_verify(module, token, claims_to_check, verify_opts) do
         conn
         |> Guardian.Plug.put_current_token(token, key: key)
         |> Guardian.Plug.put_current_claims(claims, key: key)

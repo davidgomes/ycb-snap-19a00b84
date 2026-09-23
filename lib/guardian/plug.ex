@@ -319,6 +319,21 @@ if Code.ensure_loaded?(Plug) do
       if token, do: {:ok, token}, else: :no_token_found
     end
 
+    @doc """
+    Resolves a `:secret` option given as a one argument function by calling it
+    with the connection, so that a plug can select the secret per request.
+
+    Any other `:secret`, including an `{m, f, a}` tuple, is left as is for the
+    token module to resolve.
+    """
+    @spec resolve_secret(Plug.Conn.t(), Guardian.options()) :: Guardian.options()
+    def resolve_secret(conn, opts) do
+      case Keyword.fetch(opts, :secret) do
+        {:ok, fun} when is_function(fun, 1) -> Keyword.put(opts, :secret, fun.(conn))
+        _ -> opts
+      end
+    end
+
     defp fetch_token_key(conn, opts) do
       conn
       |> Pipeline.fetch_key(opts)

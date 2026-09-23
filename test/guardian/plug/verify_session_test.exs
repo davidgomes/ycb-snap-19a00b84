@@ -336,4 +336,44 @@ defmodule Guardian.Plug.VerifySessionTest do
       assert %{"sub" => "User:jane", "typ" => "access"} = Guardian.Plug.current_claims(conn)
     end
   end
+
+  @tenant_secret "tenant-secret"
+
+  describe "with a :secret function" do
+    setup do
+      impl = __MODULE__.ImplJwt
+      {:ok, token, claims} = impl.encode_and_sign(@resource, %{}, secret: @tenant_secret)
+      {:ok, %{claims: claims, token: token, impl: impl, handler: __MODULE__.Handler}}
+    end
+
+    test "verifies the token with the secret selected from the connection", ctx do
+      conn =
+        :get
+        |> conn("/")
+        |> init_test_session(%{guardian_default_token: ctx.token})
+        |> Plug.Conn.assign(:tenant_secret, @tenant_secret)
+        |> VerifySession.call(module: ctx.impl, error_handler: ctx.handler, secret: &tenant_secret/1)
+
+      refute conn.status == 401
+      assert Guardian.Plug.current_token(conn) == ctx.token
+      assert Guardian.Plug.current_claims(conn) == ctx.claims
+    end
+
+    test "does not fall back to the configured secret when none is selected", ctx do
+      {:ok, token, _claims} = ctx.impl.encode_and_sign(@resource)
+
+      conn =
+        :get
+        |> conn("/")
+        |> init_test_session(%{guardian_default_token: token})
+        |> VerifySession.call(module: ctx.impl, error_handler: ctx.handler, secret: &tenant_secret/1)
+
+      assert conn.status == 401
+      assert conn.halted
+      assert conn.resp_body == inspect({:invalid_token, :secret_not_found})
+      refute Guardian.Plug.current_token(conn)
+    end
+  end
+
+  defp tenant_secret(conn), do: conn.assigns[:tenant_secret]
 end
