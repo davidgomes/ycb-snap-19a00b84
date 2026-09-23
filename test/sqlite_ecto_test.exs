@@ -927,7 +927,9 @@ defmodule Sqlite.Ecto2.Test do
                 {:add, :category_5, %Reference{table: :categories, on_update: :nothing}, []},
                 {:add, :category_6, %Reference{table: :categories, on_update: :update_all}, [null: false]},
                 {:add, :category_7, %Reference{table: :categories, on_update: :nilify_all}, []},
-                {:add, :category_8, %Reference{table: :categories, on_delete: :nilify_all, on_update: :update_all}, [null: false]}]}
+                {:add, :category_8, %Reference{table: :categories, on_delete: :nilify_all, on_update: :update_all}, [null: false]},
+                {:add, :category_9, %Reference{table: :categories, on_delete: :restrict}, []},
+                {:add, :category_10, %Reference{table: :categories, on_update: :restrict}, []}]}
 
     assert execute_ddl(create) == ["""
     CREATE TABLE "posts" ("id" INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -939,7 +941,9 @@ defmodule Sqlite.Ecto2.Test do
     "category_5" INTEGER CONSTRAINT "posts_category_5_fkey" REFERENCES "categories"("id"),
     "category_6" INTEGER NOT NULL CONSTRAINT "posts_category_6_fkey" REFERENCES "categories"("id") ON UPDATE CASCADE,
     "category_7" INTEGER CONSTRAINT "posts_category_7_fkey" REFERENCES "categories"("id") ON UPDATE SET NULL,
-    "category_8" INTEGER NOT NULL CONSTRAINT "posts_category_8_fkey" REFERENCES "categories"("id") ON DELETE SET NULL ON UPDATE CASCADE)
+    "category_8" INTEGER NOT NULL CONSTRAINT "posts_category_8_fkey" REFERENCES "categories"("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    "category_9" INTEGER CONSTRAINT "posts_category_9_fkey" REFERENCES "categories"("id") ON DELETE RESTRICT,
+    "category_10" INTEGER CONSTRAINT "posts_category_10_fkey" REFERENCES "categories"("id") ON UPDATE RESTRICT)
     """ |> remove_newlines]
   end
 
@@ -988,6 +992,24 @@ defmodule Sqlite.Ecto2.Test do
 
     assert execute_ddl(create) ==
            [~s|CREATE TABLE "posts" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "title" TEXT)|]
+  end
+
+  test "create table with a map column, and an empty map default" do
+    create = {:create, table(:posts),
+              [{:add, :a, :map, [default: %{}]}]}
+    assert execute_ddl(create) == [~s|CREATE TABLE "posts" ("a" TEXT DEFAULT '{}')|]
+  end
+
+  test "create table with a map column, and a map default with values" do
+    create = {:create, table(:posts),
+              [{:add, :a, :map, [default: %{foo: "bar", baz: "it's"}]}]}
+    assert execute_ddl(create) == [~s|CREATE TABLE "posts" ("a" TEXT DEFAULT '{"foo":"bar","baz":"it''s"}')|]
+  end
+
+  test "create table with a map column, and a string default" do
+    create = {:create, table(:posts),
+              [{:add, :a, :map, [default: ~s|{"foo":"bar","baz":"boom"}|]}]}
+    assert execute_ddl(create) == [~s|CREATE TABLE "posts" ("a" TEXT DEFAULT '{"foo":"bar","baz":"boom"}')|]
   end
 
   test "create table with bad table name" do
