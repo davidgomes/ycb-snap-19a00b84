@@ -137,7 +137,7 @@ defmodule HexpmWeb.Dashboard.Policy.Components.PolicyEdit do
       <h3 class="sr-only">Repository rules</h3>
       <div id="repo-config" phx-hook="PrivateRepoTabs" class="space-y-4">
         <.repo_tabs repositories={@repositories} private?={@private?} />
-        <%= inputs_for @form, :repositories, fn rf -> %>
+        <%= inputs_for @form, :repositories, [skip_hidden: true], fn rf -> %>
           <.repo_panel
             form={rf}
             index={repo_index(rf)}
@@ -660,7 +660,7 @@ defmodule HexpmWeb.Dashboard.Policy.Components.PolicyEdit do
   defp overrides_card(assigns) do
     assigns =
       assigns
-      |> assign(:overrides, Form.input_value(assigns.form, :overrides) || [])
+      |> assign(:overrides, rendered_overrides(assigns.form))
       |> assign(:override_name, Form.input_name(assigns.form, :overrides))
       |> assign(:override_id, Form.input_id(assigns.form, :overrides))
 
@@ -714,7 +714,7 @@ defmodule HexpmWeb.Dashboard.Policy.Components.PolicyEdit do
         </div>
 
         <div data-override-rows class="space-y-2">
-          <%= inputs_for @form, :overrides, fn of -> %>
+          <%= inputs_for @form, :overrides, [skip_hidden: true], fn of -> %>
             <.override_row
               action_name={Form.input_name(of, :action)}
               action_value={to_string(Form.input_value(of, :action) || "allow")}
@@ -1027,6 +1027,13 @@ defmodule HexpmWeb.Dashboard.Policy.Components.PolicyEdit do
       [_, index] -> String.to_integer(index)
       _ -> 0
     end
+  end
+
+  # `inputs_for` skips embeds marked for replacement, so the empty state has
+  # to skip them too.
+  defp rendered_overrides(form) do
+    (Form.input_value(form, :overrides) || [])
+    |> Enum.reject(&match?(%Ecto.Changeset{action: :replace}, &1))
   end
 
   # The hidden fields that keep a repository tab matched and named on submit.

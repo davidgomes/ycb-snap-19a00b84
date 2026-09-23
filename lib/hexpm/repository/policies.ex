@@ -71,12 +71,46 @@ defmodule Hexpm.Repository.Policies do
     Map.put(params, "repositories", repositories)
   end
 
-  defp submitted_repositories(nil), do: []
-  defp submitted_repositories(list) when is_list(list), do: list
-
-  defp submitted_repositories(map) when is_map(map) do
-    map |> Enum.sort_by(fn {key, _value} -> key end) |> Enum.map(fn {_key, value} -> value end)
+  defp submitted_repositories(repositories) do
+    repositories
+    |> params_list()
+    |> Enum.map(&put_submitted_overrides/1)
   end
+
+  # A submitted tab lists every override it keeps. A form with no rows left
+  # posts no `overrides` key, which `cast_embed` would read as unchanged, and
+  # an entry without a package is a leftover id from a removed row.
+  defp put_submitted_overrides(tab) when is_map(tab) do
+    overrides =
+      tab
+      |> Map.get("overrides")
+      |> params_list()
+      |> Enum.filter(&(is_map(&1) and Map.has_key?(&1, "package")))
+
+    Map.put(tab, "overrides", overrides)
+  end
+
+  defp put_submitted_overrides(tab), do: tab
+
+  defp params_list(nil), do: []
+  defp params_list(list) when is_list(list), do: list
+
+  defp params_list(map) when is_map(map) do
+    map
+    |> Enum.sort_by(fn {key, _value} -> index_key(key) end)
+    |> Enum.map(fn {_key, value} -> value end)
+  end
+
+  defp params_list(_other), do: []
+
+  defp index_key(key) when is_binary(key) do
+    case Integer.parse(key) do
+      {int, ""} -> {0, int, key}
+      _ -> {1, 0, key}
+    end
+  end
+
+  defp index_key(key), do: {1, 0, key}
 
   defp tab_to_params(repository_policy) do
     %{
