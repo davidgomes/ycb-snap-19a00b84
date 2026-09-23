@@ -22,6 +22,12 @@ defmodule PlugRailsCookieSessionStore do
     When this option is false, the cookie is still signed, meaning it
     can't be tempered with but its contents can be read;
 
+  * `:cipher` - the cipher used to encrypt cookies. Either `:aes_cbc256`
+    (default, AES-256-CBC signed with HMAC-SHA1 as used by Rails 4.x, 5.0
+    and 5.1) or `:aes_256_gcm` (authenticated encryption as used by Rails 5.2+
+    when `use_authenticated_cookie_encryption` is enabled). With
+    `:aes_256_gcm` the `:signing_salt` is not used;
+
   * `:encryption_salt` - a salt used with `conn.secret_key_base` to generate
     a key for encrypting/decrypting a cookie;
 
@@ -59,8 +65,9 @@ defmodule PlugRailsCookieSessionStore do
   alias PlugRailsCookieSessionStore.MessageEncryptor
 
   def init(opts) do
+    cipher = check_cipher(Keyword.get(opts, :cipher, :aes_cbc256))
     encryption_salt = check_encryption_salt(opts)
-    signing_salt = check_signing_salt(opts)
+    signing_salt = check_signing_salt(opts, cipher)
 
     iterations = Keyword.get(opts, :key_iterations, 1000)
     length = Keyword.get(opts, :key_length, 32)
@@ -74,6 +81,7 @@ defmodule PlugRailsCookieSessionStore do
 
     %{encryption_salt: encryption_salt,
       signing_salt: signing_salt,
+      cipher: cipher,
       key_opts: key_opts,
       serializer: serializer}
   end
@@ -81,12 +89,15 @@ defmodule PlugRailsCookieSessionStore do
   def get(conn, cookie, opts) do
     key_opts = opts.key_opts
     cookie = cookie |> URI.decode_www_form
-    if key = opts.encryption_salt do
-      MessageEncryptor.verify_and_decrypt(cookie,
-                                          derive(conn, key, key_opts),
-                                          derive(conn, opts.signing_salt, key_opts))
-    else
-      MessageVerifier.verify(cookie, derive(conn, opts.signing_salt, key_opts))
+    cond do
+      is_nil(opts.encryption_salt) ->
+        MessageVerifier.verify(cookie, derive(conn, opts.signing_salt, key_opts))
+      opts.cipher == :aes_256_gcm ->
+        MessageEncryptor.decrypt_and_verify(cookie, derive(conn, opts.encryption_salt, key_opts))
+      true ->
+        MessageEncryptor.verify_and_decrypt(cookie,
+                                            derive(conn, opts.encryption_salt, key_opts),
+                                            derive(conn, opts.signing_salt, key_opts))
     end |> decode(opts.serializer)
   end
 
@@ -94,12 +105,15 @@ defmodule PlugRailsCookieSessionStore do
   def put(conn, _sid, term, opts) do
     binary = encode(term, opts.serializer)
     key_opts = opts.key_opts
-    if key = opts.encryption_salt do
-      MessageEncryptor.encrypt_and_sign(binary,
-                                        derive(conn, key, key_opts),
-                                        derive(conn, opts.signing_salt, key_opts))
-    else
-      MessageVerifier.sign(binary, derive(conn, opts.signing_salt, key_opts))
+    cond do
+      is_nil(opts.encryption_salt) ->
+        MessageVerifier.sign(binary, derive(conn, opts.signing_salt, key_opts))
+      opts.cipher == :aes_256_gcm ->
+        MessageEncryptor.encrypt_and_authenticate(binary, derive(conn, opts.encryption_salt, key_opts))
+      true ->
+        MessageEncryptor.encrypt_and_sign(binary,
+                                          derive(conn, opts.encryption_salt, key_opts),
+                                          derive(conn, opts.signing_salt, key_opts))
     end |> URI.encode_www_form
   end
 
@@ -141,8 +155,9 @@ defmodule PlugRailsCookieSessionStore do
   defp validate_secret_key_base(secret_key_base), do:
     secret_key_base
 
-  defp check_signing_salt(opts) do
-    if Keyword.get(opts, :signing_with_salt, true) do
+  defp check_signing_salt(opts, cipher) do
+    authenticated_encryption? = cipher == :aes_256_gcm and Keyword.get(opts, :encrypt, true)
+    if Keyword.get(opts, :signing_with_salt, true) and not authenticated_encryption? do
       case opts[:signing_salt] do
         nil  -> raise ArgumentError, "cookie store expects :signing_salt as option"
         salt -> salt
@@ -158,6 +173,10 @@ defmodule PlugRailsCookieSessionStore do
       end
     end
   end
+
+  defp check_cipher(cipher) when cipher in [:aes_cbc256, :aes_256_gcm], do: cipher
+  defp check_cipher(_), do:
+    raise(ArgumentError, "cookie store expects :cipher option to be :aes_cbc256 or :aes_256_gcm")
 
   defp check_serializer(serializer) when is_atom(serializer), do: serializer
   defp check_serializer(_), do:

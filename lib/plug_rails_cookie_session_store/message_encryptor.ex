@@ -6,17 +6,24 @@ defmodule PlugRailsCookieSessionStore.MessageEncryptor do
   returned to you.
   This can be used in situations similar to the `MessageVerifier`, but where
   you don't want users to be able to determine the value of the payload.
+
+  Two formats are supported:
+
+    * AES-256-CBC signed with HMAC-SHA1 (`encrypt_and_sign/4` and
+      `verify_and_decrypt/4`), used by Rails 4.x, 5.0 and 5.1;
+
+    * AES-256-GCM authenticated encryption (`encrypt_and_authenticate/2` and
+      `decrypt_and_verify/2`), used by Rails 5.2+ when
+      `use_authenticated_cookie_encryption` is enabled.
+
   ## Example
       secret_key_base = "072d1e0157c008193fe48a670cce031faa4e..."
       encrypted_cookie_salt = "encrypted cookie"
       encrypted_signed_cookie_salt = "signed encrypted cookie"
       secret = KeyGenerator.generate(secret_key_base, encrypted_cookie_salt)
       sign_secret = KeyGenerator.generate(secret_key_base, encrypted_signed_cookie_salt)
-      encryptor = MessageEncryptor.new(secret, sign_secret)
-      data = %{current_user: %{name: "José"}}
-      encrypted = MessageEncryptor.encrypt_and_sign(encryptor, data)
-      decrypted = MessageEncryptor.verify_and_decrypt(encryptor, encrypted)
-      decrypted.current_user.name # => "José"
+      encrypted = MessageEncryptor.encrypt_and_sign("José", secret, sign_secret)
+      MessageEncryptor.verify_and_decrypt(encrypted, secret, sign_secret) # => {:ok, "José"}
   """
 
   alias PlugRailsCookieSessionStore.MessageVerifier
@@ -52,13 +59,48 @@ defmodule PlugRailsCookieSessionStore.MessageEncryptor do
     end
   end
 
+  @doc """
+  Encrypts a message with AES-256-GCM, in the format used by Rails 5.2+
+  authenticated encrypted cookies.
+  """
+  def encrypt_and_authenticate(message, secret)
+      when is_binary(message) and is_binary(secret) do
+    iv = :crypto.strong_rand_bytes(12)
+    {encrypted, tag} =
+      :crypto.crypto_one_time_aead(:aes_256_gcm, trim_secret(secret), iv, message, "", true)
+
+    Base.encode64(encrypted) <> "--" <> Base.encode64(iv) <> "--" <> Base.encode64(tag)
+  end
+
+  @doc """
+  Decrypts and verifies a message encrypted with AES-256-GCM, in the format
+  used by Rails 5.2+ authenticated encrypted cookies.
+  """
+  def decrypt_and_verify(encrypted, secret)
+      when is_binary(encrypted) and is_binary(secret) do
+    with [encrypted, iv, tag] <- String.split(encrypted, "--"),
+         {:ok, encrypted} <- Base.decode64(encrypted),
+         {:ok, iv} <- Base.decode64(iv),
+         {:ok, tag} <- Base.decode64(tag),
+         16 <- byte_size(tag),
+         message when is_binary(message) <-
+           :crypto.crypto_one_time_aead(:aes_256_gcm, trim_secret(secret), iv, encrypted, "", tag, false) do
+      {:ok, message}
+    else
+      _ -> :error
+    end
+  end
+
   defp encrypt(message, cipher, secret, iv) do
-    :crypto.block_encrypt(cipher, trim_secret(secret), iv, message)
+    :crypto.crypto_one_time(crypto_cipher(cipher), trim_secret(secret), iv, message, true)
   end
 
   defp decrypt(encrypted, cipher, secret, iv) do
-    :crypto.block_decrypt(cipher, trim_secret(secret), iv, encrypted)
+    :crypto.crypto_one_time(crypto_cipher(cipher), trim_secret(secret), iv, encrypted, false)
   end
+
+  defp crypto_cipher(:aes_cbc256), do: :aes_256_cbc
+  defp crypto_cipher(cipher), do: cipher
 
   defp pad_message(msg) do
     bytes_remaining = rem(byte_size(msg), 16)
