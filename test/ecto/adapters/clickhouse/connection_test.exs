@@ -817,25 +817,32 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
     assert Connection.quote_name(~s{has\\slash}) |> IO.iodata_to_binary() ==
              ~s{"has\\\\slash"}
 
-    assert Connection.quote_name(~s{has`tick}, ?`) |> IO.iodata_to_binary() ==
-             ~s{`has\\`tick`}
+    assert Connection.quote_name(~s{has`tick}) |> IO.iodata_to_binary() ==
+             ~s{"has`tick"}
+
+    assert Connection.quote_string(~s{let's \\ escape}) |> IO.iodata_to_binary() ==
+             ~s{'let''s \\\\ escape'}
 
     query = insert(nil, ~s{schema"quoted}, [~s{field"quoted}], [], :raise, [])
 
     assert query == ~s{INSERT INTO "schema\\"quoted"("field\\"quoted")}
   end
 
-  test "quoted identifier escape matches the byte-wise oracle for every byte pair" do
+  test "quoting matches the byte-wise oracle for every byte pair" do
     value = for left <- 0..255, right <- 0..255, into: <<>>, do: <<left, right>>
 
-    for quoter <- [?", ?`] do
+    for {quoter, fun} <- [{?", &Connection.quote_name/1}, {?', &Connection.quote_string/1}] do
       expected =
         for <<byte <- value>>, into: <<>> do
-          if byte in [?\\, quoter], do: <<?\\, byte>>, else: <<byte>>
+          cond do
+            byte == ?\\ -> "\\\\"
+            byte == quoter and quoter == ?' -> "''"
+            byte == quoter -> <<?\\, byte>>
+            true -> <<byte>>
+          end
         end
 
-      assert Connection.quote_name(value, quoter) |> IO.iodata_to_binary() ==
-               <<quoter, expected::binary, quoter>>
+      assert fun.(value) |> IO.iodata_to_binary() == <<quoter, expected::binary, quoter>>
     end
   end
 
@@ -1098,22 +1105,25 @@ defmodule Ecto.Adapters.ClickHouse.ConnectionTest do
     assert all(query) == ~s{SELECT s0."meta"[0][1] FROM "schema" AS s0}
 
     query = Schema |> select([s], json_extract_path(s.meta, ["a", "b"]))
-    assert all(query) == ~s{SELECT s0."meta".a.b FROM "schema" AS s0}
+    assert all(query) == ~s{SELECT s0."meta"."a"."b" FROM "schema" AS s0}
 
     query = Schema |> select([s], json_extract_path(s.meta, ["'a"]))
-    assert all(query) == ~s{SELECT s0."meta".`'a` FROM "schema" AS s0}
+    assert all(query) == ~s{SELECT s0."meta"."'a" FROM "schema" AS s0}
 
     query = Schema |> select([s], json_extract_path(s.meta, ["\"a"]))
-    assert all(query) == ~s{SELECT s0."meta".`"a` FROM "schema" AS s0}
+    assert all(query) == ~s{SELECT s0."meta"."\\"a" FROM "schema" AS s0}
 
     query = Schema |> select([s], json_extract_path(s.meta, ["a b", "a`b"]))
-    assert all(query) == ~s{SELECT s0."meta".`a b`.`a\\`b` FROM "schema" AS s0}
+    assert all(query) == ~s{SELECT s0."meta"."a b"."a`b" FROM "schema" AS s0}
 
     query = Schema |> select([s], json_extract_path(s.meta, ["a\\b"]))
-    assert all(query) == ~S|SELECT s0."meta".`a\\b` FROM "schema" AS s0|
+    assert all(query) == ~S|SELECT s0."meta"."a\\b" FROM "schema" AS s0|
+
+    query = Schema |> select([s], json_extract_path(s.meta, ["FROM"]))
+    assert all(query) == ~s{SELECT s0."meta"."FROM" FROM "schema" AS s0}
 
     query = Schema |> select([s], s.meta["author"]["name"])
-    assert all(query) == ~s{SELECT s0."meta".author.name FROM "schema" AS s0}
+    assert all(query) == ~s{SELECT s0."meta"."author"."name" FROM "schema" AS s0}
   end
 
   test "nested expressions" do
