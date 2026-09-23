@@ -87,6 +87,17 @@ defmodule PetalComponents.DropdownTest do
       refute html =~ "x-show"
       assert_attribute(html, "phx-click")
     end
+
+    test "panel carries the PetalDropdown hook that flips it upward", %{assigns: assigns} do
+      html =
+        rendered_to_string(~H"""
+        <.dropdown label="Dropdown">
+          <.dropdown_menu_item label="Option" />
+        </.dropdown>
+        """)
+
+      assert_attribute(html, "phx-hook", "PetalDropdown")
+    end
   end
 
   describe "dropdown/1 - placement options" do

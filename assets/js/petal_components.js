@@ -1435,6 +1435,61 @@ export const PetalInputOTP = {
   },
 };
 
+// Dropdown panel: opens below its trigger, flips above (data-flip) when the
+// viewport has no room below AND more room above. LiveView.JS owns
+// open/close by writing the panel's inline display, so the hook watches
+// that style instead of the trigger - every path that opens the panel is
+// seen, and the observer runs before the opened panel is first painted.
+export const PetalDropdown = {
+  mounted() {
+    this.open = false;
+    this.onResize = () => this.position();
+    this.observer = new MutationObserver(() => this.sync());
+    this.observer.observe(this.el, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+    this.sync();
+  },
+
+  // A patch drops data-flip (the server never renders it) from an open panel.
+  updated() {
+    if (this.open) this.position();
+  },
+
+  destroyed() {
+    this.observer.disconnect();
+    window.removeEventListener("resize", this.onResize);
+  },
+
+  sync() {
+    const open = this.el.style.display !== "none";
+    if (open && !this.open) window.addEventListener("resize", this.onResize);
+    if (!open && this.open) window.removeEventListener("resize", this.onResize);
+    this.open = open;
+    if (open) this.position();
+    else this.el.removeAttribute("data-flip");
+  },
+
+  position() {
+    // the panel is absolute against .pc-dropdown, so that box is the anchor
+    const anchor = this.el.parentElement;
+    if (!anchor) return;
+    const a = anchor.getBoundingClientRect();
+    // offsetHeight ignores the scale-95 transform of the opening transition
+    const panelH = this.el.offsetHeight;
+    if (!panelH || (!a.top && !a.bottom)) return; // jsdom / unrendered
+    const vv = window.visualViewport;
+    const viewTop = vv ? vv.offsetTop : 0;
+    const viewH = vv ? vv.height : window.innerHeight;
+    const gap = 8;
+    const below = viewTop + viewH - a.bottom;
+    const above = a.top - viewTop;
+    const flip = panelH + gap > below && above > below;
+    this.el.toggleAttribute("data-flip", flip);
+  },
+};
+
 // Positions a top-layer popover (<div popover>) next to its trigger.
 // The browser handles open/close and light-dismiss via the popover attribute;
 // this hook only computes fixed coordinates, flipping to the opposite side
@@ -5466,6 +5521,7 @@ export default {
   PetalWordRotate,
   PetalTypingEffect,
   PetalInputOTP,
+  PetalDropdown,
   PetalPopover,
   PetalCommand,
   PetalCommandTrigger,

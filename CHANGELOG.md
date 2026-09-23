@@ -3,6 +3,16 @@
 
 #### Fixed
 
+- **`dropdown` panels flip upward when the viewport leaves no room
+  below.** A dropdown near the bottom of the screen (a table row's
+  actions menu, a footer, a user menu in a bottom-docked sidebar) always
+  opened downward, so its items landed off-screen. The panel now carries
+  a `PetalDropdown` hook that measures on open: when the panel does not
+  fit below the trigger and there is more room above, it opens above
+  instead and scales out of its bottom edge. The measurement re-runs on
+  resize while open and after a LiveView patch. `user_dropdown_menu` and
+  `language_select` pick this up for free. Needs the petal_components
+  hooks registered; without them the dropdown opens downward as before.
 - **`command_dialog` now locks background scroll while the palette is
   open.** A native modal `<dialog>` hands you the top layer, the focus
   trap and Escape, but it does not stop the page underneath from
