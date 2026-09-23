@@ -10,8 +10,7 @@ defmodule EctoJob.SupervisorTest do
         assert [
                  {EctoJob.WorkerSupervisor, _, :supervisor, [EctoJob.WorkerSupervisor]},
                  {EctoJob.Producer, producer_pid, :worker, [EctoJob.Producer]},
-                 {Postgrex.Notifications, notifications_pid, :worker,
-                  [Postgrex.Notifications]}
+                 {Postgrex.Notifications, notifications_pid, :worker, [Postgrex.Notifications]}
                ] = Supervisor.which_children(pid)
 
         assert Process.whereis(JobQueue.Notifier) == notifications_pid
