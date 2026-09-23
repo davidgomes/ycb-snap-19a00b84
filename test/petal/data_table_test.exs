@@ -363,6 +363,230 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "pc-data-table__actions"
   end
 
+  describe "row selection" do
+    @people [
+      %{id: 1, name: "Amy"},
+      %{id: 2, name: "Bea"},
+      %{id: 3, name: "Cal"}
+    ]
+
+    # JS.push commands render as HTML-escaped JSON; decode them back
+    defp pushes(html) do
+      ~r/phx-click="(\[\[&quot;push&quot;[^"]*)"/
+      |> Regex.scan(html, capture: :all_but_first)
+      |> Enum.map(fn [attr] ->
+        [["push", args]] =
+          attr
+          |> String.replace("&quot;", "\"")
+          |> String.replace("&amp;", "&")
+          |> Jason.decode!()
+
+        args
+      end)
+    end
+
+    defp push_values(html, op) do
+      html |> pushes() |> Enum.map(& &1["value"]) |> Enum.filter(&(&1["op"] == op))
+    end
+
+    test "a leading checkbox column: rows push select, the header pushes select_all for the page" do
+      assigns = base(%{rows: @people})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert html =~ ~s(phx-hook="PetalDataTable")
+      assert count_substring(html, "data-pc-dt-select ") == 3
+      assert html =~ ~s(aria-label="Select all rows on this page")
+
+      assert push_values(html, "select") == [
+               %{"op" => "select", "id" => "1"},
+               %{"op" => "select", "id" => "2"},
+               %{"op" => "select", "id" => "3"}
+             ]
+
+      assert push_values(html, "select_all") == [
+               %{"op" => "select_all", "ids" => ["1", "2", "3"], "selected" => true}
+             ]
+
+      assert html |> pushes() |> Enum.all?(&(&1["event"] == "table"))
+      # nothing selected: no morph, no tri-state stamp
+      refute html =~ "pc-data-table__toolbar--selection"
+      refute html =~ "data-pc-dt-indeterminate"
+    end
+
+    test "the header is tri-state: some picked stamps indeterminate, all picked checks it" do
+      assigns = base(%{rows: @people, some: [2], all: [1, 2, 3]})
+
+      some_html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable selected={@some}>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert some_html =~ "data-pc-dt-indeterminate"
+      refute some_html =~ ~r/data-pc-dt-select-all[^>]*checked/
+      assert count_substring(some_html, "data-pc-dt-select checked") == 1
+      assert [%{"selected" => true}] = push_values(some_html, "select_all")
+
+      all_html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable selected={@all}>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      refute all_html =~ "data-pc-dt-indeterminate"
+      assert all_html =~ ~r/data-pc-dt-select-all[^>]*checked/
+      # a full page unchecks as a unit
+      assert [%{"selected" => false}] = push_values(all_html, "select_all")
+    end
+
+    test "while rows are selected the toolbar morphs into count + bulk actions + clear" do
+      assigns = base(%{rows: @people, selected: [1, 3]})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          on_change="table"
+          selectable
+          searchable
+          selected={@selected}
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+          <:bulk_action :let={ids}>
+            <button type="button">Archive {Enum.join(ids, "+")}</button>
+          </:bulk_action>
+        </.data_table>
+        """)
+
+      assert html =~ "pc-data-table__toolbar--selection"
+      assert html =~ ~r/2\s+selected/
+      assert html =~ "Archive 1+3"
+      assert html =~ "Clear selection"
+      assert html =~ ~s(phx-value-op="clear_selection")
+      # the normal toolbar stays mounted, just hidden
+      assert html =~ ~r/class="pc-data-table__toolbar" hidden/
+      assert html =~ "pc-data-table__search-input"
+    end
+
+    test "one normalized selection: stringified, blank-free, deduped for count, slot and checks" do
+      assigns = base(%{rows: @people, selected: [1, "1", nil, "", "  ", 2]})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable selected={@selected}>
+          <:col :let={row} field={:name}>{row.name}</:col>
+          <:bulk_action :let={ids}>
+            <span>ids:{inspect(ids)}</span>
+          </:bulk_action>
+        </.data_table>
+        """)
+
+      assert html =~ ~r/2\s+selected/
+      assert html =~ "ids:[&quot;1&quot;, &quot;2&quot;]"
+      assert count_substring(html, "data-pc-dt-select checked") == 2
+    end
+
+    test "link mode: selection rides on_ui, never the URL, and is required" do
+      assigns = base(%{rows: @people, state: %State{total: 74, order_by: [name: :asc]}})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} on_ui="ui" selectable selected={[1]}>
+          <:col :let={row} field={:name} sortable>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert [%{"event" => "ui"} | _] = pushes(html)
+      assert html =~ ~s(phx-click="ui")
+      refute html =~ ~r/href="[^"]*select/
+
+      assert_raise ArgumentError, ~r/on_ui/, fn ->
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+      end
+    end
+
+    test "on_ui overrides on_change in event mode too, and carries the target" do
+      assigns = base(%{rows: @people})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          on_change="table"
+          on_ui="ui"
+          target="#c"
+          selectable
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      selection_pushes = Enum.filter(pushes(html), &(&1["value"]["op"] in ~w(select select_all)))
+      assert selection_pushes != []
+      assert Enum.all?(selection_pushes, &(&1["event"] == "ui" and &1["target"] == "#c"))
+    end
+
+    test "row_id takes a function; keyless rows render inert and stay out of select-all" do
+      assigns =
+        base(%{
+          rows: [%{uuid: "a", name: "Amy"}, %{uuid: nil, name: "Bea"}, %{uuid: "c", name: "Cal"}]
+        })
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable row_id={& &1.uuid}>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert count_substring(html, "data-pc-dt-select ") == 2
+      assert html =~ ~r/<input type="checkbox" class="pc-checkbox pc-data-table__select" disabled/
+      assert [%{"ids" => ["a", "c"]}] = push_values(html, "select_all")
+    end
+
+    test "a row_id repeated on one page raises" do
+      assigns = base(%{rows: [%{id: 1, name: "Amy"}, %{id: 1, name: "Bea"}]})
+
+      assert_raise ArgumentError, ~r/row_id "1" appears more than once/, fn ->
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+      end
+    end
+
+    test "loading: no row checkboxes and the header select-all is disabled" do
+      assigns = base(%{state: %State{total: 74, page_size: 3}})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={[]} state={@state} on_change="table" selectable loading>
+          <:col :let={row} field={:name}>{row}</:col>
+        </.data_table>
+        """)
+
+      refute html =~ "data-pc-dt-select "
+      assert html =~ ~r/data-pc-dt-select-all[^>]*disabled/
+    end
+  end
+
   test "raises without either wiring mode" do
     assigns = base(%{path: nil})
 

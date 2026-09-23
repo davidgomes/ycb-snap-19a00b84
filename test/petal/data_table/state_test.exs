@@ -171,6 +171,18 @@ defmodule PetalComponents.DataTable.StateTest do
              ) == state
     end
 
+    test "selection ops are UI state - ignored, so one handler can pipe both" do
+      state = %State{page: 3, search: "amy"}
+
+      for params <- [
+            %{"op" => "select", "id" => "1"},
+            %{"op" => "select_all", "ids" => ["1", "2"], "selected" => true},
+            %{"op" => "clear_selection"}
+          ] do
+        assert State.handle_op(state, params, @opts) == state
+      end
+    end
+
     test "filter op normalizes by editor shape" do
       state = %State{}
 

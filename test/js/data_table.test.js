@@ -8,7 +8,7 @@ import hooks from "../../assets/js/petal_components.js";
 
 const mounted = [];
 
-function mountBase({ navTemplate, debounce } = {}) {
+function mountBase({ navTemplate, debounce, extraHtml = "" } = {}) {
   const el = document.createElement("div");
   el.id = "dt";
   el.className = "pc-data-table";
@@ -21,6 +21,7 @@ function mountBase({ navTemplate, debounce } = {}) {
       <option value="10" selected>10</option>
       <option value="20">20</option>
     </select>
+    ${extraHtml}
   `;
   document.body.appendChild(el);
 
@@ -262,6 +263,53 @@ describe("PetalDataTable", () => {
     expect(e.defaultPrevented).toBe(false);
     expect(patched).toEqual([]);
     expect(wrap.style.display).toBe("none");
+  });
+
+  it("selection: mount mirrors the server's indeterminate stamp and checked attributes", () => {
+    const { el } = mountBase({
+      extraHtml: `
+        <input type="checkbox" data-pc-dt-select-all data-pc-dt-indeterminate />
+        <input type="checkbox" data-pc-dt-select checked />
+        <input type="checkbox" data-pc-dt-select />
+      `,
+    });
+
+    const [header, picked, unpicked] = el.querySelectorAll(
+      "[data-pc-dt-select-all], [data-pc-dt-select]",
+    );
+    expect(header.indeterminate).toBe(true);
+    expect(header.checked).toBe(false);
+    expect(picked.checked).toBe(true);
+    expect(unpicked.checked).toBe(false);
+  });
+
+  it("selection: updated re-syncs properties the server's patch can't reach", () => {
+    const { hook, el } = mountBase({});
+    el.insertAdjacentHTML(
+      "beforeend",
+      `
+      <input type="checkbox" data-pc-dt-select-all data-pc-dt-indeterminate />
+      <input type="checkbox" data-pc-dt-select />
+    `,
+    );
+    const header = el.querySelector("[data-pc-dt-select-all]");
+    const row = el.querySelector("[data-pc-dt-select]");
+    hook.updated();
+    expect(header.indeterminate).toBe(true);
+
+    // the server now says every row is picked: stamp gone, checked on
+    header.removeAttribute("data-pc-dt-indeterminate");
+    header.setAttribute("checked", "");
+    row.setAttribute("checked", "");
+    hook.updated();
+    expect(header.indeterminate).toBe(false);
+    expect(header.checked).toBe(true);
+    expect(row.checked).toBe(true);
+
+    // a client toggle the server didn't confirm snaps back to server truth
+    row.checked = false;
+    hook.updated();
+    expect(row.checked).toBe(true);
   });
 
   it("destroyed cancels a pending search patch", () => {
