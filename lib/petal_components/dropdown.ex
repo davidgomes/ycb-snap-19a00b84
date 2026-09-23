@@ -96,6 +96,7 @@ defmodule PetalComponents.Dropdown do
         ]}
         role="menu"
         id={@options_container_id}
+        phx-hook="PetalDropdown"
         aria-orientation="vertical"
         aria-labelledby="options-menu"
       >

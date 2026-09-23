@@ -4953,6 +4953,57 @@ export const PetalComboBox = {
 // assembled around the already-encoded rest of the query) and a hidden
 // data-phx-link anchor; the hook fills a template in and clicks the
 // anchor so navigation stays LiveView's own.
+// Dropdown menu: LiveView.JS still owns open/close. This hook only
+// watches the panel's display and flips it above the trigger when the
+// viewport has no room below and more room above.
+export const PetalDropdown = {
+  mounted() {
+    this.onReposition = () => this.positionPanel();
+    this.observer = new MutationObserver(() => this.positionPanel());
+    this.observer.observe(this.el, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+    // phx-click toggles display on the button before the event bubbles,
+    // so a bubble listener measures in the same turn as the open.
+    this.root = this.el.closest(".pc-dropdown");
+    this.root?.addEventListener("click", this.onReposition);
+    window.addEventListener("scroll", this.onReposition, true);
+    window.addEventListener("resize", this.onReposition);
+    this.positionPanel();
+  },
+
+  updated() {
+    this.positionPanel();
+  },
+
+  destroyed() {
+    this.observer?.disconnect();
+    this.root?.removeEventListener("click", this.onReposition);
+    window.removeEventListener("scroll", this.onReposition, true);
+    window.removeEventListener("resize", this.onReposition);
+  },
+
+  positionPanel() {
+    const panel = this.el;
+    const open = panel.style.display !== "none" && panel.style.display !== "";
+    if (!open) {
+      panel.removeAttribute("data-flip");
+      return;
+    }
+    panel.removeAttribute("data-flip");
+    const anchor = panel.closest(".pc-dropdown")?.querySelector("button");
+    if (!anchor) return;
+    const control = anchor.getBoundingClientRect();
+    const panelH = panel.offsetHeight;
+    if (!panelH || (!control.top && !control.bottom)) return;
+    const gap = 8;
+    const below = window.innerHeight - control.bottom - gap;
+    const above = control.top - gap;
+    if (panelH > below && above > below) panel.setAttribute("data-flip", "");
+  },
+};
+
 export const PetalDataTable = {
   mounted() {
     this.searchTimer = null;
@@ -5473,5 +5524,6 @@ export default {
   PetalNavMenu,
   PetalCommandDialog,
   PetalComboBox,
+  PetalDropdown,
   PetalDataTable,
 };
