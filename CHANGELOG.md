@@ -11,11 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Codespell GitHub Action
 - CHANGELOG.md
+- Self-evaluation of quiz answers through the "Graded Cell" smart cell
 
 ### Changed
 
 - Fixed various typos
 - Fixed README badges
+- OWASP module quizzes are now self-evaluated with graded cells
 
 ## [0.8.0] - 2022-09-01
 
