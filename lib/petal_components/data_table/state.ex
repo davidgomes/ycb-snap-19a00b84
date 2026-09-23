@@ -19,6 +19,17 @@ defmodule PetalComponents.DataTable.State do
   params, so URL-as-state (shareable sorts/filters, working back button)
   is a one-liner in `handle_params` rather than a hand-rolled encoding.
 
+  ## Selection
+
+  `selected` (row ids, as strings - the shape they arrive in from the
+  DOM) and `all_matching` (every row matching the current filters and
+  search, across pages) hold a selectable table's row selection. Like
+  `total`, selection never round-trips through URL params: it is
+  ephemeral UI state. Paging and sorting keep it; a filter or search
+  change drops `all_matching`, since "all matching" just changed
+  meaning. In link mode, where `handle_params` rebuilds the state on
+  every navigation, carry it over with `keep_selection/2`.
+
   ## Filter operators
 
   Text: `:contains`, `:eq`, `:starts_with` - number: `:eq`, `:neq`,
@@ -32,10 +43,20 @@ defmodule PetalComponents.DataTable.State do
   required whitelist and anything outside it is dropped, ops outside the
   known set are dropped, and page/page_size are clamped (`:max_page_size`,
   default 100).
+
+  Selected ids are untrusted client input: scope every bulk action to
+  rows the current user may touch.
   """
 
   @enforce_keys []
-  defstruct order_by: [], filters: [], search: nil, page: 1, page_size: 10, total: nil
+  defstruct order_by: [],
+            filters: [],
+            search: nil,
+            page: 1,
+            page_size: 10,
+            total: nil,
+            selected: MapSet.new(),
+            all_matching: false
 
   @type order :: {atom(), :asc | :desc}
   @type filter :: %{field: atom(), op: atom(), value: term()}
@@ -45,7 +66,9 @@ defmodule PetalComponents.DataTable.State do
           search: String.t() | nil,
           page: pos_integer(),
           page_size: pos_integer(),
-          total: non_neg_integer() | nil
+          total: non_neg_integer() | nil,
+          selected: MapSet.t(String.t()),
+          all_matching: boolean()
         }
 
   @ops ~w(contains eq starts_with neq gt lt between in before on after)a
@@ -123,22 +146,33 @@ defmodule PetalComponents.DataTable.State do
     %{state | order_by: order_by, page: 1}
   end
 
-  @doc "Replaces the filter for `field` (or removes it when `value` is nil/empty), resetting to page 1."
+  @doc """
+  Replaces the filter for `field` (or removes it when `value` is
+  nil/empty), resetting to page 1 and dropping `all_matching`.
+  """
   def put_filter(%__MODULE__{} = state, field, _op, value)
       when value in [nil, "", []] do
-    %{state | filters: Enum.reject(state.filters, &(&1.field == field)), page: 1}
+    %{
+      state
+      | filters: Enum.reject(state.filters, &(&1.field == field)),
+        page: 1,
+        all_matching: false
+    }
   end
 
   def put_filter(%__MODULE__{} = state, field, op, value)
       when is_atom(field) and op in @ops do
     filter = %{field: field, op: op, value: value}
     rest = Enum.reject(state.filters, &(&1.field == field))
-    %{state | filters: rest ++ [filter], page: 1}
+    %{state | filters: rest ++ [filter], page: 1, all_matching: false}
   end
 
-  @doc "Sets (or clears, for blank terms) the quick-search term, resetting to page 1."
+  @doc """
+  Sets (or clears, for blank terms) the quick-search term, resetting to
+  page 1 and dropping `all_matching`.
+  """
   def put_search(%__MODULE__{} = state, term) do
-    %{state | search: parse_search(term), page: 1}
+    %{state | search: parse_search(term), page: 1, all_matching: false}
   end
 
   @doc "Sets the page size (invalid values keep the current one), resetting to page 1."
@@ -157,10 +191,11 @@ defmodule PetalComponents.DataTable.State do
       end
 
   Ops: `sort` (field), `page` (page), `search` (term), `page_size`
-  (page_size), `filter` (field, filter_op, value/value2/values), and
-  `clear_filters`. Unknown ops and non-whitelisted fields leave the
-  state unchanged; like `from_params/2`, no atoms are ever created
-  from input.
+  (page_size), `filter` (field, filter_op, value/value2/values),
+  `clear_filters`, and the selection ops `select` / `deselect` (ids, or
+  a single id), `select_all` (every matching row) and `clear_selection`.
+  Unknown ops and non-whitelisted fields leave the state unchanged;
+  like `from_params/2`, no atoms are ever created from input.
 
   A `filter` op's value normalizes by editor shape: a `values` list
   posts as-is (the select editor's `:in`), `between` pairs
@@ -195,6 +230,18 @@ defmodule PetalComponents.DataTable.State do
 
       %{"op" => "clear_filters"} ->
         clear_filters(state)
+
+      %{"op" => "select"} ->
+        select(state, params["ids"] || params["id"])
+
+      %{"op" => "deselect"} ->
+        deselect(state, params["ids"] || params["id"])
+
+      %{"op" => "select_all"} ->
+        select_all_matching(state)
+
+      %{"op" => "clear_selection"} ->
+        clear_selection(state)
 
       _other ->
         state
@@ -233,8 +280,92 @@ defmodule PetalComponents.DataTable.State do
   defp normalize_between(min, max) when min in [nil, ""] or max in [nil, ""], do: ""
   defp normalize_between(min, max), do: [min, max]
 
-  @doc "Removes every filter, resetting to page 1."
-  def clear_filters(%__MODULE__{} = state), do: %{state | filters: [], page: 1}
+  @doc "Removes every filter, resetting to page 1 and dropping `all_matching`."
+  def clear_filters(%__MODULE__{} = state),
+    do: %{state | filters: [], page: 1, all_matching: false}
+
+  # -- selection -------------------------------------------------------------
+
+  @doc "Adds row ids to the selection. Ids are stored as strings."
+  def select(%__MODULE__{} = state, ids) do
+    %{state | selected: MapSet.union(selected_set(state), normalize_ids(ids))}
+  end
+
+  @doc """
+  Removes row ids from the selection. Deselecting anything leaves
+  `all_matching` mode: the rest of the explicit selection stays.
+  """
+  def deselect(%__MODULE__{} = state, ids) do
+    %{
+      state
+      | selected: MapSet.difference(selected_set(state), normalize_ids(ids)),
+        all_matching: false
+    }
+  end
+
+  @doc """
+  Selects every row matching the current filters and search, across
+  pages. Bulk actions should then run against the query, not `selected`.
+  """
+  def select_all_matching(%__MODULE__{} = state), do: %{state | all_matching: true}
+
+  @doc "Empties the selection."
+  def clear_selection(%__MODULE__{} = state),
+    do: %{state | selected: MapSet.new(), all_matching: false}
+
+  @doc "Whether the row with `id` is selected (always true in `all_matching` mode)."
+  def selected?(%__MODULE__{all_matching: true}, _id), do: true
+
+  def selected?(%__MODULE__{} = state, id),
+    do: MapSet.member?(selected_set(state), to_string(id))
+
+  @doc """
+  How many rows are selected: `total` in `all_matching` mode (nil when
+  the total is unknown), else the size of `selected`.
+  """
+  def selected_count(%__MODULE__{all_matching: true, total: total}), do: total
+  def selected_count(%__MODULE__{} = state), do: MapSet.size(selected_set(state))
+
+  @doc """
+  Carries the selection of `previous` (nil-safe) onto a freshly built
+  state - link mode's `handle_params` rebuilds the state from the URL on
+  every navigation:
+
+      state =
+        params
+        |> State.from_params(fields: [:name, :email])
+        |> State.keep_selection(socket.assigns[:table])
+
+  `all_matching` only survives when filters and search are unchanged.
+  """
+  def keep_selection(%__MODULE__{} = state, nil), do: state
+
+  def keep_selection(%__MODULE__{} = state, %__MODULE__{} = previous) do
+    same_query? = state.filters == previous.filters and state.search == previous.search
+
+    %{
+      state
+      | selected: selected_set(previous),
+        all_matching: previous.all_matching and same_query?
+    }
+  end
+
+  # hand-built states may carry a plain list
+  defp selected_set(%__MODULE__{selected: %MapSet{} = set}), do: set
+  defp selected_set(%__MODULE__{selected: ids}), do: normalize_ids(ids)
+
+  defp normalize_ids(%MapSet{} = ids), do: ids |> MapSet.to_list() |> normalize_ids()
+
+  defp normalize_ids(ids) do
+    ids
+    |> List.wrap()
+    |> Enum.flat_map(fn
+      id when is_binary(id) and id != "" -> [id]
+      id when is_integer(id) -> [Integer.to_string(id)]
+      _other -> []
+    end)
+    |> MapSet.new()
+  end
 
   @doc "Total pages when `total` is known, else nil (cursor/unknown mode)."
   def total_pages(%__MODULE__{total: nil}), do: nil

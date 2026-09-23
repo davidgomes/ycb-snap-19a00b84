@@ -294,6 +294,83 @@ defmodule PetalComponents.DataTable.StateTest do
     end
   end
 
+  describe "selection" do
+    test "select/deselect store ids as strings and ignore blanks" do
+      state = State.select(%State{}, [1, "2", "", nil])
+      assert state.selected == MapSet.new(["1", "2"])
+      assert State.selected?(state, 1)
+      assert State.selected_count(state) == 2
+
+      state = State.deselect(state, "1")
+      assert state.selected == MapSet.new(["2"])
+      refute State.selected?(state, "1")
+    end
+
+    test "all_matching selects everything; any deselect leaves that mode" do
+      state = %State{total: 74} |> State.select(["1", "2"]) |> State.select_all_matching()
+      assert State.selected?(state, "999")
+      assert State.selected_count(state) == 74
+
+      state = State.deselect(state, ["1"])
+      refute state.all_matching
+      assert state.selected == MapSet.new(["2"])
+    end
+
+    test "clear_selection empties both" do
+      state = %State{selected: MapSet.new(["1"]), all_matching: true}
+      cleared = State.clear_selection(state)
+      assert cleared.selected == MapSet.new()
+      refute cleared.all_matching
+    end
+
+    test "hand-built list selections work like sets" do
+      state = %State{selected: ["1", 2]}
+      assert State.selected?(state, "2")
+      assert State.selected_count(state) == 2
+      assert State.select(state, "3").selected == MapSet.new(["1", "2", "3"])
+    end
+
+    test "filter and search changes drop all_matching; sorting and paging keep it" do
+      state = %State{selected: MapSet.new(["1"]), all_matching: true}
+
+      refute State.put_filter(state, :name, :contains, "a").all_matching
+      refute State.put_search(state, "a").all_matching
+      refute State.clear_filters(state).all_matching
+      assert State.toggle_sort(state, :name).all_matching
+      assert State.put_page_size(state, 20).all_matching
+      assert State.put_filter(state, :name, :contains, "a").selected == MapSet.new(["1"])
+    end
+
+    test "selection never round-trips through params" do
+      state = %State{selected: MapSet.new(["1"]), all_matching: true}
+      assert State.to_params(state) == %{}
+    end
+
+    test "keep_selection carries it across a rebuilt state" do
+      previous = %State{selected: MapSet.new(["1"]), all_matching: true, search: "a"}
+
+      assert State.keep_selection(%State{page: 2, search: "a"}, previous).all_matching
+      kept = State.keep_selection(%State{search: "b"}, previous)
+      assert kept.selected == MapSet.new(["1"])
+      refute kept.all_matching
+      assert State.keep_selection(%State{page: 2}, nil) == %State{page: 2}
+    end
+
+    test "handle_op speaks the selection grammar" do
+      opts = [fields: [:name]]
+      state = State.handle_op(%State{}, %{"op" => "select", "ids" => ["1", "2"]}, opts)
+      assert state.selected == MapSet.new(["1", "2"])
+
+      state = State.handle_op(state, %{"op" => "deselect", "id" => "1"}, opts)
+      assert state.selected == MapSet.new(["2"])
+
+      assert State.handle_op(state, %{"op" => "select_all"}, opts).all_matching
+      assert State.handle_op(state, %{"op" => "clear_selection"}, opts).selected == MapSet.new()
+      # malformed ids are dropped, not crashed on
+      assert State.handle_op(state, %{"op" => "select", "ids" => %{"a" => 1}}, opts) == state
+    end
+  end
+
   describe "total_pages/1" do
     test "nil total means unknown" do
       assert State.total_pages(%State{total: nil}) == nil
