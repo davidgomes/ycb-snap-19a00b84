@@ -748,6 +748,8 @@ defmodule Dev.PlaygroundLive do
        combo: %{disabled: false, chosen: nil},
        rich: %{labels: ~w(feat bug imp des), team: ~w(amelia jonah)},
        dt: PetalComponents.DataTable.State |> struct(page_size: 5) |> run_dt(),
+       dt_selected: [],
+       dt_notice: nil,
        radio: %{
          style: "cards",
          variant: "outline",
@@ -1438,15 +1440,22 @@ defmodule Dev.PlaygroundLive do
   def handle_event("pg_combo_change", %{"pg_city" => value}, socket),
     do: {:noreply, update(socket, :combo, &%{&1 | chosen: value})}
 
-  # the data table's event-mode op grammar: State.handle_op speaks all of
-  # it (sort/page/search/page_size/filter/clear_filters), so the whole
-  # backend is one call plus a re-run through the free engine
+  # the data table's event-mode op grammar: selection_op speaks the
+  # checkbox ops and returns anything else untouched; State.handle_op
+  # speaks sort/page/search/page_size/filter/clear_filters. One event,
+  # two one-liners, then a re-run through the free engine.
   def handle_event("pg_table", params, socket) do
     alias PetalComponents.DataTable.State
     {state, _rows} = socket.assigns.dt
 
+    selected = PetalComponents.DataTable.selection_op(socket.assigns.dt_selected, params)
     state = State.handle_op(state, params, fields: [:name, :email, :status, :amount])
-    {:noreply, assign(socket, :dt, run_dt(state))}
+    {:noreply, socket |> assign(:dt, run_dt(state)) |> assign(:dt_selected, selected)}
+  end
+
+  def handle_event("pg_table_export", %{"ids" => ids}, socket) do
+    n = ids |> String.split(",", trim: true) |> length()
+    {:noreply, assign(socket, :dt_notice, "Exported #{n} #{if n == 1, do: "row", else: "rows"}")}
   end
 
   defp run_dt(state) do
@@ -7320,6 +7329,9 @@ defmodule Dev.PlaygroundLive do
           on_change="pg_table"
           striped
           searchable
+          selectable
+          row_id={& &1.id}
+          selected={@dt_selected}
           page_size_options={[5, 10, 20]}
         >
           <:col :let={row} field={:name} sortable>{row.name}</:col>
@@ -7346,7 +7358,20 @@ defmodule Dev.PlaygroundLive do
           <:col :let={row} field={:amount} sortable align="right" filterable="number">
             ${row.amount}
           </:col>
+          <:bulk_action :let={ids}>
+            <.button
+              type="button"
+              size="sm"
+              variant="outline"
+              color="gray"
+              phx-click="pg_table_export"
+              phx-value-ids={Enum.join(ids, ",")}
+            >
+              Export
+            </.button>
+          </:bulk_action>
         </.data_table>
+        <p :if={@dt_notice} class="mt-3 text-sm text-gray-500 dark:text-gray-400">{@dt_notice}</p>
       </div>
 
       <div
@@ -7354,7 +7379,7 @@ defmodule Dev.PlaygroundLive do
           ex <-
             examples_for(
               PetalComponents.Showcase.DataTable,
-              ~w(basic loading empty)a
+              ~w(basic loading selection empty)a
             )
         }
         class="mt-10"

@@ -1722,6 +1722,15 @@
       url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23fff' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e")
     );
   }
+  /* Tri-state: the indeterminate dash follows the same on-primary tick token
+     as the check. The property is set from JS (there is no HTML attribute). */
+  .pc-checkbox:indeterminate {
+    @apply border-primary-600 bg-primary-600;
+    background-image: var(
+      --pc-checkbox-indeterminate,
+      url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23fff' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M3.5 7.25h9a.75.75 0 0 1 0 1.5h-9a.75.75 0 0 1 0-1.5z'/%3e%3c/svg%3e")
+    );
+  }
   .pc-checkbox-group {
     @apply pt-2;
   }
@@ -2595,6 +2604,61 @@
   .pc-data-table__toolbar {
     @apply mb-3 flex flex-wrap items-center gap-2;
   }
+  /* Selection morph: the idle controls and the selection bar share one grid
+     cell and crossfade. Without a selection, both wrappers are
+     display:contents so the toolbar's own flex row is unchanged. */
+  .pc-data-table__toolbar.pc-data-table__toolbar--morph {
+    @apply block;
+  }
+  .pc-data-table__toolbar-stage {
+    @apply grid;
+  }
+  .pc-data-table__toolbar:not(.pc-data-table__toolbar--morph) .pc-data-table__toolbar-stage,
+  .pc-data-table__toolbar-idle {
+    display: contents;
+  }
+  .pc-data-table__toolbar-layer {
+    @apply flex min-h-9 w-full min-w-0 flex-wrap items-center gap-2;
+    grid-area: 1 / 1;
+    transition:
+      opacity 180ms ease,
+      transform 180ms ease,
+      visibility 0s linear 180ms;
+  }
+  .pc-data-table__toolbar-layer[data-active="true"] {
+    transition-delay: 0s;
+    visibility: visible;
+  }
+  .pc-data-table__toolbar-layer[data-active="false"] {
+    visibility: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(0.25rem);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pc-data-table__toolbar-layer {
+      transition: none;
+    }
+  }
+  .pc-data-table__toolbar-selection {
+    @apply flex min-h-9 w-full flex-wrap items-center gap-2 rounded-lg bg-primary-50 px-2 dark:bg-primary-500/10;
+  }
+  .pc-data-table__selection-count {
+    @apply text-sm font-medium tabular-nums text-gray-800 dark:text-gray-100;
+  }
+  .pc-data-table__selection-clear {
+    @apply ml-auto;
+  }
+  .pc-data-table .pc-table__th.pc-data-table__select-th,
+  .pc-data-table .pc-table__td.pc-data-table__select-td {
+    @apply w-px pl-4 pr-2;
+  }
+  .pc-data-table tbody .pc-table__tr:has(.pc-data-table__select:checked) {
+    @apply bg-primary-50 dark:bg-primary-500/10;
+  }
+  .pc-data-table tbody .pc-table__tr:hover:has(.pc-data-table__select:checked) {
+    @apply bg-primary-100/80 dark:bg-primary-500/15;
+  }
   .pc-data-table__scroll {
     @apply overflow-x-auto;
   }
@@ -2627,6 +2691,9 @@
   }
   .pc-data-table__skeleton.pc-data-table__skeleton {
     @apply h-4 w-24 max-w-full;
+  }
+  .pc-data-table__skeleton--check.pc-data-table__skeleton--check {
+    @apply h-4 w-4;
   }
   .pc-data-table__search {
     @apply relative;

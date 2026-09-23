@@ -264,6 +264,35 @@ describe("PetalDataTable", () => {
     expect(wrap.style.display).toBe("none");
   });
 
+  it("paints the tri-state header and inerts the hidden toolbar layer", () => {
+    const { hook, el } = mount({ navTemplate: "/orders" });
+
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.setAttribute("data-pc-dt-select-all", "");
+    box.dataset.state = "mixed";
+    el.appendChild(box);
+
+    const idle = document.createElement("div");
+    idle.setAttribute("data-pc-dt-layer", "");
+    idle.dataset.active = "false";
+    const active = document.createElement("div");
+    active.setAttribute("data-pc-dt-layer", "");
+    active.dataset.active = "true";
+    el.append(idle, active);
+
+    hook.updated();
+    expect(box.indeterminate).toBe(true);
+    expect(idle.hasAttribute("inert")).toBe(true);
+    expect(active.hasAttribute("inert")).toBe(false);
+
+    box.dataset.state = "all";
+    idle.dataset.active = "true";
+    hook.updated();
+    expect(box.indeterminate).toBe(false);
+    expect(idle.hasAttribute("inert")).toBe(false);
+  });
+
   it("destroyed cancels a pending search patch", () => {
     const { hook, el, patched } = mount({
       navTemplate: "/orders?search=:term",

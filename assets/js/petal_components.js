@@ -4602,16 +4602,21 @@ export const PetalComboBox = {
 };
 
 // Link-mode wiring for the data table's quick search and rows-per-page
-// select. Event mode posts through plain phx-change forms and never
-// mounts this hook; link mode has no events by design (handle_params is
-// the whole backend), so state changes must become patch URLs. The
-// component renders URL templates (:term / :page_size placeholders,
-// assembled around the already-encoded rest of the query) and a hidden
-// data-phx-link anchor; the hook fills a template in and clicks the
-// anchor so navigation stays LiveView's own.
+// select, plus the selectable table's tri-state header. Event mode posts
+// search through plain phx-change forms; link mode has no events by design
+// (handle_params is the whole backend), so those state changes must become
+// patch URLs. The component renders URL templates (:term / :page_size
+// placeholders, assembled around the already-encoded rest of the query)
+// and a hidden data-phx-link anchor; the hook fills a template in and
+// clicks the anchor so navigation stays LiveView's own.
+//
+// Row selection is server-owned in both modes. The hook only paints what
+// HTML cannot: the header checkbox's indeterminate flag, and `inert` on
+// the toolbar layer that just crossfaded out.
 export const PetalDataTable = {
   mounted() {
     this.searchTimer = null;
+    this.syncSelection();
 
     this.onInput = (e) => {
       if (!e.target.closest("[data-pc-dt-search]")) return;
@@ -4659,6 +4664,22 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+  },
+
+  updated() {
+    this.syncSelection();
+  },
+
+  // `indeterminate` is an IDL property, not an attribute, so a server
+  // render cannot set the dash. `inert` keeps the faded-out toolbar layer
+  // out of the tab order; visibility is owned by CSS.
+  syncSelection() {
+    const box = this.el.querySelector("[data-pc-dt-select-all]");
+    if (box) box.indeterminate = box.dataset.state === "mixed";
+
+    this.el.querySelectorAll("[data-pc-dt-layer]").forEach((layer) => {
+      layer.toggleAttribute("inert", layer.dataset.active === "false");
+    });
   },
 
   destroyed() {

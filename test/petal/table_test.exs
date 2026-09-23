@@ -72,6 +72,35 @@ defmodule PetalComponents.TableTest do
     end
   end
 
+  test "a leading column with a header slot does not take first-column emphasis" do
+    assigns = %{
+      posts: [
+        %{id: 1, name: "Some post"},
+        %{id: 2, name: "Another post"}
+      ]
+    }
+
+    html =
+      rendered_to_string(~H"""
+      <.table id="posts" rows={@posts}>
+        <:leading_header>
+          <input type="checkbox" data-header />
+        </:leading_header>
+        <:leading :let={post} row_class="pc-data-table__select-td">
+          <input type="checkbox" data-row={post.id} />
+        </:leading>
+        <:col :let={post} label="Name">{post.name}</:col>
+      </.table>
+      """)
+
+    assert html =~ "data-header"
+    assert html =~ ~s(data-row="1")
+    assert html =~ "pc-table__td--first-col"
+    assert Enum.count(String.split(html, "data-header")) == 2
+    refute html =~ "pc-data-table__select-td pc-table__td--first-col"
+    refute html =~ ~s(pc-table__td--first-col"><input type="checkbox" data-header)
+  end
+
   test "Basic table" do
     assigns = %{}
 

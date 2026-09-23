@@ -48,6 +48,32 @@ defmodule PetalComponents.Showcase.DataTable do
     """
   end
 
+  example :selection, "Row selection",
+    description:
+      "selectable adds a checkbox column. The header is tri-state for this page: empty, a dash when some rows are picked, checked when all of them are. This static example has two ids selected, so the toolbar has morphed into the count plus the :bulk_action slot. In your app, selection_op/2 applies the select / select_page / clear_selection events and you pass the list back as selected." do
+    ~H"""
+    <% rows = Enum.take(PetalComponents.Showcase.DataTable.sample_rows(), 4) %>
+    <% state = %State{total: length(rows), page_size: 4} %>
+    <.data_table
+      id="sx-dt-selection"
+      rows={rows}
+      state={state}
+      path="#"
+      selectable
+      row_id={& &1.id}
+      selected={[1, 3]}
+      on_select="select"
+      searchable
+    >
+      <:col :let={row} field={:name}>{row.name}</:col>
+      <:col :let={row} field={:email}>{row.email}</:col>
+      <:bulk_action>
+        <.button type="button" size="sm" variant="outline" color="gray">Export</.button>
+      </:bulk_action>
+    </.data_table>
+    """
+  end
+
   example :empty, "The filters-aware empty state",
     description:
       "An empty result set with active filters says so and offers the way out - a clear-filters patch link in link mode, the op-grammar event in event mode. Without filters it is a plain no-results line. Override either with the :empty slot." do

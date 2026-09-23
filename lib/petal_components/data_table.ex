@@ -28,7 +28,32 @@ defmodule PetalComponents.DataTable do
 
   In link mode the quick-search input and rows-per-page select are wired
   by the `PetalDataTable` hook (patch URLs built from templates the
-  component renders); event mode needs no JS.
+  component renders); event mode needs no JS for those. The same hook
+  paints the header checkbox's indeterminate state and marks the hidden
+  toolbar layer `inert` whenever `selectable` is on.
+
+  ## Row selection
+
+  `selectable` adds a leading checkbox column. Pass `row_id` (a 1-arity
+  function) and `selected` (a list or `MapSet` of ids). The header
+  checkbox is tri-state for the **current page**: none, some
+  (indeterminate), or all. Selecting a row, the page, or clearing is an
+  event — `select`, `select_page`, or `clear_selection` — pushed to
+  `on_select` (or `on_change` when `on_select` is unset). Selection is
+  not URL state; `DataTable.selection_op/2` applies those ops and
+  returns its input unchanged for every other op, so it sits in front
+  of `State.handle_op/3`:
+
+      def handle_event("table", params, socket) do
+        selected = DataTable.selection_op(socket.assigns.selected, params)
+        state = State.handle_op(socket.assigns.table, params, fields: [:name])
+        # ...
+      end
+
+  Ids compare as strings. A selection op returns a list of strings; any
+  other op returns `selected` untouched. While at least one id is
+  selected, the toolbar crossfades into a count, the `:bulk_action`
+  slot (`:let` is the selected ids), and a clear control.
 
   Rows can be any enumerable of maps/structs; pair with
   `PetalComponents.DataTable.Engine.List` for zero-setup in-memory
@@ -108,6 +133,36 @@ defmodule PetalComponents.DataTable do
 
   attr :class, :any, default: nil
 
+  attr :selectable, :boolean,
+    default: false,
+    doc: "leading checkbox column, tri-state page header, and the selection toolbar"
+
+  attr :row_id, :any,
+    default: nil,
+    doc: "1-arity function from row to id; required when `selectable`"
+
+  attr :selected, :any,
+    default: [],
+    doc: "selected row ids, a list or MapSet. Compared as strings; not URL state"
+
+  attr :on_select, :string,
+    default: nil,
+    doc: "event for selection ops. Defaults to `on_change`. Required in link mode"
+
+  attr :select_all_label, :string,
+    default: "Select all rows on this page",
+    doc: "aria-label for the header checkbox, localizable"
+
+  attr :select_row_label, :string,
+    default: "Select row",
+    doc: "aria-label for a row checkbox, localizable"
+
+  attr :clear_selection_label, :string, default: "Clear selection"
+
+  attr :selection_label, :any,
+    default: nil,
+    doc: "1-arity function of the selection count; default is \"1 selected\" / \"N selected\""
+
   slot :col, required: true do
     attr :field, :atom, required: true
     attr :label, :string
@@ -126,11 +181,26 @@ defmodule PetalComponents.DataTable do
 
   slot :action, doc: "trailing actions column, `:let` receives the row"
   slot :toolbar, doc: "custom toolbar content rendered above the table"
+
+  slot :bulk_action,
+    doc: "actions inside the selection toolbar; `:let` receives the selected ids"
+
   slot :empty, doc: "custom empty state; a filters-aware default renders otherwise"
 
   def data_table(assigns) do
     if is_nil(assigns.path) and is_nil(assigns.on_change) do
       raise ArgumentError, "data_table needs either path (link mode) or on_change (event mode)"
+    end
+
+    if assigns.selectable and not is_function(assigns.row_id, 1) do
+      raise ArgumentError, "data_table with selectable requires row_id, a 1-arity function of the row"
+    end
+
+    select_event = assigns.on_select || assigns.on_change
+
+    if assigns.selectable and is_nil(select_event) do
+      raise ArgumentError,
+            "data_table with selectable requires on_select or on_change so selection can be reported"
     end
 
     {sort_by, sort_dir} =
@@ -145,11 +215,35 @@ defmodule PetalComponents.DataTable do
 
     link_mode? = is_nil(assigns.on_change)
 
+    selected_list = normalize_selected(assigns.selected)
+    selected_set = MapSet.new(selected_list, &to_string/1)
+
+    page_ids =
+      if assigns.selectable and not assigns.loading do
+        Enum.map(assigns.rows, &to_string(assigns.row_id.(&1)))
+      else
+        []
+      end
+
+    on_page = Enum.count(page_ids, &MapSet.member?(selected_set, &1))
+
+    header_state =
+      cond do
+        page_ids == [] or on_page == 0 -> "none"
+        on_page == length(page_ids) -> "all"
+        true -> "mixed"
+      end
+
+    idle_toolbar? =
+      assigns.toolbar != [] or assigns.searchable or filter_cols != [] or
+        assigns.state.filters != []
+
     # link mode: URL wiring. Either mode: filter popovers are native
-    # top-layer popovers the hook closes after an Apply.
+    # top-layer popovers the hook closes after an Apply, and a
+    # selectable table needs the hook for the indeterminate checkbox.
     hooked? =
       (link_mode? and (assigns.searchable or assigns.page_size_options != [])) or
-        filter_cols != []
+        filter_cols != [] or assigns.selectable
 
     assigns =
       assigns
@@ -160,6 +254,15 @@ defmodule PetalComponents.DataTable do
       |> assign(:filter_cols, filter_cols)
       |> assign(:op_labels, Map.merge(default_op_labels(), assigns.filter_op_labels))
       |> assign(:hooked?, hooked?)
+      |> assign(:select_event, select_event)
+      |> assign(:selected_list, selected_list)
+      |> assign(:selected_set, selected_set)
+      |> assign(:page_ids_json, Jason.encode!(page_ids))
+      |> assign(:header_state, header_state)
+      |> assign(:selection_active?, selected_list != [])
+      |> assign(:selection_text, selection_text(assigns.selection_label, length(selected_list)))
+      |> assign(:idle_toolbar?, idle_toolbar?)
+      |> assign(:morph?, assigns.selectable and idle_toolbar?)
       |> assign(
         :nav_template,
         link_mode? && hooked? && nav_template(assigns.path, assigns.state, assigns, filter_cols)
@@ -180,9 +283,17 @@ defmodule PetalComponents.DataTable do
     >
       <a :if={@hooked?} data-pc-dt-nav data-phx-link="patch" data-phx-link-state="push" hidden></a>
       <div
-        :if={@toolbar != [] or @searchable or @filter_cols != [] or @state.filters != []}
-        class="pc-data-table__toolbar"
+        :if={@idle_toolbar? or @selection_active?}
+        class={["pc-data-table__toolbar", @morph? && "pc-data-table__toolbar--morph"]}
       >
+        <div class="pc-data-table__toolbar-stage">
+          <div
+            :if={@idle_toolbar?}
+            class={if @morph?, do: "pc-data-table__toolbar-layer", else: "pc-data-table__toolbar-idle"}
+            data-pc-dt-layer={@morph? && ""}
+            data-active={@morph? && to_string(not @selection_active?)}
+            aria-hidden={@morph? && @selection_active? && "true"}
+          >
         <div :if={@searchable} class="pc-data-table__search">
           <.icon name="hero-magnifying-glass" class="pc-data-table__search-icon" />
           <%= if @on_change do %>
@@ -247,6 +358,33 @@ defmodule PetalComponents.DataTable do
             {@reset_filters_label}
           </.button>
         <% end %>
+          </div>
+          <div
+            :if={@selectable}
+            class={[
+              "pc-data-table__toolbar-selection",
+              @morph? && "pc-data-table__toolbar-layer"
+            ]}
+            data-pc-dt-layer={@morph? && ""}
+            data-active={@morph? && to_string(@selection_active?)}
+            aria-hidden={@morph? && !@selection_active? && "true"}
+          >
+            <span class="pc-data-table__selection-count" aria-live="polite">{@selection_text}</span>
+            {render_slot(@bulk_action, @selected_list)}
+            <.button
+              type="button"
+              size="sm"
+              variant="ghost"
+              color="gray"
+              class="pc-data-table__selection-clear"
+              phx-click={@select_event}
+              phx-target={@target}
+              phx-value-op="clear_selection"
+            >
+              {@clear_selection_label}
+            </.button>
+          </div>
+        </div>
       </div>
 
       <div class="pc-data-table__scroll">
@@ -261,6 +399,41 @@ defmodule PetalComponents.DataTable do
           sort_dir={@sort_dir}
           on_sort={@on_sort}
         >
+          <:leading_header :if={@selectable} class="pc-data-table__select-th">
+            <input
+              type="checkbox"
+              class="pc-checkbox pc-data-table__select"
+              data-pc-dt-select-all
+              data-state={@header_state}
+              checked={@header_state == "all"}
+              disabled={@page_ids_json == "[]"}
+              aria-label={@select_all_label}
+              phx-click={@select_event}
+              phx-target={@target}
+              phx-value-op="select_page"
+              phx-value-on={if @header_state == "all", do: "false", else: "true"}
+              phx-value-ids={@page_ids_json}
+            />
+          </:leading_header>
+          <:leading
+            :let={row}
+            :if={@selectable}
+            class="pc-data-table__select-th"
+            row_class="pc-data-table__select-td"
+          >
+            <%= if @loading do %>
+              <.skeleton variant="text" class="pc-data-table__skeleton pc-data-table__skeleton--check" />
+            <% else %>
+              <.row_checkbox
+                id={"#{@id}-select-#{@row_id.(row)}"}
+                row_id={to_string(@row_id.(row))}
+                checked={MapSet.member?(@selected_set, to_string(@row_id.(row)))}
+                label={@select_row_label}
+                event={@select_event}
+                target={@target}
+              />
+            <% end %>
+          </:leading>
           <:col
             :let={row}
             :for={col <- @col}
@@ -358,6 +531,55 @@ defmodule PetalComponents.DataTable do
         />
       </div>
     </div>
+    """
+  end
+
+  @doc """
+  Applies a selection op to `selected` (a list or `MapSet`).
+
+  * `select` — `id`, and `on` (`"true"` / `"false"`). A missing `on`
+    toggles.
+  * `select_page` — `ids` as a JSON array (or a comma-separated string)
+    and `on`. Missing `on` selects the page. `"false"` removes those ids.
+  * `clear_selection` — returns `[]`.
+
+  Any other payload returns `selected` unchanged, so a handler can call
+  this before `State.handle_op/3` without the two grammars colliding.
+  Selection ops return a list of id strings.
+  """
+  def selection_op(selected, params) when is_map(params) do
+    case params["op"] do
+      op when op in ["select", "select_page", "clear_selection"] ->
+        apply_selection(selection_ids(selected), params)
+
+      _other ->
+        selected
+    end
+  end
+
+  attr :id, :string, required: true
+  attr :row_id, :string, required: true
+  attr :checked, :boolean, required: true
+  attr :label, :string, required: true
+  attr :event, :string, required: true
+  attr :target, :any, default: nil
+
+  defp row_checkbox(assigns) do
+    ~H"""
+    <input
+      id={@id}
+      type="checkbox"
+      class="pc-checkbox pc-data-table__select"
+      data-pc-dt-select
+      data-id={@row_id}
+      checked={@checked}
+      aria-label={@label}
+      phx-click={@event}
+      phx-target={@target}
+      phx-value-op="select"
+      phx-value-id={@row_id}
+      phx-value-on={if @checked, do: "false", else: "true"}
+    />
     """
   end
 
@@ -749,4 +971,59 @@ defmodule PetalComponents.DataTable do
   defp humanize(field) do
     field |> to_string() |> String.replace("_", " ") |> String.capitalize()
   end
+
+  defp normalize_selected(%MapSet{} = set), do: MapSet.to_list(set)
+  defp normalize_selected(list) when is_list(list), do: Enum.uniq_by(list, &to_string/1)
+  defp normalize_selected(other), do: other |> List.wrap()
+
+  defp selection_ids(selected), do: selected |> normalize_selected() |> Enum.map(&to_string/1) |> Enum.uniq()
+
+  defp apply_selection(_ids, %{"op" => "clear_selection"}), do: []
+
+  defp apply_selection(ids, %{"op" => "select", "id" => id} = params) do
+    case id_string(id) do
+      "" ->
+        ids
+
+      id ->
+        if selection_on(params["on"], id not in ids),
+          do: Enum.uniq(ids ++ [id]),
+          else: List.delete(ids, id)
+    end
+  end
+
+  defp apply_selection(ids, %{"op" => "select_page"} = params) do
+    page_ids = decode_ids(params["ids"])
+
+    if selection_on(params["on"], true) do
+      Enum.uniq(ids ++ page_ids)
+    else
+      drop = MapSet.new(page_ids)
+      Enum.reject(ids, &MapSet.member?(drop, &1))
+    end
+  end
+
+  defp apply_selection(ids, _params), do: ids
+
+  defp selection_on(on, _default) when on in [true, "true", "1", 1], do: true
+  defp selection_on(on, _default) when on in [false, "false", "0", 0], do: false
+  defp selection_on(_on, default), do: default
+
+  defp id_string(id) when is_binary(id) or is_integer(id) or is_atom(id), do: to_string(id)
+  defp id_string(_id), do: ""
+
+  defp decode_ids(ids) when is_list(ids), do: Enum.map(ids, &id_string/1) |> Enum.reject(&(&1 == ""))
+
+  defp decode_ids(ids) when is_binary(ids) do
+    case Jason.decode(ids) do
+      {:ok, list} when is_list(list) -> decode_ids(list)
+      _ -> ids |> String.split(",", trim: true) |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+    end
+  end
+
+  defp decode_ids(_ids), do: []
+
+  defp selection_text(fun, count) when is_function(fun, 1), do: fun.(count)
+  defp selection_text(_fun, 1), do: "1 selected"
+  defp selection_text(_fun, count), do: "#{count} selected"
 end

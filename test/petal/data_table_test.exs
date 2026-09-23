@@ -3,6 +3,7 @@ defmodule PetalComponents.DataTableTest do
 
   import PetalComponents.DataTable
 
+  alias PetalComponents.DataTable
   alias PetalComponents.DataTable.State
 
   @rows [
@@ -361,6 +362,213 @@ defmodule PetalComponents.DataTableTest do
 
     assert html =~ "Edit Amy"
     assert html =~ "pc-data-table__actions"
+  end
+
+  @people [
+    %{id: 1, name: "Amy", email: "amy@x.com"},
+    %{id: 2, name: "Bea", email: "bea@x.com"}
+  ]
+
+  test "selectable: tri-state header, page ops, and the morphing toolbar" do
+    assigns = base(%{rows: @people, state: %State{total: 2, page_size: 10}})
+
+    mixed =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        searchable
+        selectable
+        row_id={& &1.id}
+        selected={[1]}
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:bulk_action :let={ids}><span data-bulk={length(ids)}>Export</span></:bulk_action>
+      </.data_table>
+      """)
+
+    assert mixed =~ ~s(data-pc-dt-select-all)
+    assert mixed =~ ~s(data-state="mixed")
+    assert mixed =~ ~s(data-id="1")
+    assert mixed =~ ~s(phx-click="table")
+    assert mixed =~ ~s(phx-value-op="select")
+    assert mixed =~ ~s(phx-value-op="select_page")
+    assert mixed =~ ~s(phx-value-on="true")
+    assert mixed =~ ~s(phx-value-ids="[&quot;1&quot;,&quot;2&quot;]")
+    assert mixed =~ "1 selected"
+    assert mixed =~ ~s(data-bulk="1")
+    assert mixed =~ ~s(phx-value-op="clear_selection")
+    assert mixed =~ ~s(data-active="false")
+    assert mixed =~ ~s(data-active="true")
+    assert mixed =~ ~s(phx-hook="PetalDataTable")
+    assert mixed =~ "pc-table__td--first-col"
+    refute mixed =~ "pc-data-table__select-td pc-table__td--first-col"
+    refute mixed =~ "pc-table__td--first-col pc-data-table__select-td"
+
+    all =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        row_id={& &1.id}
+        selected={[1, 2]}
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert all =~ ~s(data-state="all")
+    assert all =~ ~s(checked)
+    assert all =~ ~s(phx-value-on="false")
+    assert all =~ "2 selected"
+
+    none =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        path={@path}
+        on_select="pick"
+        selectable
+        row_id={& &1.id}
+        selected={[]}
+        searchable
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert none =~ ~s(data-state="none")
+    assert none =~ ~s(phx-click="pick")
+    assert none =~ "0 selected"
+    refute none =~ ~s(checked)
+  end
+
+  test "selection outside the page still morphs the toolbar; the header stays empty" do
+    assigns = base(%{rows: @people, myself: "myself"})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        row_id={& &1.id}
+        selected={MapSet.new([99])}
+        target={@myself}
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert html =~ ~s(data-state="none")
+    assert html =~ "1 selected"
+    assert html =~ ~s(phx-target="myself")
+    refute html =~ ~s(data-id="99")
+  end
+
+  test "loading disables the header checkbox and skips row ids" do
+    assigns = base(%{rows: @people})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        row_id={& &1.id}
+        loading
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert html =~ ~s(disabled)
+    assert html =~ "pc-data-table__skeleton--check"
+    refute html =~ "data-id="
+  end
+
+  test "selectable requires row_id and an event" do
+    assigns = base(%{rows: @people})
+
+    assert_raise ArgumentError, ~r/row_id/, fn ->
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+    end
+
+    assert_raise ArgumentError, ~r/on_select or on_change/, fn ->
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} path={@path} selectable row_id={& &1.id}>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+    end
+  end
+
+  test "selection_op toggles, unions a page, clears, and ignores other ops" do
+    assert DataTable.selection_op([1], %{"op" => "select", "id" => "2", "on" => "true"}) ==
+             ["1", "2"]
+
+    assert DataTable.selection_op(["1", "2"], %{"op" => "select", "id" => "1", "on" => "false"}) ==
+             ["2"]
+
+    assert DataTable.selection_op(["1"], %{"op" => "select", "id" => "1"}) == []
+
+    assert DataTable.selection_op(["9"], %{
+             "op" => "select_page",
+             "ids" => ~s(["1","2"]),
+             "on" => "true"
+           }) == ["9", "1", "2"]
+
+    assert DataTable.selection_op(["1", "2", "3"], %{
+             "op" => "select_page",
+             "ids" => "2,3",
+             "on" => "false"
+           }) == ["1"]
+
+    assert DataTable.selection_op(["1"], %{"op" => "clear_selection"}) == []
+
+    selected = [1]
+    assert DataTable.selection_op(selected, %{"op" => "sort", "field" => "name"}) == selected
+
+    assert DataTable.selection_op(MapSet.new(["a"]), %{"op" => "select", "id" => "b", "on" => "true"})
+           |> Enum.sort() == ["a", "b"]
+  end
+
+  test "a custom selection label replaces the count sentence" do
+    assigns = base(%{rows: @people})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        row_id={& &1.id}
+        selected={[1, 2]}
+        selection_label={fn n -> "#{n} picked" end}
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert html =~ "2 picked"
+    refute html =~ "2 selected"
   end
 
   test "raises without either wiring mode" do

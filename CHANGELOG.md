@@ -3,6 +3,17 @@
 
 #### Added
 
+- **`<.data_table>` row selection (4.12 data table, milestone 3).**
+  `selectable` renders a leading checkbox column. The header checkbox is
+  tri-state for the current page (none, indeterminate, or all), and the
+  `PetalDataTable` hook paints the dash (`indeterminate` is not an HTML
+  attribute). Pass `row_id` and `selected`; clicks push `select`,
+  `select_page`, or `clear_selection` to `on_select` (or `on_change`).
+  `DataTable.selection_op/2` applies those ops and leaves every other
+  payload untouched, so it sits in front of `State.handle_op/3`.
+  Selection is not URL state. While any id is selected, a toolbar
+  crossfades into the count, the `:bulk_action` slot, and a clear
+  control; the hidden layer is `inert`. Selected rows take a primary wash.
 - **`<.data_table>` - the component core (4.12 data table, milestone 1).**
   Composed around `<.table>`, driven entirely by `DataTable.State`:
   `:col` slots (field, label, sortable, align), sortable headers with
