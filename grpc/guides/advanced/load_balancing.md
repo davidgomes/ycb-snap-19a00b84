@@ -41,3 +41,21 @@ iex> {:ok, channel} = GRPC.Stub.connect("unix:/tmp/my.sock")
 >__Note__: When using `DNS` target, the connection layer periodically refreshes endpoints.
 
 ---
+
+## Load Balancing Policies
+
+When a target resolves to several addresses, the `:lb_policy` option chooses how RPCs are spread across them (a `loadBalancingConfig` in the DNS service config takes precedence):
+
+| Policy                  | Behaviour                                      |
+|:------------------------|:-----------------------------------------------|
+| `:pick_first` (default) | Sends every RPC to the first connected address |
+| `:round_robin`          | Rotates RPCs across all connected addresses    |
+
+```elixir
+iex> {:ok, channel} =
+...>   GRPC.Stub.connect("dns://orders.prod.svc.cluster.local:50051", lb_policy: :round_robin)
+```
+
+The policy picks a channel on every RPC, in the calling process, without messaging the connection process. Addresses that fail to connect are never picked. When re-resolution adds or removes backends, the policy's state is updated in place, so the next RPC already sees the new set.
+
+---
