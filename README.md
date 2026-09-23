@@ -171,6 +171,13 @@ end
 > Currently, to maintain simplicity, the logs are ephemeral. However, storing them in an ETS table to survive Phoenix LiveView tab restarts it could be considered for future iterations.
 
 
+### Execution History
+
+Each chore has a **History** tab listing its previous runs (retryable, completed, discarded and cancelled jobs), newest first and paginated. Clicking a run opens its arguments, state and any errors recorded for each attempt.
+
+> [!NOTE]
+> History is read from the `oban_jobs` table, so it only goes back as far as your `Oban.Plugins.Pruner` retention (`max_age`) allows.
+
 ---
 
 ## 🕒 Future Scheduling & Countdown
@@ -251,6 +258,7 @@ end
 * 🛠️ **Zero-Boilerplate Internal Tooling:** Stop building custom HTML forms and controllers for one-off admin tasks. Define your argument schema once in the backend, and let ObanChore generate the UI.
 * 📡 **Live Execution Streaming:** Leveraging Phoenix PubSub and Telemetry, ObanChore streams logs and status updates from the background process directly back to the user's browser in real-time.
 * 🕒 **Future Scheduling & Real-time Countdown:** Delay chore runs using convenient time presets or custom minute inputs, accompanied by a dynamic real-time countdown.
+* 📜 **Execution History:** Browse previous runs of each chore, including their arguments, final state and recorded errors.
 * 🔐 **Operational Safety:** 
     * **Idempotency Check:** Automatically detects if a job with the same arguments is already running.
     * **Unique Execution Toggle:** Manually enforce single-job execution via the dashboard UI. (you can override this from the job definition)
