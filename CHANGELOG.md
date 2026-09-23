@@ -1,6 +1,16 @@
-# Changelog for v2.0
+# Changelog for v2.x
 
 This is a major rewrite of the previously-existing [`sqlite_ecto`](https://github.com/jazzyb/sqlite_ecto) that adds support for Ecto 2.1+.
+
+
+## v2.2.0
+
+_Unreleased_
+
+* **BREAKING CHANGE:** Update to support Ecto 2.2. Ecto 2.1 is no longer supported; use the v2.0.x series of `sqlite_ecto2` if you need it.
+* **BREAKING CHANGE:** Elixir 1.3 is no longer supported (Ecto 2.2 requires Elixir 1.4+).
+* Support `:bigserial` columns and references, which are now the default primary key and foreign key types in Ecto 2.2 migrations.
+* Load whole-number results as floats when a `:float` value is expected.
 
 
 ## v2.0.3
