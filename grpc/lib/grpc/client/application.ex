@@ -3,6 +3,8 @@ defmodule GRPC.Client.Application do
   use Application
 
   def start(_type, _args) do
+    GRPC.Client.Connection.create_lb_table()
+
     children = [
       {Registry, [keys: :unique, name: GRPC.Client.Registry]},
       {DynamicSupervisor, [name: GRPC.Client.Supervisor]}
