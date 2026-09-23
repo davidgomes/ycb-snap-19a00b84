@@ -224,9 +224,7 @@ defmodule Hexpm.AdminTasks do
     with {:ok, reason} <- Reasons.resolve(Keyword.get(opts, :reason), :user),
          {:ok, user} <- find_user(username),
          :ok <- delete_user(user, opts) do
-      if reason && User.email(user, :primary) do
-        deliver_removal_email(Emails.account_removed(user, reason))
-      end
+      if reason, do: deliver_removal_email(Emails.account_removed(user, reason))
 
       :ok
     end
@@ -389,9 +387,7 @@ defmodule Hexpm.AdminTasks do
 
       run_package_removal_side_effects({releases, package})
 
-      if owners != [] do
-        deliver_removal_email(Emails.package_removed(owners, package, reason))
-      end
+      if reason, do: deliver_removal_email(Emails.package_removed(owners, package, reason))
 
       :ok
     end
@@ -428,6 +424,8 @@ defmodule Hexpm.AdminTasks do
     |> Repo.all()
     |> Repo.preload([:emails, organization: [organization_users: [user: :emails]]])
   end
+
+  defp deliver_removal_email(%Swoosh.Email{to: []}), do: :ok
 
   defp deliver_removal_email(email) do
     case Mailer.deliver(email) do
@@ -473,10 +471,11 @@ defmodule Hexpm.AdminTasks do
       RegistryBuilder.package(package)
       RegistryBuilder.repository(package.repository)
 
-      owners = if reason, do: removal_email_owners(package), else: []
-
-      if owners != [] do
-        deliver_removal_email(Emails.release_removed(owners, package, version, reason))
+      if reason do
+        package
+        |> removal_email_owners()
+        |> Emails.release_removed(package, version, reason)
+        |> deliver_removal_email()
       end
 
       :ok
