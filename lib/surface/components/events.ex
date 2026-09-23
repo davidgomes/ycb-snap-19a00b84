@@ -36,6 +36,12 @@ defmodule Surface.Components.Events do
       @doc "Triggered when a key on the keyboard is pressed"
       prop keydown, :event
 
+      @doc "Triggered when the first child of the element reaches the top of the viewport"
+      prop viewport_top, :event
+
+      @doc "Triggered when the last child of the element reaches the bottom of the viewport"
+      prop viewport_bottom, :event
+
       @doc "List values that will be sent as part of the payload triggered by an event"
       prop values, :keyword, default: []
     end
