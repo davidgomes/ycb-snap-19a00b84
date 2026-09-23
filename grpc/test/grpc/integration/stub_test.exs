@@ -85,6 +85,78 @@ defmodule GRPC.Integration.StubTest do
     end)
   end
 
+  test "named Gun connections survive the original caller exiting" do
+    run_server(HelloServer, fn port ->
+      parent = self()
+      channel_name = {:named_gun_connection, make_ref()}
+
+      {caller_pid, caller_ref} =
+        spawn_monitor(fn ->
+          {:ok, channel} = GRPC.Stub.connect("localhost:#{port}", name: channel_name)
+          request = %Helloworld.HelloRequest{name: "first caller"}
+          {:ok, reply} = Helloworld.Greeter.Stub.say_hello(channel, request)
+          send(parent, {:initial_call_succeeded, channel, reply.message})
+        end)
+
+      assert_receive {:initial_call_succeeded, initial_channel, "Hello, first caller"}
+      assert_receive {:DOWN, ^caller_ref, :process, ^caller_pid, :normal}
+
+      named_channel = %GRPC.Channel{ref: channel_name}
+      assert {:ok, picked_channel} = GRPC.Client.Connection.pick_channel(named_channel)
+      conn_pid = picked_channel.adapter_payload.conn_pid
+
+      assert Process.alive?(conn_pid)
+      %{gun_pid: gun_pid} = :sys.get_state(conn_pid)
+      assert Process.alive?(gun_pid)
+
+      assert {:ok, reused_channel} = GRPC.Stub.connect("localhost:#{port}", name: channel_name)
+      assert reused_channel.adapter_payload.conn_pid == conn_pid
+      assert %{gun_pid: ^gun_pid} = :sys.get_state(conn_pid)
+
+      request = %Helloworld.HelloRequest{name: "second caller"}
+      assert {:ok, reply} = Helloworld.Greeter.Stub.say_hello(named_channel, request)
+      assert reply.message == "Hello, second caller"
+
+      assert {:ok, disconnected_channel} = GRPC.Stub.disconnect(reused_channel)
+      assert disconnected_channel.ref == initial_channel.ref
+      refute Process.alive?(conn_pid)
+    end)
+  end
+
+  test "Gun streams are dropped when the calling process exits mid-request" do
+    run_server(SlowServer, fn port ->
+      {:ok, channel} = GRPC.Stub.connect("localhost:#{port}")
+      %{adapter_payload: %{conn_pid: conn_pid}} = channel
+
+      caller =
+        spawn(fn ->
+          Helloworld.Greeter.Stub.say_hello(channel, %Helloworld.HelloRequest{name: "Elixir"})
+        end)
+
+      response_pid = await_stream(conn_pid)
+      monitor_ref = Process.monitor(response_pid)
+      Process.exit(caller, :kill)
+
+      assert_receive {:DOWN, ^monitor_ref, :process, ^response_pid, {:shutdown, :owner_down}}
+      assert %{streams: streams} = :sys.get_state(conn_pid)
+      assert streams == %{}
+      assert Process.alive?(conn_pid)
+
+      {:ok, _channel} = GRPC.Stub.disconnect(channel)
+    end)
+  end
+
+  defp await_stream(conn_pid, attempts \\ 50) do
+    case Map.keys(:sys.get_state(conn_pid).streams) do
+      [response_pid] ->
+        response_pid
+
+      [] when attempts > 0 ->
+        Process.sleep(10)
+        await_stream(conn_pid, attempts - 1)
+    end
+  end
+
   test "invalid channel function clause error" do
     req = %Helloworld.HelloRequest{name: "GRPC"}
 
