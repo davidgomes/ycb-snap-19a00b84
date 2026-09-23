@@ -23,7 +23,7 @@ defmodule Paginator.Ecto.Query do
   defp filter_values(query, fields, values, cursor_direction) when is_list(values) do
     new_values =
       fields
-      |> Enum.map(&elem(&1, 0))
+      |> Enum.map(&cursor_key(elem(&1, 0)))
       |> Enum.zip(values)
       |> Map.new()
 
@@ -37,22 +37,22 @@ defmodule Paginator.Ecto.Query do
   end
 
   defp build_where_expression(query, [{column, order}], values, cursor_direction) do
-    value = Map.get(values, column)
-    {q_position, q_binding} = column_position(query, column)
+    value = Map.get(values, cursor_key(column))
+    {q_position, q_expr} = column_expr(query, column)
 
     DynamicFilterBuilder.build!(%{
       sort_order: order,
       direction: cursor_direction,
       value: value,
       entity_position: q_position,
-      column: q_binding,
+      column: q_expr,
       next_filters: true
     })
   end
 
   defp build_where_expression(query, [{column, order} | fields], values, cursor_direction) do
-    value = Map.get(values, column)
-    {q_position, q_binding} = column_position(query, column)
+    value = Map.get(values, cursor_key(column))
+    {q_position, q_expr} = column_expr(query, column)
 
     filters = build_where_expression(query, fields, values, cursor_direction)
 
@@ -61,7 +61,7 @@ defmodule Paginator.Ecto.Query do
       direction: cursor_direction,
       value: value,
       entity_position: q_position,
-      column: q_binding,
+      column: q_expr,
       next_filters: filters
     })
   end
@@ -100,6 +100,16 @@ defmodule Paginator.Ecto.Query do
     query
     |> filter_values(cursor_fields, after_values, :after)
     |> filter_values(cursor_fields, before_values, :before)
+  end
+
+  defp cursor_key({name, %Ecto.Query.DynamicExpr{}}), do: name
+  defp cursor_key(column), do: column
+
+  defp column_expr(_query, {_name, %Ecto.Query.DynamicExpr{} = expr}), do: {0, expr}
+
+  defp column_expr(query, column) do
+    {position, field_name} = column_position(query, column)
+    {position, dynamic([{q, position}], field(q, ^field_name))}
   end
 
   # Lookup position of binding in query aliases

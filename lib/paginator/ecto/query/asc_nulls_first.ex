@@ -9,26 +9,17 @@ defmodule Paginator.Ecto.Query.AscNullsFirst do
   end
 
   def build_dynamic_filter(args = %{direction: :after, value: nil}) do
-    dynamic(
-      [{query, args.entity_position}],
-      (is_nil(field(query, ^args.column)) and ^args.next_filters) or
-        not is_nil(field(query, ^args.column))
-    )
+    dynamic((is_nil(^args.column) and ^args.next_filters) or
+        not is_nil(^args.column))
   end
 
   def build_dynamic_filter(args = %{direction: :after, next_filters: true}) do
-    dynamic(
-      [{query, args.entity_position}],
-      field(query, ^args.column) > ^args.value
-    )
+    dynamic(^args.column > ^args.value)
   end
 
   def build_dynamic_filter(args = %{direction: :after}) do
-    dynamic(
-      [{query, args.entity_position}],
-      (field(query, ^args.column) == ^args.value and ^args.next_filters) or
-        field(query, ^args.column) > ^args.value
-    )
+    dynamic((^args.column == ^args.value and ^args.next_filters) or
+        ^args.column > ^args.value)
   end
 
   def build_dynamic_filter(%{direction: :before, value: nil, next_filters: true}) do
@@ -36,25 +27,16 @@ defmodule Paginator.Ecto.Query.AscNullsFirst do
   end
 
   def build_dynamic_filter(args = %{direction: :before, value: nil}) do
-    dynamic(
-      [{query, args.entity_position}],
-      is_nil(field(query, ^args.column)) and ^args.next_filters
-    )
+    dynamic(is_nil(^args.column) and ^args.next_filters)
   end
 
   def build_dynamic_filter(args = %{direction: :before, next_filters: true}) do
-    dynamic(
-      [{query, args.entity_position}],
-      field(query, ^args.column) < ^args.value or is_nil(field(query, ^args.column))
-    )
+    dynamic(^args.column < ^args.value or is_nil(^args.column))
   end
 
   def build_dynamic_filter(args = %{direction: :before}) do
-    dynamic(
-      [{query, args.entity_position}],
-      (field(query, ^args.column) == ^args.value and ^args.next_filters) or
-        field(query, ^args.column) < ^args.value or
-        is_nil(field(query, ^args.column))
-    )
+    dynamic((^args.column == ^args.value and ^args.next_filters) or
+        ^args.column < ^args.value or
+        is_nil(^args.column))
   end
 end
