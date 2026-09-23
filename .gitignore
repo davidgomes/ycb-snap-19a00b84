@@ -24,3 +24,4 @@ db/
 
 # Ignore package tarball (built via "mix hex.build").
 ocelot-*.tar
+ocelot_dev.db*
