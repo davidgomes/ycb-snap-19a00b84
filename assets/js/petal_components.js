@@ -4608,7 +4608,8 @@ export const PetalComboBox = {
 // component renders URL templates (:term / :page_size placeholders,
 // assembled around the already-encoded rest of the query) and a hidden
 // data-phx-link anchor; the hook fills a template in and clicks the
-// anchor so navigation stays LiveView's own.
+// anchor so navigation stays LiveView's own. Selectable tables (either
+// mode) mount it too, for the tri-state header's indeterminate property.
 export const PetalDataTable = {
   mounted() {
     this.searchTimer = null;
@@ -4659,6 +4660,14 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+
+    this.syncSelection();
+  },
+
+  // the root's data-selection changes on every none/some/all transition,
+  // so the patch always reaches this hook when the header must change
+  updated() {
+    this.syncSelection();
   },
 
   destroyed() {
@@ -4666,6 +4675,13 @@ export const PetalDataTable = {
     this.el.removeEventListener("input", this.onInput);
     this.el.removeEventListener("change", this.onChange);
     this.el.removeEventListener("submit", this.onSubmit);
+  },
+
+  // "some rows checked" is the native indeterminate property, which no
+  // HTML attribute can set - the server stamps the state on the root
+  syncSelection() {
+    const all = this.el.querySelector("[data-pc-dt-select-all]");
+    if (all) all.indeterminate = this.el.dataset.selection === "some";
   },
 
   committedFilters() {
