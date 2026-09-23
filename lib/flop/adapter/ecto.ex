@@ -112,6 +112,7 @@ defmodule Flop.Adapter.Ecto do
               type: {:tuple, [:atom, :atom, :keyword_list]},
               required: true
             ],
+            field_dynamic: [type: {:tuple, [:atom, :atom, :keyword_list]}],
             ecto_type: [type: :any, required: true],
             bindings: [type: {:list, :atom}],
             operators: [type: {:list, :atom}]
@@ -308,7 +309,7 @@ defmodule Flop.Adapter.Ecto do
 
         Enum.reduce(directions, query, fn {_, field} = expr, acc_query ->
           field_info = Flop.Schema.field_info(struct, field)
-          apply_order_by_field(acc_query, expr, field_info, struct)
+          apply_order_by_field(acc_query, expr, field_info, struct, opts)
         end)
     end
   end
@@ -341,6 +342,7 @@ defmodule Flop.Adapter.Ecto do
          %FieldInfo{
            extra: %{type: :join, binding: binding, field: field}
          },
+         _,
          _
        ) do
     order_by_direction(
@@ -356,11 +358,19 @@ defmodule Flop.Adapter.Ecto do
          %FieldInfo{
            extra: %{type: :compound, fields: fields}
          },
-         struct
+         struct,
+         opts
        ) do
     Enum.reduce(fields, q, fn field, acc_query ->
       field_info = Flop.Schema.field_info(struct, field)
-      apply_order_by_field(acc_query, {direction, field}, field_info, struct)
+
+      apply_order_by_field(
+        acc_query,
+        {direction, field},
+        field_info,
+        struct,
+        opts
+      )
     end)
   end
 
@@ -368,12 +378,42 @@ defmodule Flop.Adapter.Ecto do
          q,
          {order_direction, field},
          %FieldInfo{extra: %{type: :alias}},
+         _,
          _
        ) do
     order_by_direction(q, order_direction, dynamic(selected_as(^field)))
   end
 
-  defp apply_order_by_field(q, {order_direction, field}, _, _) do
+  defp apply_order_by_field(
+         q,
+         {order_direction, field},
+         %FieldInfo{extra: %{type: :custom} = custom_opts},
+         _,
+         opts
+       ) do
+    case Map.get(custom_opts, :field_dynamic) do
+      {mod, fun, field_dynamic_opts} ->
+        opts =
+          opts
+          |> Keyword.get(:extra_opts, [])
+          |> Keyword.merge(field_dynamic_opts)
+
+        order_by_direction(q, order_direction, apply(mod, fun, [opts]))
+
+      nil ->
+        # only reachable with an unvalidated Flop struct
+        raise ArgumentError, """
+        cannot order by custom field #{inspect(field)}
+
+        Custom fields can only be used for ordering if the :field_dynamic option
+        is set.
+
+        Use Flop.validate/2 to turn this exception into a validation error.
+        """
+    end
+  end
+
+  defp apply_order_by_field(q, {order_direction, field}, _, _, _) do
     order_by_direction(q, order_direction, dynamic([r], field(r, ^field)))
   end
 
@@ -409,7 +449,7 @@ defmodule Flop.Adapter.Ecto do
 
   # only reachable with an unvalidated Flop struct
   defp cursor_dynamic([{_, _, _, %FieldInfo{extra: %{type: type}}} | _])
-       when type in [:compound, :alias] do
+       when type in [:compound, :alias, :custom] do
     raise ArgumentError, """
     cursor pagination is not supported for #{type} fields
 
@@ -873,6 +913,7 @@ defmodule Flop.Adapter.Ecto do
   defp normalize_custom_field_opts({name, opts}) when is_list(opts) do
     opts = %{
       filter: Keyword.fetch!(opts, :filter),
+      field_dynamic: Keyword.get(opts, :field_dynamic),
       ecto_type: Keyword.fetch!(opts, :ecto_type),
       operators: Keyword.get(opts, :operators),
       bindings: Keyword.get(opts, :bindings, [])
@@ -986,19 +1027,23 @@ defmodule Flop.Adapter.Ecto do
 
     illegal_fields =
       custom_fields
-      |> Map.keys()
-      |> Enum.filter(&(&1 in sortable))
+      |> Enum.filter(fn {field, %{field_dynamic: field_dynamic}} ->
+        field in sortable and is_nil(field_dynamic)
+      end)
+      |> Enum.map(fn {field, _} -> field end)
+      |> Enum.sort()
 
     if illegal_fields != [] do
       raise ArgumentError, """
-      cannot sort by custom fields
+      cannot sort by custom fields without field_dynamic
 
-      Custom fields are not allowed to be sortable. These custom fields were
-      configured as sortable:
+      Custom fields can only be sortable if the :field_dynamic option is set.
+      These custom fields were configured as sortable without it:
 
           #{inspect(illegal_fields)}
 
-      Use alias fields if you want to implement custom sorting.
+      Set :field_dynamic to a module/function/options tuple referencing a
+      function that returns the field as an Ecto.Query.dynamic_expr.
       """
     end
 

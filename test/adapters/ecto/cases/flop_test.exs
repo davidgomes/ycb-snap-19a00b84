@@ -170,6 +170,56 @@ defmodule Flop.Adapters.Ecto.FlopTest do
              ) == Enum.reverse(expected)
     end
 
+    test "orders by custom fields" do
+      owners = Enum.map([20, 55, 38, 41, 70], &insert(:owner, age: &1))
+      q = select(Owner, [o], o.age)
+      expected = owners |> Enum.map(& &1.age) |> Enum.sort_by(&abs(&1 - 40))
+
+      assert {:ok, flop} =
+               Flop.validate(%{order_by: [:age_distance]}, for: Owner)
+
+      assert Flop.all(q, flop, for: Owner, extra_opts: [target_age: 40]) ==
+               expected
+
+      assert Flop.all(
+               q,
+               %{flop | order_directions: [:desc]},
+               for: Owner,
+               extra_opts: [target_age: 40]
+             ) == Enum.reverse(expected)
+    end
+
+    test "orders by custom fields with nulls directions" do
+      insert(:owner, age: nil)
+      Enum.each([20, 38, 70], &insert(:owner, age: &1))
+      q = select(Owner, [o], o.age)
+      opts = [for: Owner, extra_opts: [target_age: 40]]
+
+      assert Flop.all(
+               q,
+               %Flop{
+                 order_by: [:age_distance],
+                 order_directions: [:asc_nulls_first]
+               },
+               opts
+             ) == [nil, 38, 20, 70]
+
+      assert Flop.all(
+               q,
+               %Flop{
+                 order_by: [:age_distance],
+                 order_directions: [:desc_nulls_last]
+               },
+               opts
+             ) == [70, 20, 38, nil]
+    end
+
+    test "raises when ordering by custom field without field_dynamic" do
+      assert_raise ArgumentError, ~r/cannot order by custom field/, fn ->
+        Flop.all(Pet, %Flop{order_by: [:reverse_name]}, for: Pet)
+      end
+    end
+
     test "warns if query passed to Flop already included ordering" do
       query = from p in Pet, order_by: :species
 
@@ -1977,6 +2027,35 @@ defmodule Flop.Adapters.Ecto.FlopTest do
 
       assert error.message =~
                "cursor pagination is not supported for alias fields"
+    end
+
+    test "raises if custom field is used" do
+      insert(:owner)
+      opts = [for: Owner, extra_opts: [target_age: 40]]
+
+      assert {_, %Meta{end_cursor: end_cursor}} =
+               Flop.run(
+                 Owner,
+                 %Flop{first: 1, order_by: [:age_distance, :id]},
+                 opts ++
+                   [cursor_value_func: fn _, _ -> %{age_distance: 1, id: 1} end]
+               )
+
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.run(
+            Owner,
+            %Flop{
+              first: 1,
+              after: end_cursor,
+              order_by: [:age_distance, :id]
+            },
+            opts
+          )
+        end
+
+      assert error.message =~
+               "cursor pagination is not supported for custom fields"
     end
 
     test "nil values for cursors are ignored when not using for option" do
