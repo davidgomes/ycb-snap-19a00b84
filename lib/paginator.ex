@@ -84,6 +84,8 @@ defmodule Paginator do
     is set dynamically (e.g from a URL param set by a user) but you still want to
     enfore a maximum. Defaults to `500`.
     * `:sort_direction` - The direction used for sorting. Defaults to `:asc`.
+      Supports `:asc`, `:asc_nulls_first`, `:asc_nulls_last`, `:desc`,
+      `:desc_nulls_first` and `:desc_nulls_last`.
     It is preferred to set the sorting direction per field in `:cursor_fields`.
     * `:total_count_limit` - Running count queries on tables with a large number
     of records is expensive so it is capped by default. Can be set to `:infinity`
