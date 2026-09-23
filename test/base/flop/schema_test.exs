@@ -388,7 +388,56 @@ defmodule Flop.SchemaTest do
              )
   end
 
-  test "raises error if custom field is added to sortable list" do
+  test "allows sortable custom fields with field_dynamic" do
+    defmodule Basil do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:inserted_at_date],
+        custom_fields: [
+          inserted_at_date: [
+            field_dynamic: {__MODULE__, :some_function, []},
+            ecto_type: :date
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    assert %Flop.FieldInfo{
+             ecto_type: :date,
+             extra: %{
+               type: :custom,
+               filter: nil,
+               field_dynamic: {Basil, :some_function, []}
+             }
+           } = Schema.field_info(struct(Basil), :inserted_at_date)
+  end
+
+  test "raises error if custom field without filter is added to filterable list" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Thyme do
+          @derive {
+            Flop.Schema,
+            filterable: [:inserted_at],
+            sortable: [],
+            custom_fields: [
+              inserted_at: [
+                field_dynamic: {__MODULE__, :some_function, []},
+                ecto_type: :utc_datetime
+              ]
+            ]
+          }
+          defstruct [:id, :inserted_at]
+        end
+      end
+
+    assert error.message =~
+             "cannot filter by custom fields without filter function"
+  end
+
+  test "raises error if custom field without field_dynamic is added to sortable list" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Parsley do
@@ -407,6 +456,7 @@ defmodule Flop.SchemaTest do
         end
       end
 
-    assert error.message =~ "cannot sort by custom field"
+    assert error.message =~
+             "cannot sort by custom fields without field_dynamic function"
   end
 end

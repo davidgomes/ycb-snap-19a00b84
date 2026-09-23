@@ -170,6 +170,38 @@ defmodule Flop.Adapters.Ecto.FlopTest do
              ) == Enum.reverse(expected)
     end
 
+    test "orders by custom fields" do
+      pets = insert_list(20, :pet)
+      expected = Enum.sort_by(pets, &{&1.age, &1.id})
+
+      assert Flop.all(Pet, %Flop{order_by: [:dog_age, :id]}, for: Pet) ==
+               expected
+
+      assert_received {:field_dynamic, [factor: 7]}
+
+      assert Flop.all(
+               Pet,
+               %Flop{
+                 order_by: [:dog_age, :id],
+                 order_directions: [:desc, :desc]
+               },
+               for: Pet,
+               extra_opts: [other: :options]
+             ) == Enum.reverse(expected)
+
+      assert_received {:field_dynamic, [other: :options, factor: 7]}
+    end
+
+    test "raises if custom field without field_dynamic is used" do
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.all(Pet, %Flop{order_by: [:reverse_name]}, for: Pet)
+        end
+
+      assert error.message =~
+               "custom field :reverse_name has no field_dynamic function"
+    end
+
     test "warns if query passed to Flop already included ordering" do
       query = from p in Pet, order_by: :species
 
@@ -1977,6 +2009,27 @@ defmodule Flop.Adapters.Ecto.FlopTest do
 
       assert error.message =~
                "cursor pagination is not supported for alias fields"
+    end
+
+    test "raises if custom field is used" do
+      insert(:pet)
+
+      assert {_, %Meta{end_cursor: end_cursor}} =
+               Flop.run(Pet, %Flop{first: 1, order_by: [:dog_age, :id]},
+                 for: Pet
+               )
+
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.run(
+            Pet,
+            %Flop{first: 1, after: end_cursor, order_by: [:dog_age, :id]},
+            for: Pet
+          )
+        end
+
+      assert error.message =~
+               "cursor pagination is not supported for custom fields"
     end
 
     test "nil values for cursors are ignored when not using for option" do

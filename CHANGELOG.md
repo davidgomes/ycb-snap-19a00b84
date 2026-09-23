@@ -12,6 +12,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Support SQLite.
 - Support MySQL.
+- Support ordering by custom fields via a new `field_dynamic` option. The
+  `filter` option of custom fields is now only required if the field is
+  filterable.
+
+### Changed
+
+- Reject custom fields as order fields for cursor pagination. The error message
+  of `Flop.validate/2` is now
+  `"cursor pagination is not supported for compound, alias and custom fields"`.
 
 ### Fixed
 

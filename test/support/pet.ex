@@ -58,6 +58,10 @@ defmodule MyApp.Pet do
         reverse_name: [
           filter: {__MODULE__, :reverse_name_filter, []},
           ecto_type: :string
+        ],
+        dog_age: [
+          field_dynamic: {__MODULE__, :dog_age_dynamic, [factor: 7]},
+          ecto_type: :integer
         ]
       ]
     ]
@@ -90,6 +94,12 @@ defmodule MyApp.Pet do
   def reverse_name_filter(query, %Flop.Filter{value: value}, _) do
     reversed = value
     where(query, [p], p.name == ^reversed)
+  end
+
+  def dog_age_dynamic(opts) do
+    send(self(), {:field_dynamic, opts})
+    factor = Keyword.fetch!(opts, :factor)
+    dynamic([p], p.age * ^factor)
   end
 
   def get_field(%__MODULE__{owner: %Owner{age: age}}, :owner_age), do: age
