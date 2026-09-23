@@ -32,4 +32,26 @@ defmodule GRPC.Client.DataCase do
 
     ExUnit.Callbacks.on_exit(fn -> :telemetry.detach(handler_id) end)
   end
+
+  @doc """
+  Polls `fun` until it returns a truthy value, which is then returned.
+  Fails the test if that does not happen within `timeout` milliseconds.
+  """
+  def wait_until(fun, timeout \\ 1_000) do
+    do_wait_until(fun, System.monotonic_time(:millisecond) + timeout)
+  end
+
+  defp do_wait_until(fun, deadline) do
+    cond do
+      result = fun.() ->
+        result
+
+      System.monotonic_time(:millisecond) >= deadline ->
+        ExUnit.Assertions.flunk("condition was not met before the timeout")
+
+      true ->
+        Process.sleep(5)
+        do_wait_until(fun, deadline)
+    end
+  end
 end
