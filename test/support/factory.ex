@@ -9,6 +9,7 @@ defmodule Warehouse.Factory do
 
   def configuration_factory do
     %Configuration{
+      component: build(:component),
       quantity: 1,
       sku: build(:sku)
     }
@@ -16,6 +17,7 @@ defmodule Warehouse.Factory do
 
   def location_factory do
     %Location{
+      name: sequence(:location, &"location#{&1}"),
       area: :assembly,
       disabled: false,
       removed: false
