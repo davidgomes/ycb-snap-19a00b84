@@ -28,8 +28,7 @@ defmodule PlugRailsCookieSessionStore.Mixfile do
   end
 
   defp deps do
-    [{:cowboy,  "~> 1.0", optional: true},
-     {:plug,    ">= 0.9.0"},
+    [{:plug,    "~> 1.3"},
      {:ex_doc,  ">= 0.0.0", only: :dev}]
   end
 end
