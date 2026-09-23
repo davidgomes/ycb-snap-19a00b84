@@ -6,3 +6,9 @@ db_setup:
 
 test: compose db_setup
 	mix test
+
+db_setup_myxql:
+	MIX_ENV=test_myxql mix do ecto.create, ecto.migrate
+
+test_myxql: compose db_setup_myxql
+	MIX_ENV=test_myxql mix test
