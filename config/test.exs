@@ -20,6 +20,12 @@ config :free_oban_ui, FreeObanUiWeb.Endpoint,
   secret_key_base: "ULwqnhKUGeOOkOlqyQ2Ah24EqdoXUVyLaUMyLAv8NDe0ARqP+9NlyrJyeK3YAFTY",
   server: false
 
+config :free_oban_ui, Oban,
+  repo: FreeObanUi.Repo,
+  queues: false,
+  plugins: false,
+  testing: :manual
+
 # In test we don't send emails
 config :free_oban_ui, FreeObanUi.Mailer, adapter: Swoosh.Adapters.Test
 
