@@ -5,6 +5,21 @@
 
 <section class="row">
   <article class="column">
+    <h2>Subscribe to the newsletter</h2>
+    <.form let={f} for={:subscriber} action={Routes.page_path(@conn, :subscribe)}>
+      <%= label f, :name %>
+      <%= text_input f, :name, required: true %>
+
+      <%= label f, :email %>
+      <%= email_input f, :email, required: true %>
+
+      <%= submit "Subscribe" %>
+    </.form>
+  </article>
+</section>
+
+<section class="row">
+  <article class="column">
     <h2>Resources</h2>
     <ul>
       <li>
