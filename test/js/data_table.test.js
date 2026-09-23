@@ -8,7 +8,7 @@ import hooks from "../../assets/js/petal_components.js";
 
 const mounted = [];
 
-function mountBase({ navTemplate, debounce } = {}) {
+function mountBase({ navTemplate, debounce, extraHtml = "" } = {}) {
   const el = document.createElement("div");
   el.id = "dt";
   el.className = "pc-data-table";
@@ -21,6 +21,7 @@ function mountBase({ navTemplate, debounce } = {}) {
       <option value="10" selected>10</option>
       <option value="20">20</option>
     </select>
+    ${extraHtml}
   `;
   document.body.appendChild(el);
 
@@ -262,6 +263,18 @@ describe("PetalDataTable", () => {
     expect(e.defaultPrevented).toBe(false);
     expect(patched).toEqual([]);
     expect(wrap.style.display).toBe("none");
+  });
+
+  it("mirrors data-indeterminate onto the select-all checkbox on mount and update", () => {
+    const { hook, el } = mountBase({
+      extraHtml: `<input type="checkbox" data-pc-dt-select-all data-indeterminate />`,
+    });
+    const box = el.querySelector("[data-pc-dt-select-all]");
+    expect(box.indeterminate).toBe(true);
+
+    box.removeAttribute("data-indeterminate");
+    hook.updated();
+    expect(box.indeterminate).toBe(false);
   });
 
   it("destroyed cancels a pending search patch", () => {

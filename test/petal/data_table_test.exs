@@ -363,6 +363,186 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "pc-data-table__actions"
   end
 
+  describe "selectable" do
+    @id_rows [
+      %{id: 1, name: "Amy"},
+      %{id: 2, name: "Bea"}
+    ]
+
+    # JS.push payloads render as HTML-escaped JSON
+    defp unescape(html), do: String.replace(html, "&quot;", "\"")
+
+    defp selectable_html(state, extra \\ %{}) do
+      assigns = Map.merge(%{rows: @id_rows, state: state}, extra)
+
+      ~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable searchable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:bulk_action :let={state}>
+          <button type="button">Delete {State.selected_count(state)}</button>
+        </:bulk_action>
+      </.data_table>
+      """
+      |> rendered_to_string()
+      |> unescape()
+    end
+
+    test "nothing selected: unchecked header selects the page, no selection bar" do
+      html = selectable_html(%State{total: 74})
+
+      assert html =~ ~s(phx-hook="PetalDataTable")
+      assert html =~ ~s(id="t-select-all")
+      assert html =~ ~s(aria-label="Select all rows on this page")
+      refute html =~ "data-indeterminate"
+      assert html =~ ~s("value":{"ids":["1","2"],"op":"select"})
+      # each row pushes its own explicit select
+      assert html =~ ~s("value":{"ids":["1"],"op":"select"})
+      assert html =~ ~s(aria-label="Select row")
+      refute html =~ "pc-data-table__selection"
+      refute html =~ "pc-data-table__toolbar--selecting"
+      refute html =~ "Delete"
+    end
+
+    test "a partial page reads indeterminate and morphs the toolbar" do
+      html = selectable_html(%State{total: 74, selected: MapSet.new(["2"])})
+
+      assert html =~ "data-indeterminate"
+      # a partial header click selects the rest of the page
+      assert html =~ ~s("value":{"ids":["1","2"],"op":"select"})
+      assert html =~ ~s("value":{"ids":["2"],"op":"deselect"})
+      assert html =~ ~r/<input[^>]*value="2"[^>]*checked/
+      refute html =~ ~r/<input[^>]*value="1"[^>]*checked/
+
+      assert html =~ "pc-data-table__toolbar--selecting"
+      assert html =~ ~r/1\s+selected/
+      assert html =~ "Delete 1"
+      assert html =~ ~s("value":{"op":"clear_selection"})
+      refute html =~ "Select all 74"
+      # the regular controls stay mounted, hidden by CSS
+      assert html =~ "pc-data-table__toolbar-main"
+      assert html =~ "pc-data-table__search-input"
+    end
+
+    test "a full page checks the header, deselects on click, and offers every match" do
+      html = selectable_html(%State{total: 74, selected: ["1", "2"]})
+
+      assert html =~ ~r/id="t-select-all"[^>]*checked/
+      refute html =~ "data-indeterminate"
+      assert html =~ ~s("value":{"ids":["1","2"],"op":"deselect"})
+      assert html =~ "Select all 74"
+      assert html =~ ~s("value":{"op":"select_all"})
+    end
+
+    test "all_matching counts the total and stops offering" do
+      html = selectable_html(%State{total: 74, selected: ["1", "2"], all_matching: true})
+
+      assert html =~ ~r/74\s+selected/
+      refute html =~ "Select all 74"
+      assert html =~ ~r/<input[^>]*value="1"[^>]*checked/
+    end
+
+    test "no offer to select every match when the total is unknown" do
+      html = selectable_html(%State{total: nil, selected: ["1", "2"]})
+      refute html =~ "pc-data-table__select-all-matching"
+    end
+
+    test "loading disables the header and renders no row checkboxes" do
+      assigns = %{state: %State{total: 74, page_size: 3}}
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={[]} state={@state} on_change="table" selectable loading>
+          <:col :let={row} field={:name}>{row}</:col>
+        </.data_table>
+        """)
+
+      assert html =~ ~r/id="t-select-all"[^>]*disabled/
+      refute html =~ "pc-data-table__select-row"
+    end
+
+    test "link mode needs on_select, and uses it with a target" do
+      assigns = %{rows: @id_rows, state: %State{total: 74}}
+
+      assert_raise ArgumentError, ~r/on_select/, fn ->
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path="/orders" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+      end
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          path="/orders"
+          on_select="pick"
+          target="#parent"
+          selectable
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+        |> unescape()
+
+      assert html =~ ~s("event":"pick")
+      assert html =~ ~s("target":"#parent")
+    end
+
+    test "row_id picks the key; rows without one raise" do
+      assigns = %{rows: [%{sku: "a-1", name: "Amy"}], state: %State{total: 1}}
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable row_id={& &1.sku}>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+        |> unescape()
+
+      assert html =~ ~s("value":{"ids":["a-1"],"op":"select"})
+
+      assert_raise ArgumentError, ~r/row_id/, fn ->
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+      end
+    end
+
+    test "a selectable-only table renders its toolbar just while selecting" do
+      assigns = %{rows: @id_rows}
+
+      idle =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={%State{total: 2}} on_change="table" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      refute idle =~ "pc-data-table__toolbar"
+
+      selecting =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={%State{total: 2, selected: ["1"]}}
+          on_change="table"
+          selectable
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert selecting =~ "pc-data-table__toolbar--selecting"
+      refute selecting =~ "pc-data-table__toolbar-main"
+    end
+  end
+
   test "raises without either wiring mode" do
     assigns = base(%{path: nil})
 

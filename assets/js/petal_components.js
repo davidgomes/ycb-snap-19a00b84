@@ -4602,10 +4602,11 @@ export const PetalComboBox = {
 };
 
 // Link-mode wiring for the data table's quick search and rows-per-page
-// select. Event mode posts through plain phx-change forms and never
-// mounts this hook; link mode has no events by design (handle_params is
-// the whole backend), so state changes must become patch URLs. The
-// component renders URL templates (:term / :page_size placeholders,
+// select, plus the select-all checkbox's indeterminate state in both
+// modes. Event mode posts through plain phx-change forms; link mode has
+// no events by design (handle_params is the whole backend), so state
+// changes must become patch URLs. The component renders URL templates
+// (:term / :page_size placeholders,
 // assembled around the already-encoded rest of the query) and a hidden
 // data-phx-link anchor; the hook fills a template in and clicks the
 // anchor so navigation stays LiveView's own.
@@ -4659,6 +4660,19 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+    this.syncIndeterminate();
+  },
+
+  updated() {
+    this.syncIndeterminate();
+  },
+
+  // indeterminate is a DOM property with no HTML attribute, so the
+  // server stamps data-indeterminate and the hook mirrors it - the
+  // tri-state header then reads "mixed" to assistive tech too
+  syncIndeterminate() {
+    const box = this.el.querySelector("[data-pc-dt-select-all]");
+    if (box) box.indeterminate = box.hasAttribute("data-indeterminate");
   },
 
   destroyed() {

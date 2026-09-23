@@ -35,6 +35,31 @@ defmodule PetalComponents.Showcase.DataTable do
     """
   end
 
+  example :selection, "Row selection and bulk actions",
+    description:
+      "selectable adds a checkbox column with a tri-state header - checked, indeterminate for a partial page (as here), unchecked. Any selection morphs the toolbar into a bulk-action bar: the count, a Select all N offer once the whole page is picked, your :bulk_action buttons, and a clear. Selection ops push on_change (on_select in link mode - selection is never URL state), and State.handle_op/3 already speaks them." do
+    ~H"""
+    <% state = %State{order_by: [name: :asc], page_size: 5, selected: MapSet.new(["1", "3"])} %>
+    <% {rows, state} = Engine.List.run(PetalComponents.Showcase.DataTable.sample_rows(), state) %>
+    <.data_table
+      id="sx-dt-selection"
+      rows={rows}
+      state={state}
+      on_change="table"
+      selectable
+      searchable
+    >
+      <:col :let={row} field={:name} sortable>{row.name}</:col>
+      <:col :let={row} field={:email}>{row.email}</:col>
+      <:col :let={row} field={:amount} align="right">${row.amount}</:col>
+      <:bulk_action>
+        <.button size="sm" variant="outline" color="gray">Export</.button>
+        <.button size="sm" variant="soft" color="danger">Delete</.button>
+      </:bulk_action>
+    </.data_table>
+    """
+  end
+
   example :loading, "Loading skeletons",
     description:
       "loading swaps the page for skeleton rows - one per page_size row, respecting column count and alignment. Flip it off when the query resolves." do

@@ -42,6 +42,24 @@
   placeholder mirrored from a JSON stamp, and filter URLs now carry
   list/range values as Phoenix-style indexed params. Operator names
   localize via `filter_op_labels`.
+- **`<.data_table>` row selection (4.12 data table, milestone 3).**
+  `selectable` adds a checkbox column with a tri-state select-all
+  header - checked, indeterminate for a partial page (mirrored onto the
+  DOM property by the `PetalDataTable` hook, styled via the new
+  `.pc-checkbox:indeterminate` dash and its `--pc-checkbox-dash` token),
+  unchecked - and a `:has()` highlight on selected rows. Any selection
+  morphs the toolbar into a bulk-action bar: the count, a "Select all N"
+  offer once the whole page is picked (`State.all_matching`), the new
+  `:bulk_action` slot, and a clear button; the regular controls stay
+  mounted underneath. `State` gains `selected`/`all_matching` (never
+  URL state) with `select`/`deselect`/`select_all_matching`/
+  `clear_selection`/`selected?`/`selected_count`, and `handle_op/3`
+  speaks the new `select`/`deselect`/`select_all`/`clear_selection`
+  ops. Filter and search changes drop `all_matching`; link mode pushes
+  through `on_select` and carries the selection across navigations with
+  `State.keep_selection/2`. Row keys come from `:id` or `row_id`.
+- **`table` `:col` gains `header`**: rendered markup in place of the
+  label - how the data table puts its select-all checkbox in the header.
 - **`data_table` filter popovers are viewport-aware**: the editors now
   ride the popover's top-layer mode, so `PetalPopover` flips and clamps
   them inside the viewport - a filter button at the screen edge no
