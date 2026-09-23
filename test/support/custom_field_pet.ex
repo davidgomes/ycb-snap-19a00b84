@@ -9,7 +9,13 @@ defmodule MyApp.CustomFieldPet do
 
   @derive {
     Flop.Schema,
-    filterable: [],
+    filterable: [
+      :age_score,
+      :blocked_score,
+      :name_lower,
+      :owner_age_score,
+      :tag_list
+    ],
     sortable: [:age_score, :owner_age_score],
     adapter_opts: [
       custom_fields: [
@@ -19,10 +25,23 @@ defmodule MyApp.CustomFieldPet do
              [factor: 2, compile_only: :available]},
           ecto_type: :integer
         ],
+        blocked_score: [
+          filter: {__MODULE__, :block_filter, []},
+          field_dynamic: {__MODULE__, :age_score_dynamic, [factor: 2]},
+          ecto_type: :integer
+        ],
         owner_age_score: [
           field_dynamic: {__MODULE__, :owner_age_score_dynamic, []},
           bindings: [:owner],
           ecto_type: :integer
+        ],
+        name_lower: [
+          field_dynamic: {__MODULE__, :name_lower_dynamic, []},
+          ecto_type: :string
+        ],
+        tag_list: [
+          field_dynamic: {__MODULE__, :tag_list_dynamic, []},
+          ecto_type: {:array, :string}
         ]
       ]
     ]
@@ -30,6 +49,8 @@ defmodule MyApp.CustomFieldPet do
 
   schema "pets" do
     field :age, :integer
+    field :name, :string
+    field :tags, {:array, :string}
     belongs_to :owner, Owner
   end
 
@@ -44,5 +65,17 @@ defmodule MyApp.CustomFieldPet do
 
   def owner_age_score_dynamic(_opts) do
     dynamic([owner: owner], owner.age)
+  end
+
+  def name_lower_dynamic(_opts) do
+    dynamic([pet], fragment("lower(?)", pet.name))
+  end
+
+  def tag_list_dynamic(_opts) do
+    dynamic([pet], pet.tags)
+  end
+
+  def block_filter(query, _filter, _opts) do
+    where(query, false)
   end
 end

@@ -391,12 +391,13 @@ end
 defmodule CustomFields do
   import Ecto.Query
 
-  # for ordering
+  # Flop applies order directions and filter operators to this expression.
+  # A `filter` function is only needed for operators Flop cannot express.
   def human_age(_opts) do
     dynamic([p], fragment("? * 7", p.age))
   end
 
-  # for filtering
+  # optional; takes precedence over field_dynamic when filtering
   def human_age_filter(q, %Flop.Filter{value: value, op: op}, _) do
     case Ecto.Type.cast(:integer, value) do
       {:ok, human_years} ->
