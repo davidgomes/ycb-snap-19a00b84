@@ -80,7 +80,13 @@ defmodule Oban.Web.Jobs.DetailComponentTest do
 
     test "displaying the awaiting state with a deadline" do
       wait_until = System.system_time(:millisecond) + :timer.minutes(30)
-      job = %Oban.Job{id: 1, worker: "MyApp.Worker", args: %{}, meta: %{"wait_until" => wait_until}}
+
+      job = %Oban.Job{
+        id: 1,
+        worker: "MyApp.Worker",
+        args: %{},
+        meta: %{"wait_until" => wait_until}
+      }
 
       html = render_component(Component, assigns(job), router: Router)
 
@@ -91,7 +97,12 @@ defmodule Oban.Web.Jobs.DetailComponentTest do
     end
 
     test "displaying the awaiting state without a deadline" do
-      job = %Oban.Job{id: 1, worker: "MyApp.Worker", args: %{}, meta: %{"wait_until" => "infinity"}}
+      job = %Oban.Job{
+        id: 1,
+        worker: "MyApp.Worker",
+        args: %{},
+        meta: %{"wait_until" => "infinity"}
+      }
 
       html = render_component(Component, assigns(job), router: Router)
 

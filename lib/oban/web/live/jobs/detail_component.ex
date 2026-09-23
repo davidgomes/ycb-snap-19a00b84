@@ -708,9 +708,9 @@ defmodule Oban.Web.Jobs.DetailComponent do
             <div class="flex justify-between items-start mb-2">
               <div class="flex items-center space-x-2">
                 <h4 class="font-medium text-xs uppercase text-gray-500 dark:text-gray-400">
-                  {if signal_state(@job) == :received, do: "Received Signal", else: "Awaiting Signal"}
+                  {signal_heading(@job)}
                 </h4>
-                <.pro_badge id="signal-pro-badge" tooltip="Signal for Oban.Pro.Worker.await_signal/1" />
+                <.pro_badge id="signal-pro-badge" tooltip="Signal from Oban.Pro.Worker" />
               </div>
               <button
                 :if={signal_state(@job) == :received}
@@ -853,6 +853,10 @@ defmodule Oban.Web.Jobs.DetailComponent do
   defp signal_state(%{meta: %{"signal" => _}}), do: :received
   defp signal_state(%{meta: %{"wait_until" => _}}), do: :awaiting
   defp signal_state(_job), do: nil
+
+  defp signal_heading(job) do
+    if signal_state(job) == :received, do: "Received Signal", else: "Awaiting Signal"
+  end
 
   defp format_signal(%{meta: %{"signal" => signal}} = job, resolver) do
     Resolver.call_with_fallback(resolver, :format_signal, [signal, job])
