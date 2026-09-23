@@ -108,11 +108,15 @@ defmodule PetalComponents.DataTableTest do
     # active trigger reads the predicate; its clear button posts removal
     assert html =~ "Status is any of Pending, Paid"
     assert html =~ ~s(aria-label="Clear Status filter")
-    # event mode carries the op grammar in hidden inputs; the hook mounts
-    # only to close top-layer popovers - no URL wiring
+    # event mode carries the op grammar in hidden inputs and needs no
+    # hook; the editors are in-page popovers, and Apply closes one
+    # through its own click-away command alongside the push
     assert html =~ ~s(name="op" value="filter")
-    assert html =~ ~s(phx-hook="PetalDataTable")
-    assert html =~ ~s(popover="auto")
+    refute html =~ "PetalDataTable"
+    refute html =~ "PetalPopover"
+    refute html =~ ~s(popover="auto")
+    assert html =~ "&quot;attr&quot;:&quot;phx-click-away&quot;"
+    assert html =~ "&quot;closest&quot;:&quot;.pc-popover&quot;"
     refute html =~ "data-nav-template"
     refute html =~ "data-filters="
   end
@@ -136,6 +140,9 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ ~s(data-nav-template="/orders?:filters")
     assert html =~ ~s(data-filters=)
     assert html =~ "contains"
+    # the hook owns the patch; the form's submit only closes the popover
+    assert html =~ ~s(phx-submit="[[&quot;exec&quot;,)
+    refute html =~ "&quot;push&quot;"
     # the clear affordance patches to a filterless URL
     assert html =~ ~s(aria-label="Clear Email filter")
     refute html =~ ~s(href="/orders?filters)

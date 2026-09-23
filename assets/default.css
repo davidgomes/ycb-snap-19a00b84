@@ -2605,7 +2605,21 @@
     @apply min-w-0 max-w-full;
   }
   .pc-data-table__toolbar {
-    @apply mb-3 flex flex-wrap items-center gap-2;
+    @apply relative mb-3 flex flex-wrap items-center gap-2;
+  }
+  /* The filter editors and the Columns menu live in the page, absolutely
+     positioned under their trigger: they scroll with it and need no
+     positioning JS. On a phone a trigger can sit anywhere in the wrapped
+     toolbar, so there a panel spans the toolbar instead (never past a
+     screen edge) - the toolbar becomes its containing block, and top:auto
+     keeps it at its static position, just under its own trigger. */
+  .pc-data-table__columns,
+  .pc-data-table__filter-popover {
+    @apply max-sm:static;
+  }
+  .pc-data-table__columns > .pc-popover__panel,
+  .pc-data-table__filter-popover > .pc-popover__panel {
+    @apply max-sm:inset-x-0 max-sm:top-auto max-sm:w-auto max-sm:max-w-none;
   }
   .pc-data-table__scroll {
     @apply overflow-x-auto;
@@ -2673,10 +2687,10 @@
     @apply w-3.5! h-3.5! mr-1.5;
   }
   .pc-data-table__filter-form {
-    @apply flex w-56 flex-col gap-2;
+    @apply flex w-56 flex-col gap-2 max-sm:w-auto;
   }
   .pc-data-table__filter-form--select {
-    @apply w-48;
+    @apply w-48 max-sm:w-auto;
   }
   /* py-0: these carry an explicit height, so the base py-2 would push a
      16px line box (coarse pointers) past the content box and sit the

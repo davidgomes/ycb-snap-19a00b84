@@ -3,6 +3,19 @@
 
 #### Fixed
 
+- **`data_table` menus live in the page.** The filter editors and the
+  Columns dropdown were top-layer popovers: fixed-position panels that
+  `PetalPopover` re-measured against the viewport on every scroll,
+  resize and visual-viewport change, chasing a trigger that scrolls
+  with the page. The toolbar is never inside the table's clipped
+  scroll region, so they are now ordinary anchored popovers -
+  absolutely positioned under their trigger, they scroll with the page
+  and cannot lag, flash or detach. On phones (below `sm`) a panel spans
+  the toolbar instead, just under its trigger, so a button near a
+  screen edge can't open its editor off-screen. Apply closes the
+  editor through the popover's own close command in both wiring modes
+  (patch-safe: LiveView's sticky display state flips with it), so
+  event-mode filters no longer mount the `PetalDataTable` hook.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to
