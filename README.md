@@ -11,7 +11,7 @@ Add PlugRailsCookieSessionStore as a dependency to your `mix.exs` file:
 
 ```elixir
 def deps do
-  [{:plug_rails_cookie_session_store, "~> 0.1"}]
+  [{:plug_rails_cookie_session_store, "~> 0.3"}]
 end
 ```
 
@@ -57,6 +57,24 @@ plug Plug.Session,
   key_digest: :sha,
   serializer: Poison # see serializer details below
 end
+```
+
+This configuration works with Rails 4.x, 5.0 and 5.1, which encrypt cookies with AES-256-CBC and sign them with HMAC-SHA1.
+
+#### Rails 5.2+ authenticated encrypted cookies
+
+Rails 5.2 encrypts cookies with AES-256-GCM when `Rails.application.config.action_dispatch.use_authenticated_cookie_encryption` is `true` (the default for new 5.2 apps). No signing salt is used in this mode, and the encryption salt is the `authenticated_encrypted_cookie_salt` (`"authenticated encrypted cookie"` by default):
+
+```elixir
+plug Plug.Session,
+  store: PlugRailsCookieSessionStore,
+  key: "_SOMETHING_HERE_session",
+  cipher: :aes_256_gcm,
+  encryption_salt: "authenticated encrypted cookie",
+  key_iterations: 1000,
+  key_length: 64,
+  key_digest: :sha,
+  serializer: Poison
 ```
 
 #### Set up a serializer
