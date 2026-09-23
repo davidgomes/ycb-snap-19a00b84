@@ -1226,6 +1226,22 @@
         "difficulty": 2
       },
       {
+        "slug": "line-up",
+        "name": "Line Up",
+        "uuid": "5f9f1753-d74b-4c2f-b703-7207cf55394b",
+        "practices": [
+          "strings"
+        ],
+        "prerequisites": [
+          "strings",
+          "integers",
+          "cond",
+          "multiple-clause-functions",
+          "guards"
+        ],
+        "difficulty": 2
+      },
+      {
         "slug": "atbash-cipher",
         "name": "Atbash Cipher",
         "uuid": "eab8a96f-74af-4e3d-8039-d1d74714f72b",
