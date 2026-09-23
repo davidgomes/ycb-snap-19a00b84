@@ -51,6 +51,7 @@ defmodule Nostrum.Voice do
   alias Nostrum.Struct.VoiceWSState
   alias Nostrum.Util
   alias Nostrum.Voice.Audio
+  alias Nostrum.Voice.Crypto.Dave
   alias Nostrum.Voice.Opus
   alias Nostrum.Voice.Ports
   alias Nostrum.Voice.Session
@@ -684,8 +685,12 @@ defmodule Nostrum.Voice do
 
   If `raw_rtp` is set to `true`, a list of raw RTP packets is returned instead.
   To extract an opus packet from an RTP packet, see `extract_opus_packet/1`.
+  Note that the opus packets within raw RTP packets remain end-to-end encrypted
+  when the voice channel is using the DAVE protocol.
 
   This function will block until the specified number of packets is received.
+  When `raw_rtp` is `false`, packets that fail end-to-end decryption are discarded,
+  so fewer than `num_packets` packets may be returned.
   """
   @doc since: "0.6.0"
   @spec listen(Guild.id(), pos_integer, raw_rtp :: false) :: [rtp_opus()] | {:error, String.t()}
@@ -699,16 +704,25 @@ defmodule Nostrum.Voice do
       if raw_rtp do
         Enum.map(packets, fn {header, payload} -> header <> payload end)
       else
-        # credo:disable-for-next-line Credo.Check.Refactor.Nesting
-        Enum.map(packets, fn {header, payload} ->
-          <<_::16, seq::integer-16, time::integer-32, ssrc::integer-32>> = header
-          opus = Opus.strip_rtp_ext(payload)
-          {{seq, time, ssrc}, opus}
-        end)
+        packets_to_rtp_opus(packets, voice)
       end
     else
       {:error, "Must be connected to voice channel to listen for incoming data."}
     end
+  end
+
+  defp packets_to_rtp_opus(packets, %VoiceState{dave_session: dave_session} = voice) do
+    ssrc_map = if dave_session, do: Session.get_ws_state(voice.session_pid).ssrc_map, else: %{}
+
+    Enum.flat_map(packets, fn {header, payload} ->
+      <<_::16, seq::integer-16, time::integer-32, ssrc::integer-32>> = header
+      opus = Opus.strip_rtp_ext(payload)
+
+      case Dave.decrypt(dave_session, ssrc_map[ssrc], opus) do
+        {:ok, opus} -> [{{seq, time, ssrc}, opus}]
+        :error -> []
+      end
+    end)
   end
 
   @doc """

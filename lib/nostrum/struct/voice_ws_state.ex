@@ -23,7 +23,12 @@ defmodule Nostrum.Struct.VoiceWSState do
     :heartbeat_ack,
     :heartbeat_interval,
     :heartbeat_ref,
-    :bot_options
+    :bot_options,
+    :connected_users,
+    :dave_session,
+    :dave_protocol_version,
+    :dave_pending_transition,
+    :dave_external_sender
   ]
 
   @typedoc "The guild id that this voice websocket state applies to"
@@ -97,6 +102,35 @@ defmodule Nostrum.Struct.VoiceWSState do
   @typedoc "Time ref for the heartbeat"
   @type heartbeat_ref :: :timer.tref() | nil
 
+  @typedoc "User ids of the other users connected to the voice channel"
+  @typedoc since: "0.11.0"
+  @type connected_users :: MapSet.t(Nostrum.Struct.User.id())
+
+  @typedoc """
+  DAVE (Discord Audio & Video End-to-End Encryption) protocol session
+
+  Will be `nil` until the voice channel has negotiated a nonzero DAVE protocol version.
+  """
+  @typedoc since: "0.11.0"
+  @type dave_session :: Dave.session() | nil
+
+  @typedoc """
+  DAVE protocol version currently in effect for the voice channel
+
+  A value of `0` means audio frames are not end-to-end encrypted.
+  """
+  @typedoc since: "0.11.0"
+  @type dave_protocol_version :: non_neg_integer()
+
+  @typedoc "DAVE protocol transition that has been announced but not yet executed"
+  @typedoc since: "0.11.0"
+  @type dave_pending_transition ::
+          %{transition_id: non_neg_integer(), protocol_version: non_neg_integer()} | nil
+
+  @typedoc "Serialized MLS external sender package received from the voice gateway"
+  @typedoc since: "0.11.0"
+  @type dave_external_sender :: binary() | nil
+
   @type t :: %__MODULE__{
           guild_id: guild_id,
           channel_id: channel_id,
@@ -117,6 +151,11 @@ defmodule Nostrum.Struct.VoiceWSState do
           heartbeat_ack: heartbeat_ack,
           heartbeat_interval: heartbeat_interval,
           heartbeat_ref: heartbeat_ref,
-          bot_options: Nostrum.Bot.bot_options()
+          bot_options: Nostrum.Bot.bot_options(),
+          connected_users: connected_users,
+          dave_session: dave_session,
+          dave_protocol_version: dave_protocol_version,
+          dave_pending_transition: dave_pending_transition,
+          dave_external_sender: dave_external_sender
         }
 end
