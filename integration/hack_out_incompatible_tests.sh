@@ -19,9 +19,17 @@ sed -i "" '/test "Repo.insert_all escape/ i\
   @tag :insert_cell_wise_defaults
 ' deps/ecto/integration_test/sql/sql.exs
 
-sed -i "" '/subqueries with select expression/ i\ 
+sed -i "" '/subqueries with map and select expression/ i\ 
   @tag :map_boolean_in_subquery
 ' deps/ecto/integration_test/sql/subquery.exs
+
+sed -i "" '/subqueries with map update and select expression/ i\ 
+  @tag :map_boolean_in_subquery
+' deps/ecto/integration_test/sql/subquery.exs
+
+sed -i "" '/test "typed aggregations/ i\ 
+  @tag :typed_aggregations
+' deps/ecto/integration_test/cases/type.exs
 
 else
 
@@ -31,6 +39,10 @@ sed -i '/failing child foreign key/ i @tag :foreign_key_constraint' deps/ecto/in
 
 sed -i '/test "Repo.insert_all escape/ i @tag :insert_cell_wise_defaults' deps/ecto/integration_test/sql/sql.exs
 
-sed -i '/subqueries with select expression/ i @tag :map_boolean_in_subquery' deps/ecto/integration_test/sql/subquery.exs
+sed -i '/subqueries with map and select expression/ i @tag :map_boolean_in_subquery' deps/ecto/integration_test/sql/subquery.exs
+
+sed -i '/subqueries with map update and select expression/ i @tag :map_boolean_in_subquery' deps/ecto/integration_test/sql/subquery.exs
+
+sed -i '/test "typed aggregations/ i @tag :typed_aggregations' deps/ecto/integration_test/cases/type.exs
 
 fi

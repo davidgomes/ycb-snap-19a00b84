@@ -18,6 +18,7 @@ ExUnit.start exclude: [:array_type,
                        :modify_foreign_key_on_update,
                        :alter_primary_key,
                        :map_boolean_in_subquery,
+                       :typed_aggregations,
                        :upsert_all,
                        :with_conflict_target,
                        :without_conflict_target]
