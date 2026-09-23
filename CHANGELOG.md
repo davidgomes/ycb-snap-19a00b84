@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+* Fix compile errors/warnings with Elixir `v1.19`
+* Fix compatibility issues with Liveview >= `v1.1`
+* Remove support for Elixir < `v1.14`
+* Remove support of experimental `:for.index` without generator
+* Optimize compiler using manifest to avoid unnecessary compilation when there's no change
+
 ## v0.12.1 (2025-02-14)
 
 * Support Liveview `1.0` (#760)
