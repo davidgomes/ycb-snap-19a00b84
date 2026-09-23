@@ -122,8 +122,24 @@ end
 
 # DO NOT CHANGE CODE ABOVE THIS LINE =========================
 
-# PasswordCompare.option_one("users_password", md5_hash)
-# PasswordCompare.option_two("users_password", bcrypt_salted_hash)
+result =
+  (
+    nil
+    # PasswordCompare.option_one("users_password", md5_hash)
+    # PasswordCompare.option_two("users_password", bcrypt_salted_hash)
+  )
+
+# DO NOT CHANGE CODE BELOW THIS LINE ============================
+case result do
+  :entry_granted_op2 ->
+    IO.puts("Correct! Bcrypt is a strong, salted hashing function with a work factor.")
+
+  nil ->
+    IO.puts("Uncomment one of the function calls above.")
+
+  _ ->
+    IO.puts("Incorrect. MD5 is a deprecated hashing function and should not be used for passwords.")
+end
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -255,8 +271,22 @@ _HINT: Installed dependencies can be found at the very top, it was the very firs
 vulnerable_dependency = :vulnerable_dependency
 
 # DO NOT CHANGE CODE BELOW THIS LINE ============================
-Application.spec(vulnerable_dependency)[:vsn] |> List.to_string() |> IO.puts()
-IO.puts(vulnerable_dependency)
+version =
+  case Application.spec(vulnerable_dependency, :vsn) do
+    nil -> nil
+    vsn -> List.to_string(vsn)
+  end
+
+cond do
+  vulnerable_dependency != :plug ->
+    IO.puts("Incorrect. #{vulnerable_dependency} is not the vulnerable dependency.")
+
+  Version.match?(version, "< 1.3.5") ->
+    IO.puts("Correct dependency, but plug #{version} is still vulnerable. Update it and re-run setup.")
+
+  true ->
+    IO.puts("Correct! plug has been updated to #{version}.")
+end
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
