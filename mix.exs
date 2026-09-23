@@ -3,15 +3,15 @@ defmodule PlugRailsCookieSessionStore.Mixfile do
 
   def project do
     [app: :plug_rails_cookie_session_store,
-     version: "0.2.0",
-     elixir: "~> 1.0",
+     version: "0.3.0",
+     elixir: "~> 1.6",
      description: description(),
      package: package(),
      deps: deps()]
   end
 
   def application do
-    [applications: [:crypto, :logger]]
+    [extra_applications: [:crypto, :logger]]
   end
 
   defp description do
@@ -28,8 +28,8 @@ defmodule PlugRailsCookieSessionStore.Mixfile do
   end
 
   defp deps do
-    [{:cowboy,  "~> 1.0", optional: true},
-     {:plug,    ">= 0.9.0"},
-     {:ex_doc,  ">= 0.0.0", only: :dev}]
+    [{:plug,        "~> 1.7"},
+     {:plug_crypto, "~> 1.0"},
+     {:ex_doc,      "~> 0.19", only: :dev, runtime: false}]
   end
 end
