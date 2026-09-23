@@ -59,8 +59,12 @@ end
 when inserting a new job into a queue.
 
 However, a non-optimized version of `EctoJob` can be used on top of MySQL >=
-8.0.1. Prior version of MySQL is not supported because of the following feature:
+8.0.13. Prior versions of MySQL are not supported because of the following features:
 * `FOR UPDATE SKIP LOCKED`
+* Expressions as column default values
+
+Since MySQL has no notification mechanism, new jobs are dispatched when the queue
+is polled or when workers request more jobs, so consider lowering the `poll_interval`.
 
 ### Upgrading to version 3.0
 
