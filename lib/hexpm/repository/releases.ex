@@ -65,17 +65,60 @@ defmodule Hexpm.Repository.Releases do
 
   def latest_version(repository, package, opts)
       when is_binary(repository) and is_binary(package) do
-    from(r in Release,
-      join: p in assoc(r, :package),
-      join: repository in assoc(p, :repository),
-      where: repository.name == ^repository and p.name == ^package,
-      select: struct(r, [:version, :has_docs])
-    )
-    |> Repo.all()
-    |> Release.latest_version(opts)
-    |> case do
-      nil -> nil
-      release -> release.version
+    only_stable? = Keyword.fetch!(opts, :only_stable)
+    unstable_fallback? = Keyword.get(opts, :unstable_fallback, false)
+
+    query =
+      from(r in Release,
+        join: p in assoc(r, :package),
+        join: repository in assoc(p, :repository),
+        where: repository.name == ^repository and p.name == ^package
+      )
+
+    query =
+      if Keyword.get(opts, :with_docs),
+        do: where(query, [r], r.has_docs),
+        else: query
+
+    release =
+      if only_stable? do
+        latest_by_semver_keys(where(query, [r], r.version_stable)) ||
+          if(unstable_fallback?, do: latest_by_semver_keys(query))
+      else
+        latest_by_semver_keys(query)
+      end
+
+    release && release.version
+  end
+
+  defp latest_by_semver_keys(query) do
+    top =
+      query
+      |> order_by([r],
+        desc: r.version_major,
+        desc: r.version_minor,
+        desc: r.version_patch,
+        desc: r.version_stable
+      )
+      |> limit(1)
+      |> select([r], struct(r, [:version, :version_major, :version_minor, :version_patch, :version_stable]))
+      |> Repo.one()
+
+    case top do
+      %Release{version_stable: false} ->
+        # Pre-release precedence is not captured by the stored keys
+        query
+        |> where(
+          [r],
+          r.version_major == ^top.version_major and r.version_minor == ^top.version_minor and
+            r.version_patch == ^top.version_patch
+        )
+        |> select([r], struct(r, [:version, :has_docs]))
+        |> Repo.all()
+        |> Release.latest_version(only_stable: false)
+
+      release ->
+        release
     end
   end
 

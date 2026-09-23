@@ -10,6 +10,10 @@ defmodule Hexpm.Repository.Release do
     field :inner_checksum, :binary
     field :outer_checksum, :binary
     field :has_docs, :boolean, default: false
+    field :version_major, :integer
+    field :version_minor, :integer
+    field :version_patch, :integer
+    field :version_stable, :boolean
     field :vulnerable?, :boolean, virtual: true, default: false
     timestamps()
 
@@ -68,10 +72,25 @@ defmodule Hexpm.Repository.Release do
     |> cast_embed(:meta, required: true)
     |> validate_version(:version)
     |> validate_editable(:update, false, replace?)
+    |> put_semver_keys()
     |> put_change(:inner_checksum, inner_checksum)
     |> put_change(:outer_checksum, outer_checksum)
     |> put_assoc(:publisher, publisher)
     |> Requirement.build_all(package)
+  end
+
+  defp put_semver_keys(changeset) do
+    case get_field(changeset, :version) do
+      %Version{} = version ->
+        changeset
+        |> put_change(:version_major, version.major)
+        |> put_change(:version_minor, version.minor)
+        |> put_change(:version_patch, version.patch)
+        |> put_change(:version_stable, version.pre == [])
+
+      _ ->
+        changeset
+    end
   end
 
   def build(package, publisher, params, inner_checksum, outer_checksum, replace? \\ true) do
