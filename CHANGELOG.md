@@ -7,7 +7,7 @@
 * Add Elixir 1.6.6, 1.7.4 & 1.8.1 official support
 * Add Erlang/OTP 20.2 & 20.3 official support
 * Format code with `mix format`
-* Update dev dependencies
+* Update dev & test dependencies
 
 ## 0.6.0
 * Extra configration that allows control of logging debug fields.
