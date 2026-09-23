@@ -715,6 +715,42 @@ defmodule Guardian.PlugTest do
     end
   end
 
+  describe "resolve_secret" do
+    def secret_for_conn(conn), do: conn.assigns[:tenant_secret]
+    def secret_from_mfa, do: "mfa-secret"
+
+    test "calls a one argument function with the connection", ctx do
+      conn = assign(ctx.conn, :tenant_secret, "tenant-secret")
+      opts = Guardian.Plug.resolve_secret(conn, secret: &__MODULE__.secret_for_conn/1, key: :tenant)
+
+      assert opts[:secret] == "tenant-secret"
+      assert opts[:key] == :tenant
+    end
+
+    test "keeps an explicit nil when the function returns nil", ctx do
+      opts = Guardian.Plug.resolve_secret(ctx.conn, secret: &__MODULE__.secret_for_conn/1)
+      assert Keyword.fetch(opts, :secret) == {:ok, nil}
+    end
+
+    test "leaves an {m, f, a} for the token module to resolve", ctx do
+      opts = [secret: {__MODULE__, :secret_from_mfa, []}]
+      assert Guardian.Plug.resolve_secret(ctx.conn, opts) == opts
+    end
+
+    test "leaves other secrets untouched", ctx do
+      zero_arity = fn -> "nope" end
+      two_arity = fn _conn, _opts -> "nope" end
+
+      for secret <- ["plain", %{"kty" => "oct"}, nil, zero_arity, two_arity] do
+        assert Guardian.Plug.resolve_secret(ctx.conn, secret: secret) == [secret: secret]
+      end
+    end
+
+    test "does not add a secret when none is given", ctx do
+      assert Guardian.Plug.resolve_secret(ctx.conn, key: :tenant) == [key: :tenant]
+    end
+  end
+
   describe "#keys" do
     alias Guardian.Plug.Keys
 

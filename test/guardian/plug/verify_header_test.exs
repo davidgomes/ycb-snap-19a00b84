@@ -217,6 +217,156 @@ defmodule Guardian.Plug.VerifyHeaderTest do
     refute conn.halted
   end
 
+  describe "with a :secret option" do
+    defmodule TenantImpl do
+      @moduledoc false
+
+      use Guardian,
+        otp_app: :guardian,
+        token_module: Guardian.Token.Jwt,
+        issuer: "MyApp",
+        secret_key: "application-wide-secret"
+
+      def subject_for_token(%{id: id}, _claims), do: {:ok, "User:#{id}"}
+      def resource_from_claims(%{"sub" => "User:" <> sub}), do: {:ok, %{id: sub}}
+
+      def static_secret(secret), do: secret
+    end
+
+    @tenant_secrets %{"acme" => "acme-secret", "globex" => "globex-secret"}
+
+    def tenant_secret(conn) do
+      send(self(), :tenant_secret_called)
+
+      case get_req_header(conn, "x-tenant") do
+        [tenant] -> Map.get(@tenant_secrets, tenant)
+        _ -> nil
+      end
+    end
+
+    setup do
+      opts =
+        VerifyHeader.init(
+          module: __MODULE__.TenantImpl,
+          error_handler: __MODULE__.Handler,
+          secret: &__MODULE__.tenant_secret/1
+        )
+
+      {:ok, %{opts: opts, impl: __MODULE__.TenantImpl}}
+    end
+
+    defp tenant_conn(tenant, token) do
+      :get
+      |> conn("/")
+      |> put_req_header("x-tenant", tenant)
+      |> put_req_header("authorization", "Bearer #{token}")
+    end
+
+    test "verifies with the secret selected from the connection", ctx do
+      {:ok, token, claims} = ctx.impl.encode_and_sign(@resource, %{}, secret: "acme-secret")
+
+      conn = "acme" |> tenant_conn(token) |> VerifyHeader.call(ctx.opts)
+
+      refute conn.halted
+      assert Guardian.Plug.current_token(conn) == token
+      assert Guardian.Plug.current_claims(conn) == claims
+      assert_received :tenant_secret_called
+    end
+
+    test "rejects a token signed for another tenant", ctx do
+      {:ok, token, _} = ctx.impl.encode_and_sign(@resource, %{}, secret: "acme-secret")
+
+      conn = "globex" |> tenant_conn(token) |> VerifyHeader.call(ctx.opts)
+
+      assert conn.halted
+      assert conn.resp_body == inspect({:invalid_token, :invalid_token})
+      refute Guardian.Plug.current_token(conn)
+    end
+
+    test "does not fall back to the configured secret when no secret is found", ctx do
+      {:ok, token, _} = ctx.impl.encode_and_sign(@resource)
+      assert {:ok, _} = ctx.impl.decode_and_verify(token)
+
+      conn = "unknown" |> tenant_conn(token) |> VerifyHeader.call(ctx.opts)
+
+      assert conn.halted
+      assert conn.status == 401
+      assert conn.resp_body == inspect({:invalid_token, :secret_not_found})
+      refute Guardian.Plug.current_token(conn)
+      refute Guardian.Plug.current_claims(conn)
+    end
+
+    test "does not call the function without a token", ctx do
+      conn = :get |> conn("/") |> put_req_header("x-tenant", "acme") |> VerifyHeader.call(ctx.opts)
+
+      refute conn.halted
+      refute Guardian.Plug.current_token(conn)
+      refute_received :tenant_secret_called
+    end
+
+    test "does not call the function when a token is already on the connection", ctx do
+      {:ok, token, claims} = ctx.impl.encode_and_sign(@resource, %{}, secret: "acme-secret")
+
+      conn =
+        "acme"
+        |> tenant_conn(token)
+        |> Guardian.Plug.put_current_token("existing")
+        |> Guardian.Plug.put_current_claims(claims)
+        |> VerifyHeader.call(ctx.opts)
+
+      assert Guardian.Plug.current_token(conn) == "existing"
+      refute_received :tenant_secret_called
+    end
+
+    test "still resolves an {m, f, a} without the connection", ctx do
+      {:ok, token, claims} = ctx.impl.encode_and_sign(@resource, %{}, secret: "acme-secret")
+      opts = Keyword.put(ctx.opts, :secret, {ctx.impl, :static_secret, ["acme-secret"]})
+
+      conn = "globex" |> tenant_conn(token) |> VerifyHeader.call(opts)
+
+      refute conn.halted
+      assert Guardian.Plug.current_claims(conn) == claims
+    end
+
+    test "uses the refresh_from_cookie :secret to verify the cookie and sign the new token", ctx do
+      {:ok, refresh_token, _} = ctx.impl.encode_and_sign(@resource, %{}, token_type: "refresh", secret: "acme-secret")
+
+      opts = Keyword.put(ctx.opts, :refresh_from_cookie, secret: &__MODULE__.tenant_secret/1)
+
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_header("x-tenant", "acme")
+        |> put_req_cookie("guardian_default_token", refresh_token)
+        |> Pipeline.put_module(ctx.impl)
+        |> Pipeline.put_error_handler(__MODULE__.Handler)
+        |> VerifyHeader.call(opts)
+
+      refute conn.halted
+      assert new_token = Guardian.Plug.current_token(conn)
+      assert %{"sub" => "User:bobby", "typ" => "access"} = Guardian.Plug.current_claims(conn)
+      assert {:ok, _} = ctx.impl.decode_and_verify(new_token, %{}, secret: "acme-secret")
+      assert {:error, :invalid_token} = ctx.impl.decode_and_verify(new_token)
+    end
+
+    test "rejects the refresh cookie when its :secret function finds no secret", ctx do
+      {:ok, refresh_token, _} = ctx.impl.encode_and_sign(@resource, %{}, token_type: "refresh")
+
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_header("x-tenant", "unknown")
+        |> put_req_cookie("guardian_default_token", refresh_token)
+        |> Pipeline.put_module(ctx.impl)
+        |> Pipeline.put_error_handler(__MODULE__.Handler)
+        |> VerifyHeader.call(Keyword.put(ctx.opts, :refresh_from_cookie, secret: &__MODULE__.tenant_secret/1))
+
+      assert conn.halted
+      assert conn.resp_body == inspect({:invalid_token, :secret_not_found})
+      refute Guardian.Plug.current_token(conn)
+    end
+  end
+
   describe "with refresh_from_cookie option" do
     defmodule ImplJwt do
       @moduledoc false

@@ -140,6 +140,80 @@ defmodule Guardian.Plug.VerifyCookieTest do
     end
   end
 
+  describe "with a :secret option" do
+    defmodule TenantImpl do
+      @moduledoc false
+
+      use Guardian,
+        otp_app: :guardian,
+        token_module: Guardian.Token.Jwt,
+        issuer: "MyApp",
+        secret_key: "application-wide-secret"
+
+      def subject_for_token(%{id: id}, _claims), do: {:ok, "User:#{id}"}
+      def resource_from_claims(%{"sub" => "User:" <> sub}), do: {:ok, %{id: sub}}
+    end
+
+    def tenant_secret(conn) do
+      send(self(), :tenant_secret_called)
+
+      case get_req_header(conn, "x-tenant") do
+        ["acme"] -> "acme-secret"
+        _ -> nil
+      end
+    end
+
+    setup %{handler: handler} do
+      impl = __MODULE__.TenantImpl
+
+      conn =
+        :get
+        |> conn("/")
+        |> Pipeline.put_module(impl)
+        |> Pipeline.put_error_handler(handler)
+
+      {:ok, %{conn: conn, impl: impl}}
+    end
+
+    test "verifies the cookie and signs the new token with the selected secret", ctx do
+      {:ok, refresh_token, _} = ctx.impl.encode_and_sign(@resource, %{}, token_type: "refresh", secret: "acme-secret")
+
+      conn =
+        ctx.conn
+        |> put_req_header("x-tenant", "acme")
+        |> put_req_cookie("guardian_default_token", refresh_token)
+        |> VerifyCookie.refresh_from_cookie(secret: &__MODULE__.tenant_secret/1)
+
+      refute conn.halted
+      assert new_token = Guardian.Plug.current_token(conn)
+      assert %{"sub" => "User:bobby", "typ" => "access"} = Guardian.Plug.current_claims(conn)
+      assert {:ok, _} = ctx.impl.decode_and_verify(new_token, %{}, secret: "acme-secret")
+      assert {:error, :invalid_token} = ctx.impl.decode_and_verify(new_token)
+    end
+
+    test "does not fall back to the configured secret when no secret is found", ctx do
+      {:ok, refresh_token, _} = ctx.impl.encode_and_sign(@resource, %{}, token_type: "refresh")
+
+      conn =
+        ctx.conn
+        |> put_req_header("x-tenant", "unknown")
+        |> put_req_cookie("guardian_default_token", refresh_token)
+        |> VerifyCookie.refresh_from_cookie(secret: &__MODULE__.tenant_secret/1)
+
+      assert conn.halted
+      assert {401, _, "{:invalid_token, :secret_not_found}"} = sent_resp(conn)
+      refute Guardian.Plug.current_token(conn)
+    end
+
+    test "does not call the function without a cookie", ctx do
+      conn = VerifyCookie.refresh_from_cookie(ctx.conn, secret: &__MODULE__.tenant_secret/1)
+
+      refute conn.halted
+      refute Guardian.Plug.current_token(conn)
+      refute_received :tenant_secret_called
+    end
+  end
+
   describe "with verify session" do
     setup %{conn: conn, impl: impl, handler: handler} do
       conn =

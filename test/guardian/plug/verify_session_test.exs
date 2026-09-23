@@ -198,6 +198,107 @@ defmodule Guardian.Plug.VerifySessionTest do
     assert Guardian.Plug.current_claims(conn, key: :admin) == claims
   end
 
+  describe "with a :secret option" do
+    defmodule TenantImpl do
+      @moduledoc false
+
+      use Guardian,
+        otp_app: :guardian,
+        token_module: Guardian.Token.Jwt,
+        issuer: "MyApp",
+        secret_key: "application-wide-secret"
+
+      def subject_for_token(%{id: id}, _claims), do: {:ok, "User:#{id}"}
+      def resource_from_claims(%{"sub" => "User:" <> sub}), do: {:ok, %{id: sub}}
+    end
+
+    @tenant_secrets %{"acme" => "acme-secret", "globex" => "globex-secret"}
+
+    def tenant_secret(conn) do
+      send(self(), :tenant_secret_called)
+
+      case Plug.Conn.get_req_header(conn, "x-tenant") do
+        [tenant] -> Map.get(@tenant_secrets, tenant)
+        _ -> nil
+      end
+    end
+
+    setup do
+      opts = [module: __MODULE__.TenantImpl, error_handler: __MODULE__.Handler, secret: &__MODULE__.tenant_secret/1]
+      {:ok, %{opts: opts, impl: __MODULE__.TenantImpl}}
+    end
+
+    defp tenant_conn(tenant, session) do
+      :get
+      |> conn("/")
+      |> Plug.Conn.put_req_header("x-tenant", tenant)
+      |> init_test_session(session)
+    end
+
+    test "verifies with the secret selected from the connection", ctx do
+      {:ok, token, claims} = ctx.impl.encode_and_sign(@resource, %{}, secret: "acme-secret")
+
+      conn = "acme" |> tenant_conn(%{guardian_default_token: token}) |> VerifySession.call(ctx.opts)
+
+      refute conn.halted
+      assert Guardian.Plug.current_token(conn) == token
+      assert Guardian.Plug.current_claims(conn) == claims
+      assert_received :tenant_secret_called
+    end
+
+    test "rejects a token signed for another tenant", ctx do
+      {:ok, token, _} = ctx.impl.encode_and_sign(@resource, %{}, secret: "acme-secret")
+
+      conn = "globex" |> tenant_conn(%{guardian_default_token: token}) |> VerifySession.call(ctx.opts)
+
+      assert conn.halted
+      assert conn.resp_body == inspect({:invalid_token, :invalid_token})
+      refute Guardian.Plug.current_token(conn)
+    end
+
+    test "does not fall back to the configured secret when no secret is found", ctx do
+      {:ok, token, _} = ctx.impl.encode_and_sign(@resource)
+      assert {:ok, _} = ctx.impl.decode_and_verify(token)
+
+      conn = "unknown" |> tenant_conn(%{guardian_default_token: token}) |> VerifySession.call(ctx.opts)
+
+      assert conn.halted
+      assert conn.status == 401
+      assert conn.resp_body == inspect({:invalid_token, :secret_not_found})
+      refute Guardian.Plug.current_token(conn)
+      refute Guardian.Plug.current_claims(conn)
+    end
+
+    test "does not call the function without a token in the session", ctx do
+      conn = "acme" |> tenant_conn(%{}) |> VerifySession.call(ctx.opts)
+
+      refute conn.halted
+      refute Guardian.Plug.current_token(conn)
+      refute_received :tenant_secret_called
+    end
+
+    test "uses the refresh_from_cookie :secret to verify the cookie and sign the new token", ctx do
+      {:ok, refresh_token, _} = ctx.impl.encode_and_sign(@resource, %{}, token_type: "refresh", secret: "acme-secret")
+
+      conn =
+        :get
+        |> conn("/")
+        |> Plug.Conn.put_req_header("x-tenant", "acme")
+        |> put_req_cookie("guardian_default_token", refresh_token)
+        |> init_test_session(%{})
+        |> Pipeline.put_module(ctx.impl)
+        |> Pipeline.put_error_handler(__MODULE__.Handler)
+        |> VerifySession.call(Keyword.put(ctx.opts, :refresh_from_cookie, secret: &__MODULE__.tenant_secret/1))
+
+      refute conn.halted
+      assert new_token = Guardian.Plug.current_token(conn)
+      assert %{"sub" => "User:bobby", "typ" => "access"} = Guardian.Plug.current_claims(conn)
+      assert Plug.Conn.get_session(conn, "guardian_default_token") == new_token
+      assert {:ok, _} = ctx.impl.decode_and_verify(new_token, %{}, secret: "acme-secret")
+      assert {:error, :invalid_token} = ctx.impl.decode_and_verify(new_token)
+    end
+  end
+
   describe "with refresh_from_cookie option" do
     defmodule ImplJwt do
       @moduledoc false

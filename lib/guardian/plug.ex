@@ -308,6 +308,39 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
+    @doc """
+    Resolves a `:secret` option given as a one argument function by calling it
+    with the connection, and returns the options with the result in its place.
+
+    This lets `Guardian.Plug.VerifyHeader`, `Guardian.Plug.VerifySession` and
+    their `:refresh_from_cookie` option select the verifying secret per request,
+    for example from the tenant a request is addressed to:
+
+    ```elixir
+    plug Guardian.Plug.VerifyHeader, secret: &MyApp.Tenants.token_secret/1
+    ```
+
+    Use a remote capture such as `&MyApp.Tenants.token_secret/1`. Plug options
+    are usually escaped at compile time, which anonymous functions do not support.
+
+    Any other value, including an `{m, f, a}` tuple, is returned untouched and
+    resolved by the token module with `Guardian.Config.resolve_value/1`, which
+    does not pass the connection.
+
+    A function that returns `nil` leaves an explicit `secret: nil` in the
+    options. `Guardian.Token.Jwt` rejects it with `{:error, :secret_not_found}`
+    rather than falling back to the configured `secret_key`.
+
+    See the [Runtime Secrets](plug-runtime-secrets.html) guide.
+    """
+    @spec resolve_secret(Plug.Conn.t(), Guardian.options()) :: Guardian.options()
+    def resolve_secret(conn, opts) do
+      case Keyword.fetch(opts, :secret) do
+        {:ok, secret_fun} when is_function(secret_fun, 1) -> Keyword.put(opts, :secret, secret_fun.(conn))
+        _ -> opts
+      end
+    end
+
     @spec find_token_from_cookies(conn :: Plug.Conn.t(), Keyword.t()) :: {:ok, String.t()} | :no_token_found
     def find_token_from_cookies(conn, opts \\ []) do
       key =
