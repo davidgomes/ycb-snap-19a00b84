@@ -63,6 +63,7 @@ defmodule Phoenix.LiveView.UploadConfig do
 
   @unregistered :unregistered
   @invalid :invalid
+  @writer_failure :writer_failure
 
   @too_many_files :too_many_files
 
@@ -340,7 +341,8 @@ defmodule Phoenix.LiveView.UploadConfig do
   def entry_pid(%UploadConfig{} = conf, %UploadEntry{} = entry) do
     case Map.fetch(conf.entry_refs_to_pids, entry.ref) do
       {:ok, pid} when is_pid(pid) -> pid
-      {:ok, status} when status in [@unregistered, @invalid] -> nil
+      {:ok, status} when status in [@unregistered, @invalid, @writer_failure] -> nil
+      :error -> nil
     end
   end
 
@@ -367,9 +369,45 @@ defmodule Phoenix.LiveView.UploadConfig do
 
   @doc false
   def unregister_completed_entry(%UploadConfig{} = conf, entry_ref) do
-    %UploadEntry{} = entry = get_entry_by_ref(conf, entry_ref)
+    case get_entry_by_ref(conf, entry_ref) do
+      %UploadEntry{} = entry ->
+        if writer_failure?(conf, entry_ref) do
+          conf
+        else
+          drop_entry(conf, entry)
+        end
 
-    drop_entry(conf, entry)
+      nil ->
+        conf
+    end
+  end
+
+  @doc false
+  def writer_failure?(%UploadConfig{} = conf, entry_ref) do
+    Map.get(conf.entry_refs_to_pids, entry_ref) == @writer_failure
+  end
+
+  @doc """
+  Retains `entry_ref` after a writer failure.
+
+  Records `reason` once, marks the entry so `entry_pid/2` is nil, and makes a
+  later `register_entry_upload/3` return `{:error, :disallowed}`.
+  """
+  def fail_entry(%UploadConfig{} = conf, entry_ref, reason) do
+    pair = {entry_ref, reason}
+
+    errors =
+      if pair in conf.errors do
+        conf.errors
+      else
+        conf.errors ++ [pair]
+      end
+
+    %{
+      conf
+      | errors: errors,
+        entry_refs_to_pids: Map.put(conf.entry_refs_to_pids, entry_ref, @writer_failure)
+    }
   end
 
   @doc false
@@ -398,6 +436,9 @@ defmodule Phoenix.LiveView.UploadConfig do
            conf
            | entry_refs_to_pids: Map.put(conf.entry_refs_to_pids, entry_ref, channel_pid)
          }}
+
+      {:ok, @writer_failure} ->
+        {:error, :disallowed}
 
       {:ok, existing_pid} when is_pid(existing_pid) ->
         {:error, :already_registered}

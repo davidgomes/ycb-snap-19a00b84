@@ -74,9 +74,20 @@ defmodule Phoenix.LiveView.Upload do
 
     case UploadConfig.get_entry_by_ref(upload_config, entry_ref) do
       %UploadEntry{} = entry ->
-        upload_config
-        |> UploadConfig.cancel_entry(entry)
-        |> update_uploads(socket)
+        had_channel? = is_pid(UploadConfig.entry_pid(upload_config, entry))
+
+        new_socket =
+          upload_config
+          |> UploadConfig.cancel_entry(entry)
+          |> update_uploads(socket)
+
+        new_conf = Map.fetch!(new_socket.assigns.uploads, name)
+
+        if new_conf.entries == [] and not had_channel? do
+          Phoenix.LiveView.Channel.release_upload_name(name)
+        end
+
+        new_socket
 
       _ ->
         raise ArgumentError, "no entry in upload \"#{inspect(name)}\" with ref \"#{entry_ref}\""
@@ -180,6 +191,13 @@ defmodule Phoenix.LiveView.Upload do
   @doc """
   Populates the errors for a given entry.
   """
+  @doc false
+  def fail_upload_entry(%Socket{} = socket, %UploadConfig{} = conf, entry_ref, reason) do
+    conf
+    |> UploadConfig.fail_entry(entry_ref, reason)
+    |> update_uploads(socket)
+  end
+
   def put_upload_error(%Socket{} = socket, conf_name, entry_ref, reason) do
     conf = Map.fetch!(socket.assigns.uploads, conf_name)
 
