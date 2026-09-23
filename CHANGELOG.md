@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+* `Guardian.Plug.VerifyHeader` and `Guardian.Plug.VerifySession` accept a
+  `:secret` function (or `{module, function}`) that selects the verifying
+  secret from the connection.
+
 ## v2.4.1
 
 ### Security

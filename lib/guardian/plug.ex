@@ -299,6 +299,21 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
+    @doc """
+    Resolves a connection-dependent `:secret` option.
+
+    When `:secret` is a function of arity 1 or a `{module, function}` tuple it is
+    called with the connection and its result replaces the option.
+    """
+    @spec resolve_secret(Plug.Conn.t(), Keyword.t()) :: Keyword.t()
+    def resolve_secret(conn, opts) do
+      case Keyword.get(opts, :secret) do
+        fun when is_function(fun, 1) -> Keyword.put(opts, :secret, fun.(conn))
+        {mod, fun} when is_atom(mod) and is_atom(fun) -> Keyword.put(opts, :secret, apply(mod, fun, [conn]))
+        _ -> opts
+      end
+    end
+
     @spec maybe_halt(Plug.Conn.t(), Keyword.t()) :: Plug.Conn.t()
     def maybe_halt(conn, opts \\ []) do
       if Keyword.get(opts, :halt, true) do
