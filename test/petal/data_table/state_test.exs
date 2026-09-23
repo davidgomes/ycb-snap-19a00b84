@@ -121,6 +121,21 @@ defmodule PetalComponents.DataTable.StateTest do
       # total is a result, not a request - it never round-trips
       assert rebuilt.total == nil
     end
+
+    test "selection is UI state - it never reaches the URL" do
+      assert State.to_params(%State{selected: ["1", "2"]}) == %{}
+    end
+  end
+
+  describe "selection_state/2" do
+    test "reads all / some / none for the on-screen ids, whatever their type" do
+      state = %State{selected: ["1", "2"]}
+      assert State.selection_state(state, [1, 2]) == :all
+      assert State.selection_state(state, [1, 3]) == :some
+      assert State.selection_state(state, [3, 4]) == :none
+      assert State.selection_state(state, []) == :none
+      assert State.selected?(state, 2)
+    end
   end
 
   describe "search" do
@@ -157,6 +172,30 @@ defmodule PetalComponents.DataTable.StateTest do
 
       filtered = %{state | filters: [%{field: :name, op: :contains, value: "a"}]}
       assert State.handle_op(filtered, %{"op" => "clear_filters"}, @opts).filters == []
+    end
+
+    test "selection ops toggle rows, toggle the page, and clear" do
+      state = State.handle_op(%State{}, %{"op" => "select", "id" => "1"}, @opts)
+      assert state.selected == ["1"]
+      assert State.handle_op(state, %{"op" => "select", "id" => 1}, @opts).selected == []
+
+      # partial page -> select the missing ids, keeping order and off-page picks
+      state = %State{selected: ["9", "2"]}
+      state = State.handle_op(state, %{"op" => "select_page", "ids" => ["1", "2", "3"]}, @opts)
+      assert state.selected == ["9", "2", "1", "3"]
+
+      # full page -> deselect just the page
+      state = State.handle_op(state, %{"op" => "select_page", "ids" => ["1", "2", "3"]}, @opts)
+      assert state.selected == ["9"]
+
+      assert State.handle_op(state, %{"op" => "select_page", "ids" => []}, @opts) == state
+      assert State.handle_op(state, %{"op" => "clear_selection"}, @opts).selected == []
+    end
+
+    test "malformed selection payloads leave the state unchanged" do
+      state = %State{selected: ["1"]}
+      assert State.handle_op(state, %{"op" => "select", "id" => %{"x" => 1}}, @opts) == state
+      assert State.handle_op(state, %{"op" => "select_page", "ids" => "1"}, @opts) == state
     end
 
     test "unknown ops and non-whitelisted fields leave the state unchanged" do

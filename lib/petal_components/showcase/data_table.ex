@@ -35,6 +35,32 @@ defmodule PetalComponents.Showcase.DataTable do
     """
   end
 
+  example :selection, "Row selection and the morphing toolbar",
+    description:
+      "selectable adds a checkbox column driven by state.selected. The header is tri-state for the rows on screen - checked, indeterminate (as here: some of the page picked) or empty - and while anything is selected the toolbar morphs into a selection bar: the count, clear, and the :bulk_action slot, which receives the selected ids. Selection survives paging, so a bulk action can span pages. Every click is a State.handle_op op (select / select_page / clear_selection) pushed through on_change, or on_select in link mode." do
+    ~H"""
+    <% state = %State{page: 1, page_size: 5, selected: ["2", "4", "11"]} %>
+    <% {rows, state} = Engine.List.run(PetalComponents.Showcase.DataTable.sample_rows(), state) %>
+    <.data_table
+      id="sx-dt-selection"
+      rows={rows}
+      state={state}
+      path="#"
+      on_select="select"
+      selectable
+      searchable
+    >
+      <:col :let={row} field={:name}>{row.name}</:col>
+      <:col :let={row} field={:email}>{row.email}</:col>
+      <:col :let={row} field={:amount} align="right">${row.amount}</:col>
+      <:bulk_action>
+        <.button type="button" size="sm" color="gray" variant="outline">Export</.button>
+        <.button type="button" size="sm" color="danger" variant="outline">Delete</.button>
+      </:bulk_action>
+    </.data_table>
+    """
+  end
+
   example :loading, "Loading skeletons",
     description:
       "loading swaps the page for skeleton rows - one per page_size row, respecting column count and alignment. Flip it off when the query resolves." do

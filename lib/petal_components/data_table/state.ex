@@ -26,6 +26,15 @@ defmodule PetalComponents.DataTable.State do
   `:after`. Engines may support a subset; unknown ops are an engine
   concern, not a state concern.
 
+  ## Selection
+
+  `selected` holds the selected row ids as strings (what event payloads
+  carry, whatever the rows' id type). It is UI state, not a query: it
+  never round-trips through `to_params/1`, engines ignore it, and it
+  survives paging, sorting and filtering so bulk actions can span pages.
+  In link mode `from_params/2` builds a fresh struct, so carry the
+  selection over in `handle_params` (`%{state | selected: old.selected}`).
+
   ## Security
 
   `from_params/2` never creates atoms from user input: `:fields` is a
@@ -35,7 +44,13 @@ defmodule PetalComponents.DataTable.State do
   """
 
   @enforce_keys []
-  defstruct order_by: [], filters: [], search: nil, page: 1, page_size: 10, total: nil
+  defstruct order_by: [],
+            filters: [],
+            search: nil,
+            page: 1,
+            page_size: 10,
+            total: nil,
+            selected: []
 
   @type order :: {atom(), :asc | :desc}
   @type filter :: %{field: atom(), op: atom(), value: term()}
@@ -45,7 +60,8 @@ defmodule PetalComponents.DataTable.State do
           search: String.t() | nil,
           page: pos_integer(),
           page_size: pos_integer(),
-          total: non_neg_integer() | nil
+          total: non_neg_integer() | nil,
+          selected: [String.t()]
         }
 
   @ops ~w(contains eq starts_with neq gt lt between in before on after)a
@@ -157,8 +173,9 @@ defmodule PetalComponents.DataTable.State do
       end
 
   Ops: `sort` (field), `page` (page), `search` (term), `page_size`
-  (page_size), `filter` (field, filter_op, value/value2/values), and
-  `clear_filters`. Unknown ops and non-whitelisted fields leave the
+  (page_size), `filter` (field, filter_op, value/value2/values),
+  `clear_filters`, and the selection ops `select` (id), `select_page`
+  (ids) and `clear_selection`. Unknown ops and non-whitelisted fields leave the
   state unchanged; like `from_params/2`, no atoms are ever created
   from input.
 
@@ -195,6 +212,15 @@ defmodule PetalComponents.DataTable.State do
 
       %{"op" => "clear_filters"} ->
         clear_filters(state)
+
+      %{"op" => "select", "id" => id} when is_binary(id) or is_integer(id) ->
+        toggle_selected(state, id)
+
+      %{"op" => "select_page", "ids" => ids} when is_list(ids) ->
+        toggle_page(state, Enum.filter(ids, &(is_binary(&1) or is_integer(&1))))
+
+      %{"op" => "clear_selection"} ->
+        clear_selection(state)
 
       _other ->
         state
@@ -235,6 +261,54 @@ defmodule PetalComponents.DataTable.State do
 
   @doc "Removes every filter, resetting to page 1."
   def clear_filters(%__MODULE__{} = state), do: %{state | filters: [], page: 1}
+
+  @doc "Toggles one row id in the selection."
+  def toggle_selected(%__MODULE__{} = state, id) do
+    id = to_string(id)
+
+    selected =
+      if id in state.selected,
+        do: List.delete(state.selected, id),
+        else: state.selected ++ [id]
+
+    %{state | selected: selected}
+  end
+
+  @doc """
+  The header checkbox's grammar for the rows on screen: when every id is
+  already selected they are all deselected, otherwise the missing ones
+  are added. Selections on other pages are left alone.
+  """
+  def toggle_page(%__MODULE__{} = state, ids) when is_list(ids) do
+    ids = ids |> Enum.map(&to_string/1) |> Enum.uniq()
+
+    selected =
+      if ids != [] and Enum.all?(ids, &(&1 in state.selected)),
+        do: state.selected -- ids,
+        else: state.selected ++ (ids -- state.selected)
+
+    %{state | selected: selected}
+  end
+
+  @doc "Empties the selection."
+  def clear_selection(%__MODULE__{} = state), do: %{state | selected: []}
+
+  @doc "Whether the row id is selected."
+  def selected?(%__MODULE__{} = state, id), do: to_string(id) in state.selected
+
+  @doc """
+  The header checkbox state for the given (on-screen) ids: `:all`,
+  `:some` (the indeterminate dash) or `:none`.
+  """
+  def selection_state(%__MODULE__{} = state, ids) when is_list(ids) do
+    count = Enum.count(ids, &selected?(state, &1))
+
+    cond do
+      count == 0 -> :none
+      count == length(ids) -> :all
+      true -> :some
+    end
+  end
 
   @doc "Total pages when `total` is known, else nil (cursor/unknown mode)."
   def total_pages(%__MODULE__{total: nil}), do: nil

@@ -363,6 +363,140 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "pc-data-table__actions"
   end
 
+  describe "row selection" do
+    @selectable_rows [
+      %{id: 1, name: "Amy", email: "amy@x.com", amount: 300},
+      %{id: 2, name: "Bea", email: "bea@x.com", amount: 40}
+    ]
+
+    test "a leading checkbox column; the header reads the page's tri-state" do
+      assigns = base(%{rows: @selectable_rows, state: %State{total: 74}})
+
+      none =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert none =~ ~s(role="checkbox")
+      assert none =~ ~s(aria-label="Select all rows on this page")
+      assert count(none, ~s(aria-checked="false")) == 3
+      assert none =~ "select_page"
+      assert none =~ ~s(&quot;ids&quot;:[&quot;1&quot;,&quot;2&quot;])
+      assert none =~ ~s(&quot;id&quot;:&quot;2&quot;)
+
+      assigns = base(%{rows: @selectable_rows, state: %State{total: 74, selected: ["2"]}})
+
+      some =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert some =~ ~s(aria-checked="mixed")
+      assert count(some, ~s(aria-checked="true")) == 1
+
+      assigns = base(%{rows: @selectable_rows, state: %State{total: 74, selected: ["1", "2"]}})
+
+      all =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert count(all, ~s(aria-checked="true")) == 3
+      refute all =~ "mixed"
+    end
+
+    test "the toolbar morphs into the selection bar while rows are selected" do
+      assigns = base(%{rows: @selectable_rows, state: %State{total: 74, selected: ["1", "7"]}})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable searchable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+          <:bulk_action :let={ids}>
+            <button type="button">Delete {Enum.join(ids, "+")}</button>
+          </:bulk_action>
+        </.data_table>
+        """)
+
+      assert html =~ "pc-data-table__toolbar--selection"
+      assert html =~ ~r/2\s+selected/
+      assert html =~ ~s(phx-value-op="clear_selection")
+      assert html =~ "Delete 1+7"
+      # the regular toolbar steps aside
+      refute html =~ "pc-data-table__search"
+
+      assigns = base(%{rows: @selectable_rows, state: %State{total: 74}})
+
+      idle =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable searchable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+          <:bulk_action>Delete</:bulk_action>
+        </.data_table>
+        """)
+
+      refute idle =~ "pc-data-table__toolbar--selection"
+      refute idle =~ "Delete"
+      assert idle =~ "pc-data-table__search"
+    end
+
+    test "link mode pushes selection through on_select; a custom row_id is honored" do
+      assigns = base(%{state: %State{total: 74}})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          path={@path}
+          on_select="select"
+          row_id={& &1.email}
+          selectable
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert html =~ "&quot;event&quot;:&quot;select&quot;"
+      assert html =~ ~s(&quot;id&quot;:&quot;amy@x.com&quot;)
+    end
+
+    test "loading and empty pages disable the header and render no row checkboxes" do
+      assigns = base(%{rows: [], state: %State{total: 0}})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable loading>
+          <:col :let={row} field={:name}>{row}</:col>
+        </.data_table>
+        """)
+
+      assert count(html, ~s(role="checkbox")) == 1
+      assert html =~ ~r/role="checkbox"[^>]*disabled/
+    end
+
+    test "selectable link mode without on_select raises" do
+      assigns = base()
+
+      assert_raise ArgumentError, ~r/on_select/, fn ->
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+      end
+    end
+  end
+
+  defp count(html, needle), do: length(String.split(html, needle)) - 1
+
   test "raises without either wiring mode" do
     assigns = base(%{path: nil})
 
