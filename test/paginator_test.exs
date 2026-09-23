@@ -855,6 +855,44 @@ defmodule PaginatorTest do
     refute_receive :rce, 1000, "Remote Code Execution Detected"
   end
 
+  test "paginates with a dynamic expression as a cursor field", %{
+    customers: {c1, _c2, _c3},
+    payments: {_p1, _p2, _p3, _p4, p5, p6, p7, p8, _p9, _p10, _p11, _p12}
+  } do
+    query =
+      from(
+        p in Payment,
+        where: p.customer_id == ^c1.id,
+        order_by: [asc: fragment("? * -1", p.amount), asc: p.id],
+        select: p
+      )
+
+    opts = [
+      cursor_fields: [
+        {{:negated_amount, fn -> dynamic([p], fragment("? * -1", p.amount)) end}, :asc},
+        id: :asc
+      ],
+      fetch_cursor_value_fun: fn
+        payment, :negated_amount -> -payment.amount
+        payment, field -> Paginator.default_fetch_cursor_value(payment, field)
+      end,
+      limit: 2
+    ]
+
+    page = Repo.paginate(query, opts)
+    assert to_ids(page.entries) == to_ids([p8, p7])
+    assert page.metadata.after == encode_cursor(%{negated_amount: -p7.amount, id: p7.id})
+
+    page = Repo.paginate(query, opts ++ [after: page.metadata.after])
+    assert to_ids(page.entries) == to_ids([p5, p6])
+    assert page.metadata.after == nil
+    assert page.metadata.before == encode_cursor(%{negated_amount: -p5.amount, id: p5.id})
+
+    page = Repo.paginate(query, opts ++ [before: page.metadata.before])
+    assert to_ids(page.entries) == to_ids([p8, p7])
+    assert page.metadata.before == nil
+  end
+
   test "per-record cursor generation", %{
     payments: {p1, _p2, _p3, _p4, _p5, _p6, p7, _p8, _p9, _p10, _p11, _p12}
   } do
