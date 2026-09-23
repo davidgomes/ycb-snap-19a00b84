@@ -101,6 +101,17 @@ defmodule ObanChoreWeb.DashboardLive do
                   }></span>
                 </button>
               <% end %>
+              <button
+                phx-click="select_tab"
+                phx-value-tab="history"
+                data-role="history-tab"
+                class={[
+                  "oc-tab-item",
+                  if(@selected_tab == :history, do: "oc-tab-item--active", else: "")
+                ]}
+              >
+                History
+              </button>
             </div>
 
             <!-- Content Area -->
@@ -124,6 +135,37 @@ defmodule ObanChoreWeb.DashboardLive do
                       now={@now}
                     />
                   <% end %>
+              <% end %>
+
+              <%= if @selected_tab == :history do %>
+                <div class="oc-card" data-role="history">
+                  <%= if @history == [] do %>
+                    <p class="oc-text-xs oc-text-gray-500" style="font-style: italic;">No past executions.</p>
+                  <% else %>
+                    <table style="width: 100%; border-collapse: collapse;" class="oc-text-sm">
+                      <thead>
+                        <tr style="text-align: left;">
+                          <th>ID</th>
+                          <th>State</th>
+                          <th>Arguments</th>
+                          <th>Finished At</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <%= for job <- @history do %>
+                          <tr data-role="history-row" data-job-id={job.id}>
+                            <td class="oc-font-mono">#<%= job.id %></td>
+                            <td><%= String.capitalize(to_string(job.state)) %></td>
+                            <td class="oc-font-mono oc-text-xs"><%= inspect(job.args) %></td>
+                            <td class="oc-text-xs">
+                              <%= job.completed_at || job.discarded_at || job.cancelled_at %>
+                            </td>
+                          </tr>
+                        <% end %>
+                      </tbody>
+                    </table>
+                  <% end %>
+                </div>
               <% end %>
             </div>
           </div>
@@ -157,6 +199,7 @@ defmodule ObanChoreWeb.DashboardLive do
        jobs: %{},
        chore_jobs: %{},
        selected_tab: :new,
+       history: [],
        now: DateTime.utc_now()
      )}
   end
@@ -224,6 +267,12 @@ defmodule ObanChoreWeb.DashboardLive do
   @impl true
   def handle_event("select_tab", %{"tab" => "new"}, socket) do
     {:noreply, assign(socket, selected_tab: :new)}
+  end
+
+  @impl true
+  def handle_event("select_tab", %{"tab" => "history"}, socket) do
+    history = ObanChore.list_finished_jobs(socket.assigns.selected_chore_module)
+    {:noreply, assign(socket, selected_tab: :history, history: history)}
   end
 
   @impl true
