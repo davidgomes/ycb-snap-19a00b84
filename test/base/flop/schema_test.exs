@@ -388,7 +388,7 @@ defmodule Flop.SchemaTest do
              )
   end
 
-  test "raises error if custom field is added to sortable list" do
+  test "raises error if custom field without sorter is added to sortable list" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Parsley do
@@ -407,6 +407,58 @@ defmodule Flop.SchemaTest do
         end
       end
 
-    assert error.message =~ "cannot sort by custom field"
+    assert error.message =~ "cannot sort by custom fields without sorter"
+    assert error.message =~ ":inserted_at"
+  end
+
+  test "raises error if custom field without filter is added to filterable list" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Coriander do
+          @derive {
+            Flop.Schema,
+            filterable: [:inserted_at],
+            sortable: [],
+            custom_fields: [
+              inserted_at: [
+                sorter: {__MODULE__, :some_function, []},
+                ecto_type: :utc_datetime
+              ]
+            ]
+          }
+          defstruct [:id, :inserted_at]
+        end
+      end
+
+    assert error.message =~ "cannot filter by custom fields without filter"
+    assert error.message =~ ":inserted_at"
+  end
+
+  test "allows custom field with sorter in sortable list" do
+    defmodule Basil do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [
+            sorter: {__MODULE__, :some_function, [some: :option]},
+            ecto_type: :utc_datetime
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    basil = struct(Basil)
+    assert Schema.sortable(basil) == [:inserted_at]
+
+    assert %Flop.FieldInfo{
+             extra: %{
+               type: :custom,
+               filter: nil,
+               sorter: {Basil, :some_function, [some: :option]}
+             }
+           } = Schema.field_info(basil, :inserted_at)
   end
 end

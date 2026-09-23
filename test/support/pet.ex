@@ -58,6 +58,10 @@ defmodule MyApp.Pet do
         reverse_name: [
           filter: {__MODULE__, :reverse_name_filter, []},
           ecto_type: :string
+        ],
+        name_length: [
+          sorter: {__MODULE__, :name_length_sorter, [some: :options]},
+          ecto_type: :integer
         ]
       ]
     ]
@@ -90,6 +94,12 @@ defmodule MyApp.Pet do
   def reverse_name_filter(query, %Flop.Filter{value: value}, _) do
     reversed = value
     where(query, [p], p.name == ^reversed)
+  end
+
+  def name_length_sorter(query, direction, opts) do
+    :options = Keyword.fetch!(opts, :some)
+    send(self(), {:sorter, {direction, opts}})
+    order_by(query, [p], [{^direction, fragment("length(?)", p.name)}])
   end
 
   def get_field(%__MODULE__{owner: %Owner{age: age}}, :owner_age), do: age

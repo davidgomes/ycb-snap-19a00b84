@@ -108,10 +108,8 @@ defmodule Flop.Adapter.Ecto do
         *: [
           type: :keyword_list,
           keys: [
-            filter: [
-              type: {:tuple, [:atom, :atom, :keyword_list]},
-              required: true
-            ],
+            filter: [type: {:tuple, [:atom, :atom, :keyword_list]}],
+            sorter: [type: {:tuple, [:atom, :atom, :keyword_list]}],
             ecto_type: [type: :any, required: true],
             bindings: [type: {:list, :atom}],
             operators: [type: {:list, :atom}]
@@ -260,6 +258,17 @@ defmodule Flop.Adapter.Ecto do
         opts
       ) do
     case get_field_info(schema_struct, field) do
+      %FieldInfo{extra: %{type: :custom, filter: nil}} ->
+        # only reachable with an unvalidated Flop struct
+        raise ArgumentError, """
+        custom field #{inspect(field)} has no filter
+
+        Custom fields can only be used for filtering if the :filter option is
+        set.
+
+        Use Flop.validate/2 to turn this exception into a validation error.
+        """
+
       %FieldInfo{extra: %{type: :custom} = custom_opts} ->
         {mod, fun, custom_filter_opts} = Map.fetch!(custom_opts, :filter)
 
@@ -288,17 +297,12 @@ defmodule Flop.Adapter.Ecto do
 
     dialect = dialect(opts)
 
-    directions =
-      Enum.map(directions, fn {direction, field} ->
-        {Dialect.order_direction(dialect, direction), field}
-      end)
-
     case opts[:for] do
       nil ->
-        Enum.reduce(directions, query, fn {order_direction, field}, acc_query ->
+        Enum.reduce(directions, query, fn {direction, field}, acc_query ->
           order_by_direction(
             acc_query,
-            order_direction,
+            Dialect.order_direction(dialect, direction),
             dynamic([r], field(r, ^field))
           )
         end)
@@ -306,10 +310,45 @@ defmodule Flop.Adapter.Ecto do
       module ->
         struct = struct(module)
 
-        Enum.reduce(directions, query, fn {_, field} = expr, acc_query ->
-          field_info = Flop.Schema.field_info(struct, field)
-          apply_order_by_field(acc_query, expr, field_info, struct)
+        Enum.reduce(directions, query, fn {direction, field}, acc_query ->
+          case Flop.Schema.field_info(struct, field) do
+            %FieldInfo{extra: %{type: :custom}} = field_info ->
+              apply_custom_sorter(acc_query, direction, field, field_info, opts)
+
+            field_info ->
+              apply_order_by_field(
+                acc_query,
+                {Dialect.order_direction(dialect, direction), field},
+                field_info,
+                struct
+              )
+          end
         end)
+    end
+  end
+
+  # The sorter receives the Flop order direction rather than the dialect
+  # specific one, since it builds its own order expression.
+  defp apply_custom_sorter(q, direction, field, field_info, opts) do
+    case field_info.extra do
+      %{sorter: {mod, fun, custom_sorter_opts}} ->
+        opts =
+          opts
+          |> Keyword.get(:extra_opts, [])
+          |> Keyword.merge(custom_sorter_opts)
+
+        apply(mod, fun, [q, direction, opts])
+
+      _ ->
+        # only reachable with an unvalidated Flop struct
+        raise ArgumentError, """
+        custom field #{inspect(field)} has no sorter
+
+        Custom fields can only be used for ordering if the :sorter option is
+        set.
+
+        Use Flop.validate/2 to turn this exception into a validation error.
+        """
     end
   end
 
@@ -409,7 +448,7 @@ defmodule Flop.Adapter.Ecto do
 
   # only reachable with an unvalidated Flop struct
   defp cursor_dynamic([{_, _, _, %FieldInfo{extra: %{type: type}}} | _])
-       when type in [:compound, :alias] do
+       when type in [:compound, :alias, :custom] do
     raise ArgumentError, """
     cursor pagination is not supported for #{type} fields
 
@@ -872,7 +911,8 @@ defmodule Flop.Adapter.Ecto do
 
   defp normalize_custom_field_opts({name, opts}) when is_list(opts) do
     opts = %{
-      filter: Keyword.fetch!(opts, :filter),
+      filter: Keyword.get(opts, :filter),
+      sorter: Keyword.get(opts, :sorter),
       ecto_type: Keyword.fetch!(opts, :ecto_type),
       operators: Keyword.get(opts, :operators),
       bindings: Keyword.get(opts, :bindings, [])
@@ -983,26 +1023,44 @@ defmodule Flop.Adapter.Ecto do
          opts
        ) do
     sortable = Keyword.fetch!(opts, :sortable)
+    filterable = Keyword.fetch!(opts, :filterable)
 
-    illegal_fields =
-      custom_fields
-      |> Map.keys()
-      |> Enum.filter(&(&1 in sortable))
+    without_sorter =
+      custom_fields_without(custom_fields, :sorter, sortable)
 
-    if illegal_fields != [] do
+    if without_sorter != [] do
       raise ArgumentError, """
-      cannot sort by custom fields
+      cannot sort by custom fields without sorter
 
-      Custom fields are not allowed to be sortable. These custom fields were
-      configured as sortable:
+      Custom fields can only be sortable if the :sorter option is set. These
+      custom fields were configured as sortable without a sorter:
 
-          #{inspect(illegal_fields)}
+          #{inspect(without_sorter)}
+      """
+    end
 
-      Use alias fields if you want to implement custom sorting.
+    without_filter =
+      custom_fields_without(custom_fields, :filter, filterable)
+
+    if without_filter != [] do
+      raise ArgumentError, """
+      cannot filter by custom fields without filter
+
+      Custom fields can only be filterable if the :filter option is set. These
+      custom fields were configured as filterable without a filter:
+
+          #{inspect(without_filter)}
       """
     end
 
     adapter_opts
+  end
+
+  defp custom_fields_without(custom_fields, option, fields) do
+    for {name, field_opts} <- custom_fields,
+        name in fields,
+        is_nil(Map.fetch!(field_opts, option)),
+        do: name
   end
 
   defp duplicates(fields) do
