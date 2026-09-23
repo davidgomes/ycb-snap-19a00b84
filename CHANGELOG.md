@@ -6,6 +6,7 @@ This is a major rewrite of the previously-existing [`sqlite_ecto`](https://githu
 ## Unreleased
 
 * **BREAKING CHANGE:** Update to support Ecto 2.2. Ecto 2.1 is no longer supported.
+* **BREAKING CHANGE:** Require Elixir 1.4 or later, since Ecto 2.2 does.
 * Support `:bigserial` columns (now the default primary key and reference type in Ecto 2.2 migrations).
 * Support `on_delete: :restrict` and `on_update: :restrict` in migration references.
 
