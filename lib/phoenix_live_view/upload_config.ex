@@ -551,7 +551,20 @@ defmodule Phoenix.LiveView.UploadConfig do
 
     cond do
       too_many? && new_conf.auto_upload? ->
-        {:ok, put_error(new_conf, new_conf.ref, @too_many_files)}
+        # excess entries are dropped so they can never be preflighted later,
+        # for example once earlier entries are consumed and removed
+        {kept, dropped} = Enum.split(new_conf.entries, new_conf.max_entries)
+        dropped_refs = Enum.map(dropped, & &1.ref)
+
+        pruned_conf = %{
+          new_conf
+          | entries: kept,
+            entry_refs_to_pids: Map.drop(new_conf.entry_refs_to_pids, dropped_refs),
+            entry_refs_to_metas: Map.drop(new_conf.entry_refs_to_metas, dropped_refs),
+            errors: Enum.reject(new_conf.errors, fn {ref, _} -> ref in dropped_refs end)
+        }
+
+        {:ok, put_error(pruned_conf, pruned_conf.ref, @too_many_files)}
 
       too_many? ->
         {:error, put_error(new_conf, new_conf.ref, @too_many_files)}
