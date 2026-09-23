@@ -1164,18 +1164,23 @@ defmodule GRPC.Client.ReResolveTest do
       stub(ctx.resolver, :resolve, fn _target ->
         {:ok,
          %{
-           addresses: [%{address: "10.0.0.1", port: 50051}, %{address: "10.0.0.2", port: 50051}],
+           addresses: [%{address: "10.0.0.2", port: 50051}, %{address: "10.0.0.3", port: 50051}],
            service_config: nil
          }}
       end)
 
       Process.sleep(@wait)
 
-      assert map_size(get_state(ctx.ref).real_channels) == 2
+      assert get_state(ctx.ref).real_channels |> Map.keys() |> Enum.sort() ==
+               ["10.0.0.2:50051", "10.0.0.3:50051"]
+
       :erlang.trace(pid, false, [:call])
 
       refute_received {:trace, ^pid, :call, {:persistent_term, :put, _args}}
       assert :persistent_term.get({Connection, ctx.ref}) === published
+
+      assert {:ok, %{host: host}} = Connection.pick_channel(channel)
+      assert host in ["10.0.0.2", "10.0.0.3"]
 
       disconnect_and_wait(channel)
     end
