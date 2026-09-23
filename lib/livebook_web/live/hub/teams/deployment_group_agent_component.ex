@@ -246,7 +246,8 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
   end
 
   defp shell_quote(value) do
-    ~s/"#{String.replace(value, ~r/[\\"$`]/, "\\\\\\0")}"/
+    escaped = String.replace(value, ~r/[\\"$`]/, "\\\\\\0")
+    "\"" <> escaped <> "\""
   end
 
   defp k8s_instructions(image, env, deployment_group_name) do
