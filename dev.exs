@@ -1439,14 +1439,31 @@ defmodule Dev.PlaygroundLive do
     do: {:noreply, update(socket, :combo, &%{&1 | chosen: value})}
 
   # the data table's event-mode op grammar: State.handle_op speaks all of
-  # it (sort/page/search/page_size/filter/clear_filters), so the whole
-  # backend is one call plus a re-run through the free engine
+  # it (sort/page/search/page_size/filter/clear_filters and the selection
+  # ops), so the whole backend is one call plus a re-run through the free
+  # engine
   def handle_event("pg_table", params, socket) do
     alias PetalComponents.DataTable.State
     {state, _rows} = socket.assigns.dt
 
     state = State.handle_op(state, params, fields: [:name, :email, :status, :amount])
     {:noreply, assign(socket, :dt, run_dt(state))}
+  end
+
+  # a bulk action reads the selection off the state the LiveView already holds
+  def handle_event("pg_table_export", _params, socket) do
+    alias PetalComponents.DataTable.State
+    {state, _rows} = socket.assigns.dt
+    count = MapSet.size(state.selected)
+
+    socket =
+      socket
+      |> assign(:dt, run_dt(State.clear_selection(state)))
+      |> PetalComponents.Toast.send_toast(:success,
+        title: "Exported #{count} #{if count == 1, do: "row", else: "rows"}"
+      )
+
+    {:noreply, socket}
   end
 
   defp run_dt(state) do
@@ -7320,6 +7337,7 @@ defmodule Dev.PlaygroundLive do
           on_change="pg_table"
           striped
           searchable
+          selectable
           page_size_options={[5, 10, 20]}
         >
           <:col :let={row} field={:name} sortable>{row.name}</:col>
@@ -7346,6 +7364,11 @@ defmodule Dev.PlaygroundLive do
           <:col :let={row} field={:amount} sortable align="right" filterable="number">
             ${row.amount}
           </:col>
+          <:bulk_action>
+            <.button size="sm" variant="outline" color="gray" phx-click="pg_table_export">
+              Export
+            </.button>
+          </:bulk_action>
         </.data_table>
       </div>
 
@@ -7354,7 +7377,7 @@ defmodule Dev.PlaygroundLive do
           ex <-
             examples_for(
               PetalComponents.Showcase.DataTable,
-              ~w(basic loading empty)a
+              ~w(basic selection loading empty)a
             )
         }
         class="mt-10"
