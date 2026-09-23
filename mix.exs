@@ -31,7 +31,7 @@ defmodule Ocelot.MixProject do
 
       # Dev
       {:bandit, "~> 1.6.0", only: [:dev]},
-      {:ecto_sqlite3, "~> 0.18", only: [:dev]}
+      {:ecto_sqlite3, "~> 0.18", only: [:dev, :test]}
     ]
   end
 
