@@ -3,7 +3,7 @@ PlugRailsCookieSessionStore
 
 Rails compatible Plug session store.
 
-This allows you to share session information between Rails and a Plug-based framework like Phoenix.
+This allows you to share session information between Rails and a Plug-based framework like Phoenix. Rails 3.2, 4 and 5 are supported.
 
 ## Installation
 
@@ -118,6 +118,38 @@ Plug & Rails must use the same strategy for serializing cookie data.
   end
   ```
   
+
+#### Rails 5.2 authenticated encryption
+
+Rails 5.2 encrypts cookies with AES-256-GCM instead of AES-256-CBC when `use_authenticated_cookie_encryption` is enabled, which is the default for apps using `config.load_defaults 5.2`:
+
+```ruby
+Rails.application.config.action_dispatch.use_authenticated_cookie_encryption = true
+```
+
+These cookies are not signed, so there is no `signing_salt` to copy. Instead, they use their own encryption salt:
+
+```ruby
+Rails.application.config.action_dispatch.authenticated_encrypted_cookie_salt = 'authenticated encryption salt'
+```
+
+Enable `authenticated_encryption` in `Plug.Session` and pass that salt as the `encryption_salt`:
+
+```elixir
+plug Plug.Session,
+  store: PlugRailsCookieSessionStore,
+  key: "_SOMETHING_HERE_session",
+  encrypt: true,
+  authenticated_encryption: true,
+  encryption_salt: "authenticated encryption salt",
+  key_iterations: 1000,
+  key_length: 64,
+  key_digest: :sha,
+  serializer: Poison
+end
+```
+
+Rails 5.2 embeds an expiry in these cookies when the session store has `expire_after` set; such cookies are not supported.
 
 #### That's it!
 

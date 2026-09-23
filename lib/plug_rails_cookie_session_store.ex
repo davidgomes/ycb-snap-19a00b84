@@ -25,6 +25,12 @@ defmodule PlugRailsCookieSessionStore do
   * `:encryption_salt` - a salt used with `conn.secret_key_base` to generate
     a key for encrypting/decrypting a cookie;
 
+  * `:authenticated_encryption` - specify whether to encrypt cookies with
+    AES-256-GCM authenticated encryption instead of AES-256-CBC with an
+    HMAC signature, defaults to false. Rails 5.2 does this when
+    `use_authenticated_cookie_encryption` is enabled. The `:signing_salt`
+    is not used in this mode;
+
   * `:signing_salt` - a salt used with `conn.secret_key_base` to generate a
     key for signing/verifying a cookie;
 
@@ -60,7 +66,9 @@ defmodule PlugRailsCookieSessionStore do
 
   def init(opts) do
     encryption_salt = check_encryption_salt(opts)
-    signing_salt = check_signing_salt(opts)
+    authenticated_encryption =
+      Keyword.get(opts, :encrypt, true) && Keyword.get(opts, :authenticated_encryption, false)
+    signing_salt = unless authenticated_encryption, do: check_signing_salt(opts)
 
     iterations = Keyword.get(opts, :key_iterations, 1000)
     length = Keyword.get(opts, :key_length, 32)
@@ -73,6 +81,7 @@ defmodule PlugRailsCookieSessionStore do
     serializer = check_serializer(opts[:serializer] || :external_term_format)
 
     %{encryption_salt: encryption_salt,
+      authenticated_encryption: authenticated_encryption,
       signing_salt: signing_salt,
       key_opts: key_opts,
       serializer: serializer}
@@ -81,12 +90,15 @@ defmodule PlugRailsCookieSessionStore do
   def get(conn, cookie, opts) do
     key_opts = opts.key_opts
     cookie = cookie |> URI.decode_www_form
-    if key = opts.encryption_salt do
-      MessageEncryptor.verify_and_decrypt(cookie,
-                                          derive(conn, key, key_opts),
-                                          derive(conn, opts.signing_salt, key_opts))
-    else
-      MessageVerifier.verify(cookie, derive(conn, opts.signing_salt, key_opts))
+    cond do
+      opts.authenticated_encryption ->
+        MessageEncryptor.authenticated_decrypt(cookie, derive(conn, opts.encryption_salt, key_opts))
+      key = opts.encryption_salt ->
+        MessageEncryptor.verify_and_decrypt(cookie,
+                                            derive(conn, key, key_opts),
+                                            derive(conn, opts.signing_salt, key_opts))
+      true ->
+        MessageVerifier.verify(cookie, derive(conn, opts.signing_salt, key_opts))
     end |> decode(opts.serializer)
   end
 
@@ -94,12 +106,15 @@ defmodule PlugRailsCookieSessionStore do
   def put(conn, _sid, term, opts) do
     binary = encode(term, opts.serializer)
     key_opts = opts.key_opts
-    if key = opts.encryption_salt do
-      MessageEncryptor.encrypt_and_sign(binary,
-                                        derive(conn, key, key_opts),
-                                        derive(conn, opts.signing_salt, key_opts))
-    else
-      MessageVerifier.sign(binary, derive(conn, opts.signing_salt, key_opts))
+    cond do
+      opts.authenticated_encryption ->
+        MessageEncryptor.authenticated_encrypt(binary, derive(conn, opts.encryption_salt, key_opts))
+      key = opts.encryption_salt ->
+        MessageEncryptor.encrypt_and_sign(binary,
+                                          derive(conn, key, key_opts),
+                                          derive(conn, opts.signing_salt, key_opts))
+      true ->
+        MessageVerifier.sign(binary, derive(conn, opts.signing_salt, key_opts))
     end |> URI.encode_www_form
   end
 
