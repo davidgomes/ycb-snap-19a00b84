@@ -122,6 +122,18 @@ defmodule GRPC.Client.Connection do
   def init(%__MODULE__{} = state) do
     Process.flag(:trap_exit, true)
 
+    # Real channels were connected in the caller process; adapters like Gun tie
+    # the connection lifetime to its owner, so take ownership here.
+    if state.adapter == GRPC.Client.Adapters.Gun do
+      Enum.each(state.real_channels, fn
+        {_key, {:connected, %Channel{adapter_payload: %{conn_pid: pid}}}} when is_pid(pid) ->
+          transfer_ownership(pid)
+
+        _ ->
+          :ok
+      end)
+    end
+
     # only now persist the chosen channel (which should already have adapter_payload
     # because build_initial_state connected real channels and set virtual_channel)
     :persistent_term.put(
@@ -779,4 +791,16 @@ defmodule GRPC.Client.Connection do
   end
 
   defp default_port, do: 50051
+
+  defp transfer_ownership(pid) do
+    if node(pid) == node() and Process.alive?(pid) do
+      try do
+        :gun.set_owner(pid, self())
+      catch
+        _, _ -> :ok
+      end
+    end
+
+    :ok
+  end
 end
