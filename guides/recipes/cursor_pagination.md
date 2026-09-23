@@ -109,7 +109,8 @@ of replacing it. Replacing the order could drop the field that made it unique.
 
 ## Nullable fields
 
-Ordering by a nullable column loses the rows where it is `NULL`.
+Order fields can contain `NULL`. Paging by the nullable `age` column returns all
+six pets:
 
 ```elixir
 %{first: 2, order_by: [:age, :id]}
@@ -119,20 +120,35 @@ Ordering by a nullable column loses the rows where it is `NULL`.
 |---|---|
 | 1 | Bo 1, Ada 3 |
 | 2 | Ada 5, Ada 7 |
-| 3 | — |
+| 3 | Cy, Dee |
 
-Cy and Dee never appear, and page 3 reports `has_next_page?: false`. PostgreSQL
-sorts them last, but the cursor comparison is `age > 7`, and no comparison with
-`NULL` is ever true. A second order field does not help, because the `NULL` is
-in the first one.
+No comparison with `NULL` is ever true, so `age > 7` alone would not find Cy and
+Dee. Flop knows that PostgreSQL sorts them after the cursor value, and adds
+`age IS NULL` to the condition for page 3. A cursor that holds `NULL` works as
+well: after Cy, the next rows are the other `NULL` rows with a greater `id`.
 
-Until Flop builds null-aware predicates, order by a column that has no `NULL`,
-or sort on a computed field that substitutes a value, as in the [computed fields
-recipe](computed_and_embedded_fields.md):
+Two `NULL`s count as equal here, so the order fields still need a unique field
+at the end. A unique index on a nullable column is not enough, because it allows
+any number of `NULL`s.
 
-```sql
-SELECT coalesce(age, -1) AS age_sortable
+The order direction decides where the `NULL` rows appear. `:asc_nulls_first`,
+`:asc_nulls_last`, `:desc_nulls_first` and `:desc_nulls_last` place them
+explicitly. With `:asc` and `:desc`, it depends on the database. PostgreSQL
+sorts `NULL` as if it were larger than any value, so it comes last with `:asc`
+and first with `:desc`. MySQL and SQLite sort it as if it were smaller, so the
+first page above would be Cy and Dee.
+
+Flop reads the Ecto adapter of the repo to build the condition that matches the
+database. Cursor pagination with `:asc` or `:desc` therefore needs a repo, even
+if you only build the query with `Flop.query/3` and run it yourself:
+
+```elixir
+Flop.query(Pet, flop, for: Pet, repo: MyApp.Repo)
 ```
+
+Without a repo, Flop raises an `ArgumentError` instead of guessing. Set the repo
+in the application environment or on a backend module, or use the directions
+that place `NULL` explicitly, which work without one.
 
 ## Reading the cursor value
 
