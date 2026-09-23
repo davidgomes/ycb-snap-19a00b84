@@ -24,7 +24,7 @@ defmodule Ewebmachine.Builder.Resources do
 
     resource "/hello/:name" do %{name: name} after
       plug SomeAdditionnalPlug
-      content_types_provided do: ['application/xml': :to_xml]
+      content_types_provided do: ["application/xml": :to_xml]
       defh to_xml, do: "<Person><name>#{state.name}</name>"
     end
 
