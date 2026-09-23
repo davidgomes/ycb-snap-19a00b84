@@ -509,9 +509,9 @@ defmodule Flop.Adapter.Ecto do
     raise ArgumentError, """
     cursor pagination with #{inspect(direction)} requires a repo
 
-    Databases differ in where #{inspect(direction)} sorts NULL values. Flop reads
-    this from the Ecto adapter of the repo to build the cursor condition, but no
-    repo is configured.
+    Databases differ in where :asc and :desc sort NULL values. Flop reads this
+    from the Ecto adapter of the repo to build the cursor condition, but no repo
+    is configured.
 
     Pass the repo as an option:
 
