@@ -174,6 +174,44 @@ defmodule TidewaveTest do
 
       assert conn.status == 404
     end
+
+    test "200 with JSON-RPC response for requests" do
+      conn = mcp_request(%{"jsonrpc" => "2.0", "method" => "tools/list", "id" => "1"})
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") == ["application/json; charset=utf-8"]
+      response = Jason.decode!(conn.resp_body)
+      assert response["id"] == "1"
+      assert "browser_eval" in Enum.map(response["result"]["tools"], & &1["name"])
+    end
+
+    test "excludes browser tools with include_browser_tools=false" do
+      conn =
+        mcp_request(
+          %{"jsonrpc" => "2.0", "method" => "tools/list", "id" => "1"},
+          "/tidewave/mcp?include_browser_tools=false"
+        )
+
+      assert conn.status == 200
+      response = Jason.decode!(conn.resp_body)
+      refute "browser_eval" in Enum.map(response["result"]["tools"], & &1["name"])
+    end
+
+    test "202 for notifications" do
+      conn = mcp_request(%{"jsonrpc" => "2.0", "method" => "notifications/initialized"})
+
+      assert conn.status == 202
+      assert Jason.decode!(conn.resp_body) == %{"status" => "ok"}
+    end
+
+    test "400 with JSON-RPC error for failed requests" do
+      conn = mcp_request(%{"jsonrpc" => "2.0", "method" => "unknown", "id" => "1"})
+
+      assert conn.status == 400
+      response = Jason.decode!(conn.resp_body)
+      assert response["id"] == "1"
+      assert response["error"]["code"] == -32601
+    end
   end
 
   describe "/config" do
@@ -263,6 +301,12 @@ defmodule TidewaveTest do
       refute Enum.any?(logs, &String.contains?(&1, "old log"))
       assert Enum.any?(logs, &String.contains?(&1, "new log"))
     end
+  end
+
+  defp mcp_request(message, path \\ "/tidewave/mcp") do
+    conn(:post, path, Jason.encode!(message))
+    |> put_req_header("content-type", "application/json")
+    |> Tidewave.call(Tidewave.init([]))
   end
 
   defp router_upload_conn(filename, file_contents \\ valid_jpg()) do
