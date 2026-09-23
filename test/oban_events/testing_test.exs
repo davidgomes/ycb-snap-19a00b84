@@ -9,8 +9,9 @@ defmodule ObanEvents.TestingTest do
     event = build_event(%{"user_id" => 123})
 
     assert %Event{data: %{"user_id" => 123}, causation_id: nil, correlation_id: nil} = event
-    assert is_binary(event.event_id)
-    assert is_binary(event.idempotency_key)
+    assert event.event_id =~ ~r/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    assert event.idempotency_key =~
+             ~r/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     assert event.event_id != event.idempotency_key
   end
 
