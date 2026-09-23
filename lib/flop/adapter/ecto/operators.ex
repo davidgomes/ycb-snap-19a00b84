@@ -342,6 +342,34 @@ defmodule Flop.Adapter.Ecto.Operators do
     end
   end
 
+  # Fragments reference the filtered field as `field(r, ^field)`. For custom
+  # fields, the reference is replaced with the interpolated expression returned
+  # by the field_dynamic function, which must be bound to `field_dynamic`.
+  #
+  # Ecto types an interpolated value by the other side of a comparison, which
+  # does not compile if that side has a type interpolated at runtime, as in
+  # `type(^[], ^ecto_type)`. Wrapping that side in a dynamic avoids this.
+  def field_dynamic_fragment(fragment) do
+    Macro.postwalk(fragment, fn
+      {:field, _, [{:r, _, _}, _]} ->
+        quote(do: ^var!(field_dynamic))
+
+      {:type, _, [_, {:^, _, [_]}]} = typed ->
+        quote(do: ^dynamic(unquote(typed)))
+
+      ast ->
+        ast
+    end)
+  end
+
+  # Applies field_dynamic_fragment/1 to one of the macros above, for example
+  # `with_field_dynamic(empty(:array))`.
+  defmacro with_field_dynamic(operator_macro) do
+    operator_macro
+    |> Macro.expand_once(__CALLER__)
+    |> field_dynamic_fragment()
+  end
+
   defp prelude(:add_wildcard) do
     quote do
       var!(value) = Flop.Misc.add_wildcard(var!(value))
