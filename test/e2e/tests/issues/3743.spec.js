@@ -7,10 +7,27 @@ const pdf = (name, content) => ({
   buffer: Buffer.from(content),
 });
 
+// the server already reports writer failures, so the client must not send
+// a second, generic error for the entry
+const trackProgressErrors = (page) => {
+  const progressErrors = [];
+  page.on("websocket", (ws) => {
+    ws.on("framesent", ({ payload }) => {
+      if (typeof payload !== "string") return;
+      const [, , , event, body] = JSON.parse(payload);
+      if (event === "progress" && body.progress?.error) {
+        progressErrors.push(body.progress.error);
+      }
+    });
+  });
+  return progressErrors;
+};
+
 // https://github.com/phoenixframework/phoenix_live_view/issues/3743
 test("a writer failure remains visible until it is cancelled", async ({
   page,
 }) => {
+  const progressErrors = trackProgressErrors(page);
   await page.goto("/issues/3743");
   await syncLV(page);
 
@@ -47,11 +64,13 @@ test("a writer failure remains visible until it is cancelled", async ({
     "consumed: retry.pdf,good.pdf",
   );
   await expect(page.locator(".upload-entry")).toHaveCount(0);
+  expect(progressErrors).toEqual([]);
 });
 
 test("a writer init failure remains visible until it is cancelled", async ({
   page,
 }) => {
+  const progressErrors = trackProgressErrors(page);
   await page.goto("/issues/3743");
   await syncLV(page);
 
@@ -72,4 +91,5 @@ test("a writer init failure remains visible until it is cancelled", async ({
   await input.setInputFiles([pdf("retry.pdf", "0000000000")]);
   await expect(page.locator("#consumed")).toHaveText("consumed: retry.pdf");
   await expect(page.locator("[data-phx-main]")).toHaveClass(/phx-connected/);
+  expect(progressErrors).toEqual([]);
 });
