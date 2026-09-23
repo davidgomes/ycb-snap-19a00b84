@@ -98,7 +98,8 @@ defmodule Sqlite.Ecto2.Test do
 
   defp normalize(query, operation \\ :all, counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Sqlite.Ecto2, counter)
-    Ecto.Query.Planner.normalize(query, operation, Sqlite.Ecto2, counter)
+    {query, _} = Ecto.Query.Planner.normalize(query, operation, Sqlite.Ecto2, counter)
+    query
   end
 
   test "from" do
@@ -481,6 +482,11 @@ defmodule Sqlite.Ecto2.Test do
     assert SQL.update_all(query) ==
            ~s{UPDATE "schema" SET "x" = 0 ;--RETURNING ON UPDATE "schema","id","x","y","z"}
            # diff SQLite syntax
+
+    query = from(m in Schema, update: [set: [x: 0]]) |> select([m], fragment("?", m.x)) |> normalize(:update_all)
+    assert_raise Ecto.QueryError, ~r"SQLite adapter only supports returning fields from the table being modified", fn ->
+      SQL.update_all(query)
+    end
   end
 
   test "update all array ops" do
@@ -622,10 +628,9 @@ defmodule Sqlite.Ecto2.Test do
   end
 
   test "cross join" do
-    assert_raise ArgumentError, "join `:cross` not supported by SQLite", fn ->
-      query = from(p in Schema, cross_join: c in Schema2, select: {p.id, c.id}) |> normalize()
-      SQL.all(query)
-    end
+    query = from(p in Schema, cross_join: c in Schema2, select: {p.id, c.id}) |> normalize()
+    assert SQL.all(query) ==
+           "SELECT s0.\"id\", s1.\"id\" FROM \"schema\" AS s0 CROSS JOIN \"schema2\" AS s1"
   end
 
   test "join produces correct bindings" do
@@ -750,8 +755,9 @@ defmodule Sqlite.Ecto2.Test do
 
   # DDL
 
-  import Ecto.Migration, only: [table: 1, table: 2, index: 2, index: 3, references: 1,
-                                references: 2, constraint: 2, constraint: 3]
+  alias Ecto.Migration.Reference
+  import Ecto.Migration, only: [table: 1, table: 2, index: 2, index: 3,
+                                constraint: 2, constraint: 3]
 
   test "executing a string during migration" do
     assert execute_ddl("example") == ["example"]
@@ -822,7 +828,7 @@ defmodule Sqlite.Ecto2.Test do
 
   test "create table with prefix" do
     create = {:create, table(:posts, prefix: :foo),
-               [{:add, :category_0, references(:categories), []}]}
+               [{:add, :category_0, %Reference{table: :categories}, []}]}
 
     assert execute_ddl(create) == ["""
     CREATE TABLE "foo"."posts"
@@ -833,7 +839,7 @@ defmodule Sqlite.Ecto2.Test do
   test "create table with comment on columns and table" do
     create = {:create, table(:posts, comment: "comment"),
               [
-                {:add, :category_0, references(:categories), [comment: "column comment"]},
+                {:add, :category_0, %Reference{table: :categories}, [comment: "column comment"]},
                 {:add, :created_at, :timestamp, []},
                 {:add, :updated_at, :timestamp, [comment: "column comment 2"]}
               ]}
@@ -846,7 +852,7 @@ defmodule Sqlite.Ecto2.Test do
 
   test "create table with comment on table" do
     create = {:create, table(:posts, comment: "table comment"),
-              [{:add, :category_0, references(:categories), []}]}
+              [{:add, :category_0, %Reference{table: :categories}, []}]}
     assert execute_ddl(create) == [remove_newlines("""
     CREATE TABLE "posts"
     ("category_0" INTEGER CONSTRAINT "posts_category_0_fkey" REFERENCES "categories"("id"))
@@ -857,7 +863,7 @@ defmodule Sqlite.Ecto2.Test do
   test "create table with comment on columns" do
     create = {:create, table(:posts),
               [
-                {:add, :category_0, references(:categories), [comment: "column comment"]},
+                {:add, :category_0, %Reference{table: :categories}, [comment: "column comment"]},
                 {:add, :created_at, :timestamp, []},
                 {:add, :updated_at, :timestamp, [comment: "column comment 2"]}
               ]}
@@ -871,15 +877,17 @@ defmodule Sqlite.Ecto2.Test do
   test "create table with references" do
     create = {:create, table(:posts),
                [{:add, :id, :serial, [primary_key: true]},
-                {:add, :category_0, references(:categories), []},
-                {:add, :category_1, references(:categories, name: :foo_bar), []},
-                {:add, :category_2, references(:categories, on_delete: :nothing), []},
-                {:add, :category_3, references(:categories, on_delete: :delete_all), [null: false]},
-                {:add, :category_4, references(:categories, on_delete: :nilify_all), []},
-                {:add, :category_5, references(:categories, on_update: :nothing), []},
-                {:add, :category_6, references(:categories, on_update: :update_all), [null: false]},
-                {:add, :category_7, references(:categories, on_update: :nilify_all), []},
-                {:add, :category_8, references(:categories, on_delete: :nilify_all, on_update: :update_all), [null: false]}]}
+                {:add, :category_0, %Reference{table: :categories}, []},
+                {:add, :category_1, %Reference{table: :categories, name: :foo_bar}, []},
+                {:add, :category_2, %Reference{table: :categories, on_delete: :nothing}, []},
+                {:add, :category_3, %Reference{table: :categories, on_delete: :delete_all}, [null: false]},
+                {:add, :category_4, %Reference{table: :categories, on_delete: :nilify_all}, []},
+                {:add, :category_5, %Reference{table: :categories, on_update: :nothing}, []},
+                {:add, :category_6, %Reference{table: :categories, on_update: :update_all}, [null: false]},
+                {:add, :category_7, %Reference{table: :categories, on_update: :nilify_all}, []},
+                {:add, :category_8, %Reference{table: :categories, on_delete: :nilify_all, on_update: :update_all}, [null: false]},
+                {:add, :category_9, %Reference{table: :categories, on_delete: :restrict}, []},
+                {:add, :category_10, %Reference{table: :categories, on_update: :restrict}, []}]}
 
     assert execute_ddl(create) == ["""
     CREATE TABLE "posts" ("id" INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -891,18 +899,20 @@ defmodule Sqlite.Ecto2.Test do
     "category_5" INTEGER CONSTRAINT "posts_category_5_fkey" REFERENCES "categories"("id"),
     "category_6" INTEGER NOT NULL CONSTRAINT "posts_category_6_fkey" REFERENCES "categories"("id") ON UPDATE CASCADE,
     "category_7" INTEGER CONSTRAINT "posts_category_7_fkey" REFERENCES "categories"("id") ON UPDATE SET NULL,
-    "category_8" INTEGER NOT NULL CONSTRAINT "posts_category_8_fkey" REFERENCES "categories"("id") ON DELETE SET NULL ON UPDATE CASCADE)
+    "category_8" INTEGER NOT NULL CONSTRAINT "posts_category_8_fkey" REFERENCES "categories"("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    "category_9" INTEGER CONSTRAINT "posts_category_9_fkey" REFERENCES "categories"("id") ON DELETE RESTRICT,
+    "category_10" INTEGER CONSTRAINT "posts_category_10_fkey" REFERENCES "categories"("id") ON UPDATE RESTRICT)
     """ |> remove_newlines]
   end
 
   test "create table with references including prefixes" do
     create = {:create, table(:posts, prefix: :foo),
                [{:add, :id, :serial, [primary_key: true]},
-                {:add, :category_0, references(:categories, prefix: :foo), []},
-                {:add, :category_1, references(:categories, name: :foo_bar, prefix: :foo), []},
-                {:add, :category_2, references(:categories, on_delete: :nothing, prefix: :foo), []},
-                {:add, :category_3, references(:categories, on_delete: :delete_all, prefix: :foo), [null: false]},
-                {:add, :category_4, references(:categories, on_delete: :nilify_all, prefix: :foo), []}]}
+                {:add, :category_0, %Reference{table: :categories}, []},
+                {:add, :category_1, %Reference{table: :categories, name: :foo_bar}, []},
+                {:add, :category_2, %Reference{table: :categories, on_delete: :nothing}, []},
+                {:add, :category_3, %Reference{table: :categories, on_delete: :delete_all}, [null: false]},
+                {:add, :category_4, %Reference{table: :categories, on_delete: :nilify_all}, []}]}
 
     assert execute_ddl(create) == ["""
     CREATE TABLE "foo"."posts" ("id" INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -968,7 +978,7 @@ defmodule Sqlite.Ecto2.Test do
   test "alter table" do
     alter = {:alter, table(:posts),
                [{:add, :title, :string, [default: "Untitled", size: 100, null: false]},
-                {:add, :author_id, references(:author), []}]}
+                {:add, :author_id, %Reference{table: :author}, []}]}
     assert execute_ddl(alter) == [
       remove_newlines(~s|ALTER TABLE "posts" ADD COLUMN "title" TEXT DEFAULT 'Untitled' NOT NULL|),
       remove_newlines(~s|ALTER TABLE "posts" ADD COLUMN "author_id" INTEGER CONSTRAINT "posts_author_id_fkey" REFERENCES "author"("id")|)]
@@ -986,7 +996,7 @@ defmodule Sqlite.Ecto2.Test do
   test "alter table with prefix" do
     alter = {:alter, table(:posts, prefix: :foo),
                [{:add, :title, :string, [default: "Untitled", size: 100, null: false]},
-                {:add, :author_id, references(:author, prefix: :foo), []}]}
+                {:add, :author_id, %Reference{table: :author}, []}]}
 
     assert execute_ddl(alter) == [
       remove_newlines(~s|ALTER TABLE "foo"."posts" ADD COLUMN "title" TEXT DEFAULT 'Untitled' NOT NULL|),
