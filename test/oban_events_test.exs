@@ -101,6 +101,48 @@ defmodule ObanEventsTest do
     end
   end
 
+  describe "emit/3 metadata" do
+    test "records event metadata in job args" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{id: 1}, metadata: %{actor_id: 42})
+
+      assert %{
+               "event_id" => event_id,
+               "metadata" => %{"actor_id" => 42},
+               "causation_id" => nil,
+               "correlation_id" => event_id,
+               "emitted_at" => emitted_at
+             } = job.args
+
+      assert {:ok, _uuid} = Ecto.UUID.cast(event_id)
+      assert {:ok, %DateTime{}, 0} = DateTime.from_iso8601(emitted_at)
+    end
+
+    test "shares one event across all handler jobs" do
+      defmodule MultiHandlerEventBus do
+        @moduledoc false
+        use ObanEvents
+
+        @event_handlers %{
+          test_event: [ObanEventsTest.TestHandler, ObanEventsTest.TestHandler]
+        }
+      end
+
+      assert {:ok, [first, second]} = MultiHandlerEventBus.emit(:test_event, %{})
+      assert Map.delete(first.args, "handler") == Map.delete(second.args, "handler")
+    end
+
+    test "links follow-up events via :caused_by" do
+      parent = ObanEvents.Event.new(:investment_created, %{}, correlation_id: "chain-1")
+
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_status_changed, %{}, caused_by: parent)
+
+      assert job.args["causation_id"] == parent.event_id
+      assert job.args["correlation_id"] == "chain-1"
+    end
+  end
+
   describe "configuration" do
     test "uses default configuration when not specified" do
       assert {:ok, jobs} = TestEventBus.emit(:investment_created, %{"test" => "data"})
