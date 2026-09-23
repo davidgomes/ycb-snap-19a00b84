@@ -3,6 +3,12 @@
 
 #### Fixed
 
+- **`data_table` menus live in the page.** The filter editors and the
+  Columns dropdown were top-layer popovers, fixed to the viewport and
+  repositioned on every scroll, resize and visual-viewport change - so
+  they lagged, flipped and clamped while the page moved under them. The
+  toolbar isn't clipped, so they now render as ordinary anchored
+  popovers positioned beneath their trigger and scroll with the page.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to

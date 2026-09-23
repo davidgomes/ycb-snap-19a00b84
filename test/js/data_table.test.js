@@ -221,28 +221,6 @@ describe("PetalDataTable", () => {
     expect(url).toContain("filters[0][field]=email");
   });
 
-  it("closes a top-layer panel through the native popover API", () => {
-    const { el, patched, form } = mountWithFilter({
-      navTemplate: "/orders?:filters",
-      filters: [],
-      formHtml: `
-        <form class="pc-data-table__filter-form" data-pc-dt-filter data-field="email">
-          <select name="filter_op"><option value="contains" selected>contains</option></select>
-          <input name="value" value="x" />
-        </form>
-      `,
-    });
-
-    const panel = el.querySelector(".pc-popover__panel");
-    panel.setAttribute("popover", "auto");
-    const hidden = [];
-    panel.hidePopover = () => hidden.push(true);
-
-    submit(form);
-    expect(hidden).toEqual([true]);
-    expect(patched).toHaveLength(1);
-  });
-
   it("event mode: submit only closes the popover - no interception, no navigation", () => {
     const { el, patched } = mountBase({});
     delete el.dataset.navTemplate;
