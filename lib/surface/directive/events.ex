@@ -2,19 +2,26 @@ defmodule Surface.Directive.Events do
   use Surface.Directive
 
   @events [
+    # Click Events
     "click",
     "click-away",
     "capture-click",
-    "blur",
-    "focus",
+    # Form Events
     "change",
     "submit",
+    # Focus Events
+    "blur",
+    "focus",
+    "window-blur",
+    "window-focus",
+    # Key Events
     "keydown",
     "keyup",
-    "window-focus",
-    "window-blur",
     "window-keydown",
-    "window-keyup"
+    "window-keyup",
+    # Scroll Events
+    "viewport-top",
+    "viewport-bottom"
   ]
 
   @phx_events Enum.map(@events, &"phx-#{&1}")
