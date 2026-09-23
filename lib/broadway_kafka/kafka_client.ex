@@ -7,6 +7,7 @@ defmodule BroadwayKafka.KafkaClient do
            group_id: :brod.group_id(),
            reconnect_timeout: non_neg_integer,
            offset_commit_on_ack: boolean,
+           shared_client: boolean,
            topics: [:brod.topic()],
            group_config: keyword,
            client_config: keyword
@@ -52,4 +53,5 @@ defmodule BroadwayKafka.KafkaClient do
   @callback update_topics(:brod.group_coordinator(), [:brod.topic()]) :: :ok
   @callback connected?(:brod.client()) :: boolean
   @callback disconnect(:brod.client()) :: :ok
+  @callback shared_client_child_spec(:brod.client(), config) :: Supervisor.child_spec()
 end

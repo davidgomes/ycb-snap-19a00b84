@@ -116,6 +116,11 @@ defmodule BroadwayKafka.ProducerTest do
     def update_topics(_client_id, _topics) do
       :ok
     end
+
+    @impl true
+    def shared_client_child_spec(client_id, _config) do
+      %{id: client_id, start: {Agent, :start_link, [fn -> true end, [name: client_id]]}}
+    end
   end
 
   defmodule Forwarder do
@@ -605,6 +610,7 @@ defmodule BroadwayKafka.ProducerTest do
     processors_concurrency = Keyword.get(opts, :processors_concurrency, 1)
     batchers_concurrency = Keyword.get(opts, :batchers_concurrency)
     ack_raises_on_offset = Keyword.get(opts, :ack_raises_on_offset, nil)
+    shared_client = Keyword.get(opts, :shared_client, false)
 
     batchers =
       if batchers_concurrency do
@@ -630,7 +636,8 @@ defmodule BroadwayKafka.ProducerTest do
                max_bytes: 10,
                offset_commit_on_ack: false,
                begin_offset: :assigned,
-               ack_raises_on_offset: ack_raises_on_offset
+               ack_raises_on_offset: ack_raises_on_offset,
+               shared_client: shared_client
              ]},
           concurrency: producers_concurrency
         ],

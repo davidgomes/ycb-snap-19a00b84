@@ -47,6 +47,8 @@ defmodule BroadwayKafka.BrodClient do
 
   @default_begin_offset :assigned
 
+  @default_shared_client false
+
   @impl true
   def init(opts) do
     with {:ok, hosts} <- validate(opts, :hosts, required: true),
@@ -62,6 +64,8 @@ defmodule BroadwayKafka.BrodClient do
            validate(opts, :offset_reset_policy, default: @default_offset_reset_policy),
          {:ok, begin_offset} <-
            validate(opts, :begin_offset, default: @default_begin_offset),
+         {:ok, shared_client} <-
+           validate(opts, :shared_client, default: @default_shared_client),
          {:ok, group_config} <- validate_group_config(opts),
          {:ok, fetch_config} <- validate_fetch_config(opts),
          {:ok, client_config} <- validate_client_config(opts) do
@@ -75,6 +79,7 @@ defmodule BroadwayKafka.BrodClient do
          offset_commit_on_ack: offset_commit_on_ack,
          offset_reset_policy: offset_reset_policy,
          begin_offset: begin_offset,
+         shared_client: shared_client,
          group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
          fetch_config: Map.new(fetch_config || []),
          client_config: client_config
@@ -84,7 +89,7 @@ defmodule BroadwayKafka.BrodClient do
 
   @impl true
   def setup(stage_pid, client_id, callback_module, config) do
-    with :ok <- :brod.start_client(config.hosts, client_id, config.client_config),
+    with :ok <- start_client(client_id, config),
          {:ok, group_coordinator} <-
            start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
       Process.monitor(client_id)
@@ -92,6 +97,22 @@ defmodule BroadwayKafka.BrodClient do
       Process.unlink(group_coordinator)
       {:ok, group_coordinator, ref}
     end
+  end
+
+  defp start_client(_client_id, %{shared_client: true}), do: :ok
+
+  defp start_client(client_id, config) do
+    :brod.start_client(config.hosts, client_id, config.client_config)
+  end
+
+  @impl true
+  def shared_client_child_spec(client_id, config) do
+    %{
+      id: client_id,
+      start:
+        {BroadwayKafka.SharedClient, :start_link,
+         [{config.hosts, client_id, config.client_config}]}
+    }
   end
 
   @impl true
@@ -239,6 +260,9 @@ defmodule BroadwayKafka.BrodClient do
        when value not in @begin_offset_values do
     validation_error(:begin_offset, "one of #{inspect(@begin_offset_values)}", value)
   end
+
+  defp validate_option(:shared_client, value) when not is_boolean(value),
+    do: validation_error(:shared_client, "a boolean", value)
 
   defp validate_option(:offset_commit_interval_seconds, value)
        when not is_integer(value) or value < 1,

@@ -49,6 +49,12 @@ defmodule BroadwayKafka.Producer do
       When set to `:reset`, the starting offset will be dictated by the `:offset_reset_policy` option, either
       starting from the `:earliest` or the `:latest` offsets of the topic. Default is `:assigned`.
 
+    * `:shared_client` - Optional. When `false`, each producer starts its own `:brod` client,
+      with its own connections to Kafka. When `true`, a single client is started and shared
+      by all producers in the pipeline, which reduces the number of connections to Kafka and
+      the resources used by them. Note that producers will then send their fetch requests over
+      the same connections, which may reduce throughput. Default is `false`.
+
     * `:group_config` - Optional. A list of options used to configure the group
       coordinator. See the ["Group config options"](#module-group-config-options) section below for a list of all available
       options.
@@ -120,6 +126,9 @@ defmodule BroadwayKafka.Producer do
             shutdown: 5000,
             child_type: :worker
           ]
+
+    When `:shared_client` is `true`, the client id is built from the Broadway name instead,
+    e.g. `:"nonode@nohost - Elixir.BroadwayKafka.ConsumerTest.MyBroadway.SharedClient"`.
 
     * `:sasl` - Optional. A a tuple of mechanism which can be `:plain`, `:scram_sha_256` or `:scram_sha_512`, username and password. See the `:brod`'s
     [`Authentication Support`](https://github.com/klarna/brod#authentication-support) documentation
@@ -245,8 +254,13 @@ defmodule BroadwayKafka.Producer do
           |> drain_after_revoke_table_name!()
           |> drain_after_revoke_table_init!()
 
-        prefix = get_in(config, [:client_config, :client_id_prefix])
-        client_id = :"#{prefix}#{Module.concat([producer_name, Client])}"
+        client_id =
+          if config.shared_client do
+            shared_client_id(opts[:broadway][:name], config)
+          else
+            prefix = get_in(config, [:client_config, :client_id_prefix])
+            :"#{prefix}#{Module.concat([producer_name, Client])}"
+          end
 
         max_demand =
           with [{_first, processor_opts}] <- opts[:broadway][:processors],
@@ -509,7 +523,9 @@ defmodule BroadwayKafka.Producer do
       |> Keyword.put(:processors, [updated_processor_entry | other_processors_entries])
       |> Keyword.put(:batchers, updated_batchers_entries)
 
-    {allocators, updated_opts}
+    {_producer_mod, producer_opts} = opts[:producer][:module]
+
+    {shared_client_child_specs(broadway_name, producer_opts) ++ allocators, updated_opts}
   end
 
   @impl :brod_group_member
@@ -547,7 +563,11 @@ defmodule BroadwayKafka.Producer do
   def terminate(_reason, state) do
     %{client: client, group_coordinator: group_coordinator, client_id: client_id} = state
     group_coordinator && Process.exit(group_coordinator, :shutdown)
-    client.disconnect(client_id)
+
+    unless state.config.shared_client do
+      client.disconnect(client_id)
+    end
+
     :ok
   end
 
@@ -669,6 +689,26 @@ defmodule BroadwayKafka.Producer do
             "cannot set option :partition_by for #{group} #{inspect(consumer_name)}. " <>
               "The option will be set automatically by BroadwayKafka.Producer"
     end
+  end
+
+  defp shared_client_child_specs(broadway_name, producer_opts) do
+    client = producer_opts[:client] || BroadwayKafka.BrodClient
+
+    case client.init(producer_opts) do
+      {:error, message} ->
+        raise ArgumentError, "invalid options given to #{inspect(client)}.init/1, " <> message
+
+      {:ok, %{shared_client: true} = config} ->
+        [client.shared_client_child_spec(shared_client_id(broadway_name, config), config)]
+
+      {:ok, _config} ->
+        []
+    end
+  end
+
+  defp shared_client_id(broadway_name, config) do
+    prefix = get_in(config, [:client_config, :client_id_prefix])
+    :"#{prefix}#{Module.concat([broadway_name, SharedClient])}"
   end
 
   ## Buffer handling
