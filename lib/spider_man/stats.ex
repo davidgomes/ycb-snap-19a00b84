@@ -30,7 +30,7 @@ defmodule SpiderMan.Stats do
     def print_spider_stats(tid), do: format_stats(tid)
   end
 
-  defp format_stats(tid) do
+  def format_stats(tid) do
     [downloader, item_processor, spider] = :ets.tab2list(tid) |> Enum.sort()
 
     [downloader, spider, item_processor]

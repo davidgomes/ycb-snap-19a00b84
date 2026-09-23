@@ -401,6 +401,7 @@ defmodule SpiderMan.Engine do
       item_processor_tid: state.item_processor_tid
     })
 
+    :persistent_term.put({spider, :stats_tid}, state.stats_tid)
     Logger.info("#{log_prefix} setup ets tables finish.")
     state
   end
@@ -602,7 +603,10 @@ defmodule SpiderMan.Engine do
     Logger.remove_backend({LoggerFileBackend, spider})
   end
 
-  defp setup_print_stats(%{print_stats: false} = state), do: Map.put(state, :stats_task_pid, nil)
+  defp setup_print_stats(%{print_stats: false, stats_tid: tid, spider: spider} = state) do
+    Stats.attach_spider_stats(spider, tid)
+    Map.put(state, :stats_task_pid, nil)
+  end
 
   defp setup_print_stats(%{stats_tid: tid, spider: spider, status: status} = state) do
     Stats.attach_spider_stats(spider, tid)

@@ -176,6 +176,14 @@ defmodule SpiderMan do
     end)
   end
 
+  @doc "fetch spider's throughput infos as a readable string, easy to show on livebook"
+  @spec throughput_infos(spider) :: String.t() | nil
+  def throughput_infos(spider) do
+    if tid = :persistent_term.get({spider, :stats_tid}, nil) do
+      SpiderMan.Stats.format_stats(tid)
+    end
+  end
+
   @spec components :: [component]
   def components, do: [:downloader, :spider, :item_processor]
 

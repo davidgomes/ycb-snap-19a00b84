@@ -6,7 +6,8 @@
 Mix.install([
   {:spider_man, "~> 0.5"},
   {:floki, "~> 0.34"},
-  {:nimble_csv, "~> 1.2"}
+  {:nimble_csv, "~> 1.2"},
+  {:kino, "~> 0.9"}
 ])
 ```
 
@@ -143,5 +144,13 @@ callbacks = [init: init, handle_response: handle_response]
 run ther spider
 
 ```elixir
-SpiderMan.run_until_zero(spider, settings, 5_000)
+frame = Kino.Frame.new() |> Kino.render()
+
+Kino.listen(1_000, fn _ ->
+  if infos = SpiderMan.throughput_infos(spider) do
+    Kino.Frame.render(frame, Kino.Text.new(infos))
+  end
+end)
+
+SpiderMan.run_until_zero(spider, Keyword.put(settings, :print_stats, false), 5_000)
 ```
