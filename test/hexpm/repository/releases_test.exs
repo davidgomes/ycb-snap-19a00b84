@@ -163,6 +163,47 @@ defmodule Hexpm.Repository.ReleasesTest do
                unstable_fallback: true
              ) == Version.parse!("1.0.0-rc.2")
     end
+
+    test "compares versions by SemVer precedence" do
+      package = insert(:package, name: "semver_precedence")
+
+      for version <- ["1.9.0", "1.10.0-rc.1", "1.10.0", "2.0.0-alpha.9", "2.0.0-alpha.10"] do
+        insert(:release, package: package, version: version)
+      end
+
+      assert Releases.latest_version("hexpm", package.name,
+               only_stable: true,
+               unstable_fallback: true
+             ) == Version.parse!("1.10.0")
+
+      assert Releases.latest_version("hexpm", package.name, only_stable: true) ==
+               Version.parse!("1.10.0")
+
+      assert Releases.latest_version("hexpm", package.name, only_stable: false) ==
+               Version.parse!("2.0.0-alpha.10")
+    end
+
+    test "only considers releases with docs when asked to" do
+      package = insert(:package, name: "latest_documented")
+      insert(:release, package: package, version: "1.0.0", has_docs: true)
+      insert(:release, package: package, version: "1.1.0-rc.1", has_docs: true)
+      insert(:release, package: package, version: "1.1.0", has_docs: false)
+
+      assert Releases.latest_version("hexpm", package.name, only_stable: true, with_docs: true) ==
+               Version.parse!("1.0.0")
+
+      assert Releases.latest_version("hexpm", package.name, only_stable: false, with_docs: true) ==
+               Version.parse!("1.1.0-rc.1")
+    end
+
+    test "returns nil without a matching release", %{repository: repository} do
+      package = insert(:package, name: "prerelease_only")
+      insert(:release, package: package, version: "1.0.0-rc.1")
+
+      assert Releases.latest_version("hexpm", package.name, only_stable: true) == nil
+      assert Releases.latest_version("hexpm", "missing", only_stable: false) == nil
+      assert Releases.latest_version(repository.name, package.name, only_stable: false) == nil
+    end
   end
 
   describe "publish/7" do

@@ -171,6 +171,22 @@ defmodule Hexpm.Repository.PackageDependantsTest do
       assert requirements[dependant.id] == "~> 2.0"
     end
 
+    test "compares releases by SemVer precedence", %{repository: repository} do
+      dep = insert(:package, name: "dep", repository_id: repository.id)
+      dependant = insert(:package, name: "dependant", repository_id: repository.id)
+
+      old_rel = insert(:release, package: dependant, version: "1.9.0")
+      insert(:requirement, release: old_rel, dependency: dep, requirement: "~> 1.0")
+
+      new_rel = insert(:release, package: dependant, version: "1.10.0")
+      insert(:requirement, release: new_rel, dependency: dep, requirement: "~> 2.0")
+
+      {:ok, latest} = PackageDependants.recompute_for_package(Repo, dependant)
+
+      assert latest.id == new_rel.id
+      assert Packages.dependant_requirements([dependant], dep)[dependant.id] == "~> 2.0"
+    end
+
     test "skips retired releases", %{repository: repository} do
       dep = insert(:package, name: "dep", repository_id: repository.id)
       dependant = insert(:package, name: "dependant", repository_id: repository.id)

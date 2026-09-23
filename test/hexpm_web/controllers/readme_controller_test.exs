@@ -140,6 +140,33 @@ defmodule HexpmWeb.ReadmeControllerTest do
       assert get_resp_header(conn, "cache-control") == ["public, max-age=3600"]
     end
 
+    test "redirects versionless URL to the latest stable version by SemVer", %{package: package} do
+      for version <- ["1.10.0", "1.9.0", "2.0.0-rc.1"] do
+        insert(:release,
+          package: package,
+          version: version,
+          meta: build(:release_metadata, app: package.name)
+        )
+      end
+
+      conn =
+        build_conn()
+        |> Map.put(:host, "readme.localhost")
+        |> get("/#{package.name}")
+
+      assert get_resp_header(conn, "location") == ["/#{package.name}/1.10.0"]
+    end
+
+    test "shows no README for versionless URL of an unknown package" do
+      conn =
+        build_conn()
+        |> Map.put(:host, "readme.localhost")
+        |> get("/unknown_package")
+
+      assert conn.resp_body =~ "readme-not-found"
+      assert get_resp_header(conn, "cache-control") == ["public, max-age=3600"]
+    end
+
     test "renders plain text for non-markdown README", %{package: package} do
       mock_file_list_and_readme(
         package.name,

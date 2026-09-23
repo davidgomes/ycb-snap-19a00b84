@@ -197,6 +197,35 @@ defmodule Hexpm.Repository.Release do
     end
   end
 
+  @doc """
+  Limits `query` to its latest release, taking the same options as
+  `latest_version/2`.
+
+  Orders by the stored SemVer sort key so that, per package, an index answers
+  the query without reading every release.
+  """
+  def latest_query(query, opts) do
+    only_stable? = Keyword.fetch!(opts, :only_stable)
+    unstable_fallback? = Keyword.get(opts, :unstable_fallback, false)
+    with_docs? = Keyword.get(opts, :with_docs)
+
+    query = if with_docs?, do: from(r in query, where: r.has_docs), else: query
+
+    query =
+      cond do
+        not only_stable? ->
+          from(r in query, order_by: [desc: r.semver_sort_key])
+
+        unstable_fallback? ->
+          from(r in query, order_by: [desc: r.stable, desc: r.semver_sort_key])
+
+        true ->
+          from(r in query, where: r.stable, order_by: [desc: r.semver_sort_key])
+      end
+
+    from(r in query, limit: 1)
+  end
+
   defp latest([]), do: nil
 
   defp latest(releases) do
