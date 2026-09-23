@@ -611,4 +611,72 @@ defmodule FlopTest do
       end
     end
   end
+
+  describe "custom field ordering" do
+    test "orders by the dynamic expression of a custom field" do
+      query =
+        Flop.query(
+          MyApp.CustomOrderPet,
+          %Flop{order_by: [:dog_age], order_directions: [:desc]},
+          for: MyApp.CustomOrderPet,
+          extra_opts: [factor: 7]
+        )
+
+      expected =
+        from(p in MyApp.CustomOrderPet,
+          order_by: [desc: fragment("? * ?", p.age, ^7)]
+        )
+
+      assert order_by_clauses(query) == order_by_clauses(expected)
+    end
+
+    test "uses configured field_dynamic options" do
+      defmodule ScaledPet do
+        use Ecto.Schema
+
+        import Ecto.Query
+
+        @derive {
+          Flop.Schema,
+          filterable: [],
+          sortable: [:dog_age],
+          adapter_opts: [
+            custom_fields: [
+              dog_age: [
+                field_dynamic: {__MODULE__, :dog_age, [factor: 7]},
+                ecto_type: :integer
+              ]
+            ]
+          ]
+        }
+
+        schema "pets" do
+          field :age, :integer
+        end
+
+        def dog_age(opts) do
+          factor = Keyword.fetch!(opts, :factor)
+          dynamic([p], fragment("? * ?", p.age, ^factor))
+        end
+      end
+
+      query =
+        Flop.query(ScaledPet, %Flop{order_by: [:dog_age]}, for: ScaledPet)
+
+      expected =
+        from(p in ScaledPet, order_by: [asc: fragment("? * ?", p.age, ^7)])
+
+      assert order_by_clauses(query) == order_by_clauses(expected)
+    end
+
+    defp order_by_clauses(query) do
+      Enum.map(query.order_bys, &{&1.expr, &1.params})
+    end
+
+    test "raises when ordering by a custom field without field_dynamic" do
+      assert_raise ArgumentError, ~r/field_dynamic/, fn ->
+        Flop.query(Pet, %Flop{order_by: [:reverse_name]}, for: Pet)
+      end
+    end
+  end
 end

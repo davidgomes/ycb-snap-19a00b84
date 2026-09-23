@@ -388,7 +388,7 @@ defmodule Flop.SchemaTest do
              )
   end
 
-  test "raises error if custom field is added to sortable list" do
+  test "raises error if custom field is sortable without field_dynamic" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Parsley do
@@ -407,6 +407,82 @@ defmodule Flop.SchemaTest do
         end
       end
 
-    assert error.message =~ "cannot sort by custom field"
+    assert error.message =~ "field_dynamic"
+    assert error.message =~ ":inserted_at"
+  end
+
+  test "allows a custom field with field_dynamic to be sortable" do
+    defmodule Sage do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:human_age],
+        custom_fields: [
+          human_age: [
+            field_dynamic: {__MODULE__, :human_age, []},
+            ecto_type: :integer
+          ]
+        ]
+      }
+      defstruct [:id, :age]
+
+      def human_age(_opts), do: nil
+    end
+
+    sage = struct(Sage)
+    assert Schema.sortable(sage) == [:human_age]
+
+    assert %Flop.FieldInfo{
+             ecto_type: :integer,
+             extra: %{
+               type: :custom,
+               field_dynamic: {Sage, :human_age, []},
+               bindings: []
+             }
+           } = Schema.field_info(sage, :human_age)
+  end
+
+  test "raises if a filterable custom field has no filter function" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Thyme do
+          @derive {
+            Flop.Schema,
+            filterable: [:human_age],
+            sortable: [:human_age],
+            custom_fields: [
+              human_age: [
+                field_dynamic: {__MODULE__, :human_age, []},
+                ecto_type: :integer
+              ]
+            ]
+          }
+          defstruct [:id]
+
+          def human_age(_opts), do: nil
+        end
+      end
+
+    assert error.message =~ "filter"
+    assert error.message =~ ":human_age"
+  end
+
+  test "raises if a custom field has neither filter nor field_dynamic" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Rosemary do
+          @derive {
+            Flop.Schema,
+            filterable: [],
+            sortable: [],
+            custom_fields: [
+              human_age: [ecto_type: :integer]
+            ]
+          }
+          defstruct [:id]
+        end
+      end
+
+    assert error.message =~ "filter or a field_dynamic"
   end
 end

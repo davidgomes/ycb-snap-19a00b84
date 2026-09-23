@@ -384,7 +384,27 @@ defprotocol Flop.Schema do
   ID of the current user), use the `extra_opts` option when calling Flop
   functions.
 
-  Note that as of now, custom fields only support filtering, not sorting.
+  Custom fields can also be used for sorting. Set `:field_dynamic` to a
+  module/function/options tuple. The function receives the options keyword
+  list, with the tuple options merged over `extra_opts`, and must return an
+  `Ecto.Query.dynamic/1` expression. Flop orders by that expression. When both
+  `:filter` and `:field_dynamic` are set, the filter function is used for
+  filtering and the dynamic expression is used for sorting.
+
+      custom_fields: [
+        human_age: [
+          field_dynamic: {CustomFields, :human_age, []},
+          ecto_type: :integer
+        ]
+      ]
+
+      def human_age(_opts) do
+        dynamic([p], fragment("? * 7", p.age))
+      end
+
+  Add the field to `:sortable` and pass it as `order_by`. `:filter` is required
+  when the field is filterable. `:field_dynamic` is required when the field is
+  sortable. Cursor pagination does not support custom fields.
 
   Schema:
 
@@ -541,7 +561,8 @@ defprotocol Flop.Schema do
     custom fields. Alias fields are not supported.
   - `:sortable` (required) - A list of fields that can be used for sorting.
     Supports fields from the Ecto schema, join fields, and alias fields. Custom
-    fields and compound fields are not supported.
+    fields are supported when a `:field_dynamic` function is configured.
+    Compound fields are not supported.
   - `:default_limit` - The default limit applied if no `limit`, `page_size`,
     `first` or `last` parameter is set. Set to `false` to not set any default
     limit.
@@ -571,7 +592,8 @@ defprotocol Flop.Schema do
   - `:join_fields` - A list of fields on named bindings.
   - `:compound_fields` - Groups of fields that can be combined and filtered, for
     example a family name plus a given name field.
-  - `:custom_fields` - Custom fields with user-defined filter functions.
+  - `:custom_fields` - Custom fields with user-defined filter functions and
+    optional sort expressions.
   - `:alias_field` - Fields that reference aliases defined with
     `Ecto.Query.API.selected_as/2`.
   """
@@ -602,15 +624,19 @@ defprotocol Flop.Schema do
   @typedoc """
   Defines the options for a custom field.
 
-  - `:filter` (required) - A module/function/options tuple referencing a
-    custom filter function. The function must take the Ecto query, the
-    `Flop.Filter` struct, and the options from the tuple as arguments.
+  - `:filter` - A module/function/options tuple referencing a custom filter
+    function. Required when the field is filterable. The function must take
+    the Ecto query, the `Flop.Filter` struct, and the options from the tuple
+    as arguments.
+  - `:field_dynamic` - A module/function/options tuple referencing a function
+    that returns an Ecto dynamic expression for the field value. Required when
+    the field is sortable. The function receives the options keyword list.
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator
     and value validation is based on this option.
-  - `:bindings` - If the custom filter function requires certain named bindings
-    to be present in the Ecto query, you can specify them here. These bindings
-    will be conditionally added by `Flop.with_named_bindings/4` if the filter
-    is used.
+  - `:bindings` - If the custom field requires certain named bindings to be
+    present in the Ecto query, you can specify them here. These bindings will
+    be conditionally added by `Flop.with_named_bindings/4` when the field is
+    used in a filter or an order.
   - `:operators` - Defines which filter operators are allowed for this field.
     If omitted, all operators will be accepted.
 
@@ -620,6 +646,7 @@ defprotocol Flop.Schema do
   """
   @type custom_field_option ::
           {:filter, {module, atom, keyword}}
+          | {:field_dynamic, {module, atom, keyword}}
           | {:ecto_type, ecto_type()}
           | {:bindings, [atom]}
           | {:operators, [Flop.Filter.op()]}

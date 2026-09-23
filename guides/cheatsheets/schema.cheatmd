@@ -438,6 +438,26 @@ custom_fields: [
 
 Takes precedence over the operators derived from `ecto_type`.
 
+### Ordering
+
+```elixir
+custom_fields: [
+  human_age: [
+    field_dynamic: {CustomFields, :human_age_dynamic, []},
+    ecto_type: :integer
+  ]
+]
+```
+
+```elixir
+def human_age_dynamic(_opts) do
+  dynamic([p], fragment("? * 7", p.age))
+end
+```
+
+Add the field to `sortable`. The function receives the options keyword list and
+returns an Ecto dynamic expression that Flop uses in `ORDER BY`.
+
 ### Bindings
 
 ```elixir

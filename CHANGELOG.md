@@ -12,6 +12,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Support SQLite.
 - Support MySQL.
+- Support ordering by custom fields. Set `field_dynamic` to a callback that
+  returns an Ecto dynamic expression, and include the field in `sortable`.
 
 ### Fixed
 
