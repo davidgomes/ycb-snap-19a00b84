@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add `before_clean` callback on bucket expiry (#177)
+
 ## 7.2.0 - 2026-02-03
 
 - Fix race condition in `TokenBucket` and `LeakyBucket` atomics backends by using compare-and-swap (CAS) with packed 64-bit values (#169)
