@@ -23,7 +23,7 @@ defmodule Paginator.Ecto.Query do
   defp filter_values(query, fields, values, cursor_direction) when is_list(values) do
     new_values =
       fields
-      |> Enum.map(&elem(&1, 0))
+      |> Enum.map(fn {column, _order} -> cursor_key(column) end)
       |> Enum.zip(values)
       |> Map.new()
 
@@ -37,7 +37,7 @@ defmodule Paginator.Ecto.Query do
   end
 
   defp build_where_expression(query, [{column, order}], values, cursor_direction) do
-    value = Map.get(values, column)
+    value = Map.get(values, cursor_key(column))
     {q_position, q_binding} = column_position(query, column)
 
     DynamicFilterBuilder.build!(%{
@@ -51,7 +51,7 @@ defmodule Paginator.Ecto.Query do
   end
 
   defp build_where_expression(query, [{column, order} | fields], values, cursor_direction) do
-    value = Map.get(values, column)
+    value = Map.get(values, cursor_key(column))
     {q_position, q_binding} = column_position(query, column)
 
     filters = build_where_expression(query, fields, values, cursor_direction)
@@ -102,6 +102,10 @@ defmodule Paginator.Ecto.Query do
     |> filter_values(cursor_fields, before_values, :before)
   end
 
+  # Expressions reference their own bindings, so the position is never used
+  defp column_position(_query, {_field, expression} = column) when is_function(expression, 0),
+    do: {0, column}
+
   # Lookup position of binding in query aliases
   defp column_position(query, {binding_name, column}) do
     case Map.fetch(query.aliases, binding_name) do
@@ -118,6 +122,11 @@ defmodule Paginator.Ecto.Query do
 
   # Without named binding we assume position of binding is 0
   defp column_position(_query, column), do: {0, column}
+
+  defp cursor_key({field, expression}) when is_atom(field) and is_function(expression, 0),
+    do: field
+
+  defp cursor_key(column), do: column
 
   #  In order to return the correct pagination cursors, we need to fetch one more
   # # record than we actually want to return.

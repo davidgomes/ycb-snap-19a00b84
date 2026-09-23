@@ -96,6 +96,10 @@ defmodule Paginator.Config do
         when is_atom(schema) and is_atom(field) and value in @order_directions ->
           {schema, field}
 
+        {{field, expression}, value}
+        when is_atom(field) and is_function(expression, 0) and value in @order_directions ->
+          field
+
         field when is_atom(field) ->
           field
 

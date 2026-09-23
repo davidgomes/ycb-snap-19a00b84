@@ -71,7 +71,9 @@ defmodule Paginator do
     * `:before` - Fetch the records before this cursor.
     * `:cursor_fields` - The fields with sorting direction used to determine the
     cursor. In most cases, this should be the same fields as the ones used for sorting in the query.
-    When you use named bindings in your query they can also be provided.
+    When you use named bindings in your query they can also be provided. When sorting on an
+    expression, a `{name, fun}` tuple can be provided where `fun` returns the expression as an
+    `Ecto.Query.dynamic/2`.
     * `:fetch_cursor_value_fun` function of arity 2 to lookup cursor values on returned records.
     Defaults to `Paginator.default_fetch_cursor_value/2`
     * `:include_total_count` - Set this to true to return the total number of
@@ -165,6 +167,35 @@ defmodule Paginator do
         end,
         limit: 50
       )
+
+  ## Example with sorting on an expression
+
+      query =
+        from(
+          p in Post,
+          select_merge: %{rank: fragment("ts_rank(?, plainto_tsquery(?))", p.document, ^term)},
+          order_by: [
+            desc: fragment("ts_rank(?, plainto_tsquery(?))", p.document, ^term),
+            desc: p.id
+          ]
+        )
+
+      Repo.paginate(query,
+        cursor_fields: [
+          {{:rank,
+            fn ->
+              dynamic([p], fragment("ts_rank(?, plainto_tsquery(?))", p.document, ^term))
+            end}, :desc},
+          id: :desc
+        ],
+        limit: 50
+      )
+
+  The function returns the expression used to filter records against the cursor.
+  The name is the key the value is stored under in the cursor and is used to fetch
+  the value from the returned records, so the query has to select the expression
+  into a field of that name, e.g. a virtual field on the schema. Alternatively
+  `:fetch_cursor_value_fun` can be used to compute the value.
 
   """
   @callback paginate(queryable :: Ecto.Query.t(), opts :: Keyword.t(), repo_opts :: Keyword.t()) ::
@@ -309,6 +340,10 @@ defmodule Paginator do
        }) do
     cursor_fields
     |> Enum.map(fn
+      {{cursor_field, expression}, _order}
+      when is_atom(cursor_field) and is_function(expression, 0) ->
+        {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
+
       {cursor_field, _order} ->
         {cursor_field, fetch_cursor_value_fun.(schema, cursor_field)}
 
