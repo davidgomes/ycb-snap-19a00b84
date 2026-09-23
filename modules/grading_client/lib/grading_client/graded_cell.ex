@@ -22,40 +22,28 @@ defmodule GradingClient.GradedCell do
 
   @impl true
   def to_source(attrs) do
-    modules = Map.new(GradingClient.Answers.get_modules(), &{inspect(&1), &1})
-
     source_ast =
       try do
         source_attr = attrs["source"]
         source = Code.string_to_quoted!(source_attr)
 
+        ids_ast =
+          case parse_ids(source_attr) do
+            {:ok, module_id, question_id} ->
+              quote do
+                {unquote(module_id), unquote(question_id)}
+              end
+
+            {:error, message} ->
+              quote do
+                raise unquote(message)
+              end
+          end
+
         quote do
           result = unquote(source)
 
-          [module_id, question_id] =
-            unquote(source_attr)
-            |> String.split("\n", parts: 2)
-            |> hd()
-            |> String.trim_leading("#")
-            |> String.split(":", parts: 2)
-
-          module_id =
-            case unquote(Macro.escape(modules))[String.trim(module_id)] do
-              nil ->
-                raise "invalid module id: #{module_id}"
-
-              module_id ->
-                module_id
-            end
-
-          question_id =
-            case Integer.parse(String.trim(question_id)) do
-              {id, ""} ->
-                id
-
-              _ ->
-                raise "invalid question id: #{question_id}"
-            end
+          {module_id, question_id} = unquote(ids_ast)
 
           case GradingClient.check_answer(module_id, question_id, result) do
             :correct ->
@@ -75,6 +63,28 @@ defmodule GradingClient.GradedCell do
       end
 
     Kino.SmartCell.quoted_to_string(source_ast)
+  end
+
+  defp parse_ids(source) do
+    modules = Map.new(GradingClient.Answers.get_modules(), &{inspect(&1), &1})
+
+    header =
+      source
+      |> String.split("\n", parts: 2)
+      |> hd()
+      |> String.trim_leading("#")
+
+    case String.split(header, ":", parts: 2) do
+      [module_id, question_id] ->
+        case {modules[String.trim(module_id)], Integer.parse(String.trim(question_id))} do
+          {nil, _} -> {:error, "invalid module id: #{module_id}"}
+          {module, {id, ""}} -> {:ok, module, id}
+          _ -> {:error, "invalid question id: #{question_id}"}
+        end
+
+      _ ->
+        {:error, "invalid graded cell header: #{header}"}
+    end
   end
 
   @impl true
