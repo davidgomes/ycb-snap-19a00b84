@@ -62,6 +62,7 @@ defmodule BroadwayKafka.BrodClient do
            validate(opts, :offset_reset_policy, default: @default_offset_reset_policy),
          {:ok, begin_offset} <-
            validate(opts, :begin_offset, default: @default_begin_offset),
+         {:ok, shared_client} <- validate(opts, :shared_client, default: false),
          {:ok, group_config} <- validate_group_config(opts),
          {:ok, fetch_config} <- validate_fetch_config(opts),
          {:ok, client_config} <- validate_client_config(opts) do
@@ -77,14 +78,16 @@ defmodule BroadwayKafka.BrodClient do
          begin_offset: begin_offset,
          group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
          fetch_config: Map.new(fetch_config || []),
-         client_config: client_config
+         client_config: client_config,
+         shared_client: shared_client,
+         shared_client_id: opts[:shared_client_id]
        }}
     end
   end
 
   @impl true
   def setup(stage_pid, client_id, callback_module, config) do
-    with :ok <- :brod.start_client(config.hosts, client_id, config.client_config),
+    with :ok <- maybe_start_client(client_id, config),
          {:ok, group_coordinator} <-
            start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
       Process.monitor(client_id)
@@ -92,6 +95,19 @@ defmodule BroadwayKafka.BrodClient do
       Process.unlink(group_coordinator)
       {:ok, group_coordinator, ref}
     end
+  end
+
+  defp maybe_start_client(_client_id, %{shared_client: true}), do: :ok
+
+  defp maybe_start_client(client_id, config),
+    do: :brod.start_client(config.hosts, client_id, config.client_config)
+
+  @impl true
+  def shared_client_child_spec(client_id, config) do
+    %{
+      id: client_id,
+      start: {:brod_client, :start_link, [config.hosts, client_id, config.client_config]}
+    }
   end
 
   @impl true
@@ -219,6 +235,9 @@ defmodule BroadwayKafka.BrodClient do
 
   defp validate_option(:receive_interval, value) when not is_integer(value) or value < 0,
     do: validation_error(:receive_interval, "a non-negative integer", value)
+
+  defp validate_option(:shared_client, value) when not is_boolean(value),
+    do: validation_error(:shared_client, "a boolean", value)
 
   defp validate_option(:reconnect_timeout, value) when not is_integer(value) or value < 0,
     do: validation_error(:reconnect_timeout, "a non-negative integer", value)

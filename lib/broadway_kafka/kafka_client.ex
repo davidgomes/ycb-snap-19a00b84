@@ -49,6 +49,10 @@ defmodule BroadwayKafka.KafkaClient do
             ) ::
               offset :: integer | no_return()
 
+  @callback shared_client_child_spec(client_id :: :brod.client(), config) ::
+              Supervisor.child_spec()
+  @optional_callbacks shared_client_child_spec: 2
+
   @callback update_topics(:brod.group_coordinator(), [:brod.topic()]) :: :ok
   @callback connected?(:brod.client()) :: boolean
   @callback disconnect(:brod.client()) :: :ok

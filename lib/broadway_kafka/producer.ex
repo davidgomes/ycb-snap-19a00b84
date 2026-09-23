@@ -59,6 +59,10 @@ defmodule BroadwayKafka.Producer do
     * `:client_config` - Optional. A list of options used when creating the client. See the
       ["Client config options"](#module-client-config-options) section below for a list of all available options.
 
+    * `:shared_client` - Optional. When `true`, a single `:brod` client is started
+      under the Broadway supervisor and shared by all producers of the pipeline,
+      instead of starting one client per producer. Default is `false`.
+
   ## Group config options
 
   The available options that will be passed to `:brod`'s group coordinator.
@@ -245,8 +249,13 @@ defmodule BroadwayKafka.Producer do
           |> drain_after_revoke_table_name!()
           |> drain_after_revoke_table_init!()
 
-        prefix = get_in(config, [:client_config, :client_id_prefix])
-        client_id = :"#{prefix}#{Module.concat([producer_name, Client])}"
+        client_id =
+          if config[:shared_client] do
+            config.shared_client_id
+          else
+            prefix = get_in(config, [:client_config, :client_id_prefix])
+            :"#{prefix}#{Module.concat([producer_name, Client])}"
+          end
 
         max_demand =
           with [{_first, processor_opts}] <- opts[:broadway][:processors],
@@ -509,7 +518,38 @@ defmodule BroadwayKafka.Producer do
       |> Keyword.put(:processors, [updated_processor_entry | other_processors_entries])
       |> Keyword.put(:batchers, updated_batchers_entries)
 
-    {allocators, updated_opts}
+    {shared_client_specs, updated_opts} = maybe_shared_client(broadway_name, updated_opts)
+
+    {allocators ++ shared_client_specs, updated_opts}
+  end
+
+  defp maybe_shared_client(broadway_name, opts) do
+    {producer_module, producer_opts} = opts[:producer][:module]
+
+    if producer_opts[:shared_client] do
+      client = producer_opts[:client] || BroadwayKafka.BrodClient
+
+      config =
+        case client.init(producer_opts) do
+          {:ok, config} ->
+            config
+
+          {:error, message} ->
+            raise ArgumentError, "invalid options given to #{inspect(client)}.init/1, " <> message
+        end
+
+      prefix = get_in(config, [:client_config, :client_id_prefix])
+      client_id = :"#{prefix}#{Module.concat([broadway_name, SharedClient])}"
+
+      producer_opts = Keyword.put(producer_opts, :shared_client_id, client_id)
+
+      updated_opts =
+        put_in(opts, [:producer, :module], {producer_module, producer_opts})
+
+      {[client.shared_client_child_spec(client_id, config)], updated_opts}
+    else
+      {[], opts}
+    end
   end
 
   @impl :brod_group_member
@@ -547,7 +587,11 @@ defmodule BroadwayKafka.Producer do
   def terminate(_reason, state) do
     %{client: client, group_coordinator: group_coordinator, client_id: client_id} = state
     group_coordinator && Process.exit(group_coordinator, :shutdown)
-    client.disconnect(client_id)
+
+    unless state.config[:shared_client] do
+      client.disconnect(client_id)
+    end
+
     :ok
   end
 
