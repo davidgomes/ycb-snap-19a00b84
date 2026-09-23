@@ -60,6 +60,67 @@ defmodule Sentry.Transport.RateLimiterTest do
       assert RateLimiter.rate_limited?("error") == true
       assert RateLimiter.rate_limited?("transaction") == true
     end
+
+    test "a byte category parsed from the header gates its count category" do
+      # X-Sentry-Rate-Limits: 60:log_byte:organization
+      RateLimiter.update_rate_limits("60:log_byte:organization")
+
+      assert RateLimiter.rate_limited?("log_byte") == true
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+    end
+  end
+
+  describe "rate_limited_for_category?/1" do
+    test "gates log_item on the log_byte limit as well" do
+      now = System.system_time(:second)
+      :ets.insert(table_name(), {"log_byte", now + 60})
+
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited?("log_item") == false
+    end
+
+    test "gates trace_metric on the trace_metric_byte limit as well" do
+      now = System.system_time(:second)
+      :ets.insert(table_name(), {"trace_metric_byte", now + 60})
+
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == true
+      assert RateLimiter.rate_limited?("trace_metric") == false
+    end
+
+    test "still gates log_item and trace_metric on their own limits" do
+      now = System.system_time(:second)
+      :ets.insert(table_name(), {"log_item", now + 60})
+      :ets.insert(table_name(), {"trace_metric", now + 60})
+
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == true
+    end
+
+    test "does not gate on an expired byte limit" do
+      now = System.system_time(:second)
+      :ets.insert(table_name(), {"log_byte", now - 10})
+      :ets.insert(table_name(), {"trace_metric_byte", now - 10})
+
+      assert RateLimiter.rate_limited_for_category?("log_item") == false
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == false
+    end
+
+    test "gates a category on itself when it has no companion byte category" do
+      now = System.system_time(:second)
+      :ets.insert(table_name(), {"error", now + 60})
+
+      assert RateLimiter.rate_limited_for_category?("error") == true
+      assert RateLimiter.rate_limited_for_category?("transaction") == false
+    end
+
+    test "honors a global rate limit" do
+      now = System.system_time(:second)
+      :ets.insert(table_name(), {:global, now + 60})
+
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == true
+      assert RateLimiter.rate_limited_for_category?("error") == true
+    end
   end
 
   describe "update_rate_limits/1" do

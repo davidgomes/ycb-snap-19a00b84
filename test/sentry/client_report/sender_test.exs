@@ -4,7 +4,7 @@ defmodule Sentry.ClientReportTest do
   import Sentry.TestHelpers
 
   alias Sentry.ClientReport.Sender
-  alias Sentry.Event
+  alias Sentry.{Envelope, Event, LogBatch, LogEvent, Metric, MetricBatch}
 
   setup do
     setup_bypass()
@@ -139,5 +139,199 @@ defmodule Sentry.ClientReportTest do
                {:before_send, "span"} => 1
              }
     end
+
+    test "records both log_item and log_byte outcomes when a log event is discarded" do
+      start_supervised!({Sender, name: :test_log_report})
+
+      log_event = make_log_event("hello world")
+      expected_bytes = Envelope.item_byte_size(log_event)
+      assert expected_bytes > 0
+
+      assert :ok =
+               Sender.record_discarded_events(:ratelimit_backoff, [log_event], :test_log_report)
+
+      assert :sys.get_state(:test_log_report) == %{
+               {:ratelimit_backoff, "log_item"} => 1,
+               {:ratelimit_backoff, "log_byte"} => expected_bytes
+             }
+    end
+
+    test "records both trace_metric and trace_metric_byte outcomes when a metric is discarded" do
+      start_supervised!({Sender, name: :test_metric_report})
+
+      metric = make_metric("requests", 1)
+      expected_bytes = Envelope.item_byte_size(metric)
+      assert expected_bytes > 0
+
+      assert :ok =
+               Sender.record_discarded_events(:ratelimit_backoff, [metric], :test_metric_report)
+
+      assert :sys.get_state(:test_metric_report) == %{
+               {:ratelimit_backoff, "trace_metric"} => 1,
+               {:ratelimit_backoff, "trace_metric_byte"} => expected_bytes
+             }
+    end
+
+    test "records aggregate log_item and log_byte outcomes when a log batch is discarded" do
+      start_supervised!({Sender, name: :test_log_batch_report})
+
+      log_events = [make_log_event("first"), make_log_event("second")]
+      expected_bytes = Enum.reduce(log_events, 0, &(Envelope.item_byte_size(&1) + &2))
+      log_batch = %LogBatch{log_events: log_events}
+
+      assert :ok =
+               Sender.record_discarded_events(:send_error, [log_batch], :test_log_batch_report)
+
+      assert :sys.get_state(:test_log_batch_report) == %{
+               {:send_error, "log_item"} => 2,
+               {:send_error, "log_byte"} => expected_bytes
+             }
+    end
+
+    test "records aggregate trace_metric and trace_metric_byte outcomes when a metric batch is discarded" do
+      start_supervised!({Sender, name: :test_metric_batch_report})
+
+      metrics = [make_metric("a", 1), make_metric("b", 2)]
+      expected_bytes = Enum.reduce(metrics, 0, &(Envelope.item_byte_size(&1) + &2))
+      metric_batch = %MetricBatch{metrics: metrics}
+
+      assert :ok =
+               Sender.record_discarded_events(
+                 :send_error,
+                 [metric_batch],
+                 :test_metric_batch_report
+               )
+
+      assert :sys.get_state(:test_metric_batch_report) == %{
+               {:send_error, "trace_metric"} => 2,
+               {:send_error, "trace_metric_byte"} => expected_bytes
+             }
+    end
+
+    test "does not record zero-quantity outcomes for an empty batch" do
+      start_supervised!({Sender, name: :test_empty_batch_report})
+
+      assert :ok =
+               Sender.record_discarded_events(
+                 :send_error,
+                 [%LogBatch{log_events: []}, %MetricBatch{metrics: []}],
+                 :test_empty_batch_report
+               )
+
+      assert :sys.get_state(:test_empty_batch_report) == %{}
+    end
+
+    @tag :capture_log
+    test "records the count but not a zero byte outcome for a log event that cannot be encoded" do
+      start_supervised!({Sender, name: :test_unencodable_report})
+
+      log_event = make_log_event(<<0xFF>>)
+
+      assert :ok =
+               Sender.record_discarded_events(
+                 :ratelimit_backoff,
+                 [log_event],
+                 :test_unencodable_report
+               )
+
+      assert :sys.get_state(:test_unencodable_report) == %{
+               {:ratelimit_backoff, "log_item"} => 1
+             }
+    end
+
+    test "sends log_byte and trace_metric_byte outcomes in the client report", %{bypass: bypass} do
+      start_supervised!({Sender, name: :test_byte_report})
+
+      log_event = make_log_event("hello world")
+      metric = make_metric("requests", 1)
+
+      assert :ok =
+               Sender.record_discarded_events(:cache_overflow, [log_event], :test_byte_report)
+
+      assert :ok = Sender.record_discarded_events(:cache_overflow, [metric], :test_byte_report)
+
+      test_pid = self()
+
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        send(test_pid, {:client_report_body, body})
+        Plug.Conn.resp(conn, 200, ~s<{"id": "340"}>)
+      end)
+
+      assert :ok = Sender.flush(:test_byte_report)
+
+      assert_receive {:client_report_body, body}
+
+      assert [{%{"type" => "client_report"}, client_report}] = decode_envelope!(body)
+
+      assert Enum.sort_by(client_report["discarded_events"], & &1["category"]) == [
+               %{
+                 "category" => "log_byte",
+                 "quantity" => Envelope.item_byte_size(log_event),
+                 "reason" => "cache_overflow"
+               },
+               %{"category" => "log_item", "quantity" => 1, "reason" => "cache_overflow"},
+               %{"category" => "trace_metric", "quantity" => 1, "reason" => "cache_overflow"},
+               %{
+                 "category" => "trace_metric_byte",
+                 "quantity" => Envelope.item_byte_size(metric),
+                 "reason" => "cache_overflow"
+               }
+             ]
+    end
+
+    test "expands items into outcomes inside the Sender, not on the calling process" do
+      defmodule ReportingJSONLibrary do
+        def encode(data) do
+          # Config validation encodes an empty map on the calling process.
+          if data != %{} do
+            case Process.whereis(:client_report_encoding_observer) do
+              nil -> :ok
+              pid -> send(pid, {:encoded, self()})
+            end
+          end
+
+          Jason.encode(data)
+        end
+
+        def decode(binary), do: Jason.decode(binary)
+      end
+
+      start_supervised!({Sender, name: :test_encoding_process_report})
+      put_test_config(json_library: ReportingJSONLibrary)
+      Process.register(self(), :client_report_encoding_observer)
+
+      assert :ok =
+               Sender.record_discarded_events(
+                 :ratelimit_backoff,
+                 [make_log_event("hello world")],
+                 :test_encoding_process_report
+               )
+
+      # Processes the cast, so the encode has definitely happened by now.
+      _ = :sys.get_state(:test_encoding_process_report)
+
+      sender = Process.whereis(:test_encoding_process_report)
+      assert_received {:encoded, ^sender}
+      refute_received {:encoded, _other_pid}
+    end
+  end
+
+  defp make_log_event(body) do
+    %LogEvent{
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+      level: :info,
+      body: body
+    }
+  end
+
+  defp make_metric(name, value) do
+    %Metric{
+      type: :counter,
+      name: name,
+      value: value,
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+      attributes: %{}
+    }
   end
 end

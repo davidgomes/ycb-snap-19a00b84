@@ -4,7 +4,7 @@ defmodule Sentry.TransportTest do
   import Sentry.TestHelpers
   import ExUnit.CaptureLog
 
-  alias Sentry.{ClientError, Envelope, Event, FinchClient, HackneyClient, Transport}
+  alias Sentry.{ClientError, ClientReport, Envelope, Event, FinchClient, HackneyClient, Transport}
 
   describe "encode_and_post_envelope/2" do
     setup do
@@ -393,6 +393,79 @@ defmodule Sentry.TransportTest do
       # Other categories should not be rate-limited
       refute Transport.RateLimiter.rate_limited?("session")
     end
+
+    test "drops log envelopes when a log_byte rate limit is active", %{bypass: bypass} do
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "60:log_byte:key")
+        |> Plug.Conn.resp(200, ~s<{"id":"first"}>)
+      end)
+
+      first = Envelope.from_event(Event.create_event(message: "First"))
+      assert {:ok, "first"} = Transport.encode_and_post_envelope(first, HackneyClient)
+      assert Transport.RateLimiter.rate_limited?("log_byte")
+      refute Transport.RateLimiter.rate_limited?("log_item")
+
+      # Transport records outcomes in the global Sender, so drop anything earlier
+      # tests left there (without sending it) before asserting on its state.
+      :sys.replace_state(ClientReport.Sender, fn _state -> %{} end)
+
+      log_events = [make_log_event("dropped"), make_log_event("also dropped")]
+      log_envelope = Envelope.from_log_events(log_events)
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(log_envelope, HackneyClient, _retries = [])
+
+      assert :sys.get_state(ClientReport.Sender) == %{
+               {:ratelimit_backoff, "log_item"} => 2,
+               {:ratelimit_backoff, "log_byte"} =>
+                 Enum.reduce(log_events, 0, &(Envelope.item_byte_size(&1) + &2))
+             }
+    end
+
+    test "drops metric envelopes when a trace_metric_byte rate limit is active", %{bypass: bypass} do
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("X-Sentry-Rate-Limits", "60:trace_metric_byte:key")
+        |> Plug.Conn.resp(200, ~s<{"id":"first"}>)
+      end)
+
+      first = Envelope.from_event(Event.create_event(message: "First"))
+      assert {:ok, "first"} = Transport.encode_and_post_envelope(first, HackneyClient)
+      assert Transport.RateLimiter.rate_limited?("trace_metric_byte")
+      refute Transport.RateLimiter.rate_limited?("trace_metric")
+
+      :sys.replace_state(ClientReport.Sender, fn _state -> %{} end)
+
+      metric = make_metric("dropped", 1)
+      metric_envelope = Envelope.from_metric_events([metric])
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(metric_envelope, HackneyClient, _retries = [])
+
+      assert :sys.get_state(ClientReport.Sender) == %{
+               {:ratelimit_backoff, "trace_metric"} => 1,
+               {:ratelimit_backoff, "trace_metric_byte"} => Envelope.item_byte_size(metric)
+             }
+    end
+  end
+
+  defp make_log_event(body) do
+    %Sentry.LogEvent{
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+      level: :info,
+      body: body
+    }
+  end
+
+  defp make_metric(name, value) do
+    %Sentry.Metric{
+      type: :counter,
+      name: name,
+      value: value,
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+      attributes: %{}
+    }
   end
 
   defp error(fun) do
