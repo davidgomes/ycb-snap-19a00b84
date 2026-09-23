@@ -48,8 +48,69 @@ defmodule EctoJob.Supervisor do
     notifier_name = String.to_atom("#{schema}.Notifier")
     producer_name = String.to_atom("#{schema}.Producer")
 
-    children = [
-      worker(Postgrex.Notifications, [repo.config() ++ [name: notifier_name]]),
+    notifier =
+      if repo.__adapter__() == Ecto.Adapters.Postgres do
+        [worker(Postgrex.Notifications, [repo.config() ++ [name: notifier_name]])]
+      else
+        []
+      end
+
+    children =
+      notifier ++
+        [
+          worker(Producer, [
+            [
+              name: producer_name,
+              repo: repo,
+              schema: schema,
+              notifier: notifier_name,
+              poll_interval: poll_interval,
+              reservation_timeout: reservation_timeout,
+              execution_timeout: execution_timeout,
+              notifications_listen_timeout: notifications_listen_timeout
+            ]
+          ]),
+          supervisor(WorkerSupervisor, [
+            [config: config, subscribe_to: [{producer_name, max_demand: max_demand}]]
+          ])
+        ]
+
+    Supervisor.start_link(children, opts)
+      end
+  """
+
+  import Supervisor.Spec, only: [worker: 2, supervisor: 2]
+  alias EctoJob.{Config, Producer, WorkerSupervisor}
+
+  @doc """
+  Starts an EctoJob queue supervisor
+  """
+  @spec start_link(Config.t()) :: {:ok, pid}
+  def start_link(
+        config = %Config{
+          repo: repo,
+          schema: schema,
+          max_demand: max_demand,
+          poll_interval: poll_interval,
+          reservation_timeout: reservation_timeout,
+          execution_timeout: execution_timeout,
+          notifications_listen_timeout: notifications_listen_timeout
+        }
+      ) do
+    supervisor_name = String.to_atom("#{schema}.Supervisor")
+    notifier_name = String.to_atom("#{schema}.Notifier")
+    producer_name = String.to_atom("#{schema}.Producer")
+
+    notifier =
+      if repo.__adapter__() == Ecto.Adapters.Postgres do
+        [worker(Postgrex.Notifications, [repo.config() ++ [name: notifier_name]])]
+      else
+        []
+      end
+
+    children =
+      notifier ++
+        [
       worker(Producer, [
         [
           name: producer_name,
@@ -65,7 +126,7 @@ defmodule EctoJob.Supervisor do
       supervisor(WorkerSupervisor, [
         [config: config, subscribe_to: [{producer_name, max_demand: max_demand}]]
       ])
-    ]
+        ]
 
     Supervisor.start_link(children, strategy: :rest_for_one, name: supervisor_name)
   end

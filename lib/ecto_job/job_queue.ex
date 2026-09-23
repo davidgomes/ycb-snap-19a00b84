@@ -283,13 +283,30 @@ defmodule EctoJob.JobQueue do
   """
   @spec reserve_available_jobs(repo, schema, integer, DateTime.t(), integer) :: {integer, [job]}
   def reserve_available_jobs(repo, schema, demand, now = %DateTime{}, timeout_ms) do
-    schema
-    |> Query.with_cte("available_jobs", as: ^available_jobs(schema, demand))
-    |> Query.join(:inner, [job], a in "available_jobs", on: job.id == a.id)
-    |> Query.select([job], job)
-    |> repo.update_all(
-      set: [state: "RESERVED", expires: reservation_expiry(now, timeout_ms), updated_at: now]
-    )
+    updates = [state: "RESERVED", expires: reservation_expiry(now, timeout_ms), updated_at: now]
+
+    if postgres?(repo) do
+      schema
+      |> Query.with_cte("available_jobs", as: ^available_jobs(schema, demand))
+      |> Query.join(:inner, [job], a in "available_jobs", on: job.id == a.id)
+      |> Query.select([job], job)
+      |> repo.update_all(set: updates)
+    else
+      {:ok, result} =
+        repo.transaction(fn ->
+          ids =
+            schema
+            |> available_jobs(demand)
+            |> Query.exclude(:select)
+            |> Query.select([job], job.id)
+            |> repo.all()
+
+          {count, _} = repo.update_all(Query.from(j in schema, where: j.id in ^ids), set: updates)
+          {count, repo.all(Query.from(j in schema, where: j.id in ^ids))}
+        end)
+
+      result
+    end
   end
 
   @doc """
@@ -336,16 +353,17 @@ defmodule EctoJob.JobQueue do
           {:ok, job} | {:error, :expired}
   def update_job_in_progress(repo, job = %schema{}, now, timeout_ms) do
     {count, results} =
-      repo.update_all(
+      update_job_returning(
+        repo,
+        job,
         Query.from(
           j in schema,
           where: j.id == ^job.id,
           where: j.attempt == ^job.attempt,
           where: j.state == "RESERVED",
-          where: j.expires >= ^now,
-          select: j
+          where: j.expires >= ^now
         ),
-        set: [
+        [
           attempt: job.attempt + 1,
           state: "IN_PROGRESS",
           expires: increase_time(now, job.attempt + 1, timeout_ms),
@@ -376,15 +394,16 @@ defmodule EctoJob.JobQueue do
       end
 
     {count, results} =
-      repo.update_all(
+      update_job_returning(
+        repo,
+        job,
         Query.from(
           j in schema,
           where: j.id == ^job.id,
           where: j.state == "IN_PROGRESS",
-          where: j.attempt == ^job.attempt,
-          select: j
+          where: j.attempt == ^job.attempt
         ),
-        set: updates
+        updates
       )
 
     case {count, results} do
@@ -426,6 +445,28 @@ defmodule EctoJob.JobQueue do
     |> Changeset.optimistic_lock(:attempt)
   end
 
+  @doc false
+  @spec postgres?(repo) :: boolean
+  def postgres?(repo), do: repo.__adapter__() == Ecto.Adapters.Postgres
+
+  # Single-job update returning the updated row, emulated on adapters without RETURNING
+  @spec update_job_returning(repo, job, Ecto.Query.t(), Keyword.t()) :: {integer, [job]}
+  defp update_job_returning(repo, job = %schema{}, query, updates) do
+    if postgres?(repo) do
+      repo.update_all(Query.select(query, [j], j), set: updates)
+    else
+      {:ok, result} =
+        repo.transaction(fn ->
+          case repo.update_all(query, set: updates) do
+            {0, _} -> {0, []}
+            {count, _} -> {count, repo.all(Query.from(j in schema, where: j.id == ^job.id))}
+          end
+        end)
+
+      result
+    end
+  end
+
   defp advance_seconds(seconds, start_time) do
     start_time
     |> DateTime.to_unix()
@@ -453,7 +494,11 @@ defmodule EctoJob.JobQueue do
   end
 
   @spec do_notify_failed(repo(), job(), binary()) :: :ok
-  defp do_notify_failed(repo, _job = %queue{notify: payload}, event) do
+  defp do_notify_failed(repo, job, event) do
+    if postgres?(repo), do: pg_notify_failed(repo, job, event), else: :ok
+  end
+
+  defp pg_notify_failed(repo, _job = %queue{notify: payload}, event) do
     topic = queue.__schema__(:source) <> "." <> event
     repo.query("SELECT pg_notify($1, $2)", [topic, payload])
     :ok
