@@ -63,6 +63,7 @@ defmodule Phoenix.LiveView.UploadConfig do
 
   @unregistered :unregistered
   @invalid :invalid
+  @failed :failed
 
   @too_many_files :too_many_files
 
@@ -340,7 +341,7 @@ defmodule Phoenix.LiveView.UploadConfig do
   def entry_pid(%UploadConfig{} = conf, %UploadEntry{} = entry) do
     case Map.fetch(conf.entry_refs_to_pids, entry.ref) do
       {:ok, pid} when is_pid(pid) -> pid
-      {:ok, status} when status in [@unregistered, @invalid] -> nil
+      {:ok, status} when status in [@unregistered, @invalid, @failed] -> nil
     end
   end
 
@@ -367,9 +368,30 @@ defmodule Phoenix.LiveView.UploadConfig do
 
   @doc false
   def unregister_completed_entry(%UploadConfig{} = conf, entry_ref) do
-    %UploadEntry{} = entry = get_entry_by_ref(conf, entry_ref)
+    case {get_entry_by_ref(conf, entry_ref), Map.fetch(conf.entry_refs_to_pids, entry_ref)} do
+      {%UploadEntry{}, {:ok, @failed}} -> conf
+      {%UploadEntry{} = entry, _} -> drop_entry(conf, entry)
+      # the entry may already be gone, e.g. a failed entry cancelled before its channel exited
+      {nil, _} -> conf
+    end
+  end
 
-    drop_entry(conf, entry)
+  @doc false
+  def fail_entry(%UploadConfig{} = conf, entry_ref, reason) do
+    case get_entry_by_ref(conf, entry_ref) do
+      %UploadEntry{} ->
+        pair = {entry_ref, reason}
+        errors = if pair in conf.errors, do: conf.errors, else: conf.errors ++ [pair]
+
+        %{
+          conf
+          | errors: errors,
+            entry_refs_to_pids: Map.put(conf.entry_refs_to_pids, entry_ref, @failed)
+        }
+
+      nil ->
+        conf
+    end
   end
 
   @doc false
@@ -401,6 +423,9 @@ defmodule Phoenix.LiveView.UploadConfig do
 
       {:ok, existing_pid} when is_pid(existing_pid) ->
         {:error, :already_registered}
+
+      {:ok, @failed} ->
+        {:error, :disallowed}
 
       :error ->
         {:error, :disallowed}

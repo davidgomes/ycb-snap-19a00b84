@@ -417,6 +417,46 @@ defmodule Phoenix.LiveView.UploadConfigTest do
     end
   end
 
+  describe "fail_entry/3" do
+    setup do
+      socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any, max_entries: 2)
+      %{"ref" => ref} = entry = build_client_entry(:avatar)
+      {:ok, conf} = UploadConfig.put_entries(socket.assigns.uploads.avatar, [entry])
+      {:ok, conf} = UploadConfig.register_entry_upload(conf, self(), ref)
+      %{conf: conf, ref: ref}
+    end
+
+    test "retains the entry with the error and no channel pid", %{conf: conf, ref: ref} do
+      reason = {:writer_failure, :boom}
+      conf = UploadConfig.fail_entry(conf, ref, reason)
+
+      assert %UploadEntry{} = entry = UploadConfig.get_entry_by_ref(conf, ref)
+      assert conf.errors == [{ref, reason}]
+      assert UploadConfig.entry_pid(conf, entry) == nil
+
+      assert UploadConfig.fail_entry(conf, ref, reason).errors == [{ref, reason}]
+    end
+
+    test "cannot be registered again", %{conf: conf, ref: ref} do
+      conf = UploadConfig.fail_entry(conf, ref, {:writer_failure, :boom})
+      assert UploadConfig.register_entry_upload(conf, self(), ref) == {:error, :disallowed}
+    end
+
+    test "is not dropped when unregistered", %{conf: conf, ref: ref} do
+      conf = UploadConfig.fail_entry(conf, ref, {:writer_failure, :boom})
+      assert UploadConfig.unregister_completed_entry(conf, ref) == conf
+    end
+
+    test "is dropped when cancelled", %{conf: conf, ref: ref} do
+      conf = UploadConfig.fail_entry(conf, ref, {:writer_failure, :boom})
+      entry = UploadConfig.get_entry_by_ref(conf, ref)
+      conf = UploadConfig.cancel_entry(conf, entry)
+
+      assert conf.entries == []
+      assert conf.errors == []
+    end
+  end
+
   test "supports binary upload name" do
     assert LiveView.allow_upload(build_socket(), "avatar", accept: ~w(image/png .jpeg))
   end
