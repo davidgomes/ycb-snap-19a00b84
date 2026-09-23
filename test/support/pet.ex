@@ -58,6 +58,11 @@ defmodule MyApp.Pet do
         reverse_name: [
           filter: {__MODULE__, :reverse_name_filter, []},
           ecto_type: :string
+        ],
+        name_length: [
+          filter: {__MODULE__, :name_length_filter, []},
+          field_dynamic: {__MODULE__, :length_dynamic, [source: :name]},
+          ecto_type: :integer
         ]
       ]
     ]
@@ -90,6 +95,16 @@ defmodule MyApp.Pet do
   def reverse_name_filter(query, %Flop.Filter{value: value}, _) do
     reversed = value
     where(query, [p], p.name == ^reversed)
+  end
+
+  def name_length_filter(query, %Flop.Filter{value: value}, _) do
+    where(query, ^length_dynamic(source: :name) == ^value)
+  end
+
+  def length_dynamic(opts) do
+    source = Keyword.fetch!(opts, :source)
+    send(self(), {:field_dynamic, opts})
+    dynamic([p], fragment("length(?)", field(p, ^source)))
   end
 
   def get_field(%__MODULE__{owner: %Owner{age: age}}, :owner_age), do: age

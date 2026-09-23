@@ -409,4 +409,29 @@ defmodule Flop.SchemaTest do
 
     assert error.message =~ "cannot sort by custom field"
   end
+
+  test "allows sortable custom field with field_dynamic option" do
+    defmodule Basil do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [
+            filter: {__MODULE__, :some_function, []},
+            field_dynamic: {__MODULE__, :some_dynamic, [some: :option]},
+            ecto_type: :utc_datetime
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    assert %Flop.FieldInfo{
+             extra: %{
+               type: :custom,
+               field_dynamic: {Basil, :some_dynamic, [some: :option]}
+             }
+           } = Schema.field_info(struct(Basil), :inserted_at)
+  end
 end
