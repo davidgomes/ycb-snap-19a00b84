@@ -156,7 +156,7 @@ defmodule EctoJob.JobQueue do
        - `:schedule` : runs the job at the given `%DateTime{}`
        - `:max_attempts` : the maximum attempts for this job
        - `:priority` (integer): lower numbers run first; default is 0
-       - `:notify` (string): payload to use for Postgres notification upon job completion
+       - `:notify` (string): payload to use for Postgres notification upon job completion (ignored with MySQL)
       """
       @spec new(map, Keyword.t()) :: EctoJob.JobQueue.job()
       def new(params = %{}, opts \\ []) do
@@ -283,13 +283,19 @@ defmodule EctoJob.JobQueue do
   """
   @spec reserve_available_jobs(repo, schema, integer, DateTime.t(), integer) :: {integer, [job]}
   def reserve_available_jobs(repo, schema, demand, now = %DateTime{}, timeout_ms) do
-    schema
-    |> Query.with_cte("available_jobs", as: ^available_jobs(schema, demand))
-    |> Query.join(:inner, [job], a in "available_jobs", on: job.id == a.id)
-    |> Query.select([job], job)
-    |> repo.update_all(
-      set: [state: "RESERVED", expires: reservation_expiry(now, timeout_ms), updated_at: now]
-    )
+    updates = [state: "RESERVED", expires: reservation_expiry(now, timeout_ms), updated_at: now]
+
+    case repo.__adapter__() do
+      Ecto.Adapters.MyXQL ->
+        update_locked_jobs(repo, schema, available_jobs(schema, demand), updates)
+
+      _ ->
+        schema
+        |> Query.with_cte("available_jobs", as: ^available_jobs(schema, demand))
+        |> Query.join(:inner, [job], a in "available_jobs", on: job.id == a.id)
+        |> Query.select([job], job)
+        |> repo.update_all(set: updates)
+    end
   end
 
   @doc """
@@ -336,21 +342,20 @@ defmodule EctoJob.JobQueue do
           {:ok, job} | {:error, :expired}
   def update_job_in_progress(repo, job = %schema{}, now, timeout_ms) do
     {count, results} =
-      repo.update_all(
+      update_all_returning(
+        repo,
+        schema,
         Query.from(
           j in schema,
           where: j.id == ^job.id,
           where: j.attempt == ^job.attempt,
           where: j.state == "RESERVED",
-          where: j.expires >= ^now,
-          select: j
+          where: j.expires >= ^now
         ),
-        set: [
-          attempt: job.attempt + 1,
-          state: "IN_PROGRESS",
-          expires: increase_time(now, job.attempt + 1, timeout_ms),
-          updated_at: now
-        ]
+        attempt: job.attempt + 1,
+        state: "IN_PROGRESS",
+        expires: increase_time(now, job.attempt + 1, timeout_ms),
+        updated_at: now
       )
 
     case {count, results} do
@@ -376,15 +381,16 @@ defmodule EctoJob.JobQueue do
       end
 
     {count, results} =
-      repo.update_all(
+      update_all_returning(
+        repo,
+        schema,
         Query.from(
           j in schema,
           where: j.id == ^job.id,
           where: j.state == "IN_PROGRESS",
-          where: j.attempt == ^job.attempt,
-          select: j
+          where: j.attempt == ^job.attempt
         ),
-        set: updates
+        updates
       )
 
     case {count, results} do
@@ -426,6 +432,43 @@ defmodule EctoJob.JobQueue do
     |> Changeset.optimistic_lock(:attempt)
   end
 
+  @spec update_all_returning(repo, schema, Ecto.Query.t(), Keyword.t()) :: {integer, [job]}
+  defp update_all_returning(repo, schema, query, updates) do
+    case repo.__adapter__() do
+      Ecto.Adapters.MyXQL ->
+        ids_query = query |> Query.select([j], %{id: j.id}) |> Query.lock("FOR UPDATE")
+        update_locked_jobs(repo, schema, ids_query, updates)
+
+      _ ->
+        repo.update_all(Query.select(query, [j], j), set: updates)
+    end
+  end
+
+  # MySQL has no RETURNING clause, so the selected rows are locked, updated and then
+  # read back within a single transaction.
+  @spec update_locked_jobs(repo, schema, Ecto.Query.t(), Keyword.t()) :: {integer, [job]}
+  defp update_locked_jobs(repo, schema, ids_query, updates) do
+    {:ok, result} =
+      repo.transaction(fn ->
+        ids = ids_query |> repo.all() |> Enum.map(& &1.id)
+
+        {count, _} = repo.update_all(Query.from(j in schema, where: j.id in ^ids), set: updates)
+
+        jobs =
+          repo.all(
+            Query.from(
+              j in schema,
+              where: j.id in ^ids,
+              order_by: [asc: j.priority, asc: j.schedule, asc: j.id]
+            )
+          )
+
+        {count, jobs}
+      end)
+
+    result
+  end
+
   defp advance_seconds(seconds, start_time) do
     start_time
     |> DateTime.to_unix()
@@ -454,8 +497,11 @@ defmodule EctoJob.JobQueue do
 
   @spec do_notify_failed(repo(), job(), binary()) :: :ok
   defp do_notify_failed(repo, _job = %queue{notify: payload}, event) do
-    topic = queue.__schema__(:source) <> "." <> event
-    repo.query("SELECT pg_notify($1, $2)", [topic, payload])
+    if repo.__adapter__() == Ecto.Adapters.Postgres do
+      topic = queue.__schema__(:source) <> "." <> event
+      repo.query("SELECT pg_notify($1, $2)", [topic, payload])
+    end
+
     :ok
   end
 end

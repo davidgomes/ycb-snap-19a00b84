@@ -5,6 +5,8 @@ defmodule EctoJob.Supervisor do
   The `EctoJob.Supervisor` will start the required processes to listen for postgres job notifications,
   GenStage producer and ConsumerSupervisor to process the jobs.
 
+  When the repo uses MySQL, no notification listener is started and new jobs are picked up by polling.
+
   ## Example:
 
       def start(_type, _args) do
@@ -48,14 +50,23 @@ defmodule EctoJob.Supervisor do
     notifier_name = String.to_atom("#{schema}.Notifier")
     producer_name = String.to_atom("#{schema}.Producer")
 
+    {notifier_children, notifier} =
+      case repo.__adapter__() do
+        Ecto.Adapters.Postgres ->
+          {[worker(Postgrex.Notifications, [repo.config() ++ [name: notifier_name]])],
+           notifier_name}
+
+        _ ->
+          {[], nil}
+      end
+
     children = [
-      worker(Postgrex.Notifications, [repo.config() ++ [name: notifier_name]]),
       worker(Producer, [
         [
           name: producer_name,
           repo: repo,
           schema: schema,
-          notifier: notifier_name,
+          notifier: notifier,
           poll_interval: poll_interval,
           reservation_timeout: reservation_timeout,
           execution_timeout: execution_timeout,
@@ -67,6 +78,9 @@ defmodule EctoJob.Supervisor do
       ])
     ]
 
-    Supervisor.start_link(children, strategy: :rest_for_one, name: supervisor_name)
+    Supervisor.start_link(notifier_children ++ children,
+      strategy: :rest_for_one,
+      name: supervisor_name
+    )
   end
 end
