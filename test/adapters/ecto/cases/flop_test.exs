@@ -20,6 +20,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
   alias MyApp.Fruit
   alias MyApp.Owner
   alias MyApp.Pet
+  alias MyApp.PetCustomSort
 
   @pet_count_range 1..200
 
@@ -216,6 +217,50 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       assert capture_log(fn ->
                Flop.all(query, flop, opts)
              end) == ""
+    end
+
+    test "orders by custom fields" do
+      pets = insert_list(20, :pet)
+      expected = Enum.sort_by(pets, &{&1.age * 7, &1.id})
+
+      result =
+        Flop.all(
+          PetCustomSort,
+          %Flop{order_by: [:human_age, :id]},
+          for: PetCustomSort
+        )
+
+      assert Enum.map(result, & &1.id) == Enum.map(expected, & &1.id)
+      assert_received {:field_dynamic, opts}
+      assert opts[:factor] == 7
+      refute Keyword.has_key?(opts, :trace)
+
+      desc =
+        Flop.all(
+          PetCustomSort,
+          %Flop{
+            order_by: [:human_age, :id],
+            order_directions: [:desc, :desc]
+          },
+          for: PetCustomSort,
+          extra_opts: [trace: :yes]
+        )
+
+      assert Enum.map(desc, & &1.id) ==
+               expected |> Enum.reverse() |> Enum.map(& &1.id)
+
+      assert_received {:field_dynamic, opts}
+      assert opts[:factor] == 7
+      assert opts[:trace] == :yes
+    end
+
+    test "raises when ordering by a custom field without field_dynamic" do
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.all(Pet, %Flop{order_by: [:custom]}, for: Pet)
+        end
+
+      assert error.message =~ "field_dynamic"
     end
   end
 
@@ -1288,8 +1333,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                    Flop.validate_and_run(Fruit, flop, for: Fruit)
 
         _ ->
-          assert {:error, meta} =
-                   Flop.validate_and_run(Fruit, flop, for: Fruit)
+          assert {:error, meta} = Flop.validate_and_run(Fruit, flop, for: Fruit)
 
           assert meta.errors == [filters: [[value: [{"is invalid", []}]]]]
       end
@@ -1348,8 +1392,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                    Flop.validate_and_run(Fruit, flop, for: Fruit)
 
         _ ->
-          assert {:error, meta} =
-                   Flop.validate_and_run(Fruit, flop, for: Fruit)
+          assert {:error, meta} = Flop.validate_and_run(Fruit, flop, for: Fruit)
 
           assert meta.errors == [filters: [[value: [{"is invalid", []}]]]]
       end
@@ -1977,6 +2020,37 @@ defmodule Flop.Adapters.Ecto.FlopTest do
 
       assert error.message =~
                "cursor pagination is not supported for alias fields"
+    end
+
+    test "paginates with a cursor on a custom field" do
+      pets = insert_list(6, :pet)
+      expected = Enum.sort_by(pets, &{&1.age * 7, &1.id})
+
+      query =
+        from p in PetCustomSort,
+          select: %{p | human_age: fragment("? * 7", p.age)}
+
+      opts = [for: PetCustomSort]
+      params = %{first: 2, order_by: [:human_age, :id]}
+
+      assert {:ok, {page, %Meta{end_cursor: cursor, has_next_page?: true}}} =
+               Flop.validate_and_run(query, params, opts)
+
+      assert Enum.map(page, & &1.id) ==
+               expected |> Enum.take(2) |> Enum.map(& &1.id)
+
+      assert Enum.map(page, & &1.human_age) ==
+               expected |> Enum.take(2) |> Enum.map(&(&1.age * 7))
+
+      assert {:ok, {next_page, _meta}} =
+               Flop.validate_and_run(
+                 query,
+                 %{first: 2, after: cursor, order_by: [:human_age, :id]},
+                 opts
+               )
+
+      assert Enum.map(next_page, & &1.id) ==
+               expected |> Enum.slice(2, 2) |> Enum.map(& &1.id)
     end
 
     test "nil values for cursors are ignored when not using for option" do

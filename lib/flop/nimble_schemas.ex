@@ -105,13 +105,14 @@ defmodule Flop.NimbleSchemas do
         *: [
           type: :keyword_list,
           keys: [
-            filter: [
-              type: {:tuple, [:atom, :atom, :keyword_list]},
-              required: true
+            filter: [type: {:tuple, [:atom, :atom, :keyword_list]}],
+            field_dynamic: [
+              type: {:tuple, [:atom, :atom, :keyword_list]}
             ],
             ecto_type: [type: :any],
             bindings: [type: {:list, :atom}],
-            operators: [type: {:list, :atom}]
+            operators: [type: {:list, :atom}],
+            path: [type: {:list, :atom}]
           ]
         ]
       ]

@@ -408,5 +408,118 @@ defmodule Flop.SchemaTest do
       end
 
     assert error.message =~ "cannot sort by custom field"
+    assert error.message =~ "field_dynamic"
+  end
+
+  test "allows ordering by a custom field with field_dynamic" do
+    defmodule Sage do
+      use Ecto.Schema
+
+      import Ecto.Query
+
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:human_age, :id],
+        custom_fields: [
+          human_age: [
+            field_dynamic: {__MODULE__, :human_age, [source: :age]},
+            ecto_type: :integer,
+            path: [:age]
+          ]
+        ]
+      }
+
+      schema "sages" do
+        field :age, :integer
+      end
+
+      def human_age(opts) do
+        source = Keyword.fetch!(opts, :source)
+        dynamic([s], fragment("? * 7", field(s, ^source)))
+      end
+    end
+
+    sage = struct!(Sage, age: 4)
+
+    assert Schema.sortable(sage) == [:human_age, :id]
+
+    assert Schema.field_info(sage, :human_age).extra.field_dynamic ==
+             {Sage, :human_age, [source: :age]}
+
+    assert Schema.get_field(sage, :human_age) == 4
+
+    query =
+      Flop.query(
+        Sage,
+        %Flop{order_by: [:human_age], order_directions: [:desc]},
+        for: Sage
+      )
+
+    assert [%{expr: [desc: fragment]}] = query.order_bys
+
+    assert fragment ==
+             {:fragment, [],
+              [
+                raw: "",
+                expr: {{:., [], [{:&, [], [0]}, :age]}, [], []},
+                raw: " * 7"
+              ]}
+
+    cursor = Flop.Cursor.encode(%{human_age: 21, id: 5})
+
+    cursor_query =
+      Flop.query(
+        Sage,
+        %Flop{
+          first: 1,
+          after: cursor,
+          order_by: [:human_age, :id]
+        },
+        for: Sage
+      )
+
+    assert [where] = cursor_query.wheres
+
+    assert where.params == [
+             {21, :any},
+             {21, :any},
+             {5, {0, :id}}
+           ]
+
+    assert {:and, [], [gte, or_expr]} = where.expr
+    assert {:>=, [], [^fragment, {:^, [], [0]}]} = gte
+    assert {:or, [], [gt, id_cmp]} = or_expr
+    assert {:>, [], [^fragment, {:^, [], [1]}]} = gt
+
+    assert {:>, [], [{{:., [], [{:&, [], [0]}, :id]}, [], []}, _]} = id_cmp
+  end
+
+  test "raises when ordering by a custom field without field_dynamic" do
+    assert_raise ArgumentError, ~r/field_dynamic/, fn ->
+      Flop.query(MyApp.Pet, %Flop{order_by: [:custom]}, for: MyApp.Pet)
+    end
+  end
+
+  test "raises if a filterable custom field has no filter function" do
+    error =
+      assert_raise ArgumentError, fn ->
+        defmodule Dill do
+          @derive {
+            Flop.Schema,
+            filterable: [:human_age],
+            sortable: [:human_age],
+            custom_fields: [
+              human_age: [
+                field_dynamic: {__MODULE__, :human_age, []},
+                ecto_type: :integer
+              ]
+            ]
+          }
+          defstruct [:id]
+        end
+      end
+
+    assert error.message =~ "filter function"
   end
 end
