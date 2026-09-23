@@ -275,7 +275,7 @@ defmodule ObanChoreWeb.CoreComponents do
 
   def history_table(assigns) do
     ~H"""
-    <div class="oc-card" data-role="history">
+    <div class="oc-card oc-history" data-role="history">
       <%= if @jobs == [] do %>
         <p class="oc-card-body oc-text-sm oc-text-gray-500" style="font-style: italic;" data-role="history-empty">
           No previous runs yet.
@@ -300,8 +300,10 @@ defmodule ObanChoreWeb.CoreComponents do
                     <%= String.capitalize(to_string(job.state)) %>
                   </span>
                 </td>
-                <td class="oc-history-args oc-font-mono" title={format_args(job.args)}>
-                  <%= format_args(job.args) %>
+                <td>
+                  <div class="oc-history-args oc-font-mono" title={format_args(job.args)}>
+                    <%= format_args(job.args) %>
+                  </div>
                 </td>
                 <td style="white-space: nowrap;"><%= format_datetime(last_run_at(job)) %></td>
                 <td><%= job.attempt %>/<%= job.max_attempts %></td>
