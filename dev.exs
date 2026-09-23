@@ -748,6 +748,7 @@ defmodule Dev.PlaygroundLive do
        combo: %{disabled: false, chosen: nil},
        rich: %{labels: ~w(feat bug imp des), team: ~w(amelia jonah)},
        dt: PetalComponents.DataTable.State |> struct(page_size: 5) |> run_dt(),
+       dt_selected: MapSet.new(),
        radio: %{
          style: "cards",
          variant: "outline",
@@ -1440,13 +1441,15 @@ defmodule Dev.PlaygroundLive do
 
   # the data table's event-mode op grammar: State.handle_op speaks all of
   # it (sort/page/search/page_size/filter/clear_filters), so the whole
-  # backend is one call plus a re-run through the free engine
+  # backend is one call plus a re-run through the free engine. Selection
+  # ops ride the same event; each reducer ignores the other's ops.
   def handle_event("pg_table", params, socket) do
-    alias PetalComponents.DataTable.State
+    alias PetalComponents.DataTable.{Selection, State}
     {state, _rows} = socket.assigns.dt
 
     state = State.handle_op(state, params, fields: [:name, :email, :status, :amount])
-    {:noreply, assign(socket, :dt, run_dt(state))}
+    selected = Selection.handle_op(socket.assigns.dt_selected, params)
+    {:noreply, assign(socket, dt: run_dt(state), dt_selected: selected)}
   end
 
   defp run_dt(state) do
@@ -7321,7 +7324,12 @@ defmodule Dev.PlaygroundLive do
           striped
           searchable
           page_size_options={[5, 10, 20]}
+          selectable
+          selected={@dt_selected}
         >
+          <:bulk_action>
+            <.button size="sm" variant="outline" color="gray" type="button">Export</.button>
+          </:bulk_action>
           <:col :let={row} field={:name} sortable>{row.name}</:col>
           <:col :let={row} field={:email} filterable="text">{row.email}</:col>
           <:col
@@ -7354,7 +7362,7 @@ defmodule Dev.PlaygroundLive do
           ex <-
             examples_for(
               PetalComponents.Showcase.DataTable,
-              ~w(basic loading empty)a
+              ~w(basic selection loading empty)a
             )
         }
         class="mt-10"

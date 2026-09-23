@@ -52,6 +52,27 @@
   `min-w-0 max-w-full` so flex/grid parents can't size it to the
   table's min-content; footer children shrink and wrap. Wide tables
   scroll inside `pc-data-table__scroll`, never the page.
+- **`<.data_table>` row selection.** `selectable` prepends a checkbox
+  column whose header is tri-state over the current page - none, some
+  (the indeterminate dash, stamped as `data-indeterminate` so it is
+  right before the `PetalDataTable` hook mirrors the property) and all;
+  a click selects the rest of the page or, when all are picked, clears
+  it, leaving other pages' picks alone. While anything is selected the
+  toolbar morphs into a selection bar - the count, a `:bulk_action`
+  slot that receives the selected ids, and "Clear selection" - with the
+  regular toolbar kept in the DOM (hidden) so an uncommitted search
+  term and the link-mode URL templates survive the round trip. The
+  toolbar reserves its height, so the swap never shifts the table, and
+  selected rows take a soft primary wash. Selection is not query state:
+  it lives in the consumer's `selected` assign (never `State` or the
+  URL) and every change is an event in both wiring modes (`on_select`,
+  falling back to `on_change`), folded by the new pure reducer
+  `DataTable.Selection.handle_op/2` (`select`/`select_page`/
+  `clear_selection`; ids normalize to strings; foreign ops pass
+  through, so it shares one event with `State.handle_op/3`). `row_id`
+  picks the id (default `row.id`); every label is localizable.
+- **`table` `:col` accepts a rendered `header`** in place of the string
+  label - how the data table puts its select-all checkbox in the head.
 - **`table` `on_sort` accepts a 1-arity function** of the sort key -
   per-column events/JS, how the data table patches sort URLs.
 - **`pagination` event mode grows up**: `event` accepts a custom event

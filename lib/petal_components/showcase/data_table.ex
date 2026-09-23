@@ -35,6 +35,32 @@ defmodule PetalComponents.Showcase.DataTable do
     """
   end
 
+  example :selection, "Row selection",
+    description:
+      "selectable prepends a checkbox column whose header is tri-state over the page - here two of five rows are picked, so it shows the indeterminate dash and a click selects the rest. While anything is selected the toolbar morphs into a selection bar: the count, your :bulk_action slot (it receives the selected ids) and a clear button. Selection lives in your own assign, never the URL - fold every op with Selection.handle_op." do
+    ~H"""
+    <% state = %State{page: 1, page_size: 5} %>
+    <% {rows, state} = Engine.List.run(PetalComponents.Showcase.DataTable.sample_rows(), state) %>
+    <.data_table
+      id="sx-dt-selection"
+      rows={rows}
+      state={state}
+      path="#"
+      selectable
+      on_select="select"
+      selected={[2, 4]}
+    >
+      <:col :let={row} field={:name}>{row.name}</:col>
+      <:col :let={row} field={:email}>{row.email}</:col>
+      <:col :let={row} field={:amount} align="right">${row.amount}</:col>
+      <:bulk_action>
+        <.button size="sm" variant="outline" color="gray" type="button">Export</.button>
+        <.button size="sm" variant="outline" color="danger" type="button">Delete</.button>
+      </:bulk_action>
+    </.data_table>
+    """
+  end
+
   example :loading, "Loading skeletons",
     description:
       "loading swaps the page for skeleton rows - one per page_size row, respecting column count and alignment. Flip it off when the query resolves." do
