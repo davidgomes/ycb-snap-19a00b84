@@ -63,6 +63,24 @@ defmodule ObanEventsTest do
       assert job.args["event"] == "investment_status_changed"
       assert job.args["handler"] == "Elixir.ObanEventsTest.TestHandler"
       assert job.args["data"] == event_data
+      assert is_binary(job.args["event_id"])
+      assert is_binary(job.args["idempotency_key"])
+      assert job.args["causation_id"] == nil
+      assert job.args["correlation_id"] == nil
+    end
+
+    test "stores optional causation and correlation metadata" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{"id" => 1},
+                 causation_id: "parent-event",
+                 correlation_id: "corr-123"
+               )
+
+      assert job.args["causation_id"] == "parent-event"
+      assert job.args["correlation_id"] == "corr-123"
+      assert is_binary(job.args["event_id"])
+      assert is_binary(job.args["idempotency_key"])
+      assert job.args["event_id"] != job.args["idempotency_key"]
     end
 
     test "creates multiple jobs when multiple handlers are registered" do
