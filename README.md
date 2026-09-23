@@ -57,11 +57,11 @@ defmodule ClassicBroadway do
       name: __MODULE__,
       producer: [
         module: {OffBroadway.Kafka.Producer, kafka_config},
-        stages: 1
+        concurrency: 1
       ],
       processors: [
         default: [
-          stages: 1
+          concurrency: 1
         ]
       ],
       context: %{pid: Keyword.get(opts, :pid)}
@@ -107,7 +107,7 @@ defmodule ShowtimeBroadway do
       name: :"broadway_per_partition_#{topic}_#{partition}",
       processors: [
         default: [
-          stages: 5
+          concurrency: 5
         ]
       ],
       context: %{
