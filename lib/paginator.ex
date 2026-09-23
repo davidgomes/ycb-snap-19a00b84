@@ -72,6 +72,10 @@ defmodule Paginator do
     * `:cursor_fields` - The fields with sorting direction used to determine the
     cursor. In most cases, this should be the same fields as the ones used for sorting in the query.
     When you use named bindings in your query they can also be provided.
+    Each field may set its own direction: `:asc`, `:asc_nulls_last`, `:asc_nulls_first`,
+    `:desc`, `:desc_nulls_first`, or `:desc_nulls_last`. `:asc` and `:desc` follow
+    PostgreSQL's default null ordering (`:asc` is nulls last, `:desc` is nulls first).
+    A nullable column cannot be the final cursor field, because that sort is not stable.
     * `:fetch_cursor_value_fun` function of arity 2 to lookup cursor values on returned records.
     Defaults to `Paginator.default_fetch_cursor_value/2`
     * `:include_total_count` - Set this to true to return the total number of
@@ -207,7 +211,11 @@ defmodule Paginator do
       iex> Paginator.cursor_for_record(%Paginator.Customer{id: 1, name: "Alice"}, [id: :asc, name: :desc])
       "g3QAAAACZAACaWRhAWQABG5hbWVtAAAABUFsaWNl"
   """
-  @spec cursor_for_record(any(), [atom() | {atom(), atom()}], (map(), atom() | {atom(), atom()} -> any())) :: binary()
+  @spec cursor_for_record(
+          any(),
+          [atom() | {atom(), atom()}],
+          (map(), atom() | {atom(), atom()} -> any())
+        ) :: binary()
   def cursor_for_record(
         record,
         cursor_fields,

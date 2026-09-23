@@ -33,6 +33,16 @@ defmodule Paginator.ConfigTest do
       assert config.cursor_fields == [id: :desc]
     end
 
+    test "keeps nulls first and nulls last directions" do
+      config =
+        Config.new(
+          cursor_fields: [charged_at: :asc_nulls_last, id: :desc_nulls_first],
+          sort_direction: :asc
+        )
+
+      assert config.cursor_fields == [charged_at: :asc_nulls_last, id: :desc_nulls_first]
+    end
+
     test "applies column with direction tuples mixed with column fields" do
       config = Config.new(cursor_fields: [{:id, :desc}, :name], sort_direction: :asc)
 
