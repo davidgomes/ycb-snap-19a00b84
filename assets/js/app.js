@@ -8,7 +8,7 @@ let liveTransport = document .querySelector("meta[name='live-transport']") .getA
 const themeStorageKey = "error_tracker:theme";
 const prefersLightQuery = window.matchMedia("(prefers-color-scheme: light)");
 
-// Storage may be unavailable (e.g. blocked cookies), which must not break the dashboard.
+// localStorage can throw (e.g. quota or private browsing restrictions), which must not break theming.
 function getStoredTheme() {
   try {
     return localStorage.getItem(themeStorageKey);
