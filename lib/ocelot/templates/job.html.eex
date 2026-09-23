@@ -1,0 +1,45 @@
+<% job = assigns[:job] %>
+<main class="single">
+  <section class="card">
+    <div class="toolbar">
+      <h2>Job <%= job.id %> <span class="badge <%= h(job.state) %>"><%= h(job.state) %></span></h2>
+      <a class="muted" href="<%= h(assigns[:base]) %>/">Back to jobs</a>
+    </div>
+    <dl>
+      <dt>Worker</dt><dd class="mono"><%= h(job.worker) %></dd>
+      <dt>Queue</dt><dd><%= h(job.queue) %></dd>
+      <dt>Attempt</dt><dd><%= job.attempt %>/<%= job.max_attempts %></dd>
+      <dt>Priority</dt><dd><%= job.priority %></dd>
+      <dt>Tags</dt><dd><%= if job.tags in [nil, []], do: "—", else: h(Enum.join(job.tags, ", ")) %></dd>
+      <dt>Attempted by</dt><dd class="mono"><%= if job.attempted_by in [nil, []], do: "—", else: h(Enum.join(job.attempted_by, ", ")) %></dd>
+      <dt>Inserted</dt><dd><%= format_time(job.inserted_at) %></dd>
+      <dt>Scheduled</dt><dd><%= format_time(job.scheduled_at) %></dd>
+      <dt>Attempted</dt><dd><%= format_time(job.attempted_at) %></dd>
+      <dt>Completed</dt><dd><%= format_time(job.completed_at) %></dd>
+      <dt>Discarded</dt><dd><%= format_time(job.discarded_at) %></dd>
+      <dt>Cancelled</dt><dd><%= format_time(job.cancelled_at) %></dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h3>Args</h3>
+    <pre><%= h(pretty_json(job.args)) %></pre>
+  </section>
+
+  <section class="card">
+    <h3>Meta</h3>
+    <pre><%= h(pretty_json(job.meta)) %></pre>
+  </section>
+
+  <section class="card">
+    <h3>Errors</h3>
+    <%= if job.errors in [nil, []] do %>
+      <p class="muted">No errors.</p>
+    <% else %>
+      <%= for error <- Enum.reverse(job.errors) do %>
+        <p class="muted">Attempt <%= h(error["attempt"]) %> · <%= h(error["at"]) %></p>
+        <pre><%= h(error["error"]) %></pre>
+      <% end %>
+    <% end %>
+  </section>
+</main>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= h(assigns[:title]) %> · Ocelot</title>
+  <style>
+    :root {
+      --bg: #f6f7f9; --fg: #1f2933; --muted: #6b7280; --card: #fff; --border: #e5e7eb;
+      --accent: #d97706; --available: #2563eb; --scheduled: #7c3aed; --executing: #0891b2;
+      --retryable: #ea580c; --completed: #16a34a; --discarded: #dc2626; --cancelled: #6b7280;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.5 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); }
+    a { color: inherit; }
+    header { display: flex; align-items: center; gap: 1rem; padding: .75rem 1.5rem; background: var(--fg); color: #fff; }
+    header a { text-decoration: none; font-weight: 600; font-size: 1.1rem; }
+    header span { color: var(--accent); }
+    main { display: grid; grid-template-columns: 220px 1fr; gap: 1.5rem; padding: 1.5rem; max-width: 1400px; margin: 0 auto; }
+    main.single { grid-template-columns: 1fr; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+    .card h2, .card h3 { margin: 0 0 .75rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    nav ul { list-style: none; margin: 0; padding: 0; }
+    nav li a { display: flex; justify-content: space-between; padding: .3rem .5rem; border-radius: 4px; text-decoration: none; }
+    nav li a:hover { background: var(--bg); }
+    nav li a.active { background: var(--fg); color: #fff; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: .5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { font-size: .75rem; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+    tbody tr:hover { background: var(--bg); }
+    .muted { color: var(--muted); }
+    .mono, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    pre { margin: 0; padding: .75rem; background: var(--bg); border-radius: 4px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+    .args { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .badge { display: inline-block; padding: 0 .5rem; border-radius: 999px; font-size: .75rem; font-weight: 600; color: #fff; background: var(--muted); }
+    .badge.available { background: var(--available); } .badge.scheduled { background: var(--scheduled); }
+    .badge.executing { background: var(--executing); } .badge.retryable { background: var(--retryable); }
+    .badge.completed { background: var(--completed); } .badge.discarded { background: var(--discarded); }
+    .badge.cancelled { background: var(--cancelled); }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.5rem; margin: 0; }
+    dt { color: var(--muted); }
+    dd { margin: 0; }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem; }
+    .toolbar h2 { margin: 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="<%= h(assigns[:base]) %>/">Ocelot <span>Oban</span></a>
+  </header>
+  <%= assigns[:content] %>
+</body>
+</html>

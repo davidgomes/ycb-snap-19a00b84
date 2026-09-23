@@ -1,0 +1,64 @@
+<% base = assigns[:base] %>
+<% filters = assigns[:filters] %>
+<main>
+  <nav>
+    <section class="card">
+      <h2>States</h2>
+      <ul>
+        <li><a class="<%= if is_nil(filters.state), do: "active" %>" href="<%= h(jobs_url(base, %{filters | state: nil})) %>"><span>all</span></a></li>
+        <%= for {state, count} <- assigns[:state_counts] do %>
+          <li><a class="<%= if filters.state == state, do: "active" %>" href="<%= h(jobs_url(base, %{filters | state: state})) %>"><span><%= h(state) %></span><span class="muted"><%= count %></span></a></li>
+        <% end %>
+      </ul>
+    </section>
+    <section class="card">
+      <h2>Queues</h2>
+      <ul>
+        <li><a class="<%= if is_nil(filters.queue), do: "active" %>" href="<%= h(jobs_url(base, %{filters | queue: nil})) %>"><span>all</span></a></li>
+        <%= for {queue, count} <- assigns[:queue_counts] do %>
+          <li><a class="<%= if filters.queue == queue, do: "active" %>" href="<%= h(jobs_url(base, %{filters | queue: queue})) %>"><span><%= h(queue) %></span><span class="muted"><%= count %></span></a></li>
+        <% end %>
+      </ul>
+    </section>
+  </nav>
+
+  <section class="card">
+    <div class="toolbar">
+      <h2>Jobs<%= if filters.state, do: " · #{h(filters.state)}" %><%= if filters.queue, do: " · #{h(filters.queue)}" %></h2>
+      <a class="muted" href="<%= h(jobs_url(base, filters)) %>">Refresh</a>
+    </div>
+    <%= if assigns[:jobs] == [] do %>
+      <p class="muted">No jobs found.</p>
+    <% else %>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Worker</th>
+            <th>Queue</th>
+            <th>State</th>
+            <th>Attempt</th>
+            <th>Args</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          <%= for job <- assigns[:jobs] do %>
+            <tr>
+              <td><a href="<%= h(base) %>/jobs/<%= job.id %>"><%= job.id %></a></td>
+              <td class="mono"><%= h(job.worker) %></td>
+              <td><%= h(job.queue) %></td>
+              <td><span class="badge <%= h(job.state) %>"><%= h(job.state) %></span></td>
+              <td><%= job.attempt %>/<%= job.max_attempts %></td>
+              <td class="mono args" title="<%= h(Jason.encode!(job.args)) %>"><%= h(Jason.encode!(job.args)) %></td>
+              <td class="muted"><%= format_time(relevant_time(job)) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+      <%= if length(assigns[:jobs]) == assigns[:page_size] do %>
+        <p class="muted">Showing the <%= assigns[:page_size] %> most recent jobs.</p>
+      <% end %>
+    <% end %>
+  </section>
+</main>
