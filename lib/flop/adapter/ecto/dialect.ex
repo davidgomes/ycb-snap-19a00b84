@@ -13,6 +13,11 @@ defmodule Flop.Adapter.Ecto.Dialect do
   # and DESC, and the other two need `field IS NULL` as an extra sort key.
   @without_nulls_ordering [Ecto.Adapters.MyXQL]
 
+  # PostgreSQL sorts NULLs last in ASC and first in DESC. SQLite and MySQL
+  # sort them first in ASC and last in DESC. Bare `:asc` and `:desc` follow
+  # the adapter default; the explicit nulls directions do not.
+  @asc_nulls_first [Ecto.Adapters.MyXQL, Ecto.Adapters.SQLite3]
+
   # Ecto's MyXQL adapter can store arrays in JSON columns, but it cannot build
   # array operations. Flop uses JSON_CONTAINS and JSON_LENGTH instead.
   @without_arrays [Ecto.Adapters.MyXQL]
@@ -23,11 +28,12 @@ defmodule Flop.Adapter.Ecto.Dialect do
   """
   @type t :: %__MODULE__{
           arrays?: boolean,
+          asc_nulls: :first | :last,
           ilike?: boolean,
           nulls_ordering?: boolean
         }
 
-  defstruct arrays?: true, ilike?: true, nulls_ordering?: true
+  defstruct arrays?: true, asc_nulls: :last, ilike?: true, nulls_ordering?: true
 
   @nulls_ordering_fallback %{
     asc_nulls_first: {:native, :asc},
@@ -46,10 +52,34 @@ defmodule Flop.Adapter.Ecto.Dialect do
 
     %__MODULE__{
       arrays?: adapter not in @without_arrays,
+      asc_nulls: if(adapter in @asc_nulls_first, do: :first, else: :last),
       ilike?: adapter not in @without_ilike,
       nulls_ordering?: adapter not in @without_nulls_ordering
     }
   end
+
+  @doc """
+  Returns whether NULLs sort before or after other values for a direction.
+
+  Bare `:asc` and `:desc` use the adapter default. `:asc_nulls_first`,
+  `:asc_nulls_last`, `:desc_nulls_first` and `:desc_nulls_last` use the
+  position in the direction name, including when that position is emulated
+  with an `IS NULL` sort key.
+  """
+  @spec nulls_position(t, atom) :: :first | :last
+  def nulls_position(%__MODULE__{asc_nulls: asc_nulls}, direction) do
+    case direction do
+      :asc -> asc_nulls
+      :desc -> flip_nulls(asc_nulls)
+      :asc_nulls_first -> :first
+      :desc_nulls_first -> :first
+      :asc_nulls_last -> :last
+      :desc_nulls_last -> :last
+    end
+  end
+
+  defp flip_nulls(:first), do: :last
+  defp flip_nulls(:last), do: :first
 
   @doc """
   Dumps a filter value with the element type of an array field.

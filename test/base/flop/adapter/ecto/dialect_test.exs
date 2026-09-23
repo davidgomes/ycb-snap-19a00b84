@@ -31,13 +31,28 @@ defmodule Flop.Adapter.Ecto.DialectTest do
   describe "new/1" do
     test "reads the features of a known adapter" do
       assert Dialect.new(PostgresRepo) ==
-               %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 asc_nulls: :last,
+                 ilike?: true,
+                 nulls_ordering?: true
+               }
 
       assert Dialect.new(MyXQLRepo) ==
-               %Dialect{arrays?: false, ilike?: false, nulls_ordering?: false}
+               %Dialect{
+                 arrays?: false,
+                 asc_nulls: :first,
+                 ilike?: false,
+                 nulls_ordering?: false
+               }
 
       assert Dialect.new(SQLite3Repo) ==
-               %Dialect{arrays?: true, ilike?: false, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 asc_nulls: :first,
+                 ilike?: false,
+                 nulls_ordering?: true
+               }
     end
 
     test "returns the defaults for an unknown adapter" do
@@ -51,7 +66,12 @@ defmodule Flop.Adapter.Ecto.DialectTest do
 
     test "defaults to leaving the query unmodified" do
       assert %Dialect{} ==
-               %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 asc_nulls: :last,
+                 ilike?: true,
+                 nulls_ordering?: true
+               }
     end
   end
 
@@ -104,6 +124,15 @@ defmodule Flop.Adapter.Ecto.DialectTest do
     test "keeps the direction for an unknown adapter" do
       assert Dialect.order_direction(Dialect.new(UnknownRepo), :asc_nulls_last) ==
                {:native, :asc_nulls_last}
+    end
+
+    test "places NULLs for bare asc and desc by adapter" do
+      assert Dialect.nulls_position(Dialect.new(PostgresRepo), :asc) == :last
+      assert Dialect.nulls_position(Dialect.new(PostgresRepo), :desc) == :first
+      assert Dialect.nulls_position(Dialect.new(SQLite3Repo), :asc) == :first
+      assert Dialect.nulls_position(Dialect.new(MyXQLRepo), :desc) == :last
+      assert Dialect.nulls_position(Dialect.new(nil), :asc_nulls_first) == :first
+      assert Dialect.nulls_position(Dialect.new(nil), :desc_nulls_last) == :last
     end
 
     test "keeps the direction without a repo" do

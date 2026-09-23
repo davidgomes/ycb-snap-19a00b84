@@ -26,6 +26,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on array fields, with `JSON_CONTAINS` and `JSON_LENGTH` on MySQL, instead of
   raising.
 - Remove the `:=~` operator from the operators allowed for boolean fields.
+- Include rows whose order field is `NULL` in cursor pagination. The cursor
+  comparison uses the same `NULL` placement as the `ORDER BY` clause.
 
 ## [0.27.2] - 2026-08-12
 
