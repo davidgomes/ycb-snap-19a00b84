@@ -173,11 +173,7 @@ defmodule Canary.Plugs do
   defp do_authorize_controller(conn, opts) do
     controller = conn.assigns[:canary_controller] || conn.private[:phoenix_controller]
 
-    current_user_name =
-      opts[:current_user] ||
-        Application.get_env(:canary, :current_user, :current_user)
-
-    current_user = Map.fetch!(conn.assigns, current_user_name)
+    current_user = get_current_user(conn, opts)
     action = get_action(conn)
 
     Plug.Conn.assign(conn, :authorized, can?(current_user, action, controller))
@@ -268,10 +264,7 @@ defmodule Canary.Plugs do
   end
 
   defp do_authorize_resource(conn, opts) do
-    current_user_name =
-      opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
-
-    current_user = Map.fetch!(conn.assigns, current_user_name)
+    current_user = get_current_user(conn, opts)
     action = get_action(conn)
     is_persisted = persisted?(opts)
 
@@ -294,7 +287,14 @@ defmodule Canary.Plugs do
           fetch_resource(conn, opts)
       end
 
-    Plug.Conn.assign(conn, :authorized, can?(current_user, action, resource))
+    authorized =
+      if is_nil(resource) and required?(opts) do
+        false
+      else
+        can?(current_user, action, resource)
+      end
+
+    Plug.Conn.assign(conn, :authorized, authorized)
   end
 
   @doc """

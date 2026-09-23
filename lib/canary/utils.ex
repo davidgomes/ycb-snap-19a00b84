@@ -135,4 +135,18 @@ defmodule Canary.Utils do
     end
   end
 
+  @doc """
+  Get the subject (current user) from the conn or socket assigns.
+
+  The assigns key is taken from `opts[:current_user]`, then from
+  `Application.get_env(:canary, :current_user, :current_user)`.
+  Returns `nil` when the key is not assigned.
+  """
+  @spec get_current_user(Plug.Conn.t() | Phoenix.LiveView.Socket.t(), Keyword.t()) :: any
+  def get_current_user(%{assigns: assigns}, opts) do
+    current_user_name =
+      opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
+
+    Map.get(assigns, current_user_name)
+  end
 end

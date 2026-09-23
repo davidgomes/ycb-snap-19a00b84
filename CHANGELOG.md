@@ -5,6 +5,7 @@
     * added support for authorization LiveView
     * added `:error_handler` and ErrorHandler behaviour
     * aded  `:required` option
+    * consistent API for plugs and hooks: a missing `:current_user` assign is treated as `nil` subject, and a missing `:required` resource is always unauthorized
 
   * Dependency changes
     * Elixir ~> 1.14 is now required

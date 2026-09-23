@@ -444,20 +444,15 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     # Perform the authorization check
     defp check_authorization(%Socket{} = socket, action, opts) do
-      current_user_name =
-        opts[:current_user] || Application.get_env(:canary, :current_user, :current_user)
+      current_user = get_current_user(socket, opts)
 
-      current_user = Map.fetch(socket.assigns, current_user_name)
-      resource = fetch_resoruce_or_model(socket, opts)
+      authorized =
+        case fetch_resoruce_or_model(socket, opts) do
+          nil -> false
+          resource -> can?(current_user, action, resource)
+        end
 
-      case {current_user, resource} do
-        {{:ok, _current_user}, nil} ->
-          assign(socket, :authorized, false)
-        {{:ok, current_user}, _} ->
-          assign(socket, :authorized, can?(current_user, action, resource))
-        _ ->
-          assign(socket, :authorized, false)
-      end
+      assign(socket, :authorized, authorized)
     end
 
     # Fetch resource form assigns or model name if empty and not required
