@@ -149,12 +149,18 @@ defmodule ObanChoreWeb.ChoreComponent do
             do: "Job already running with these arguments",
             else: "Successfully enqueued #{chore.name}"
 
-        {:noreply, put_flash(socket, :info, message)}
+        {:noreply, put_parent_flash(socket, :info, message)}
 
       {:error, _reason} ->
         Logger.error("Failed to enqueue #{chore.name} with args #{inspect(casted_args)}")
-        {:noreply, put_flash(socket, :error, "Failed to enqueue #{chore.name}")}
+        {:noreply, put_parent_flash(socket, :error, "Failed to enqueue #{chore.name}")}
     end
+  end
+
+  # A component's own flash only reaches the parent LiveView on navigation, which never happens here.
+  defp put_parent_flash(socket, kind, message) do
+    send(self(), {:put_flash, kind, message})
+    socket
   end
 
   defp type_to_input_type(type) do

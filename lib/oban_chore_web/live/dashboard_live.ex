@@ -234,6 +234,11 @@ defmodule ObanChoreWeb.DashboardLive do
   end
 
   @impl true
+  def handle_info({:put_flash, kind, message}, socket) do
+    {:noreply, put_flash(socket, kind, message)}
+  end
+
+  @impl true
   def handle_info({:oban_chore_log, job_id, message}, socket) do
     send_update(ObanChoreWeb.JobComponent, id: job_id, new_log: message)
     {:noreply, socket}
