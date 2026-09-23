@@ -407,6 +407,6 @@ defmodule Flop.SchemaTest do
         end
       end
 
-    assert error.message =~ "cannot sort by custom field"
+    assert error.message =~ "cannot sort by custom fields without an order"
   end
 end

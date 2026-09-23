@@ -139,6 +139,29 @@ defmodule Flop.Adapters.Ecto.FlopTest do
              ) == Enum.reverse(expected)
     end
 
+    test "orders by custom fields" do
+      pets = insert_list(20, :pet)
+
+      expected = Enum.sort_by(pets, &{String.length(&1.name), &1.id})
+
+      assert Flop.all(Pet, %Flop{order_by: [:reverse_name, :id]}, for: Pet) ==
+               expected
+
+      assert_received {:order, :asc, [source: :name]}
+
+      assert Flop.all(
+               Pet,
+               %Flop{
+                 order_by: [:reverse_name, :id],
+                 order_directions: [:desc, :desc]
+               },
+               for: Pet,
+               extra_opts: [label: :custom]
+             ) == Enum.reverse(expected)
+
+      assert_received {:order, :desc, [label: :custom, source: :name]}
+    end
+
     test "orders by alias fields" do
       owner_1 = insert(:owner, pets: build_list(2, :pet))
       owner_2 = insert(:owner, pets: build_list(1, :pet))

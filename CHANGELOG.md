@@ -12,6 +12,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Support SQLite.
 - Support MySQL.
+- Allow ordering by custom fields that define an `:order` function. The
+  function returns the dynamic expression used as the sort key. Cursor
+  pagination still rejects custom fields.
 
 ### Fixed
 
