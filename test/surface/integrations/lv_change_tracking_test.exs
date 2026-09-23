@@ -8,6 +8,8 @@ defmodule Surface.LVChangeTrackingTest do
 
   alias Phoenix.LiveView.{Socket, Diff}
 
+  @lv_version :phoenix_live_view |> Application.spec(:vsn) |> to_string()
+
   defp wrapper(assigns) do
     ~H[*** <%= render_slot(@inner_block, "ARG") %> ***]
   end
@@ -28,13 +30,13 @@ defmodule Surface.LVChangeTrackingTest do
       """
     end
 
-    {socket, full_render, components} = render(comp.(assigns))
+    {full_render, fingerprints, components} = render(comp.(assigns))
 
     assert has_dynamic_part?(full_render, "INNER WITH ARG")
 
     assigns = Map.put(assigns, :__changed__, %{some_assign: true})
 
-    {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+    {full_render, _, _} = render(comp.(assigns), fingerprints, components)
 
     assert has_dynamic_part?(full_render, "SOME_ASSIGN")
     refute has_dynamic_part?(full_render, "INNER WITH ARG")
@@ -52,13 +54,13 @@ defmodule Surface.LVChangeTrackingTest do
       """
     end
 
-    {socket, full_render, components} = render(comp.(assigns))
+    {full_render, fingerprints, components} = render(comp.(assigns))
 
     assert has_dynamic_part?(full_render, "INNER WITH ARG")
 
     assigns = Map.put(assigns, :__changed__, %{some_assign: true})
 
-    {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+    {full_render, _, _} = render(comp.(assigns), fingerprints, components)
 
     assert has_dynamic_part?(full_render, "SOME_ASSIGN")
     refute has_dynamic_part?(full_render, "INNER WITH ARG")
@@ -76,13 +78,13 @@ defmodule Surface.LVChangeTrackingTest do
       """
     end
 
-    {socket, full_render, components} = render(comp.(assigns))
+    {full_render, fingerprints, components} = render(comp.(assigns))
 
     assert has_dynamic_part?(full_render, "INNER WITH ARG")
 
     assigns = Map.put(assigns, :__changed__, %{some_assign: true})
 
-    {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+    {full_render, _, _} = render(comp.(assigns), fingerprints, components)
 
     # TODO: Why "INNER WITH ARG" is resent? It shouldn't!
     assert has_dynamic_part?(full_render, "INNER WITH ARG")
@@ -100,13 +102,13 @@ defmodule Surface.LVChangeTrackingTest do
       """
     end
 
-    {socket, full_render, components} = render(comp.(assigns))
+    {full_render, fingerprints, components} = render(comp.(assigns))
 
     assert has_dynamic_part?(full_render, "INNER WITH ARG")
 
     assigns = Map.put(assigns, :__changed__, %{some_assign: true})
 
-    {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+    {full_render, _, _} = render(comp.(assigns), fingerprints, components)
 
     # TODO: Why "INNER WITH ARG" is resent? It shouldn't!
     assert has_dynamic_part?(full_render, "INNER WITH ARG")
@@ -123,16 +125,22 @@ defmodule Surface.LVChangeTrackingTest do
       """
     end
 
-    {socket, full_render, components} = render(comp.(assigns))
+    {full_render, fingerprints, components} = render(comp.(assigns))
 
     assert has_dynamic_part?(full_render, "STATIC LABEL")
 
     assigns = Map.put(assigns, :__changed__, %{content: true})
 
-    {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+    {full_render, _, _} = render(comp.(assigns), fingerprints, components)
 
     assert has_dynamic_part?(full_render, "DYN CONTENT")
-    refute has_dynamic_part?(full_render, "STATIC LABEL")
+
+    # Since LV v1.1.2, change tracking is disabled for components receiving dynamic assigns
+    if Version.match?(@lv_version, ">= 1.1.2") do
+      assert has_dynamic_part?(full_render, "STATIC LABEL")
+    else
+      refute has_dynamic_part?(full_render, "STATIC LABEL")
+    end
   end
 
   test "phx-* attributes with string values are static so they're not resent after first rendering" do
@@ -146,13 +154,13 @@ defmodule Surface.LVChangeTrackingTest do
       """
     end
 
-    {socket, full_render, components} = render(comp.(assigns))
+    {full_render, fingerprints, components} = render(comp.(assigns))
 
-    assert full_render[:s] == ["<button phx-click=\"click\">", "</button>\n"]
+    assert static_parts(full_render) == ["<button phx-click=\"click\">", "</button>\n"]
 
     assigns = Map.put(assigns, :__changed__, %{content: true})
 
-    {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+    {full_render, _, _} = render(comp.(assigns), fingerprints, components)
 
     assert full_render == %{0 => "DYN CONTENT"}
   end
@@ -169,25 +177,42 @@ defmodule Surface.LVChangeTrackingTest do
   #     """
   #   end
 
-  #   {socket, full_render, components} = render(comp.(assigns))
+  #   {full_render, fingerprints, components} = render(comp.(assigns))
 
-  #   assert full_render[:s] == ["<button phx-click=\"click\">", "</button>\n"]
+  #   assert static_parts(full_render) == ["<button phx-click=\"click\">", "</button>\n"]
 
   #   assigns = Map.put(assigns, :__changed__, %{content: true})
 
-  #   {_, full_render, _} = render(comp.(assigns), socket.fingerprints, components)
+  #   {full_render, _, _} = render(comp.(assigns), fingerprints, components)
 
   #   assert full_render == %{0 => "DYN CONTENT"}
   # end
 
-  defp render(
-         rendered,
-         fingerprints \\ Diff.new_fingerprints(),
-         components \\ Diff.new_components()
-       ) do
-    socket = %Socket{endpoint: __MODULE__, fingerprints: fingerprints}
-    Diff.render(socket, rendered, components)
+  # LV < v1.1 keeps fingerprints in the socket and returns the updated socket
+  if Map.has_key?(%Socket{}, :fingerprints) do
+    defp render(
+           rendered,
+           fingerprints \\ Diff.new_fingerprints(),
+           components \\ Diff.new_components()
+         ) do
+      socket = %Socket{endpoint: __MODULE__, fingerprints: fingerprints}
+      {socket, diff, components} = Diff.render(socket, rendered, components)
+      {diff, socket.fingerprints, components}
+    end
+  else
+    defp render(
+           rendered,
+           fingerprints \\ Diff.new_fingerprints(),
+           components \\ Diff.new_components()
+         ) do
+      socket = %Socket{endpoint: __MODULE__}
+      Diff.render(socket, rendered, fingerprints, components)
+    end
   end
+
+  # Since LV v1.1, statics can be shared as templates (`:p`) referenced by index
+  defp static_parts(%{s: index, p: templates}) when is_integer(index), do: Map.fetch!(templates, index)
+  defp static_parts(%{s: static}), do: static
 
   defp has_dynamic_part?([{_, value} | _rest], value) do
     true
