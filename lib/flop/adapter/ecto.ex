@@ -480,15 +480,26 @@ defmodule Flop.Adapter.Ecto do
   end
 
   @impl Flop.Adapter
-  def apply_cursor(q, cursor_fields, _opts) do
-    where_dynamic = cursor_dynamic(cursor_fields)
+  def apply_cursor(q, cursor_fields, opts) do
+    where_dynamic =
+      case cursor_dynamic(cursor_fields, dialect(opts)) do
+        true -> dynamic(true)
+        false -> dynamic(false)
+        dynamic -> dynamic
+      end
+
     Query.where(q, ^where_dynamic)
   end
 
-  defp cursor_dynamic([]), do: true
+  # With more cursor fields to come, the predicate has the form
+  # `at_or_after and (after or rest)`, which keeps a range condition on the
+  # leading field that an index can serve. No comparison with NULL is true, so
+  # NULLs need explicit IS NULL conditions. Predicates that are constant are
+  # represented as booleans, so that they can be folded away.
+  defp cursor_dynamic([], _dialect), do: true
 
   # only reachable with an unvalidated Flop struct
-  defp cursor_dynamic([{_, _, _, %FieldInfo{extra: %{type: type}}} | _])
+  defp cursor_dynamic([{_, _, _, %FieldInfo{extra: %{type: type}}} | _], _)
        when type in [:compound, :alias, :custom] do
     raise ArgumentError, """
     cursor pagination is not supported for #{type} fields
@@ -501,107 +512,93 @@ defmodule Flop.Adapter.Ecto do
     """
   end
 
-  # no cursor value, last cursor field
-  defp cursor_dynamic([{_, _, nil, _}]) do
-    true
+  defp cursor_dynamic(
+         [{direction, field, cursor_value, field_info} | tail],
+         dialect
+       ) do
+    column = cursor_column(field, field_info)
+    nulls_last? = Dialect.nulls_last?(dialect, direction)
+    after_dynamic = cursor_after(column, direction, cursor_value, nulls_last?)
+
+    case tail do
+      [] ->
+        after_dynamic
+
+      [_ | _] ->
+        column
+        |> cursor_at_or_after(direction, cursor_value, nulls_last?)
+        |> dynamic_and(dynamic_or(after_dynamic, cursor_dynamic(tail, dialect)))
+    end
   end
 
-  # no cursor value, more cursor fields to come
-  defp cursor_dynamic([{_, _, nil, _} | [{_, _, _, _} | _] = tail]) do
-    cursor_dynamic(tail)
+  defp cursor_column(_, %FieldInfo{
+         extra: %{binding: binding, field: field, type: :join}
+       }),
+       do: {binding, field}
+
+  defp cursor_column(field, _), do: {nil, field}
+
+  defp cursor_after(_column, _direction, nil, true), do: false
+
+  defp cursor_after(column, _direction, nil, false),
+    do: dynamic(not (^cursor_is_nil(column)))
+
+  defp cursor_after(column, direction, cursor_value, nulls_last?) do
+    op = if asc_direction?(direction), do: :>, else: :<
+
+    column
+    |> cursor_compare(op, cursor_value)
+    |> dynamic_or(nulls_last? && cursor_is_nil(column))
   end
 
-  # join field ascending, last cursor field
-  defp cursor_dynamic([
-         {direction, _, cursor_value,
-          %FieldInfo{extra: %{binding: binding, field: field, type: :join}}}
-       ])
-       when direction in [:asc, :asc_nulls_first, :asc_nulls_last] do
-    dynamic(
-      [{^binding, r}],
-      field(r, ^field) > type(^cursor_value, field(r, ^field))
-    )
+  defp cursor_at_or_after(column, _direction, nil, true),
+    do: cursor_is_nil(column)
+
+  defp cursor_at_or_after(_column, _direction, nil, false), do: true
+
+  defp cursor_at_or_after(column, direction, cursor_value, nulls_last?) do
+    op = if asc_direction?(direction), do: :>=, else: :<=
+
+    column
+    |> cursor_compare(op, cursor_value)
+    |> dynamic_or(nulls_last? && cursor_is_nil(column))
   end
 
-  # join field descending, last cursor field
-  defp cursor_dynamic([
-         {direction, _, cursor_value,
-          %FieldInfo{extra: %{binding: binding, field: field, type: :join}}}
-       ])
-       when direction in [:desc, :desc_nulls_first, :desc_nulls_last] do
-    dynamic(
-      [{^binding, r}],
-      field(r, ^field) < type(^cursor_value, field(r, ^field))
-    )
+  defp asc_direction?(direction),
+    do: direction in [:asc, :asc_nulls_first, :asc_nulls_last]
+
+  for op <- [:>, :<, :>=, :<=] do
+    defp cursor_compare({nil, field}, unquote(op), value) do
+      dynamic(
+        [r],
+        unquote(op)(field(r, ^field), type(^value, field(r, ^field)))
+      )
+    end
+
+    defp cursor_compare({binding, field}, unquote(op), value) do
+      dynamic(
+        [{^binding, r}],
+        unquote(op)(field(r, ^field), type(^value, field(r, ^field)))
+      )
+    end
   end
 
-  # join field ascending, more cursor fields to come
-  defp cursor_dynamic([
-         {direction, _, cursor_value,
-          %FieldInfo{extra: %{binding: binding, field: field, type: :join}}}
-         | [{_, _, _, _} | _] = tail
-       ])
-       when direction in [:asc, :asc_nulls_first, :asc_nulls_last] do
-    dynamic(
-      [{^binding, r}],
-      field(r, ^field) >= type(^cursor_value, field(r, ^field)) and
-        (field(r, ^field) > type(^cursor_value, field(r, ^field)) or
-           ^cursor_dynamic(tail))
-    )
-  end
+  defp cursor_is_nil({nil, field}), do: dynamic([r], is_nil(field(r, ^field)))
 
-  # join field descending, more cursor fields to come
-  defp cursor_dynamic([
-         {direction, _, cursor_value,
-          %FieldInfo{extra: %{binding: binding, field: field, type: :join}}}
-         | [{_, _, _, _} | _] = tail
-       ])
-       when direction in [:desc, :desc_nulls_first, :desc_nulls_last] do
-    dynamic(
-      [{^binding, r}],
-      field(r, ^field) <= type(^cursor_value, field(r, ^field)) and
-        (field(r, ^field) < type(^cursor_value, field(r, ^field)) or
-           ^cursor_dynamic(tail))
-    )
-  end
+  defp cursor_is_nil({binding, field}),
+    do: dynamic([{^binding, r}], is_nil(field(r, ^field)))
 
-  # any other field type ascending, last cursor field
-  defp cursor_dynamic([{direction, field, cursor_value, _}])
-       when direction in [:asc, :asc_nulls_first, :asc_nulls_last] do
-    dynamic([r], field(r, ^field) > type(^cursor_value, field(r, ^field)))
-  end
+  defp dynamic_and(false, _), do: false
+  defp dynamic_and(_, false), do: false
+  defp dynamic_and(true, b), do: b
+  defp dynamic_and(a, true), do: a
+  defp dynamic_and(a, b), do: dynamic(^a and ^b)
 
-  # any other field type descending, last cursor field
-  defp cursor_dynamic([{direction, field, cursor_value, _}])
-       when direction in [:desc, :desc_nulls_first, :desc_nulls_last] do
-    dynamic([r], field(r, ^field) < type(^cursor_value, field(r, ^field)))
-  end
-
-  # any other field type ascending, more cursor fields to come
-  defp cursor_dynamic([
-         {direction, field, cursor_value, _} | [{_, _, _, _} | _] = tail
-       ])
-       when direction in [:asc, :asc_nulls_first, :asc_nulls_last] do
-    dynamic(
-      [r],
-      field(r, ^field) >= type(^cursor_value, field(r, ^field)) and
-        (field(r, ^field) > type(^cursor_value, field(r, ^field)) or
-           ^cursor_dynamic(tail))
-    )
-  end
-
-  # any other field type descending, more cursor fields to come
-  defp cursor_dynamic([
-         {direction, field, cursor_value, _} | [{_, _, _, _} | _] = tail
-       ])
-       when direction in [:desc, :desc_nulls_first, :desc_nulls_last] do
-    dynamic(
-      [r],
-      field(r, ^field) <= type(^cursor_value, field(r, ^field)) and
-        (field(r, ^field) < type(^cursor_value, field(r, ^field)) or
-           ^cursor_dynamic(tail))
-    )
-  end
+  defp dynamic_or(true, _), do: true
+  defp dynamic_or(_, true), do: true
+  defp dynamic_or(false, b), do: b
+  defp dynamic_or(a, false), do: a
+  defp dynamic_or(a, b), do: dynamic(^a or ^b)
 
   @impl Flop.Adapter
   def list(query, opts) do

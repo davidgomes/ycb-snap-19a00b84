@@ -13,6 +13,10 @@ defmodule Flop.Adapter.Ecto.Dialect do
   # and DESC, and the other two need `field IS NULL` as an extra sort key.
   @without_nulls_ordering [Ecto.Adapters.MyXQL]
 
+  # PostgreSQL sorts NULLs as if larger than any value, so they come last with
+  # ASC and first with DESC. SQLite and MySQL sort them as if smaller.
+  @with_nulls_smallest [Ecto.Adapters.MyXQL, Ecto.Adapters.SQLite3]
+
   # Ecto's MyXQL adapter can store arrays in JSON columns, but it cannot build
   # array operations. Flop uses JSON_CONTAINS and JSON_LENGTH instead.
   @without_arrays [Ecto.Adapters.MyXQL]
@@ -24,10 +28,14 @@ defmodule Flop.Adapter.Ecto.Dialect do
   @type t :: %__MODULE__{
           arrays?: boolean,
           ilike?: boolean,
+          nulls_largest?: boolean,
           nulls_ordering?: boolean
         }
 
-  defstruct arrays?: true, ilike?: true, nulls_ordering?: true
+  defstruct arrays?: true,
+            ilike?: true,
+            nulls_largest?: true,
+            nulls_ordering?: true
 
   @nulls_ordering_fallback %{
     asc_nulls_first: {:native, :asc},
@@ -47,6 +55,7 @@ defmodule Flop.Adapter.Ecto.Dialect do
     %__MODULE__{
       arrays?: adapter not in @without_arrays,
       ilike?: adapter not in @without_ilike,
+      nulls_largest?: adapter not in @with_nulls_smallest,
       nulls_ordering?: adapter not in @without_nulls_ordering
     }
   end
@@ -84,6 +93,25 @@ defmodule Flop.Adapter.Ecto.Dialect do
   def order_direction(%__MODULE__{}, direction) do
     Map.get(@nulls_ordering_fallback, direction, {:native, direction})
   end
+
+  @doc """
+  Returns whether NULLs are sorted after all other values in an order
+  direction.
+  """
+  @spec nulls_last?(t, atom) :: boolean
+  def nulls_last?(%__MODULE__{}, direction)
+      when direction in [:asc_nulls_last, :desc_nulls_last],
+      do: true
+
+  def nulls_last?(%__MODULE__{}, direction)
+      when direction in [:asc_nulls_first, :desc_nulls_first],
+      do: false
+
+  def nulls_last?(%__MODULE__{nulls_largest?: nulls_largest?}, :asc),
+    do: nulls_largest?
+
+  def nulls_last?(%__MODULE__{nulls_largest?: nulls_largest?}, :desc),
+    do: not nulls_largest?
 
   defp adapter(repo) when is_atom(repo) and not is_nil(repo) do
     if Code.ensure_loaded?(repo) and

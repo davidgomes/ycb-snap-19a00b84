@@ -38,6 +38,22 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     Enum.map(ages, &Repo.insert!(%CustomFieldPet{age: &1}))
   end
 
+  defp paginate_ids(%Flop{} = flop, direction) do
+    {pets, meta} = Flop.run(pets_with_owners_query(), flop, for: Pet)
+    ids = Enum.map(pets, & &1.id)
+
+    case direction do
+      :after when meta.has_next_page? ->
+        ids ++ paginate_ids(%{flop | after: meta.end_cursor}, :after)
+
+      :before when meta.has_previous_page? ->
+        paginate_ids(%{flop | before: meta.start_cursor}, :before) ++ ids
+
+      _ ->
+        ids
+    end
+  end
+
   describe "ordering" do
     test "adds order_by to query if set" do
       pets = insert_list(20, :pet)
@@ -2157,6 +2173,52 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                    },
                    for: Pet
                  )
+      end
+    end
+
+    test "includes rows with nil values in nullable order fields" do
+      owner_a = insert(:owner, name: "A")
+      owner_b = insert(:owner, name: nil)
+
+      for {age, owner} <- [
+            {3, owner_a},
+            {nil, owner_b},
+            {5, nil},
+            {nil, owner_a},
+            {3, nil},
+            {1, owner_b},
+            {nil, nil}
+          ] do
+        insert(:pet, age: age, owner: owner)
+      end
+
+      directions = [
+        :asc,
+        :asc_nulls_first,
+        :asc_nulls_last,
+        :desc,
+        :desc_nulls_first,
+        :desc_nulls_last
+      ]
+
+      for order_by <- [[:age, :id], [:owner_name, :age, :id]],
+          direction_a <- directions,
+          direction_b <- directions do
+        order_directions =
+          Enum.take([direction_a, direction_b, :asc], length(order_by))
+
+        flop = %Flop{order_by: order_by, order_directions: order_directions}
+
+        expected_ids =
+          pets_with_owners_query()
+          |> Flop.all(flop, for: Pet)
+          |> Enum.map(& &1.id)
+
+        assert paginate_ids(%{flop | first: 2}, :after) == expected_ids,
+               "forward: #{inspect(flop)}"
+
+        assert paginate_ids(%{flop | last: 2}, :before) == expected_ids,
+               "backward: #{inspect(flop)}"
       end
     end
 

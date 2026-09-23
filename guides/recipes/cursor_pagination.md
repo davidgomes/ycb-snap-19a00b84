@@ -109,7 +109,9 @@ of replacing it. Replacing the order could drop the field that made it unique.
 
 ## Nullable fields
 
-Ordering by a nullable column loses the rows where it is `NULL`.
+Order fields may contain `NULL`. Flop places the rows where a field is `NULL`
+where the database sorts them and adds `IS NULL` conditions to the cursor
+comparison, since no comparison with `NULL` is ever true.
 
 ```elixir
 %{first: 2, order_by: [:age, :id]}
@@ -119,20 +121,15 @@ Ordering by a nullable column loses the rows where it is `NULL`.
 |---|---|
 | 1 | Bo 1, Ada 3 |
 | 2 | Ada 5, Ada 7 |
-| 3 | — |
+| 3 | Cy, Dee |
 
-Cy and Dee never appear, and page 3 reports `has_next_page?: false`. PostgreSQL
-sorts them last, but the cursor comparison is `age > 7`, and no comparison with
-`NULL` is ever true. A second order field does not help, because the `NULL` is
-in the first one.
+PostgreSQL sorts `NULL` last with `:asc` and first with `:desc`, and SQLite and
+MySQL do the opposite. Use `:asc_nulls_first`, `:asc_nulls_last`,
+`:desc_nulls_first` or `:desc_nulls_last` if the order must not depend on the
+database.
 
-Until Flop builds null-aware predicates, order by a column that has no `NULL`,
-or sort on a computed field that substitutes a value, as in the [computed fields
-recipe](computed_and_embedded_fields.md):
-
-```sql
-SELECT coalesce(age, -1) AS age_sortable
-```
+As with any other value, a `NULL` is not unique, so the order still needs a
+unique field at the end.
 
 ## Reading the cursor value
 
