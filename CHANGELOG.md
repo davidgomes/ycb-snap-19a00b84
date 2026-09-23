@@ -13,13 +13,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Support SQLite.
 - Support MySQL.
 - Support ordering by custom fields with the new `:sorter` option. The `:filter`
-  option is now only required if the custom field is filterable.
-
-### Changed
-
-- Custom fields can be sortable if they set the `:sorter` option. Custom fields
-  without a `:filter` cannot be filterable.
-- Reject custom fields as cursor order fields.
+  option is now only required if the custom field is filterable. Custom fields
+  cannot be used as cursor order fields.
 
 ### Fixed
 
