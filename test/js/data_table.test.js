@@ -221,8 +221,8 @@ describe("PetalDataTable", () => {
     expect(url).toContain("filters[0][field]=email");
   });
 
-  it("closes a top-layer panel through the native popover API", () => {
-    const { el, patched, form } = mountWithFilter({
+  it("closes through the popover's own hide command when LiveView is connected", () => {
+    const { hook, el, patched, form } = mountWithFilter({
       navTemplate: "/orders?:filters",
       filters: [],
       formHtml: `
@@ -234,12 +234,18 @@ describe("PetalDataTable", () => {
     });
 
     const panel = el.querySelector(".pc-popover__panel");
-    panel.setAttribute("popover", "auto");
-    const hidden = [];
-    panel.hidePopover = () => hidden.push(true);
+    const popover = document.createElement("div");
+    popover.className = "pc-popover";
+    popover.setAttribute("phx-click-away", '[["hide",{"to":"#pop"}]]');
+    panel.replaceWith(popover);
+    popover.appendChild(panel);
+
+    const executed = [];
+    hook.liveSocket = { execJS: (target, js) => executed.push([target, js]) };
 
     submit(form);
-    expect(hidden).toEqual([true]);
+    expect(executed).toEqual([[popover, '[["hide",{"to":"#pop"}]]']]);
+    expect(panel.style.display).toBe("");
     expect(patched).toHaveLength(1);
   });
 

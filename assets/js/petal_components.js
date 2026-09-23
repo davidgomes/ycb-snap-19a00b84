@@ -4852,17 +4852,17 @@ export const PetalDataTable = {
   },
 
   closePopover(form) {
-    const panel = form.closest(".pc-popover__panel");
-    if (!panel) return;
-    if (
-      panel.hasAttribute("popover") &&
-      typeof panel.hidePopover === "function"
-    ) {
-      // top-layer panels close through the native API, which also
-      // restores focus and light-dismiss state
-      panel.hidePopover();
+    const popover = form.closest(".pc-popover");
+    const hide = popover?.getAttribute("phx-click-away");
+    if (hide && this.liveSocket) {
+      // the popover's own close command: LiveView keeps the open toggle
+      // sticky across patches, so a bare style write would be undone by
+      // the patch that follows an Apply
+      this.liveSocket.execJS(popover, hide);
       return;
     }
+    const panel = form.closest(".pc-popover__panel");
+    if (!panel) return;
     panel.style.display = "none";
     const trigger = document.getElementById(`${panel.id}-trigger`);
     if (trigger) trigger.setAttribute("aria-expanded", "false");

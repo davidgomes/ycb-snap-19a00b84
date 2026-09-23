@@ -3,6 +3,16 @@
 
 #### Fixed
 
+- **`data_table` menus live in the page.** The filter editors and the
+  Columns dropdown were top-layer popovers, positioned with fixed
+  offsets that had to be recomputed against the viewport on every
+  scroll, resize, keyboard and patch - and lagged or drifted whenever
+  that chase lost. The toolbar is never inside the table's clipping
+  scroll region, so they now render as ordinary in-page popovers
+  anchored with CSS: they scroll with their trigger for free and stay
+  open across LiveView patches. The hook closes an editor after Apply
+  through the popover's own hide command, so the patch that follows
+  can't re-open it.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to
