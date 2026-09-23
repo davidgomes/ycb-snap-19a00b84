@@ -46,7 +46,49 @@ defmodule UtilsTest do
   test "required?/1 returns true if the resource is required" do
     assert required?(required: true) == true
     assert required?(required: false) == false
-    assert required?([]) == false
+    assert required?([]) == true
+  end
+
+  describe "get_resource_name/2" do
+    test "infers the resource name from the model" do
+      assert get_resource_name(:show, model: MyApp.BlogPost) == :blog_post
+      assert get_resource_name(:index, model: MyApp.BlogPost) == :blog_posts
+      assert get_resource_name(:index, model: MyApp.BlogPost, required: true) == :blog_post
+    end
+
+    test "uses the :as option" do
+      assert get_resource_name(:index, model: MyApp.BlogPost, as: :posts_list) == :posts_list
+    end
+  end
+
+  test "non_id_actions/1 returns the default and configured non-id actions" do
+    assert non_id_actions([]) == [:index, :new, :create]
+    assert non_id_actions(non_id_actions: [:search]) == [:index, :new, :create, :search]
+  end
+
+  describe "apply_handle_not_found?/3" do
+    test "returns true when the required resource is missing" do
+      assert apply_handle_not_found?(:show, %{}, model: Post)
+      assert apply_handle_not_found?(:new, %{post: nil}, model: Post)
+      assert apply_handle_not_found?(:show, %{post: nil}, model: Post, required: false)
+    end
+
+    test "returns false when the resource is loaded or not required" do
+      refute apply_handle_not_found?(:show, %{post: %Post{id: 1}}, model: Post)
+      refute apply_handle_not_found?(:new, %{post: nil}, model: Post, required: false)
+    end
+  end
+
+  test "validate_opts/1 warns about deprecated options" do
+    assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+             assert validate_opts(persisted: true) == [persisted: true]
+           end) =~ "The `:persisted` option is deprecated"
+
+    assert ExUnit.CaptureIO.capture_io(:stderr, fn ->
+             validate_opts(non_id_actions: [:search])
+           end) =~ "The `:non_id_actions` option is deprecated"
+
+    assert ExUnit.CaptureIO.capture_io(:stderr, fn -> validate_opts(model: Post) end) == ""
   end
 
   describe "apply_error_handler/3" do
