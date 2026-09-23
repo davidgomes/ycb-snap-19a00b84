@@ -1,0 +1,7 @@
+<%= PackageRemoved.title(@package) %>
+
+<%= PackageRemoved.message(@package) %>
+
+Reason: <%= @reason %>
+
+<%= PackageRemoved.contact() %>

@@ -1,0 +1,7 @@
+<%= AccountRemoved.title() %>
+
+<%= AccountRemoved.message(@username) %>
+
+Reason: <%= @reason %>
+
+<%= AccountRemoved.contact() %>

@@ -176,6 +176,8 @@ defmodule Hexpm.AdminTasks do
   - `opts` - Options:
     - `:delete_packages` - When `true`, deletes all packages where the user is
       the sole owner before removing the user (default: `false`)
+    - `:reason` - When given, the user is emailed that their account was
+      removed and why (default: `nil`, no email is sent)
 
   ## Examples
 
@@ -184,30 +186,42 @@ defmodule Hexpm.AdminTasks do
 
       iex> AdminTasks.remove_user("spammer", delete_packages: true)
       :ok
+
+      iex> AdminTasks.remove_user("spammer", reason: "Publishing malware")
+      :ok
   """
   @spec remove_user(String.t(), keyword()) :: :ok | {:error, atom() | Ecto.Changeset.t()}
   def remove_user(username, opts \\ []) do
-    with {:ok, user} <- find_user(username) do
-      if Keyword.get(opts, :delete_packages, false) do
-        Repo.transaction(fn ->
-          deleted = delete_sole_owned_packages(user)
-
-          case Users.delete(user, audit: AuditLogs.admin(), notify: false) do
-            :ok -> deleted
-            {:error, reason} -> Repo.rollback(reason)
-          end
-        end)
-        |> case do
-          {:ok, deleted} ->
-            Enum.each(deleted, &run_package_removal_side_effects/1)
-            :ok
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-      else
-        Users.delete(user, audit: AuditLogs.admin(), notify: false)
+    with {:ok, user} <- find_user(username),
+         :ok <- do_remove_user(user, opts) do
+      if reason = opts[:reason] do
+        Emails.account_removed(user, reason) |> Mailer.deliver!()
       end
+
+      :ok
+    end
+  end
+
+  defp do_remove_user(user, opts) do
+    if Keyword.get(opts, :delete_packages, false) do
+      Repo.transaction(fn ->
+        deleted = delete_sole_owned_packages(user)
+
+        case Users.delete(user, audit: AuditLogs.admin(), notify: false) do
+          :ok -> deleted
+          {:error, reason} -> Repo.rollback(reason)
+        end
+      end)
+      |> case do
+        {:ok, deleted} ->
+          Enum.each(deleted, &run_package_removal_side_effects/1)
+          :ok
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    else
+      Users.delete(user, audit: AuditLogs.admin(), notify: false)
     end
   end
 
@@ -319,21 +333,35 @@ defmodule Hexpm.AdminTasks do
 
   - `repo` - The repository name (e.g., "hexpm")
   - `package_name` - The name of the package to remove
+  - `opts` - Options:
+    - `:reason` - When given, the package owners are emailed that the package
+      was removed and why (default: `nil`, no email is sent)
 
   ## Examples
 
       iex> AdminTasks.remove_package("hexpm", "malicious_pkg")
       :ok
+
+      iex> AdminTasks.remove_package("hexpm", "malicious_pkg", reason: "Contains malware")
+      :ok
   """
-  @spec remove_package(String.t(), String.t()) :: :ok | {:error, atom()}
-  def remove_package(repo, package_name) do
+  @spec remove_package(String.t(), String.t(), keyword()) :: :ok | {:error, atom()}
+  def remove_package(repo, package_name, opts \\ []) do
     with {:ok, package} <- find_package(repo, package_name) do
+      owners = if opts[:reason], do: Owners.all(package, user: :emails), else: []
+
       {:ok, {releases, package}} =
         Repo.transaction(fn ->
           remove_package_db(package)
         end)
 
       run_package_removal_side_effects({releases, package})
+
+      if owners != [] do
+        Emails.package_removed(package, Enum.map(owners, & &1.user), opts[:reason])
+        |> Mailer.deliver!()
+      end
+
       :ok
     end
   end

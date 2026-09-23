@@ -343,6 +343,19 @@ defmodule Hexpm.AdminTasksTest do
     end
   end
 
+  describe "remove_user/2 with reason" do
+    test "emails the user the reason" do
+      user = insert(:user)
+
+      assert :ok = AdminTasks.remove_user(user.username, reason: "Publishing malware")
+
+      assert_email_sent(fn email ->
+        assert email.subject == "Hex.pm - Your account has been removed"
+        assert email.text_body =~ "Reason: Publishing malware"
+      end)
+    end
+  end
+
   describe "remove_package/2" do
     test "removes package" do
       package = insert(:package)
@@ -364,6 +377,19 @@ defmodule Hexpm.AdminTasksTest do
     test "returns error for nonexistent package" do
       assert {:error, :package_not_found} =
                AdminTasks.remove_package("hexpm", "nonexistent")
+    end
+
+    test "emails owners the reason when given" do
+      owner = insert(:user)
+      package = insert(:package, package_owners: [build(:package_owner, user: owner)])
+
+      assert :ok = AdminTasks.remove_package("hexpm", package.name, reason: "Contains malware")
+
+      assert_email_sent(fn email ->
+        assert email.subject =~ "Package #{package.name} has been removed"
+        assert email.text_body =~ "Reason: Contains malware"
+        assert [{_, _}] = email.to
+      end)
     end
   end
 
