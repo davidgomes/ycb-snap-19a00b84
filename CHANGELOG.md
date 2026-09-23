@@ -17,6 +17,15 @@
   patch that removes an open dialog fires no close event at all, so
   `destroyed()` releases it too, guarded on `open` so tearing down a
   closed palette cannot strip a lock another overlay owns.
+- **`dropdown` panel flips upward when the viewport leaves no room
+  below.** A dropdown near the bottom of the screen used to open
+  downward regardless and run off the page. The new `PetalDropdown`
+  hook measures the panel each time it opens (and on resize) and flips
+  it above the trigger when it won't fit below and there is more room
+  above. Opening and closing are still pure `LiveView.JS`; the hook only
+  sets `data-pc-flip="top"`. The `hooks: { ...PetalComponents }` spread
+  picks it up; cherry-picked hook setups need to add `PetalDropdown`,
+  and without it the panel keeps opening downward as before.
 
 ### 4.14.0 - 2026-08-11
 

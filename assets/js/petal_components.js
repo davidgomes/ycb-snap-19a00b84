@@ -2079,6 +2079,62 @@ export const PetalNavMenu = {
   },
 };
 
+// Dropdown panel: opening and closing stay pure LiveView.JS. This hook only
+// watches the panel's inline display and, each time it becomes visible,
+// flips it above the trigger when the viewport has no room below and more
+// room above. Without the hook the panel simply always opens downward.
+export const PetalDropdown = {
+  mounted() {
+    this.observer = new MutationObserver(() => {
+      const open = this.isOpen();
+      if (open && !this.wasOpen) this.place();
+      this.wasOpen = open;
+    });
+    this.observer.observe(this.el, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+    this.onResize = () => {
+      if (this.isOpen()) this.place();
+    };
+    window.addEventListener("resize", this.onResize);
+    this.wasOpen = this.isOpen();
+  },
+
+  // a patch drops attributes the server didn't render
+  updated() {
+    if (this.isOpen()) this.place();
+  },
+
+  destroyed() {
+    this.observer?.disconnect();
+    window.removeEventListener("resize", this.onResize);
+  },
+
+  isOpen() {
+    return this.el.style.display !== "none" && this.el.style.display !== "";
+  },
+
+  place() {
+    const trigger = this.el.parentElement?.querySelector("button");
+    if (!trigger) return;
+    this.el.removeAttribute("data-pc-flip");
+
+    const vv = window.visualViewport;
+    const viewTop = vv ? vv.offsetTop : 0;
+    const viewHeight = vv ? vv.height : window.innerHeight;
+    const t = trigger.getBoundingClientRect();
+    const below = viewTop + viewHeight - t.bottom;
+    const above = t.top - viewTop;
+    // offsetHeight ignores the scale-95 enter transform
+    const needed = this.el.offsetHeight + 8;
+
+    if (needed > below && above > below) {
+      this.el.setAttribute("data-pc-flip", "top");
+    }
+  },
+};
+
 // Localised timestamps: formats the <time datetime> UTC instant with the
 // browser's Intl. Relative forms tick on a decaying cadence and re-render
 // when a hidden tab becomes visible (browsers throttle background timers).
@@ -5471,6 +5527,7 @@ export default {
   PetalCommandTrigger,
   PetalAurora,
   PetalNavMenu,
+  PetalDropdown,
   PetalCommandDialog,
   PetalComboBox,
   PetalDataTable,

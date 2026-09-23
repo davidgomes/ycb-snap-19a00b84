@@ -87,6 +87,18 @@ defmodule PetalComponents.DropdownTest do
       refute html =~ "x-show"
       assert_attribute(html, "phx-click")
     end
+
+    test "binds the PetalDropdown hook to the panel for viewport flipping", %{assigns: assigns} do
+      html =
+        rendered_to_string(~H"""
+        <.dropdown label="Dropdown" options_container_id="flip_menu">
+          <.dropdown_menu_item label="Option" />
+        </.dropdown>
+        """)
+
+      assert html =~ ~s(id="flip_menu")
+      assert html =~ ~s(phx-hook="PetalDropdown")
+    end
   end
 
   describe "dropdown/1 - placement options" do
