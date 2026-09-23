@@ -1540,10 +1540,10 @@
         "name": "Line Up",
         "uuid": "c360c977-9a6d-4ad8-8f05-71f55a2cba57",
         "practices": [
-          "string-interpolation"
+          "strings"
         ],
         "prerequisites": [
-          "string-interpolation",
+          "strings",
           "integers",
           "guards"
         ],
