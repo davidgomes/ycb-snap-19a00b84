@@ -96,7 +96,7 @@ defmodule Ewebmachine.Core.Utils do
   def rfc1123_date({{yyyy, mm, dd}, {hour, min, sec}}) do
     day_number = :calendar.day_of_the_week({yyyy, mm, dd})
     args = [:httpd_util.day(day_number), dd, :httpd_util.month(mm), yyyy, hour, min, sec]
-    :io_lib.format('~s, ~2.2.0w ~3.s ~4.4.0w ~2.2.0w:~2.2.0w:~2.2.0w GMT', args) |> IO.iodata_to_binary()
+    :io_lib.format(~c"~s, ~2.2.0w ~3.s ~4.4.0w ~2.2.0w:~2.2.0w:~2.2.0w GMT", args) |> IO.iodata_to_binary()
   end
 
   @doc """
@@ -105,7 +105,7 @@ defmodule Ewebmachine.Core.Utils do
   @spec convert_request_date(String.t) :: {{year :: integer, month :: integer, day :: integer}, {h :: integer, min :: integer, sec :: integer}} | :bad_date
   def convert_request_date(date) do
     try do
-      :httpd_util.convert_request_date('#{date}')
+      :httpd_util.convert_request_date(~c"#{date}")
     catch _, _ -> :bad_date
     end
   end
@@ -192,14 +192,14 @@ defmodule Ewebmachine.Core.Utils do
     default_prio = Enum.find_value(prios, fn {prio, v} -> v == default && prio end)
     start_prio = Enum.find_value(prios, fn {prio, v} -> v == "*" && prio end)
     default_ok = case default_prio do
-		   nil -> start_prio !== 0.0
-		   0.0 -> false
+		   nil -> start_prio !== +0.0
+		   +0.0 -> false
 		   _ -> true
 		 end
-    any_ok = start_prio not in [nil, 0.0]
+    any_ok = start_prio not in [nil, +0.0]
 
     # remove choices where prio == 0.0
-    {zero_prios, prios} = Compat.Enum.split_with(prios, fn {prio, _} -> prio == 0.0 end)
+    {zero_prios, prios} = Compat.Enum.split_with(prios, fn {prio, _} -> prio == +0.0 end)
     choices_to_remove = Enum.map(zero_prios, &elem(&1, 1))
     choices = Enum.filter(choices, &!(String.downcase(&1) in choices_to_remove))
 
