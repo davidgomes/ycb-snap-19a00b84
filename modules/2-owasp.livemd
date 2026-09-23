@@ -101,29 +101,29 @@ Notable CWEs included are CWE-259: Use of Hard-coded Password, CWE-327: Broken o
 
 **Which of the following functions is performing password comparisons in the most secure way?**
 
-_Please uncomment the function call that you believe is correct._
+_Please uncomment the function call that you believe is correct, then evaluate the cell to check your answer._
+
+<!-- livebook:{"attrs":"eyJtb2R1bGVfaWQiOiJPV0FTUCIsInF1ZXN0aW9uX2lkIjoxLCJzb3VyY2UiOiJkZWZtb2R1bGUgUGFzc3dvcmRDb21wYXJlIGRvXG4gIGRlZiBvcHRpb25fb25lKHBhc3N3b3JkLCBtZDVfaGFzaCkgZG9cbiAgICBjYXNlIDpjcnlwdG8uaGFzaCg6bWQ1LCBwYXNzd29yZCkgPT0gbWQ1X2hhc2ggZG9cbiAgICAgIHRydWUgLT4gOmVudHJ5X2dyYW50ZWRfb3AxXG4gICAgICBmYWxzZSAtPiA6ZW50cnlfZGVuaWVkX29wMVxuICAgIGVuZFxuICBlbmRcblxuICBkZWYgb3B0aW9uX3R3byhwYXNzd29yZCwgYmNyeXB0X3NhbHRlZF9oYXNoKSBkb1xuICAgIGNhc2UgQmNyeXB0LnZlcmlmeV9wYXNzKHBhc3N3b3JkLCBiY3J5cHRfc2FsdGVkX2hhc2gpIGRvXG4gICAgICB0cnVlIC0+IDplbnRyeV9ncmFudGVkX29wMlxuICAgICAgZmFsc2UgLT4gOmVudHJ5X2RlbmllZF9vcDJcbiAgICBlbmRcbiAgZW5kXG5lbmRcblxuIyBETyBOT1QgQ0hBTkdFIENPREUgQUJPVkUgVEhJUyBMSU5FID09PT09PT09PT09PT09PT09PT09PT09PT1cblxuIyBQYXNzd29yZENvbXBhcmUub3B0aW9uX29uZShcInVzZXJzX3Bhc3N3b3JkXCIsIG1kNV9oYXNoKVxuIyBQYXNzd29yZENvbXBhcmUub3B0aW9uX3R3byhcInVzZXJzX3Bhc3N3b3JkXCIsIGJjcnlwdF9zYWx0ZWRfaGFzaCkifQ","chunks":null,"kind":"Elixir.GradingClient.GradedCell","livebook_object":"smart_cell"} -->
 
 ```elixir
-defmodule PasswordCompare do
-  def option_one(password, md5_hash) do
-    case :crypto.hash(:md5, password) == md5_hash do
-      true -> :entry_granted_op1
-      false -> :entry_denied_op1
+answer =
+  defmodule PasswordCompare do
+    def option_one(password, md5_hash) do
+      case :crypto.hash(:md5, password) == md5_hash do
+        true -> :entry_granted_op1
+        false -> :entry_denied_op1
+      end
+    end
+
+    def option_two(password, bcrypt_salted_hash) do
+      case Bcrypt.verify_pass(password, bcrypt_salted_hash) do
+        true -> :entry_granted_op2
+        false -> :entry_denied_op2
+      end
     end
   end
 
-  def option_two(password, bcrypt_salted_hash) do
-    case Bcrypt.verify_pass(password, bcrypt_salted_hash) do
-      true -> :entry_granted_op2
-      false -> :entry_denied_op2
-    end
-  end
-end
-
-# DO NOT CHANGE CODE ABOVE THIS LINE =========================
-
-# PasswordCompare.option_one("users_password", md5_hash)
-# PasswordCompare.option_two("users_password", bcrypt_salted_hash)
+GradingClient.self_evaluate(answer, OWASP, 1)
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -250,13 +250,24 @@ _Please change the atom below to the name of the vulnerable package installed in
 
 _HINT: Installed dependencies can be found at the very top, it was the very first cell you ran._
 
-```elixir
-# CHANGE ME
-vulnerable_dependency = :vulnerable_dependency
+_Evaluate the cell to check your answer._
 
-# DO NOT CHANGE CODE BELOW THIS LINE ============================
-Application.spec(vulnerable_dependency)[:vsn] |> List.to_string() |> IO.puts()
-IO.puts(vulnerable_dependency)
+<!-- livebook:{"attrs":"eyJtb2R1bGVfaWQiOiJPV0FTUCIsInF1ZXN0aW9uX2lkIjoyLCJzb3VyY2UiOiIjIENIQU5HRSBNRVxudnVsbmVyYWJsZV9kZXBlbmRlbmN5ID0gOnZ1bG5lcmFibGVfZGVwZW5kZW5jeVxuXG4jIERPIE5PVCBDSEFOR0UgQ09ERSBCRUxPVyBUSElTIExJTkUgPT09PT09PT09PT09PT09PT09PT09PT09PT09PVxuY2FzZSBBcHBsaWNhdGlvbi5zcGVjKHZ1bG5lcmFibGVfZGVwZW5kZW5jeSwgOnZzbikgZG9cbiAgbmlsIC0+IElPLnB1dHMoXCIje3Z1bG5lcmFibGVfZGVwZW5kZW5jeX0gaXMgbm90IGFuIGluc3RhbGxlZCBkZXBlbmRlbmN5XCIpXG4gIHZzbiAtPiBJTy5wdXRzKFwiI3t2dWxuZXJhYmxlX2RlcGVuZGVuY3l9ICN7dnNufVwiKVxuZW5kXG5cbnZ1bG5lcmFibGVfZGVwZW5kZW5jeSJ9","chunks":null,"kind":"Elixir.GradingClient.GradedCell","livebook_object":"smart_cell"} -->
+
+```elixir
+answer =
+  (
+    vulnerable_dependency = :vulnerable_dependency
+
+    case Application.spec(vulnerable_dependency, :vsn) do
+      nil -> IO.puts("#{vulnerable_dependency} is not an installed dependency")
+      vsn -> IO.puts("#{vulnerable_dependency} #{vsn}")
+    end
+
+    vulnerable_dependency
+  )
+
+GradingClient.self_evaluate(answer, OWASP, 2)
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
