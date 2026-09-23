@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fix key type inconsistency in backend implementations - ETS and Atomic backends now accept `term()` keys instead of `String.t()` (#143)
+- Add documentation warning about Redis backend string key requirement
+
 ## 7.0.1 - 2025-03-04
 
 - Fix race condition in Atomic backends during creation of key.
