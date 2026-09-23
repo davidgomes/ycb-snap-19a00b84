@@ -18,6 +18,10 @@ defmodule Nostrum.Struct.VoiceWSState do
     :identified,
     :seq,
     :encryption_mode,
+    :dave_session,
+    :dave_protocol_version,
+    :dave_pending_transitions,
+    :dave_connected_users,
     :last_heartbeat_send,
     :last_heartbeat_ack,
     :heartbeat_ack,
@@ -76,6 +80,22 @@ defmodule Nostrum.Struct.VoiceWSState do
   @typedoc "Encryption mode selected for voice channel"
   @type encryption_mode :: Nostrum.Voice.Crypto.cipher()
 
+  @typedoc "DAVE session used for end-to-end encryption of audio frames"
+  @typedoc since: "0.11.0"
+  @type dave_session :: Dave.session() | nil
+
+  @typedoc "DAVE protocol version in use, `0` when audio isn't end-to-end encrypted"
+  @typedoc since: "0.11.0"
+  @type dave_protocol_version :: non_neg_integer()
+
+  @typedoc "Announced DAVE protocol transitions awaiting execution, mapping transition id to protocol version"
+  @typedoc since: "0.11.0"
+  @type dave_pending_transitions :: %{non_neg_integer() => non_neg_integer()}
+
+  @typedoc "Users connected to the voice channel, the only users that may be added to the DAVE MLS group"
+  @typedoc since: "0.11.0"
+  @type dave_connected_users :: MapSet.t(Nostrum.Struct.User.id())
+
   @typedoc """
   The time the last heartbeat was sent, if a heartbeat hasn't been sent it
   will be the time the websocket process was started
@@ -112,6 +132,10 @@ defmodule Nostrum.Struct.VoiceWSState do
           identified: identified,
           seq: seq,
           encryption_mode: encryption_mode,
+          dave_session: dave_session,
+          dave_protocol_version: dave_protocol_version,
+          dave_pending_transitions: dave_pending_transitions,
+          dave_connected_users: dave_connected_users,
           last_heartbeat_send: last_heartbeat_send,
           last_heartbeat_ack: last_heartbeat_ack,
           heartbeat_ack: heartbeat_ack,
