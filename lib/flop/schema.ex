@@ -384,7 +384,11 @@ defprotocol Flop.Schema do
   ID of the current user), use the `extra_opts` option when calling Flop
   functions.
 
-  Note that as of now, custom fields only support filtering, not sorting.
+  To make a custom field sortable, set the `:sorter` option to a
+  module/function/options tuple. The sorter function receives the Ecto query,
+  the order direction (e.g. `:asc` or `:desc_nulls_last`), and an options
+  keyword list, and must return the query with the ordering applied. Custom
+  fields cannot be used for cursor-based pagination.
 
   Schema:
 
@@ -586,6 +590,10 @@ defprotocol Flop.Schema do
 
   - `:binding` (required) - Any named binding
   - `:field` (required)
+  - `:sorter` - A module/function/options tuple referencing a custom sort
+    function. The function must take the Ecto query, the order direction, and
+    the options from the tuple (merged with `extra_opts`) as arguments. Required
+    if the field is sortable.
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator and value
     validation is based on this option.
   - `:path` - This option is used by `Flop.Schema.get_field/2` to retrieve the
@@ -605,6 +613,10 @@ defprotocol Flop.Schema do
   - `:filter` (required) - A module/function/options tuple referencing a
     custom filter function. The function must take the Ecto query, the
     `Flop.Filter` struct, and the options from the tuple as arguments.
+  - `:sorter` - A module/function/options tuple referencing a custom sort
+    function. The function must take the Ecto query, the order direction, and
+    the options from the tuple (merged with `extra_opts`) as arguments. Required
+    if the field is sortable.
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator
     and value validation is based on this option.
   - `:bindings` - If the custom filter function requires certain named bindings
@@ -620,6 +632,7 @@ defprotocol Flop.Schema do
   """
   @type custom_field_option ::
           {:filter, {module, atom, keyword}}
+          | {:sorter, {module, atom, keyword}}
           | {:ecto_type, ecto_type()}
           | {:bindings, [atom]}
           | {:operators, [Flop.Filter.op()]}

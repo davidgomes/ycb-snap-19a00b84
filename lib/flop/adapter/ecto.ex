@@ -288,14 +288,13 @@ defmodule Flop.Adapter.Ecto do
 
     dialect = dialect(opts)
 
-    directions =
-      Enum.map(directions, fn {direction, field} ->
-        {Dialect.order_direction(dialect, direction), field}
-      end)
-
     case opts[:for] do
       nil ->
-        Enum.reduce(directions, query, fn {order_direction, field}, acc_query ->
+        directions
+        |> Enum.map(fn {direction, field} ->
+          {Dialect.order_direction(dialect, direction), field}
+        end)
+        |> Enum.reduce(query, fn {order_direction, field}, acc_query ->
           order_by_direction(
             acc_query,
             order_direction,
@@ -306,9 +305,22 @@ defmodule Flop.Adapter.Ecto do
       module ->
         struct = struct(module)
 
-        Enum.reduce(directions, query, fn {_, field} = expr, acc_query ->
-          field_info = Flop.Schema.field_info(struct, field)
-          apply_order_by_field(acc_query, expr, field_info, struct)
+        Enum.reduce(directions, query, fn {direction, field}, acc_query ->
+          case Flop.Schema.field_info(struct, field) do
+            %FieldInfo{extra: %{type: :custom} = custom_opts} ->
+              {mod, fun, sorter_opts} = Map.fetch!(custom_opts, :sorter)
+
+              sorter_opts =
+                opts
+                |> Keyword.get(:extra_opts, [])
+                |> Keyword.merge(sorter_opts)
+
+              apply(mod, fun, [acc_query, direction, sorter_opts])
+
+            field_info ->
+              expr = {Dialect.order_direction(dialect, direction), field}
+              apply_order_by_field(acc_query, expr, field_info, struct)
+          end
         end)
     end
   end
@@ -986,19 +998,21 @@ defmodule Flop.Adapter.Ecto do
 
     illegal_fields =
       custom_fields
-      |> Map.keys()
-      |> Enum.filter(&(&1 in sortable))
+      |> Enum.filter(fn {field, field_opts} ->
+        field in sortable and not Map.has_key?(field_opts, :sorter)
+      end)
+      |> Enum.map(fn {field, _} -> field end)
 
     if illegal_fields != [] do
       raise ArgumentError, """
-      cannot sort by custom fields
+      custom field without sorter configured as sortable
 
-      Custom fields are not allowed to be sortable. These custom fields were
-      configured as sortable:
+      Custom fields can only be sortable if a `:sorter` function is set. These
+      custom fields were configured as sortable without a sorter:
 
           #{inspect(illegal_fields)}
 
-      Use alias fields if you want to implement custom sorting.
+      Set the `:sorter` option or remove the fields from the sortable list.
       """
     end
 
