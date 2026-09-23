@@ -18,22 +18,37 @@ defmodule Paginator.Ecto.Query do
     paginate(queryable, config)
   end
 
-  defp get_operator(:asc, :before), do: :lt
-  defp get_operator(:desc, :before), do: :gt
-  defp get_operator(:asc, :after), do: :gt
-  defp get_operator(:desc, :after), do: :lt
+  @asc_directions [:asc, :asc_nulls_first, :asc_nulls_last]
+  @desc_directions [:desc, :desc_nulls_first, :desc_nulls_last]
+
+  defp get_operator(order, :before) when order in @asc_directions, do: :lt
+  defp get_operator(order, :before) when order in @desc_directions, do: :gt
+  defp get_operator(order, :after) when order in @asc_directions, do: :gt
+  defp get_operator(order, :after) when order in @desc_directions, do: :lt
 
   defp get_operator(direction, _),
-    do: raise("Invalid sorting value :#{direction}, please use either :asc or :desc")
+    do:
+      raise(
+        "Invalid sorting value :#{direction}, please use either :asc, :asc_nulls_first, " <>
+          ":asc_nulls_last, :desc, :desc_nulls_first or :desc_nulls_last"
+      )
 
-  defp get_operator_for_field(cursor_fields, key, direction) do
+  # Whether NULLs come after non-NULL values when walking in `cursor_direction`.
+  # `nil` means the NULL position is unspecified (plain :asc / :desc).
+  defp nulls_after?(order, :after) when order in [:asc_nulls_last, :desc_nulls_last], do: true
+  defp nulls_after?(order, :after) when order in [:asc_nulls_first, :desc_nulls_first], do: false
+  defp nulls_after?(order, :before) when order in [:asc_nulls_first, :desc_nulls_first], do: true
+  defp nulls_after?(order, :before) when order in [:asc_nulls_last, :desc_nulls_last], do: false
+  defp nulls_after?(_order, _cursor_direction), do: nil
+
+  defp get_order_for_field(cursor_fields, key) do
     {_, order} =
       cursor_fields
       |> Enum.find(fn {field_key, _order} ->
         field_key == key
       end)
 
-    get_operator(order, direction)
+    order
   end
 
   # This clause is responsible for transforming legacy list cursors into map cursors
@@ -51,7 +66,10 @@ defmodule Paginator.Ecto.Query do
     sorts =
       fields
       |> Enum.map(fn {column, _order} -> {column, Map.get(values, column)} end)
-      |> Enum.reject(fn val -> match?({_column, nil}, val) end)
+      |> Enum.reject(fn {column, value} ->
+        is_nil(value) and
+          is_nil(nulls_after?(get_order_for_field(fields, column), cursor_direction))
+      end)
 
     dynamic_sorts =
       sorts
@@ -59,15 +77,34 @@ defmodule Paginator.Ecto.Query do
       |> Enum.reduce(true, fn {{bound_column, value}, i}, dynamic_sorts ->
         {position, column} = column_position(query, bound_column)
 
-        dynamic = true
+        order = get_order_for_field(fields, bound_column)
+        nulls_after = nulls_after?(order, cursor_direction)
 
         dynamic =
-          case get_operator_for_field(fields, bound_column, cursor_direction) do
-            :lt ->
-              dynamic([{q, position}], field(q, ^column) < ^value and ^dynamic)
+          case {get_operator(order, cursor_direction), value, nulls_after} do
+            {_, nil, true} ->
+              false
 
-            :gt ->
-              dynamic([{q, position}], field(q, ^column) > ^value and ^dynamic)
+            {_, nil, false} ->
+              dynamic([{q, position}], not is_nil(field(q, ^column)))
+
+            {:lt, _, true} ->
+              dynamic(
+                [{q, position}],
+                field(q, ^column) < ^value or is_nil(field(q, ^column))
+              )
+
+            {:gt, _, true} ->
+              dynamic(
+                [{q, position}],
+                field(q, ^column) > ^value or is_nil(field(q, ^column))
+              )
+
+            {:lt, _, _} ->
+              dynamic([{q, position}], field(q, ^column) < ^value)
+
+            {:gt, _, _} ->
+              dynamic([{q, position}], field(q, ^column) > ^value)
           end
 
         dynamic =
@@ -75,7 +112,11 @@ defmodule Paginator.Ecto.Query do
           |> Enum.take(i)
           |> Enum.reduce(dynamic, fn {prev_column, prev_value}, dynamic ->
             {position, prev_column} = column_position(query, prev_column)
-            dynamic([{q, position}], field(q, ^prev_column) == ^prev_value and ^dynamic)
+            if is_nil(prev_value) do
+              dynamic([{q, position}], is_nil(field(q, ^prev_column)) and ^dynamic)
+            else
+              dynamic([{q, position}], field(q, ^prev_column) == ^prev_value and ^dynamic)
+            end
           end)
 
         if i == 0 do
@@ -160,7 +201,11 @@ defmodule Paginator.Ecto.Query do
             | expr:
                 Enum.map(expr, fn
                   {:desc, ast} -> {:asc, ast}
+                  {:desc_nulls_first, ast} -> {:asc_nulls_last, ast}
+                  {:desc_nulls_last, ast} -> {:asc_nulls_first, ast}
                   {:asc, ast} -> {:desc, ast}
+                  {:asc_nulls_last, ast} -> {:desc_nulls_first, ast}
+                  {:asc_nulls_first, ast} -> {:desc_nulls_last, ast}
                 end)
           }
         end
