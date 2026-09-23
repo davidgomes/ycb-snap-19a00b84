@@ -2224,6 +2224,23 @@
         "difficulty": 5
       },
       {
+        "slug": "prism",
+        "name": "Prism",
+        "uuid": "3c7fc94e-64a9-4b74-9a3a-11abc3075628",
+        "practices": [
+          "floating-point-numbers"
+        ],
+        "prerequisites": [
+          "floating-point-numbers",
+          "erlang-libraries",
+          "maps",
+          "lists",
+          "enum",
+          "recursion"
+        ],
+        "difficulty": 5
+      },
+      {
         "slug": "pythagorean-triplet",
         "name": "Pythagorean Triplet",
         "uuid": "087a2a3b-71e2-4473-ab2f-3be5240567b5",
