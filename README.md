@@ -5,6 +5,8 @@ Rails compatible Plug session store.
 
 This allows you to share session information between Rails and a Plug-based framework like Phoenix.
 
+It reads and writes the session cookies of Rails 4 and Rails 5 applications (and Rails 3.2, see below).
+
 ## Installation
 
 Add PlugRailsCookieSessionStore as a dependency to your `mix.exs` file:
@@ -29,13 +31,15 @@ There are 4 things to copy:
  
 The `secret_key_base` can be found usually in the Rails' `secrets.yml` file and should be copied to Phoenix's `config.exs` file. There should already be a key named like that and you should override it.
 
-The other three values can be found somewhere in the initializers directory of your Rails project. Some people don't set the `signing_salt` and `encryption_salt`. If you don't find them, set them like so:
+The other three values can be found somewhere in the initializers directory of your Rails project:
 
 ```ruby
 Rails.application.config.session_store :cookie_store, key: '_SOMETHING_HERE_session'
 Rails.application.config.action_dispatch.encrypted_cookie_salt =  'encryption salt'
 Rails.application.config.action_dispatch.encrypted_signed_cookie_salt = 'signing salt'
 ```
+
+Most applications don't set the salts. In that case Rails 4 and Rails 5 use `"encrypted cookie"` as the `encryption_salt` and `"signed encrypted cookie"` as the `signing_salt`.
 
 #### Configure the Cookie Store in Phoenix. 
 
@@ -57,6 +61,14 @@ plug Plug.Session,
   key_digest: :sha,
   serializer: Poison # see serializer details below
 end
+```
+
+`key_iterations: 1000`, `key_length: 64` and `key_digest: :sha` match how Rails 4 and Rails 5 derive the cookie keys from `secret_key_base`, so keep them as they are.
+
+Rails 5.2 applications created with `config.load_defaults 5.2` encrypt cookies with AES-256-GCM, which this store does not support. Keep such an application on the cookie format of Rails 4 and Rails 5.0/5.1 with:
+
+```ruby
+Rails.application.config.action_dispatch.use_authenticated_cookie_encryption = false
 ```
 
 #### Set up a serializer

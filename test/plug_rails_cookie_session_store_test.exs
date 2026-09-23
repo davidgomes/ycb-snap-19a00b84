@@ -204,4 +204,40 @@ defmodule PlugRailsCookieSessionStoreTest do
            |> custom_serialize_conn()
            |> get_session(:foo) == nil
   end
+
+  ## Rails 4 and Rails 5
+
+  defmodule PassthroughSerializer do
+    def encode(binary), do: {:ok, binary}
+    def decode(binary), do: {:ok, binary}
+  end
+
+  # Rails derives cookie keys with ActiveSupport::KeyGenerator (PBKDF2-HMAC-SHA1,
+  # 1000 iterations, 64 byte keys) using these default salts.
+  @rails_opts CookieStore.init(
+    encryption_salt: "encrypted cookie",
+    signing_salt: "signed encrypted cookie",
+    key_iterations: 1000,
+    key_length: 64,
+    key_digest: :sha,
+    serializer: PassthroughSerializer
+  )
+
+  @rails_session ~s({"session_id":"d1ccef272dab52cc52f9a3a1eaad328f","_csrf_token":"SzOx1XoIY2ewP/F/v45TIr2Ay+BNtiouhU5Xj2zOLDg=","user_id":42,"foo":"bar"})
+
+  # @rails_session as written by each version's encrypted cookie jar with @secret
+  # as secret_key_base (Rails 5.2 with use_authenticated_cookie_encryption = false).
+  @rails_cookies [
+    {"4.2", "SElPdVpvMGtid3ozbG8rMm9aekdJWnN3QU82VnZQZkZib3ZKU1dhVVJTN204cmtRZGJmakIzdFFLTi9vZng0Z0xjVUtnN3FBaVlHcmF5cEJ1UmJuSE50azJjR3FFeGRPQmgzRGNOSEJxT0c2bjhKWWF6SGdjbnp1RHRJWUFmRnVUWmJUVTdITU1adEZ5VVdTT2Z3aWNEbzlvcFhVM1cxN3NZWENaYzFhcE9OUjRiRUNLR3E0S2VtTUVZL1g5b2RlLS1NdWRZdnFXU2NJWTNsUWZqRW9Tdkh3PT0%3D--f33d7ceaf25e02cfe673c63737f336fb02df464b"},
+    {"5.0", "VkNvUjRBaGdxdEZBdVdkRko1ZnB6ZmNtbkFseThsTksrR3I0dUkzaXo0ZW9lVmpxN2dGR05ZVFRxYUJKN0drTlZNUS83QUEvalNib1FYUXdxV1pCTkdaRTZUdzFXcVF3VEkvZHZSS3kzeHZMVWhQRDZwaGhEeGpPN2RWMmV1cCtReEsxeFdXSG9hQzlHZy9rSjE1NGo5Ym56MDBHRGxmU2VMSmtRQnZwVUlLczRQRVR2SjY5VWFYdTVDRUpCenFJLS0rSXllM2NjMkthUExCNUwrLzlrWFFnPT0%3D--346d0be19ab6f37e3ad57e6bba8fa37c7f10572c"},
+    {"5.1", "OEpQM1g2YVF4NWxnejdHVkR6cWE3akE0NGVHSm1neEthQVpSL3c2RjJUQTZqUzQ3Qms4SmxhUjhFYUhBdWdjcVdzYWtmNDlPR0l5UG9jbGtEazZUN3hLMG1yQkJFUGJ4d0NpZWZFSnhqcHRSWDdlS2JSM2tKWUg2MlJiWVhZT1NWVlVReWRCbGErWU1Gb3A0VG5KbVpMdkdsbkdCc2xJT0tVZWxEYWVMUUlUWXIvTDlRS0gyWnFXL3Uzb0plYjVJLS1YVmJEbmwySGk2NXJPY3JITjdVcnpRPT0%3D--d0dd6526fdd27c3916695c5a903a5acc33516ee8"},
+    {"5.2", "R051Qy9vZkdaWFE0ZE1YL1NSalZveVlyRmE3RjNSSDZRczFXa2w2ODdFalNwcGYyTDM3cHpsQ0dUdklIdklaOVFGY2pGTmtkVEFIOUZvK1lEeWdJa3BabTlYWkVLUjUxbGpwKzZPUzUwZ1p4elJDaHpDZzhOVXE4T1lWUU5CVnZSUTNLaGdYdHRIanRYZ2h0R2psdTlKQjNlWVI4TFFWTXRUbUxndXZFL3doZXFzNnR6T3NhT2ZnU1lHUkpqQTFWLS1wV0VhZDBLSStMZlZqalppd2FFWXp3PT0%3D--ae3da24ff2fbf28e823cd95aeba030151d472fba"}
+  ]
+
+  for {version, cookie} <- @rails_cookies do
+    test "reads session cookies written by Rails #{version}" do
+      conn = %{secret_key_base: @secret}
+      assert CookieStore.get(conn, unquote(cookie), @rails_opts) == {nil, @rails_session}
+    end
+  end
 end
