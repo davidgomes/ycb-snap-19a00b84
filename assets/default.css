@@ -2694,6 +2694,62 @@
   .pc-data-table__filter-clear-icon.pc-data-table__filter-clear-icon {
     @apply w-4! h-4!;
   }
+  .pc-data-table__select-th,
+  .pc-data-table__select-td {
+    @apply w-px pr-0;
+  }
+  .pc-data-table__select-all,
+  .pc-data-table__select-row {
+    @apply block;
+  }
+  /* the checkbox column takes the table's first slot; the emphasis stays
+     on the first data column */
+  .pc-data-table__select-td + .pc-table__td {
+    @apply font-semibold;
+  }
+  /* tri-state header: :indeterminate once the hook mirrors the property,
+     data-indeterminate so the dash is right before (or without) JS */
+  .pc-data-table__select-all:indeterminate,
+  .pc-data-table__select-all[data-indeterminate]:not(:checked) {
+    @apply border-primary-600 bg-primary-600;
+    background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23fff' xmlns='http://www.w3.org/2000/svg'%3e%3crect x='4' y='7' width='8' height='2' rx='1'/%3e%3c/svg%3e");
+  }
+  .pc-data-table .pc-table__tr:has(.pc-data-table__select-row:checked) {
+    @apply bg-primary-50/60 dark:bg-primary-500/10;
+  }
+  /* the toolbar reserves its height so the selection bar swaps in place */
+  .pc-data-table__toolbar--selectable {
+    @apply min-h-9;
+  }
+  /* while selecting, the toolbar morphs: its regular content leaves the
+     layout (and tab order) but stays in the DOM, so an uncommitted search
+     term and the link-mode templates survive the round trip */
+  .pc-data-table__toolbar--selecting > :not(.pc-data-table__selection-bar) {
+    @apply hidden;
+  }
+  .pc-data-table__selection-bar {
+    @apply flex min-h-9 w-full flex-wrap items-center gap-2 rounded-lg bg-gray-100 px-3 py-1 dark:bg-gray-400/10;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pc-data-table__selection-bar {
+      animation: pc-data-table-morph 150ms ease-out;
+    }
+  }
+  .pc-data-table__selection-count {
+    @apply text-sm font-medium text-gray-900 tabular-nums dark:text-gray-100;
+  }
+  .pc-data-table__bulk-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .pc-data-table__clear-selection {
+    @apply ml-auto;
+  }
+  @keyframes pc-data-table-morph {
+    from {
+      opacity: 0;
+      transform: translateY(-2px);
+    }
+  }
 
   /* Avatars - sizes */
 

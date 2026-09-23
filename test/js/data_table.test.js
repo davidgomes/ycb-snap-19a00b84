@@ -264,6 +264,23 @@ describe("PetalDataTable", () => {
     expect(wrap.style.display).toBe("none");
   });
 
+  it("mirrors data-indeterminate onto the select-all property on mount and update", () => {
+    const { hook, el } = mountBase({});
+    el.insertAdjacentHTML(
+      "beforeend",
+      `<input type="checkbox" data-pc-dt-select-all data-indeterminate />`,
+    );
+    const box = el.querySelector("[data-pc-dt-select-all]");
+
+    hook.updated();
+    expect(box.indeterminate).toBe(true);
+
+    // the server re-renders the header as all/none: the dash must clear
+    box.removeAttribute("data-indeterminate");
+    hook.updated();
+    expect(box.indeterminate).toBe(false);
+  });
+
   it("destroyed cancels a pending search patch", () => {
     const { hook, el, patched } = mount({
       navTemplate: "/orders?search=:term",

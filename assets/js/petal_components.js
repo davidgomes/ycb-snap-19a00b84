@@ -4659,6 +4659,19 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+    this.syncSelectAll();
+  },
+
+  updated() {
+    this.syncSelectAll();
+  },
+
+  // the tri-state header: indeterminate is a property with no HTML
+  // attribute, so the server stamps data-indeterminate and we mirror it
+  syncSelectAll() {
+    this.el.querySelectorAll("[data-pc-dt-select-all]").forEach((box) => {
+      box.indeterminate = box.hasAttribute("data-indeterminate");
+    });
   },
 
   destroyed() {

@@ -363,6 +363,139 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "pc-data-table__actions"
   end
 
+  describe "row selection" do
+    @sel_rows [
+      %{id: 1, name: "Amy"},
+      %{id: 2, name: "Bea"}
+    ]
+
+    test "a checkbox column with a select-all header; checked rows follow `selected`" do
+      assigns = base(%{rows: @sel_rows, selected: [2]})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable selected={@selected}>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert html =~ "data-pc-dt-select-all"
+      assert html =~ ~s(aria-label="Select all rows on this page")
+      assert length(String.split(html, "pc-data-table__select-row")) - 1 == 2
+      # one of two on the page: the indeterminate middle, and the header
+      # click selects the rest of the page
+      assert html =~ "data-indeterminate"
+      assert html =~ "select_page"
+      assert html =~ ~s(&quot;checked&quot;:true)
+      # the hook mounts to mirror the indeterminate property
+      assert html =~ ~s(phx-hook="PetalDataTable")
+    end
+
+    test "the header reads all / none, and the all-state click unselects the page" do
+      assigns = base(%{rows: @sel_rows, all: MapSet.new(["1", "2"])})
+
+      all_html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable selected={@all}>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      refute all_html =~ "data-indeterminate"
+      assert all_html =~ ~s(&quot;checked&quot;:false)
+
+      none_html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      refute none_html =~ "data-indeterminate"
+      refute none_html =~ "pc-data-table__selection-bar"
+    end
+
+    test "while selecting, the toolbar morphs into the selection bar with bulk actions" do
+      assigns = base(%{rows: @sel_rows, selected: [1, 2]})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          on_change="table"
+          searchable
+          selectable
+          selected={@selected}
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+          <:bulk_action :let={ids}>
+            <button type="button">Archive {Enum.join(ids, ",")}</button>
+          </:bulk_action>
+        </.data_table>
+        """)
+
+      assert html =~ "pc-data-table__toolbar--selecting"
+      assert html =~ ~r/2\s+selected/
+      assert html =~ "Archive 1,2"
+      assert html =~ "Clear selection"
+      assert html =~ "clear_selection"
+      # the regular toolbar stays in the DOM, only hidden by the morph
+      assert html =~ ~s(name="op" value="search")
+    end
+
+    test "link mode pushes selection through on_select and a custom row_id" do
+      assigns = base(%{rows: [%{uuid: "a-1", name: "Amy"}]})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          path={@path}
+          selectable
+          on_select="select"
+          row_id={& &1.uuid}
+          selected={["a-1"]}
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert html =~ ~s(&quot;select&quot;)
+      assert html =~ ~s(&quot;id&quot;:&quot;a-1&quot;)
+      assert html =~ "pc-data-table__toolbar--selecting"
+    end
+
+    test "loading renders no row checkboxes and a disabled header" do
+      assigns = base(%{rows: @sel_rows})
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable loading>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      refute html =~ "pc-data-table__select-row"
+      assert html =~ ~r/data-pc-dt-select-all[^>]*disabled/
+    end
+
+    test "a selectable link-mode table without on_select raises" do
+      assigns = base(%{rows: @sel_rows})
+
+      assert_raise ArgumentError, ~r/on_select/, fn ->
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path={@path} selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+      end
+    end
+  end
+
   test "raises without either wiring mode" do
     assigns = base(%{path: nil})
 
