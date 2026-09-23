@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Enhancement
+
+* `Guardian.Plug.VerifyHeader`, `Guardian.Plug.VerifySession` and `Guardian.Plug.VerifyCookie`
+  (including the `:refresh_from_cookie` option) accept a one argument function as the `:secret`
+  option. It is called with the connection once a token is found, so the verifying secret can be
+  selected per request, for example per tenant, without wrapping the plug
+  [#748](https://github.com/ueberauth/guardian/pull/748)
+
+### Behaviour Change
+
+* A `:secret` option that resolves to `nil` no longer falls back to the configured `secret_key`.
+  Signing and verifying fail with `{:error, :secret_not_found}` instead, so a failed per-request
+  lookup can no longer silently use the application wide secret. Omitting `:secret` still uses
+  `secret_key`.
+* `Guardian.Token.Jwt.decode_token/3` returns `{:error, :secret_not_found}` instead of
+  `{:error, :invalid_token}` when no verifying secret is found. Error handlers now receive
+  `{:invalid_token, :secret_not_found}` in that case, including when a custom
+  `Guardian.Token.Jwt.SecretFetcher` returns `{:error, :secret_not_found}`.
+
 ## v2.4.1
 
 ### Security

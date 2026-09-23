@@ -293,6 +293,31 @@ resource = MyApp.Guardian.Plug.current_resource(conn, key: :impersonate)
 claims = MyApp.Guardian.Plug.current_claims(conn, key: :impersonate)
 ```
 
+### Selecting the verifying secret per request
+
+`Guardian.Plug.VerifyHeader`, `Guardian.Plug.VerifySession` and `Guardian.Plug.VerifyCookie` accept a
+`:secret` option. Besides the values your token module accepts, it may be a one argument function which is
+called with the connection once a token has been found. For example, to verify tokens with the key of the
+tenant an upstream plug has assigned:
+
+```elixir
+plug Guardian.Plug.VerifyHeader, secret: &MyApp.Tenants.verifying_secret/1
+```
+
+```elixir
+defmodule MyApp.Tenants do
+  def verifying_secret(%Plug.Conn{assigns: %{current_tenant: tenant}}), do: tenant.jwk
+  def verifying_secret(_conn), do: nil
+end
+```
+
+Returning `nil` rejects the token with `{:invalid_token, :secret_not_found}` rather than falling back to the
+configured `secret_key`. Use a function capture as above: anonymous functions cannot be used when plugs are
+initialized at compile time. An `{m, f, a}` tuple keeps its usual meaning and is not given the connection.
+
+The `:refresh_from_cookie` option does not inherit `:secret`; pass it in the refresh options as well, where the
+selected secret also signs the exchanged token.
+
 ### Plugs out of the box
 
 #### `Guardian.Plug.VerifyHeader`
