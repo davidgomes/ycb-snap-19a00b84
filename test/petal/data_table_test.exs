@@ -363,6 +363,119 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "pc-data-table__actions"
   end
 
+  describe "selectable" do
+    @id_rows [
+      %{id: 1, name: "Amy"},
+      %{id: 2, name: "Bea"}
+    ]
+
+    defp render_selectable(state, extra \\ %{}) do
+      assigns = Map.merge(%{rows: @id_rows, state: state}, extra)
+
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} on_change="table" selectable>
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:bulk_action :let={ids}>
+          <button type="button">Delete {Enum.join(ids, ",")}</button>
+        </:bulk_action>
+      </.data_table>
+      """)
+    end
+
+    test "renders a checkbox per row and a select-all header, and mounts the hook" do
+      html = render_selectable(%State{total: 2})
+
+      assert html =~ ~s(phx-hook="PetalDataTable")
+      assert html =~ "data-pc-dt-select-all"
+      assert html =~ ~s(aria-label="Select all rows on this page")
+      assert length(Regex.scan(~r/data-pc-dt-select-row/, html)) == 2
+      assert html =~ "&quot;op&quot;:&quot;select&quot;"
+      assert html =~ "&quot;op&quot;:&quot;select_page&quot;"
+      assert html =~ ~s(&quot;ids&quot;:[&quot;1&quot;,&quot;2&quot;])
+    end
+
+    test "the header is tri-state over the visible page" do
+      none = render_selectable(%State{total: 2})
+      refute none =~ "data-indeterminate"
+      refute select_all(none) =~ "checked"
+
+      some = render_selectable(State.put_selection(%State{total: 2}, [1]))
+      assert select_all(some) =~ "data-indeterminate"
+      refute select_all(some) =~ "checked"
+
+      all = render_selectable(State.put_selection(%State{total: 2}, [1, 2]))
+      refute select_all(all) =~ "data-indeterminate"
+      assert select_all(all) =~ "checked"
+
+      # off-page selections never tick this page's header
+      off_page = render_selectable(State.put_selection(%State{total: 2}, [99]))
+      refute select_all(off_page) =~ "data-indeterminate"
+      refute select_all(off_page) =~ "checked"
+    end
+
+    test "the toolbar morphs into the selection bar while rows are selected" do
+      idle = render_selectable(%State{total: 2})
+      refute idle =~ "pc-data-table__toolbar--selecting"
+      refute idle =~ "Delete"
+
+      html = render_selectable(State.put_selection(%State{total: 2}, [2, 1]))
+      assert html =~ "pc-data-table__toolbar--selecting"
+      assert html =~ ~r/2\s+selected/
+      assert html =~ "Delete 1,2"
+      assert html =~ ~s(phx-value-op="clear_selection")
+      assert html =~ ~r/class="pc-data-table__toolbar-default" hidden/
+    end
+
+    test "link mode needs on_select, which then carries every selection op" do
+      assigns = %{rows: @id_rows, state: %State{total: 2}}
+
+      assert_raise ArgumentError, ~r/on_select/, fn ->
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={@rows} state={@state} path="/orders" selectable>
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+      end
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table
+          id="t"
+          rows={@rows}
+          state={@state}
+          path="/orders"
+          selectable
+          on_select="select"
+          row_id={& &1.name}
+        >
+          <:col :let={row} field={:name}>{row.name}</:col>
+        </.data_table>
+        """)
+
+      assert html =~ "&quot;event&quot;:&quot;select&quot;"
+      assert html =~ ~s(&quot;ids&quot;:[&quot;Amy&quot;,&quot;Bea&quot;])
+    end
+
+    test "loading disables the header and renders no row checkboxes" do
+      assigns = %{state: %State{total: 2}}
+
+      html =
+        rendered_to_string(~H"""
+        <.data_table id="t" rows={[]} state={@state} on_change="table" selectable loading>
+          <:col :let={row} field={:name}>{row}</:col>
+        </.data_table>
+        """)
+
+      assert select_all(html) =~ "disabled"
+      refute html =~ "data-pc-dt-select-row"
+    end
+
+    defp select_all(html) do
+      [tag] = Regex.run(~r/<input[^>]*data-pc-dt-select-all[^>]*>/, html)
+      tag
+    end
+  end
+
   test "raises without either wiring mode" do
     assigns = base(%{path: nil})
 

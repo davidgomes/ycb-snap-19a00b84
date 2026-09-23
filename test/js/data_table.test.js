@@ -264,6 +264,36 @@ describe("PetalDataTable", () => {
     expect(wrap.style.display).toBe("none");
   });
 
+  it("mirrors data-indeterminate onto the select-all checkbox on mount and update", () => {
+    const { hook, el } = mountBase({});
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.setAttribute("data-pc-dt-select-all", "");
+    box.setAttribute("data-indeterminate", "");
+    el.appendChild(box);
+
+    hook.updated();
+    expect(box.indeterminate).toBe(true);
+
+    // the server re-render drops the attribute once all/none are selected
+    box.removeAttribute("data-indeterminate");
+    box.checked = true;
+    hook.updated();
+    expect(box.indeterminate).toBe(false);
+    expect(box.checked).toBe(true);
+  });
+
+  it("syncs indeterminate at mount time too", () => {
+    const el = document.createElement("div");
+    el.innerHTML = `<input type="checkbox" data-pc-dt-select-all data-indeterminate />`;
+    document.body.appendChild(el);
+    const hook = Object.create(hooks.PetalDataTable);
+    hook.el = el;
+    hook.mounted();
+    mounted.push(hook);
+    expect(el.querySelector("input").indeterminate).toBe(true);
+  });
+
   it("destroyed cancels a pending search patch", () => {
     const { hook, el, patched } = mount({
       navTemplate: "/orders?search=:term",

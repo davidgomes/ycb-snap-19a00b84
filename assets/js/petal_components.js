@@ -4602,7 +4602,8 @@ export const PetalComboBox = {
 };
 
 // Link-mode wiring for the data table's quick search and rows-per-page
-// select. Event mode posts through plain phx-change forms and never
+// select, plus (both modes) the select-all checkbox's indeterminate
+// state. Event mode posts through plain phx-change forms and never
 // mounts this hook; link mode has no events by design (handle_params is
 // the whole backend), so state changes must become patch URLs. The
 // component renders URL templates (:term / :page_size placeholders,
@@ -4659,6 +4660,19 @@ export const PetalDataTable = {
     this.el.addEventListener("input", this.onInput);
     this.el.addEventListener("change", this.onChange);
     this.el.addEventListener("submit", this.onSubmit);
+    this.syncSelectAll();
+  },
+
+  updated() {
+    this.syncSelectAll();
+  },
+
+  // indeterminate is a DOM property with no HTML attribute, so the server
+  // stamps data-indeterminate and every render mirrors it onto the input
+  syncSelectAll() {
+    const box = this.el.querySelector("[data-pc-dt-select-all]");
+    if (!box) return;
+    box.indeterminate = box.hasAttribute("data-indeterminate");
   },
 
   destroyed() {

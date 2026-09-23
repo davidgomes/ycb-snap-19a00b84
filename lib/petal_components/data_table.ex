@@ -30,6 +30,15 @@ defmodule PetalComponents.DataTable do
   by the `PetalDataTable` hook (patch URLs built from templates the
   component renders); event mode needs no JS.
 
+  `selectable` adds a checkbox column. The header checkbox is tri-state
+  over the visible page (checked / indeterminate / unchecked) and the
+  toolbar morphs into a selection bar - "3 selected", the `:bulk_action`
+  slot, and a clear button - while anything is selected. Selection is
+  ephemeral, not URL state, so it always speaks events: `on_select`
+  (defaulting to `on_change`) receives `%{"op" => "select", "id" => id}`,
+  `%{"op" => "select_page", "ids" => ids}` and
+  `%{"op" => "clear_selection"}`, all handled by `State.handle_op/3`.
+
   Rows can be any enumerable of maps/structs; pair with
   `PetalComponents.DataTable.Engine.List` for zero-setup in-memory
   data, or run the state against your own query layer.
@@ -106,6 +115,28 @@ defmodule PetalComponents.DataTable do
     default: %{},
     doc: "overrides for the operator display names, e.g. %{contains: \"enthält\"}"
 
+  attr :selectable, :boolean,
+    default: false,
+    doc: "render a row-selection checkbox column with a tri-state select-all header"
+
+  attr :row_id, :any,
+    default: nil,
+    doc: "selection: 1-arity function returning a row's id (defaults to its :id)"
+
+  attr :on_select, :string,
+    default: nil,
+    doc: """
+    selection: the event row checkboxes push (defaults to `on_change`).
+    Required for `selectable` in link mode.
+    """
+
+  attr :select_all_label, :string, default: "Select all rows on this page"
+  attr :select_row_label, :string, default: "Select row"
+  attr :selected_label, :string,
+    default: "selected",
+    doc: "the selection bar's \"3 selected\" word, localizable"
+  attr :clear_selection_label, :string, default: "Clear selection"
+
   attr :class, :any, default: nil
 
   slot :col, required: true do
@@ -126,6 +157,10 @@ defmodule PetalComponents.DataTable do
 
   slot :action, doc: "trailing actions column, `:let` receives the row"
   slot :toolbar, doc: "custom toolbar content rendered above the table"
+
+  slot :bulk_action,
+    doc: "selection bar actions shown while rows are selected, `:let` receives the selected ids"
+
   slot :empty, doc: "custom empty state; a filters-aware default renders otherwise"
 
   def data_table(assigns) do
@@ -144,12 +179,20 @@ defmodule PetalComponents.DataTable do
     filter_cols = Enum.filter(assigns.col, & &1[:filterable])
 
     link_mode? = is_nil(assigns.on_change)
+    select_event = assigns.on_select || assigns.on_change
+
+    if assigns.selectable and is_nil(select_event) do
+      raise ArgumentError, "a selectable data_table needs on_select (or on_change) for its events"
+    end
 
     # link mode: URL wiring. Either mode: filter popovers are native
-    # top-layer popovers the hook closes after an Apply.
+    # top-layer popovers the hook closes after an Apply, and the select-all
+    # checkbox's indeterminate state is a DOM property only JS can set.
     hooked? =
       (link_mode? and (assigns.searchable or assigns.page_size_options != [])) or
-        filter_cols != []
+        filter_cols != [] or assigns.selectable
+
+    selecting? = assigns.selectable and MapSet.size(assigns.state.selected) > 0
 
     assigns =
       assigns
@@ -160,6 +203,10 @@ defmodule PetalComponents.DataTable do
       |> assign(:filter_cols, filter_cols)
       |> assign(:op_labels, Map.merge(default_op_labels(), assigns.filter_op_labels))
       |> assign(:hooked?, hooked?)
+      |> assign(:selecting?, selecting?)
+      |> assign(:select_event, select_event)
+      |> assign(:row_id, assigns.row_id || (&Map.get(&1, :id)))
+      |> assign_selection()
       |> assign(
         :nav_template,
         link_mode? && hooked? && nav_template(assigns.path, assigns.state, assigns, filter_cols)
@@ -180,73 +227,103 @@ defmodule PetalComponents.DataTable do
     >
       <a :if={@hooked?} data-pc-dt-nav data-phx-link="patch" data-phx-link-state="push" hidden></a>
       <div
-        :if={@toolbar != [] or @searchable or @filter_cols != [] or @state.filters != []}
-        class="pc-data-table__toolbar"
+        :if={
+          @toolbar != [] or @searchable or @filter_cols != [] or @state.filters != [] or
+            @selecting?
+        }
+        class={["pc-data-table__toolbar", @selecting? && "pc-data-table__toolbar--selecting"]}
       >
-        <div :if={@searchable} class="pc-data-table__search">
-          <.icon name="hero-magnifying-glass" class="pc-data-table__search-icon" />
-          <%= if @on_change do %>
-            <form phx-change={@on_change} phx-submit={@on_change} phx-target={@target}>
-              <input type="hidden" name="op" value="search" />
-              <input
-                type="text"
-                name="term"
-                value={@state.search}
-                placeholder={@search_placeholder}
-                phx-debounce={@search_debounce}
-                autocomplete="off"
-                class="pc-text-input pc-data-table__search-input"
-              />
-            </form>
-          <% else %>
-            <input
-              type="text"
-              value={@state.search}
-              placeholder={@search_placeholder}
-              autocomplete="off"
-              data-pc-dt-search
-              class="pc-text-input pc-data-table__search-input"
-            />
-          <% end %>
-        </div>
-        <.filter_button
-          :for={col <- @filter_cols}
-          col={col}
-          table_id={@id}
-          state={@state}
-          path={@path}
-          on_change={@on_change}
-          target={@target}
-          op_labels={@op_labels}
-          apply_label={@apply_label}
-        />
-        {render_slot(@toolbar)}
-        <%= if @state.filters != [] do %>
+        <div
+          :if={@selectable}
+          class="pc-data-table__selection"
+          role="status"
+          hidden={!@selecting?}
+        >
+          <span class="pc-data-table__selection-count">
+            {MapSet.size(@state.selected)} {@selected_label}
+          </span>
+          {render_slot(@bulk_action, State.selected_ids(@state))}
           <.button
-            :if={@on_change}
             type="button"
             size="sm"
             variant="ghost"
             color="gray"
-            class="pc-data-table__reset"
-            phx-click={@on_change}
+            class="pc-data-table__clear-selection"
+            phx-click={@select_event}
             phx-target={@target}
-            phx-value-op="clear_filters"
+            phx-value-op="clear_selection"
           >
-            {@reset_filters_label}
+            {@clear_selection_label}
           </.button>
-          <.button
-            :if={@path}
-            link_type="live_patch"
-            to={url_for(@path, State.clear_filters(@state))}
-            size="sm"
-            variant="ghost"
-            color="gray"
-            class="pc-data-table__reset"
-          >
-            {@reset_filters_label}
-          </.button>
-        <% end %>
+        </div>
+        <%!-- hidden, not removed, while selecting: an uncommitted search term
+             and the hook's live inputs must survive the morph --%>
+        <div class="pc-data-table__toolbar-default" hidden={@selecting?}>
+          <div :if={@searchable} class="pc-data-table__search">
+            <.icon name="hero-magnifying-glass" class="pc-data-table__search-icon" />
+            <%= if @on_change do %>
+              <form phx-change={@on_change} phx-submit={@on_change} phx-target={@target}>
+                <input type="hidden" name="op" value="search" />
+                <input
+                  type="text"
+                  name="term"
+                  value={@state.search}
+                  placeholder={@search_placeholder}
+                  phx-debounce={@search_debounce}
+                  autocomplete="off"
+                  class="pc-text-input pc-data-table__search-input"
+                />
+              </form>
+            <% else %>
+              <input
+                type="text"
+                value={@state.search}
+                placeholder={@search_placeholder}
+                autocomplete="off"
+                data-pc-dt-search
+                class="pc-text-input pc-data-table__search-input"
+              />
+            <% end %>
+          </div>
+          <.filter_button
+            :for={col <- @filter_cols}
+            col={col}
+            table_id={@id}
+            state={@state}
+            path={@path}
+            on_change={@on_change}
+            target={@target}
+            op_labels={@op_labels}
+            apply_label={@apply_label}
+          />
+          {render_slot(@toolbar)}
+          <%= if @state.filters != [] do %>
+            <.button
+              :if={@on_change}
+              type="button"
+              size="sm"
+              variant="ghost"
+              color="gray"
+              class="pc-data-table__reset"
+              phx-click={@on_change}
+              phx-target={@target}
+              phx-value-op="clear_filters"
+            >
+              {@reset_filters_label}
+            </.button>
+            <.button
+              :if={@path}
+              link_type="live_patch"
+              to={url_for(@path, State.clear_filters(@state))}
+              size="sm"
+              variant="ghost"
+              color="gray"
+              class="pc-data-table__reset"
+            >
+              {@reset_filters_label}
+            </.button>
+          <% end %>
+        </div>
       </div>
 
       <div class="pc-data-table__scroll">
@@ -261,6 +338,24 @@ defmodule PetalComponents.DataTable do
           sort_dir={@sort_dir}
           on_sort={@on_sort}
         >
+          <:col
+            :let={row}
+            :if={@selectable}
+            label=""
+            header={@select_all}
+            class="pc-data-table__select-cell"
+            row_class="pc-data-table__select-cell"
+          >
+            <input
+              :if={!@loading}
+              type="checkbox"
+              class="pc-checkbox pc-data-table__select-row"
+              checked={State.selected?(@state, @row_id.(row))}
+              aria-label={@select_row_label}
+              data-pc-dt-select-row
+              phx-click={select_row_js(@select_event, @target, @row_id.(row))}
+            />
+          </:col>
           <:col
             :let={row}
             :for={col <- @col}
@@ -383,6 +478,56 @@ defmodule PetalComponents.DataTable do
       JS.push(event, Keyword.put(opts, :value, %{"op" => "sort", "field" => key}))
     end
   end
+
+  # -- selection -------------------------------------------------------------
+
+  defp assign_selection(%{selectable: false} = assigns), do: assign(assigns, :select_all, nil)
+
+  # The header is tri-state over the visible page only: selections on
+  # other pages count in the toolbar, never in this checkbox.
+  defp assign_selection(assigns) do
+    page_ids =
+      if assigns.loading,
+        do: [],
+        else:
+          assigns.rows
+          |> Enum.map(assigns.row_id)
+          |> Enum.reject(&is_nil/1)
+          |> Enum.map(&to_string/1)
+
+    on_page = Enum.count(page_ids, &MapSet.member?(assigns.state.selected, &1))
+
+    header_state =
+      cond do
+        on_page == 0 -> :none
+        on_page == length(page_ids) -> :all
+        true -> :some
+      end
+
+    assigns = assign(assigns, page_ids: page_ids, header_state: header_state)
+
+    assign(assigns, :select_all, ~H"""
+    <input
+      type="checkbox"
+      class="pc-checkbox pc-data-table__select-all"
+      checked={@header_state == :all}
+      data-indeterminate={@header_state == :some}
+      disabled={@page_ids == []}
+      aria-label={@select_all_label}
+      data-pc-dt-select-all
+      phx-click={select_page_js(@select_event, @target, @page_ids)}
+    />
+    """)
+  end
+
+  defp select_row_js(event, target, id),
+    do: push_op(event, target, %{"op" => "select", "id" => to_string(id)})
+
+  defp select_page_js(event, target, ids),
+    do: push_op(event, target, %{"op" => "select_page", "ids" => ids})
+
+  defp push_op(event, nil, value), do: JS.push(event, value: value)
+  defp push_op(event, target, value), do: JS.push(event, value: value, target: target)
 
   defp url_for(path, %State{} = state) do
     query = state |> State.to_params() |> flatten_params() |> URI.encode_query()
