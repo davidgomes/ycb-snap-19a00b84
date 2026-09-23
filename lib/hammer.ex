@@ -21,6 +21,14 @@ defmodule Hammer do
   @type count :: pos_integer
   @type increment :: non_neg_integer
 
+  @typedoc """
+  Callback invoked with the algorithm and the expired entries before a backend cleans them up.
+  See `Hammer.ETS` and `Hammer.Atomic`.
+  """
+  @type before_clean ::
+          (algorithm :: atom(), entries :: [map()] -> any())
+          | {module(), atom(), list()}
+
   @doc """
   Checks if a key is allowed to perform an action, and increment the counter.
 

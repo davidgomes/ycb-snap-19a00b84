@@ -154,6 +154,34 @@ defmodule Hammer.ETS.SlidingWindow do
     :ets.select_delete(table, match_spec)
   end
 
+  @doc """
+  Returns the expired entries from the table without deleting them.
+  """
+  @spec select_expired(config :: Hammer.ETS.config()) :: [tuple()]
+  def select_expired(config) do
+    match_spec = [{{:_, :"$1"}, [{:<, :"$1", {:const, now()}}], [:"$_"]}]
+    :ets.select(config.table, match_spec)
+  end
+
+  @doc """
+  Converts entries returned by `select_expired/1` to one `%{key: key, count: count}` map per key,
+  where `count` is the number of expired hits for that key.
+  """
+  @spec normalize_expired(entries :: [tuple()]) :: [map()]
+  def normalize_expired(entries) do
+    entries
+    |> Enum.frequencies_by(fn {{key, _timestamp}, _expires_at} -> key end)
+    |> Enum.map(fn {key, count} -> %{key: key, count: count} end)
+  end
+
+  @doc """
+  Deletes entries returned by `select_expired/1`.
+  """
+  @spec delete_expired(config :: Hammer.ETS.config(), entries :: [tuple()]) :: :ok
+  def delete_expired(config, entries) do
+    Enum.each(entries, &:ets.delete_object(config.table, &1))
+  end
+
   defp get_earliest_expiry(table, key, now) do
     match_spec = [
       {

@@ -192,4 +192,13 @@ defmodule Hammer.Atomic.TokenBucket do
         0
     end
   end
+
+  @doc """
+  Converts a stored entry to a `%{key: key, level: level, last_update: last_update}` map.
+  """
+  @spec normalize_entry(key :: term(), atomic :: :atomics.atomics_ref()) :: map()
+  def normalize_entry(key, atomic) do
+    {last_update, level} = unpack(:atomics.get(atomic, 1))
+    %{key: key, level: level, last_update: last_update}
+  end
 end

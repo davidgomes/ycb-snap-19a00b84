@@ -185,4 +185,12 @@ defmodule Hammer.Atomic.FixWindow do
       [] -> 0
     end
   end
+
+  @doc """
+  Converts a stored entry to a `%{key: key, count: count, expires_at: expires_at}` map.
+  """
+  @spec normalize_entry({key :: term(), window :: integer()}, :atomics.atomics_ref()) :: map()
+  def normalize_entry({key, _window}, atomic) do
+    %{key: key, count: :atomics.get(atomic, 1), expires_at: :atomics.get(atomic, 2)}
+  end
 end

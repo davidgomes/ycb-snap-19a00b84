@@ -163,4 +163,31 @@ defmodule Hammer.ETS.FixWindow do
     match_spec = [{{{:_, :_}, :_, :"$1"}, [], [{:<, :"$1", {:const, ETS.now()}}]}]
     :ets.select_delete(table, match_spec)
   end
+
+  @doc """
+  Returns the expired entries from the table without deleting them.
+  """
+  @spec select_expired(config :: ETS.config()) :: [tuple()]
+  def select_expired(config) do
+    match_spec = [{{{:_, :_}, :_, :"$1"}, [{:<, :"$1", {:const, ETS.now()}}], [:"$_"]}]
+    :ets.select(config.table, match_spec)
+  end
+
+  @doc """
+  Converts entries returned by `select_expired/1` to `%{key: key, count: count, expires_at: expires_at}` maps.
+  """
+  @spec normalize_expired(entries :: [tuple()]) :: [map()]
+  def normalize_expired(entries) do
+    Enum.map(entries, fn {{key, _window}, count, expires_at} ->
+      %{key: key, count: count, expires_at: expires_at}
+    end)
+  end
+
+  @doc """
+  Deletes entries returned by `select_expired/1`, unless they have been updated since.
+  """
+  @spec delete_expired(config :: ETS.config(), entries :: [tuple()]) :: :ok
+  def delete_expired(config, entries) do
+    Enum.each(entries, &:ets.delete_object(config.table, &1))
+  end
 end

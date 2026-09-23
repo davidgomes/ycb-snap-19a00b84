@@ -165,10 +165,38 @@ defmodule Hammer.ETS.LeakyBucket do
   """
   @spec clean(config :: ETS.config()) :: non_neg_integer()
   def clean(config) do
-    now = System.system_time(:second)
-    older_than = now - div(config.key_older_than, 1000)
-
-    match_spec = [{{:_, :_, :"$1"}, [], [{:<, :"$1", {:const, older_than}}]}]
+    match_spec = [{{:_, :_, :"$1"}, [], [{:<, :"$1", {:const, older_than(config)}}]}]
     :ets.select_delete(config.table, match_spec)
+  end
+
+  @doc """
+  Returns the expired entries from the table without deleting them.
+  """
+  @spec select_expired(config :: ETS.config()) :: [tuple()]
+  def select_expired(config) do
+    match_spec = [{{:_, :_, :"$1"}, [{:<, :"$1", {:const, older_than(config)}}], [:"$_"]}]
+    :ets.select(config.table, match_spec)
+  end
+
+  @doc """
+  Converts entries returned by `select_expired/1` to `%{key: key, level: level, last_update: last_update}` maps.
+  """
+  @spec normalize_expired(entries :: [tuple()]) :: [map()]
+  def normalize_expired(entries) do
+    Enum.map(entries, fn {key, level, last_update} ->
+      %{key: key, level: level, last_update: last_update}
+    end)
+  end
+
+  @doc """
+  Deletes entries returned by `select_expired/1`, unless they have been updated since.
+  """
+  @spec delete_expired(config :: ETS.config(), entries :: [tuple()]) :: :ok
+  def delete_expired(config, entries) do
+    Enum.each(entries, &:ets.delete_object(config.table, &1))
+  end
+
+  defp older_than(config) do
+    System.system_time(:second) - div(config.key_older_than, 1000)
   end
 end
