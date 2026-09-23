@@ -30,8 +30,11 @@ defmodule GradingClient.Answers do
 
   @doc """
   Checks if the given answer is correct.
+
+  The stored answer is either the exact expected value, or a 1-arity function
+  that receives the given answer and returns whether it is correct.
   """
-  @spec check(integer(), integer(), String.t()) :: :correct | {:incorrect, String.t()}
+  @spec check(term(), term(), term()) :: :correct | {:incorrect, String.t()}
   def check(module_id, question_id, answer) do
     GenServer.call(__MODULE__, {:check, module_id, question_id, answer})
   end
@@ -44,7 +47,7 @@ defmodule GradingClient.Answers do
           {:incorrect, "Question not found"}
 
         [{_id, %Answer{answer: correct_answer, help_text: help_text}}] ->
-          if answer == correct_answer do
+          if correct?(answer, correct_answer) do
             :correct
           else
             {:incorrect, help_text}
@@ -53,4 +56,7 @@ defmodule GradingClient.Answers do
 
     {:reply, result, state}
   end
+
+  defp correct?(answer, checker) when is_function(checker, 1), do: checker.(answer) == true
+  defp correct?(answer, correct_answer), do: answer == correct_answer
 end
