@@ -224,3 +224,19 @@ A lower level `phx:navigate` event is also triggered any time the browser's URL 
 
 For navigation-aware logic, prefer `phx:navigate` over hook callbacks like `updated()`,
 as hooks may fire before `window.location` is updated.
+
+### Cancelling navigation
+
+Before LiveView performs a client-side navigation, a cancelable `phx:before-navigate` event is dispatched on window. This happens for clicks on `<.link navigate={...}>` and `<.link patch={...}>`, `Phoenix.LiveView.JS.navigate/1` and `Phoenix.LiveView.JS.patch/1` (and their `this.js()` equivalents in hooks), as well as user navigation forward or back in history. The `info.detail` contains the same `href`, `patch`, `pop`, and `direction` keys as `phx:navigate`, with `href` being the location that is about to be navigated to.
+
+Calling `preventDefault()` on the event cancels the navigation. For history navigation, the browser is moved back to the entry it was on. This is useful, for example, to warn about unsaved changes:
+
+```javascript
+window.addEventListener("phx:before-navigate", (e) => {
+  if (document.querySelector("form[data-unsaved]") && !confirm("Discard unsaved changes?")) {
+    e.preventDefault()
+  }
+})
+```
+
+Server-initiated navigation via `push_navigate` and `push_patch` cannot be cancelled. Full page loads are not covered either, so you may want to combine this with a [`beforeunload`](https://developer.mozilla.org/en-US/docs/Web/API/Window/beforeunload_event) listener.
