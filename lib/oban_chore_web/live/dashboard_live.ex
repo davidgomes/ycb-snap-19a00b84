@@ -219,6 +219,13 @@ defmodule ObanChoreWeb.DashboardLive do
      |> assign(jobs: new_jobs, chore_jobs: new_chore_jobs, selected_tab: {:job, job.id})}
   end
 
+  # Flashes set inside a LiveComponent are only shown on redirects, so the component
+  # asks the parent LiveView to set them instead.
+  @impl true
+  def handle_info({:put_flash, kind, message}, socket) do
+    {:noreply, put_flash(socket, kind, message)}
+  end
+
   @impl true
   def handle_info({:oban_chore_state, job_id, state}, socket) do
     # O(1) update of the flat jobs map
