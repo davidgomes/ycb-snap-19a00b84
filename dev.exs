@@ -748,6 +748,7 @@ defmodule Dev.PlaygroundLive do
        combo: %{disabled: false, chosen: nil},
        rich: %{labels: ~w(feat bug imp des), team: ~w(amelia jonah)},
        dt: PetalComponents.DataTable.State |> struct(page_size: 5) |> run_dt(),
+       dt_selected: [],
        radio: %{
          style: "cards",
          variant: "outline",
@@ -1440,14 +1441,38 @@ defmodule Dev.PlaygroundLive do
 
   # the data table's event-mode op grammar: State.handle_op speaks all of
   # it (sort/page/search/page_size/filter/clear_filters), so the whole
-  # backend is one call plus a re-run through the free engine
+  # backend is one call plus a re-run through the free engine. Selection
+  # ops ride the same event; handle_op ignores them, so both pipe through.
   def handle_event("pg_table", params, socket) do
     alias PetalComponents.DataTable.State
     {state, _rows} = socket.assigns.dt
 
     state = State.handle_op(state, params, fields: [:name, :email, :status, :amount])
-    {:noreply, assign(socket, :dt, run_dt(state))}
+
+    {:noreply,
+     socket
+     |> assign(:dt, run_dt(state))
+     |> update(:dt_selected, &dt_select(&1, params))}
   end
+
+  def handle_event("pg_dt_export", _params, socket) do
+    count = length(socket.assigns.dt_selected)
+
+    {:noreply,
+     socket
+     |> assign(:dt_selected, [])
+     |> PetalComponents.Toast.send_toast(:success, title: "Exported #{count} rows")}
+  end
+
+  defp dt_select(ids, %{"op" => "select", "id" => id}),
+    do: if(id in ids, do: List.delete(ids, id), else: ids ++ [id])
+
+  defp dt_select(ids, %{"op" => "select_all", "ids" => page, "selected" => true}),
+    do: Enum.uniq(ids ++ page)
+
+  defp dt_select(ids, %{"op" => "select_all", "ids" => page}), do: ids -- page
+  defp dt_select(_ids, %{"op" => "clear_selection"}), do: []
+  defp dt_select(ids, _other), do: ids
 
   defp run_dt(state) do
     {rows, state} =
@@ -7308,7 +7333,8 @@ defmodule Dev.PlaygroundLive do
         Sortable, paged and filter-aware, driven by one State struct. This live demo runs
         EVENT mode: every interaction pushes a single op-grammar event, the handler applies it
         with State helpers and re-runs the free in-memory engine. Link mode does the same
-        through patch URLs - state you can curl.
+        through patch URLs - state you can curl. Tick rows to morph the toolbar into bulk
+        actions - selection is UI state, so it rides the event and never the URL.
       </p>
 
       <div class="border border-gray-200 dark:border-gray-400/20 rounded-xl p-6">
@@ -7321,7 +7347,14 @@ defmodule Dev.PlaygroundLive do
           striped
           searchable
           page_size_options={[5, 10, 20]}
+          selectable
+          selected={@dt_selected}
         >
+          <:bulk_action>
+            <.button size="sm" variant="outline" color="gray" phx-click="pg_dt_export">
+              Export
+            </.button>
+          </:bulk_action>
           <:col :let={row} field={:name} sortable>{row.name}</:col>
           <:col :let={row} field={:email} filterable="text">{row.email}</:col>
           <:col
