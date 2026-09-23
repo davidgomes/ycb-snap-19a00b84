@@ -189,25 +189,6 @@ defmodule GRPC.Client.ReResolveTest do
     :sys.get_state(worker_pid)
   end
 
-  defp wait_until(fun, timeout \\ 1_000) do
-    deadline = System.monotonic_time(:millisecond) + timeout
-    do_wait_until(fun, deadline)
-  end
-
-  defp do_wait_until(fun, deadline) do
-    cond do
-      fun.() ->
-        :ok
-
-      System.monotonic_time(:millisecond) > deadline ->
-        flunk("condition was not met in time")
-
-      true ->
-        Process.sleep(5)
-        do_wait_until(fun, deadline)
-    end
-  end
-
   # Waits for the next re-resolution of `kind` (:stop or :error) and returns
   # the Connection state once it has processed the resulting update.
   defp await_resolution(ref, kind) do
