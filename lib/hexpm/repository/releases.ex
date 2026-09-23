@@ -65,18 +65,17 @@ defmodule Hexpm.Repository.Releases do
 
   def latest_version(repository, package, opts)
       when is_binary(repository) and is_binary(package) do
-    from(r in Release,
-      join: p in assoc(r, :package),
-      join: repository in assoc(p, :repository),
-      where: repository.name == ^repository and p.name == ^package,
-      select: struct(r, [:version, :has_docs])
-    )
-    |> Repo.all()
-    |> Release.latest_version(opts)
-    |> case do
-      nil -> nil
-      release -> release.version
-    end
+    # A scalar package id lets the planner walk the release index for that package.
+    package_id =
+      from(p in Package,
+        join: repository in assoc(p, :repository),
+        where: repository.name == ^repository and p.name == ^package,
+        select: p.id
+      )
+
+    from(r in Release, where: r.package_id == subquery(package_id), select: r.version)
+    |> Release.latest(opts)
+    |> Repo.one()
   end
 
   def package_versions(packages) do

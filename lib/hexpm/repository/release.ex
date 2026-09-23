@@ -11,6 +11,9 @@ defmodule Hexpm.Repository.Release do
     field :outer_checksum, :binary
     field :has_docs, :boolean, default: false
     field :vulnerable?, :boolean, virtual: true, default: false
+    # Set by a database trigger from the version, only used for ordering
+    field :semver_sort_key, :binary, load_in_query: false
+    field :stable, :boolean, load_in_query: false
     timestamps()
 
     belongs_to :package, Package
@@ -213,6 +216,35 @@ defmodule Hexpm.Repository.Release do
   defp to_version(%Release{version: version}), do: to_version(version)
   defp to_version(%Version{} = version), do: version
   defp to_version(version) when is_binary(version), do: Version.parse!(version)
+
+  @doc """
+  Limits a release query to its latest release, taking the same options as
+  `latest_version/2`.
+
+  The ordering matches the indexes on `(package_id, semver_sort_key)` and
+  `(package_id, stable, semver_sort_key)`, so filter the query by package.
+  """
+  def latest(query, opts) do
+    only_stable? = Keyword.fetch!(opts, :only_stable)
+    unstable_fallback? = Keyword.get(opts, :unstable_fallback, false)
+    with_docs? = Keyword.get(opts, :with_docs)
+
+    query = if with_docs?, do: from(r in query, where: r.has_docs), else: query
+
+    query =
+      cond do
+        only_stable? and unstable_fallback? ->
+          from(r in query, order_by: [desc: r.stable, desc: r.semver_sort_key])
+
+        only_stable? ->
+          from(r in query, where: r.stable, order_by: [desc: r.semver_sort_key])
+
+        true ->
+          from(r in query, order_by: [desc: r.semver_sort_key])
+      end
+
+    from(query, limit: 1)
+  end
 
   def all(package) do
     assoc(package, :releases)
