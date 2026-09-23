@@ -142,17 +142,22 @@ defmodule SpiderMan do
           downloader_tid: ets_stats,
           failed_tid: ets_stats,
           spider_tid: ets_stats,
-          item_processor_tid: ets_stats
+          item_processor_tid: ets_stats,
+          throughputs: [map]
         ]
   def stats(spider) do
     components =
       :persistent_term.get(spider)
       |> Enum.sort()
-      |> Enum.map(fn {key, tid} ->
-        {key,
-         tid
-         |> :ets.info()
-         |> Keyword.take([:size, :memory])}
+      |> Enum.map(fn
+        {:stats_tid, tid} ->
+          {:throughputs, throughput(tid)}
+
+        {key, tid} ->
+          {key,
+           tid
+           |> :ets.info()
+           |> Keyword.take([:size, :memory])}
       end)
 
     [{:status, Engine.status(spider)} | components]
@@ -249,6 +254,46 @@ defmodule SpiderMan do
     Enum.each(list_spiders(), &telemetry_execute(&1))
   catch
     _, _ -> :ok
+  end
+
+  @doc """
+  Component throughput for a running spider.
+
+  Returns a list of maps (`component`, `total`, `success`, `fail`, `tps`,
+  `duration`). In Livebook the list renders as a table:
+
+      SpiderMan.throughput(MySpider)
+  """
+  @spec throughput(spider | :ets.tid()) :: [map]
+  def throughput(spider) when is_atom(spider) do
+    :persistent_term.get(spider)
+    |> Map.fetch!(:stats_tid)
+    |> throughput()
+  end
+
+  def throughput(stats_tid) when is_reference(stats_tid) do
+    stats_tid
+    |> :ets.tab2list()
+    |> Enum.sort()
+    |> Enum.map(fn {component, total, success, fail, duration} ->
+      tps =
+        case System.convert_time_unit(duration, :native, :millisecond) do
+          0 ->
+            0
+
+          ms ->
+            Float.floor(success / (ms / 1000), 2)
+        end
+
+      %{
+        component: component,
+        total: total,
+        success: success,
+        fail: fail,
+        tps: tps,
+        duration: duration
+      }
+    end)
   end
 
   @doc false

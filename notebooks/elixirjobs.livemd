@@ -145,3 +145,11 @@ run ther spider
 ```elixir
 SpiderMan.run_until_zero(spider, settings, 5_000)
 ```
+
+## Throughput in Livebook
+
+`SpiderMan.throughput/1` returns one map per component. Livebook renders that list as a table, so a cell can show success, fail, and requests per second while the spider is running:
+
+```elixir
+SpiderMan.throughput(spider)
+```
