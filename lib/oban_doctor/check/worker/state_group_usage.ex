@@ -14,6 +14,17 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsage do
 
   Good - allows re-enqueueing after completion:
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  Good - named group that allows re-enqueueing after completion:
+      unique: [fields: [:args], states: :incomplete]
+
+  Other named groups (`:incomplete`, `:scheduled`, `:successful`) are not flagged
+  by this check.
+
+  ## References
+
+    * [Oban Unique Jobs guide](https://hexdocs.pm/oban/unique_jobs.html)
+    * [`Oban.Job.unique_states/1`](https://hexdocs.pm/oban/Oban.Job.html#unique_states/1)
   """
 
   use ObanDoctor.Check, category: :worker
