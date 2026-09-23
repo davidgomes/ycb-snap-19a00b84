@@ -21,14 +21,14 @@ defmodule Warehouse.Clients.Assembly.Connection do
     Logger.debug("Warehouse.Clients.Assembly.Connection connecting to gateway at #{config(:url)}")
 
     case GRPC.Stub.connect(config(:url), assembly_service_options()) do
-      {:error, error} ->
-        Logger.error("Warehouse.Clients.Assembly.Connection could not connect: #{error}")
-        Process.sleep(5000)
-        init(%{})
-
-      channel ->
+      {:ok, channel} ->
         Logger.debug("Warehouse.Clients.Assembly.Connection connected")
         {:ok, channel}
+
+      {:error, error} ->
+        Logger.error("Warehouse.Clients.Assembly.Connection could not connect: #{inspect(error)}")
+        Process.sleep(5000)
+        init(%{})
     end
   end
 

@@ -10,4 +10,26 @@ defmodule Warehouse do
   - Calculating and tracking the demand for different SKUs in our system
     (available, back ordered, etc)
   """
+
+  @doc """
+  Starts all GenServers required for Warehouse to run, then loads the current
+  component demands from the assembly service.
+
+  ## Examples
+
+      iex> warmup()
+      :ok
+
+  """
+  @spec warmup() :: :ok
+  def warmup() do
+    with :ok <- Warehouse.Component.warmup_components(),
+         :ok <- Warehouse.Sku.warmup_skus() do
+      Warehouse.Clients.Assembly.request_component_demands()
+      |> Stream.each(fn %{component_id: id, demand_quantity: demand} ->
+        Warehouse.Component.update_component_demand(id, demand)
+      end)
+      |> Stream.run()
+    end
+  end
 end

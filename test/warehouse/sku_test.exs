@@ -16,6 +16,14 @@ defmodule Warehouse.SkuTest do
     assert Sku.list_skus(ids) == skus
   end
 
+  test "warmup_skus/0 starts all sku processes" do
+    sku = insert(:sku)
+    assert Registry.lookup(Warehouse.SkuRegistry, to_string(sku.id)) == []
+
+    assert :ok = Sku.warmup_skus()
+    assert [_] = Registry.lookup(Warehouse.SkuRegistry, to_string(sku.id))
+  end
+
   test "get_sku/1 finds a sku by ID" do
     sku = :sku |> insert() |> supervise()
     assert Sku.get_sku(sku.id) == sku

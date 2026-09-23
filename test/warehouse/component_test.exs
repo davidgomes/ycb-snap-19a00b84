@@ -28,6 +28,14 @@ defmodule Warehouse.ComponentTest do
     assert Component.list_components(ids) == components
   end
 
+  test "warmup_components/0 starts all component processes" do
+    component = insert(:component)
+    assert Registry.lookup(Warehouse.ComponentRegistry, to_string(component.id)) == []
+
+    assert :ok = Component.warmup_components()
+    assert [_] = Registry.lookup(Warehouse.ComponentRegistry, to_string(component.id))
+  end
+
   test "get_component/1 finds a component by ID" do
     component = :component |> insert() |> supervise()
     assert Component.get_component(component.id) == component
