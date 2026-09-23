@@ -393,6 +393,44 @@ defmodule Sentry.TransportTest do
       # Other categories should not be rate-limited
       refute Transport.RateLimiter.rate_limited?("session")
     end
+
+    test "drops log and metric envelopes when their byte category is rate-limited", %{
+      bypass: bypass
+    } do
+      Bypass.expect_once(bypass, "POST", "/api/1/envelope/", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header(
+          "X-Sentry-Rate-Limits",
+          "60:log_byte:organization, 60:trace_metric_byte:organization"
+        )
+        |> Plug.Conn.resp(200, ~s<{"id":"first-event"}>)
+      end)
+
+      envelope = Envelope.from_event(Event.create_event(message: "Hello"))
+      assert {:ok, "first-event"} = Transport.encode_and_post_envelope(envelope, HackneyClient)
+
+      log_envelope =
+        Envelope.from_log_events([
+          %Sentry.LogEvent{timestamp: System.system_time(:second), level: :info, body: "hi"}
+        ])
+
+      metric_envelope =
+        Envelope.from_metric_events([
+          %Sentry.Metric{
+            type: :counter,
+            name: "requests",
+            value: 1,
+            timestamp: System.system_time(:second)
+          }
+        ])
+
+      # Bypass only expects one request, so these must be dropped before sending.
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(log_envelope, HackneyClient, _retries = [])
+
+      assert {:error, %ClientError{reason: :rate_limited}} =
+               Transport.encode_and_post_envelope(metric_envelope, HackneyClient, _retries = [])
+    end
   end
 
   defp error(fun) do

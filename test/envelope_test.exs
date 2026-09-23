@@ -336,4 +336,60 @@ defmodule Sentry.EnvelopeTest do
       assert Envelope.get_data_category(metric_batch) == "trace_metric"
     end
   end
+
+  describe "get_byte_data_category/1" do
+    test "returns the byte category for logs and metrics" do
+      assert Envelope.get_byte_data_category("log_item") == "log_byte"
+      assert Envelope.get_byte_data_category("trace_metric") == "trace_metric_byte"
+    end
+
+    test "returns nil for other categories" do
+      for category <- ~w(error transaction monitor attachment span internal) do
+        assert Envelope.get_byte_data_category(category) == nil
+      end
+    end
+  end
+
+  describe "serialized_byte_size/1" do
+    test "returns the size of the JSON-encoded log event" do
+      log_event = %LogEvent{timestamp: 1_588_601_261.535_386, level: :info, body: "test log"}
+
+      assert Envelope.get_data_category(log_event) == "log_item"
+
+      assert Envelope.serialized_byte_size(log_event) ==
+               encoded_byte_size(LogEvent.to_map(log_event))
+    end
+
+    test "returns the size of the JSON-encoded metric" do
+      metric = %Metric{type: :counter, name: "test", value: 1, timestamp: 1_588_601_261.5}
+
+      assert Envelope.get_data_category(metric) == "trace_metric"
+
+      assert Envelope.serialized_byte_size(metric) ==
+               encoded_byte_size(Metric.to_map(metric))
+    end
+
+    test "returns the sum of the sizes of the items in a batch" do
+      log_events =
+        for body <- ["short", "a somewhat longer log message"] do
+          %LogEvent{timestamp: 1_588_601_261.535_386, level: :info, body: body}
+        end
+
+      metrics =
+        for name <- ["a", "a.longer.metric.name"] do
+          %Metric{type: :gauge, name: name, value: 2.5, timestamp: 1_588_601_261.5}
+        end
+
+      assert Envelope.serialized_byte_size(%Sentry.LogBatch{log_events: log_events}) ==
+               Enum.sum(Enum.map(log_events, &Envelope.serialized_byte_size/1))
+
+      assert Envelope.serialized_byte_size(%Sentry.MetricBatch{metrics: metrics}) ==
+               Enum.sum(Enum.map(metrics, &Envelope.serialized_byte_size/1))
+    end
+  end
+
+  defp encoded_byte_size(map) do
+    {:ok, encoded} = Sentry.JSON.encode(map, Sentry.Config.json_library())
+    byte_size(encoded)
+  end
 end

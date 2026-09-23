@@ -6,7 +6,17 @@ defmodule Sentry.ClientReport.Sender do
 
   use GenServer
 
-  alias Sentry.{Client, ClientReport, Config, Envelope, Transaction}
+  alias Sentry.{
+    Client,
+    ClientReport,
+    Config,
+    Envelope,
+    LogBatch,
+    LogEvent,
+    Metric,
+    MetricBatch,
+    Transaction
+  }
 
   @send_interval 30_000
 
@@ -39,6 +49,10 @@ defmodule Sentry.ClientReport.Sender do
                | Sentry.CheckIn.t()
                | ClientReport.t()
                | Sentry.Event.t()
+               | LogBatch.t()
+               | LogEvent.t()
+               | MetricBatch.t()
+               | Metric.t()
                | Sentry.Transaction.t()
   def record_discarded_events(reason, event_items, genserver)
       when is_list(event_items) do
@@ -46,7 +60,7 @@ defmodule Sentry.ClientReport.Sender do
     # https://develop.sentry.dev/sdk/client-reports/
     if Enum.member?(@client_report_reasons, reason) do
       Enum.each(event_items, fn item ->
-        for {category, quantity} <- data_categories(item) do
+        for {category, quantity} <- data_categories(item), quantity > 0 do
           GenServer.cast(genserver, {:record_discarded_events, reason, category, quantity})
         end
       end)
@@ -65,9 +79,27 @@ defmodule Sentry.ClientReport.Sender do
     [{Envelope.get_data_category(transaction), 1}, {"span", span_count}]
   end
 
+  # Logs and metrics are tracked both by count and by serialized size, so a
+  # dropped log event or metric also records a `log_byte`/`trace_metric_byte`
+  # outcome whose quantity is its size in bytes.
+  # https://develop.sentry.dev/sdk/telemetry/client-reports/
+  defp data_categories(%struct{} = item)
+       when struct in [LogBatch, LogEvent, MetricBatch, Metric] do
+    category = Envelope.get_data_category(item)
+
+    [
+      {category, telemetry_item_count(item)},
+      {Envelope.get_byte_data_category(category), Envelope.serialized_byte_size(item)}
+    ]
+  end
+
   defp data_categories(item) do
     [{Envelope.get_data_category(item), 1}]
   end
+
+  defp telemetry_item_count(%LogBatch{log_events: log_events}), do: length(log_events)
+  defp telemetry_item_count(%MetricBatch{metrics: metrics}), do: length(metrics)
+  defp telemetry_item_count(_log_event_or_metric), do: 1
 
   ## Callbacks
 

@@ -4,7 +4,7 @@ defmodule Sentry.ClientReportTest do
   import Sentry.TestHelpers
 
   alias Sentry.ClientReport.Sender
-  alias Sentry.Event
+  alias Sentry.{Envelope, Event, LogBatch, LogEvent, Metric, MetricBatch}
 
   setup do
     setup_bypass()
@@ -138,6 +138,60 @@ defmodule Sentry.ClientReportTest do
                {:before_send, "transaction"} => 1,
                {:before_send, "span"} => 1
              }
+    end
+
+    test "records log_item and log_byte outcomes when log events are discarded" do
+      start_supervised!({Sender, name: :test_log_report})
+
+      log_events =
+        for body <- ["first", "second log", "third log message"] do
+          %LogEvent{timestamp: 1_588_601_261.535_386, level: :info, body: body}
+        end
+
+      [single | _] = log_events
+      batch = %LogBatch{log_events: log_events}
+
+      assert :ok = Sender.record_discarded_events(:ratelimit_backoff, [batch], :test_log_report)
+      assert :ok = Sender.record_discarded_events(:cache_overflow, [single], :test_log_report)
+
+      assert :sys.get_state(:test_log_report) == %{
+               {:ratelimit_backoff, "log_item"} => 3,
+               {:ratelimit_backoff, "log_byte"} => Envelope.serialized_byte_size(batch),
+               {:cache_overflow, "log_item"} => 1,
+               {:cache_overflow, "log_byte"} => Envelope.serialized_byte_size(single)
+             }
+    end
+
+    test "records trace_metric and trace_metric_byte outcomes when metrics are discarded" do
+      start_supervised!({Sender, name: :test_metric_report})
+
+      metrics =
+        for name <- ["a", "b.metric"] do
+          %Metric{type: :counter, name: name, value: 1, timestamp: 1_588_601_261.5}
+        end
+
+      [single | _] = metrics
+      batch = %MetricBatch{metrics: metrics}
+
+      assert :ok = Sender.record_discarded_events(:send_error, [batch], :test_metric_report)
+      assert :ok = Sender.record_discarded_events(:send_error, [single], :test_metric_report)
+
+      assert :sys.get_state(:test_metric_report) == %{
+               {:send_error, "trace_metric"} => 3,
+               {:send_error, "trace_metric_byte"} =>
+                 Envelope.serialized_byte_size(batch) + Envelope.serialized_byte_size(single)
+             }
+    end
+
+    test "does not record byte outcomes for other categories" do
+      start_supervised!({Sender, name: :test_no_byte_report})
+
+      event = %Event{event_id: Sentry.UUID.uuid4_hex(), timestamp: "2024-10-12T13:21:13"}
+
+      assert :ok =
+               Sender.record_discarded_events(:ratelimit_backoff, [event], :test_no_byte_report)
+
+      assert :sys.get_state(:test_no_byte_report) == %{{:ratelimit_backoff, "error"} => 1}
     end
   end
 end

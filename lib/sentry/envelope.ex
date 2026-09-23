@@ -126,7 +126,9 @@ defmodule Sentry.Envelope do
           | ClientReport.t()
           | Event.t()
           | LogBatch.t()
+          | LogEvent.t()
           | MetricBatch.t()
+          | Metric.t()
           | Transaction.t()
         ) ::
           String.t()
@@ -136,7 +138,50 @@ defmodule Sentry.Envelope do
   def get_data_category(%ClientReport{}), do: "internal"
   def get_data_category(%Event{}), do: "error"
   def get_data_category(%LogBatch{}), do: "log_item"
+  def get_data_category(%LogEvent{}), do: "log_item"
   def get_data_category(%MetricBatch{}), do: "trace_metric"
+  def get_data_category(%Metric{}), do: "trace_metric"
+
+  @doc """
+  Returns the byte-based data category that accompanies the given count-based
+  data category, or `nil` if there is none.
+
+  Sentry tracks logs and metrics both by count (`log_item`, `trace_metric`) and
+  by serialized size (`log_byte`, `trace_metric_byte`).
+  """
+  @spec get_byte_data_category(String.t()) :: String.t() | nil
+  def get_byte_data_category("log_item"), do: "log_byte"
+  def get_byte_data_category("trace_metric"), do: "trace_metric_byte"
+  def get_byte_data_category(_data_category), do: nil
+
+  @doc """
+  Returns the serialized size in bytes of a log event or metric, or the sum of
+  the sizes of all log events or metrics in a batch.
+  """
+  @spec serialized_byte_size(LogBatch.t() | LogEvent.t() | MetricBatch.t() | Metric.t()) ::
+          non_neg_integer()
+  def serialized_byte_size(%LogBatch{log_events: log_events}) do
+    Enum.reduce(log_events, 0, &(serialized_byte_size(&1) + &2))
+  end
+
+  def serialized_byte_size(%MetricBatch{metrics: metrics}) do
+    Enum.reduce(metrics, 0, &(serialized_byte_size(&1) + &2))
+  end
+
+  def serialized_byte_size(%LogEvent{} = log_event) do
+    encoded_byte_size(LogEvent.to_map(log_event))
+  end
+
+  def serialized_byte_size(%Metric{} = metric) do
+    encoded_byte_size(Metric.to_map(metric))
+  end
+
+  defp encoded_byte_size(map) do
+    case Sentry.JSON.encode(map, Config.json_library()) do
+      {:ok, encoded} -> byte_size(encoded)
+      {:error, _reason} -> 0
+    end
+  end
 
   @doc """
   Returns the total number of payload items in the envelope.

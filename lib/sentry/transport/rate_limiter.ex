@@ -91,6 +91,30 @@ defmodule Sentry.Transport.RateLimiter do
   end
 
   @doc """
+  Checks if items of the given data category are currently rate-limited.
+
+  Like `rate_limited?/1`, but also takes into account the byte-based category
+  associated with the given one (for example, log events are rate-limited if
+  either `log_item` or `log_byte` is limited).
+
+  ## Examples
+
+      iex> :ets.insert(RateLimiter, {"log_byte", System.system_time(:second) + 60})
+      iex> RateLimiter.rate_limited?("log_item")
+      false
+      iex> RateLimiter.rate_limited_for_category?("log_item")
+      true
+
+  """
+  @spec rate_limited_for_category?(String.t()) :: boolean()
+  def rate_limited_for_category?(category) when is_binary(category) do
+    case Sentry.Envelope.get_byte_data_category(category) do
+      nil -> rate_limited?(category)
+      byte_category -> rate_limited?(category) or rate_limited?(byte_category)
+    end
+  end
+
+  @doc """
   Updates global rate limit from a `Retry-After` header value.
 
   This is a fallback for when `X-Sentry-Rate-Limits` is not present.

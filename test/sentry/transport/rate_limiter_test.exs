@@ -134,5 +134,39 @@ defmodule Sentry.Transport.RateLimiterTest do
     end
   end
 
+  describe "rate_limited_for_category?/1" do
+    test "returns true when the count category is limited" do
+      RateLimiter.update_rate_limits("60:log_item")
+
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+    end
+
+    test "treats log events as limited when only log_byte is limited" do
+      RateLimiter.update_rate_limits("60:log_byte:organization")
+
+      assert RateLimiter.rate_limited?("log_item") == false
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == false
+    end
+
+    test "treats metrics as limited when only trace_metric_byte is limited" do
+      RateLimiter.update_rate_limits("60:trace_metric_byte:organization")
+
+      assert RateLimiter.rate_limited?("trace_metric") == false
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == true
+      assert RateLimiter.rate_limited_for_category?("log_item") == false
+    end
+
+    test "behaves like rate_limited?/1 for categories without a byte category" do
+      assert RateLimiter.rate_limited_for_category?("error") == false
+
+      RateLimiter.update_rate_limits("60:error")
+      assert RateLimiter.rate_limited_for_category?("error") == true
+
+      :ets.insert(table_name(), {:global, System.system_time(:second) + 60})
+      assert RateLimiter.rate_limited_for_category?("transaction") == true
+    end
+  end
+
   defp table_name, do: Process.get(:rate_limiter_table_name)
 end
