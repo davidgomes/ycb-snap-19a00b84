@@ -31,6 +31,25 @@ defmodule GRPC.Client.ConnectionTest do
 
       assert {:ok, ^channel} = Connection.pick_channel(%Channel{ref: ref})
     end
+
+    test "round_robin picks a different backend on each call", %{ref: ref, adapter: adapter} do
+      {:ok, channel} =
+        Connection.connect("ipv4:127.0.0.1:50051,127.0.0.2:50051",
+          adapter: adapter,
+          name: ref,
+          lb_policy: :round_robin
+        )
+
+      hosts =
+        for _ <- 1..4 do
+          {:ok, %Channel{host: host}} = Connection.pick_channel(channel)
+          host
+        end
+
+      assert hosts == ["127.0.0.1", "127.0.0.2", "127.0.0.1", "127.0.0.2"]
+
+      Connection.disconnect(channel)
+    end
   end
 
   describe "connect/2 - already_started branch" do
