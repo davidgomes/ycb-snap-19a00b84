@@ -97,7 +97,7 @@ defmodule EctoJob.Producer do
       %State{
         repo: repo,
         schema: schema,
-        notifier: Process.whereis(notifier),
+        notifier: notifier && Process.whereis(notifier),
         demand: 0,
         clock: &DateTime.utc_now/0,
         poll_interval: poll_interval,
@@ -122,7 +122,12 @@ defmodule EctoJob.Producer do
         }
       ) do
     _ = start_timer(poll_interval)
-    _ = start_listener(notifier, schema, notifications_listen_timeout)
+
+    _ =
+      if notifier do
+        start_listener(notifier, schema, notifications_listen_timeout)
+      end
+
     {:producer, state}
   end
 
