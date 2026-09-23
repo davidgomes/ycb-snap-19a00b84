@@ -2,18 +2,45 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsage do
   @moduledoc """
   Checks for workers using the `:all` state group in unique configuration.
 
-  Using `states: :all` (or `states: [:all]`) in unique configuration is dangerous
-  because it includes `:completed` and `:discarded` states. This means once a job
-  completes or is discarded, you can never enqueue another job with the same
-  unique key.
+  Oban provides named state groups for unique constraints:
+  - `:successful` (default) - excludes cancelled/discarded, safe for most cases
+  - `:incomplete` - only unfinished jobs, good for preventing concurrent execution
+  - `:scheduled` - only scheduled jobs, useful for debouncing
+  - `:all` - includes cancelled and discarded jobs (DANGEROUS)
 
-  ## Examples
+  Using `states: :all` is dangerous because it includes `:completed` and `:discarded`
+  states. This means once a job completes or is discarded, you can never enqueue
+  another job with the same unique key.
 
-  Bad - prevents re-enqueueing forever:
-      unique: [fields: [:args], states: :all]
+  ## How to fix
 
-  Good - allows re-enqueueing after completion:
-      unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+  Replace `:all` with a named state group or explicit states:
+
+      # Use :incomplete to prevent concurrent execution
+      use Oban.Worker,
+        queue: :default,
+        unique: [fields: [:args], states: :incomplete]
+
+      # Or use explicit states
+      use Oban.Worker,
+        queue: :default,
+        unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
+
+  See [Oban unique jobs](https://hexdocs.pm/oban/unique_jobs.html).
+
+  ## Configuration
+
+  In `.oban_doctor.exs`:
+
+      checks: [
+        state_group_usage: [
+          # Disable the check entirely
+          enabled: false,
+
+          # Or exclude specific workers from this check
+          excluded_workers: [MyApp.Workers.LegacyWorker]
+        ]
+      ]
   """
 
   use ObanDoctor.Check, category: :worker
