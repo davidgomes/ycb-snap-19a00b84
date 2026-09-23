@@ -244,11 +244,22 @@ defmodule Nostrum.Constants do
       "HELLO" => 8,
       "RESUMED" => 9,
       "UNDOCUMENTED_10" => 10,
-      "UNDOCUMENTED_11" => 11,
+      "CLIENTS_CONNECT" => 11,
       "CLIENT_CONNECT" => 12,
       "CLIENT_DISCONNECT" => 13,
       "CODEC_INFO" => 14,
-      "UNDOCUMENTED_18" => 18
+      "UNDOCUMENTED_18" => 18,
+      "DAVE_PREPARE_TRANSITION" => 21,
+      "DAVE_EXECUTE_TRANSITION" => 22,
+      "DAVE_TRANSITION_READY" => 23,
+      "DAVE_PREPARE_EPOCH" => 24,
+      "MLS_EXTERNAL_SENDER" => 25,
+      "MLS_KEY_PACKAGE" => 26,
+      "MLS_PROPOSALS" => 27,
+      "MLS_COMMIT_WELCOME" => 28,
+      "MLS_ANNOUNCE_COMMIT_TRANSITION" => 29,
+      "MLS_WELCOME" => 30,
+      "MLS_INVALID_COMMIT_WELCOME" => 31
     }
   end
 
