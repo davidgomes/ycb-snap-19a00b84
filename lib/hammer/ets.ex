@@ -181,8 +181,9 @@ defmodule Hammer.ETS do
     {before_clean, opts} = Keyword.pop(opts, :before_clean)
     before_clean = CleanUtils.validate_before_clean!(before_clean)
 
-    if before_clean && not (Code.ensure_loaded?(algorithm) and
-                                function_exported?(algorithm, :select_expired, 1)) do
+    if before_clean &&
+         not (Code.ensure_loaded?(algorithm) and
+                function_exported?(algorithm, :select_expired, 1)) do
       raise ArgumentError,
             "#{inspect(algorithm)} does not support the :before_clean option"
     end
