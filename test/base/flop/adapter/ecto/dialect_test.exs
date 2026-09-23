@@ -2,6 +2,7 @@ defmodule Flop.Adapter.Ecto.DialectTest do
   use ExUnit.Case, async: true
 
   alias Flop.Adapter.Ecto.Dialect
+  alias MyApp.CustomFieldPet
 
   @order_directions [
     :asc,
@@ -171,6 +172,15 @@ defmodule Flop.Adapter.Ecto.DialectTest do
                ~S|is_nil(p0.tags) or fragment("JSON_LENGTH(?) = 0", p0.tags)|
     end
 
+    test "applies the same functions to a custom field with field_dynamic" do
+      filters = [contains: "pear", not_contains: "pear", empty: true]
+
+      for repo <- [PostgresRepo, MyXQLRepo], {op, value} <- filters do
+        assert where_clause(repo, :pet_tags, op, value, CustomFieldPet) ==
+                 where_clause(repo, :tags, op, value)
+      end
+    end
+
     test "dumps the value with the element type of the field" do
       assert Dialect.dump_array_element("pear", {:array, :string}) == "pear"
 
@@ -197,11 +207,11 @@ defmodule Flop.Adapter.Ecto.DialectTest do
     |> String.trim_trailing(">")
   end
 
-  defp where_clause(repo, field, op, value) do
+  defp where_clause(repo, field, op, value, module \\ MyApp.Pet) do
     flop = %Flop{filters: [%Flop.Filter{field: field, op: op, value: value}]}
 
-    MyApp.Pet
-    |> Flop.query(flop, for: MyApp.Pet, repo: repo)
+    module
+    |> Flop.query(flop, for: module, repo: repo)
     |> inspect()
     |> String.split("where: ")
     |> List.last()
