@@ -1013,6 +1013,172 @@ defmodule PaginatorTest do
     end
   end
 
+  describe "paginate a collection of payments, sorting by an expression" do
+    test "sorts with after cursor", %{
+      payments: {p1, p2, _p3, _p4, _p5, _p6, _p7, _p8, _p9, p10, p11, p12}
+    } do
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_customer_name_length(:desc, :asc)
+        |> Repo.paginate(
+          cursor_fields: customer_name_length_cursor_fields(:desc, :asc),
+          fetch_cursor_value_fun: &fetch_customer_name_length/2,
+          after: encode_cursor(%{customer_name_length: 7, id: p10.id}),
+          limit: 4
+        )
+
+      assert to_ids(entries) == to_ids([p11, p12, p1, p2])
+
+      assert metadata == %Metadata{
+               after: encode_cursor(%{customer_name_length: 5, id: p2.id}),
+               before: encode_cursor(%{customer_name_length: 7, id: p11.id}),
+               limit: 4
+             }
+    end
+
+    test "sorts with before cursor", %{
+      payments: {p1, p2, _p3, _p4, _p5, _p6, _p7, _p8, _p9, _p10, p11, p12}
+    } do
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_customer_name_length(:desc, :asc)
+        |> Repo.paginate(
+          cursor_fields: customer_name_length_cursor_fields(:desc, :asc),
+          fetch_cursor_value_fun: &fetch_customer_name_length/2,
+          before: encode_cursor(%{customer_name_length: 5, id: p2.id}),
+          limit: 3
+        )
+
+      assert to_ids(entries) == to_ids([p11, p12, p1])
+
+      assert metadata == %Metadata{
+               after: encode_cursor(%{customer_name_length: 5, id: p1.id}),
+               before: encode_cursor(%{customer_name_length: 7, id: p11.id}),
+               limit: 3
+             }
+    end
+
+    for length_direction <- [:asc, :desc] do
+      test "paginates forwards and backwards - order by customer name length #{length_direction}" do
+        query = payments_by_customer_name_length(unquote(length_direction), :asc)
+
+        opts = [
+          cursor_fields: customer_name_length_cursor_fields(unquote(length_direction), :asc),
+          fetch_cursor_value_fun: &fetch_customer_name_length/2,
+          limit: 1
+        ]
+
+        expected = query |> Repo.all() |> to_ids()
+
+        assert paginate_as_list(query, opts) == expected
+        assert paginate_before_as_list(query, opts) == init([nil | expected])
+      end
+    end
+
+    test "per-record cursor generation", %{
+      payments: {p1, _p2, _p3, _p4, _p5, _p6, _p7, _p8, _p9, _p10, _p11, _p12}
+    } do
+      assert Paginator.cursor_for_record(
+               p1,
+               customer_name_length_cursor_fields(:desc, :asc),
+               &fetch_customer_name_length/2
+             ) == encode_cursor(%{customer_name_length: 5, id: p1.id})
+    end
+  end
+
+  for order <- @available_sorting_order do
+    test "paginates correctly when an expression contains nulls - order by charged_at day #{order}" do
+      customer = insert(:customer)
+
+      now = NaiveDateTime.utc_now()
+
+      for k <- 1..50 do
+        if Enum.random([true, false]) do
+          insert(:payment, customer: customer, charged_at: NaiveDateTime.add(now, k * 7 * 3600))
+        else
+          insert(:payment, customer: customer, charged_at: nil)
+        end
+      end
+
+      opts = [
+        cursor_fields: [
+          {{:charged_on, fn -> dynamic([p], fragment("date_trunc('day', ?)", p.charged_at)) end},
+           unquote(order)},
+          id: :asc
+        ],
+        fetch_cursor_value_fun: fn
+          payment, :charged_on ->
+            payment.charged_at && %{payment.charged_at | hour: 0, minute: 0, second: 0}
+
+          payment, field ->
+            Paginator.default_fetch_cursor_value(payment, field)
+        end,
+        limit: 1
+      ]
+
+      query =
+        from(
+          p in Payment,
+          where: p.customer_id == ^customer.id,
+          order_by: [
+            {^unquote(order), fragment("date_trunc('day', ?)", p.charged_at)},
+            asc: p.id
+          ],
+          select: p
+        )
+
+      expected = query |> Repo.all() |> to_ids()
+
+      assert paginate_as_list(query, opts) == expected
+      assert paginate_before_as_list(query, opts) == init([nil | expected])
+    end
+  end
+
+  test "paginates on an expression selected into a virtual field", %{
+    customers: {c1, _c2, _c3}
+  } do
+    c4 = insert(:customer, name: "Bob Bob")
+    c5 = insert(:customer, name: "Bob Smith")
+    c6 = insert(:customer, name: "Alice Bob")
+    c7 = insert(:customer, name: "Bob Bob Bob")
+    insert(:customer, name: "Bobby")
+
+    search = "bob"
+    query = customers_by_search_rank(search)
+
+    opts = [
+      cursor_fields: [
+        {{:rank_value,
+          fn ->
+            dynamic(
+              [c],
+              fragment(
+                "ts_rank(to_tsvector('simple', ?), plainto_tsquery('simple', ?))",
+                c.name,
+                ^search
+              )
+            )
+          end}, :desc},
+        id: :asc
+      ],
+      limit: 2
+    ]
+
+    page = Repo.paginate(query, opts)
+    assert to_ids(page.entries) == to_ids([c7, c4])
+
+    assert page.metadata.after ==
+             encode_cursor(%{rank_value: List.last(page.entries).rank_value, id: c4.id})
+
+    page = Repo.paginate(query, opts ++ [after: page.metadata.after])
+    assert to_ids(page.entries) == to_ids([c1, c5])
+
+    page = Repo.paginate(query, opts ++ [after: page.metadata.after])
+    assert to_ids(page.entries) == to_ids([c6])
+    assert page.metadata.after == nil
+
+    page = Repo.paginate(query, opts ++ [before: page.metadata.before])
+    assert to_ids(page.entries) == to_ids([c1, c5])
+  end
+
   defp to_ids(entries), do: Enum.map(entries, & &1.id)
 
   defp create_customers_and_payments(_context) do
@@ -1102,6 +1268,64 @@ defmodule PaginatorTest do
       order_by: [
         {^address_city_direction, a.city},
         {^payment_id_direction, p.id}
+      ]
+    )
+  end
+
+  defp payments_by_customer_name_length(length_direction, id_direction) do
+    from(
+      p in Payment,
+      as: :payments,
+      join: c in assoc(p, :customer),
+      as: :customer,
+      preload: [customer: c],
+      select: p,
+      order_by: [
+        {^length_direction, fragment("length(?)", c.name)},
+        {^id_direction, p.id}
+      ]
+    )
+  end
+
+  defp customer_name_length_cursor_fields(length_direction, id_direction) do
+    [
+      {{:customer_name_length, fn -> dynamic([customer: c], fragment("length(?)", c.name)) end},
+       length_direction},
+      id: id_direction
+    ]
+  end
+
+  defp fetch_customer_name_length(payment, :customer_name_length),
+    do: String.length(payment.customer.name)
+
+  defp fetch_customer_name_length(payment, field),
+    do: Paginator.default_fetch_cursor_value(payment, field)
+
+  defp customers_by_search_rank(search) do
+    from(
+      c in Customer,
+      where:
+        fragment(
+          "to_tsvector('simple', ?) @@ plainto_tsquery('simple', ?)",
+          c.name,
+          ^search
+        ),
+      select_merge: %{
+        rank_value:
+          fragment(
+            "ts_rank(to_tsvector('simple', ?), plainto_tsquery('simple', ?))",
+            c.name,
+            ^search
+          )
+      },
+      order_by: [
+        desc:
+          fragment(
+            "ts_rank(to_tsvector('simple', ?), plainto_tsquery('simple', ?))",
+            c.name,
+            ^search
+          ),
+        asc: c.id
       ]
     )
   end

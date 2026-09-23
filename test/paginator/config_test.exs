@@ -1,6 +1,8 @@
 defmodule Paginator.ConfigTest do
   use ExUnit.Case, async: true
 
+  import Ecto.Query, only: [dynamic: 2]
+
   alias Paginator.{Config, Cursor}
 
   describe "Config.new/2" do
@@ -49,6 +51,18 @@ defmodule Paginator.ConfigTest do
       config = Config.new(cursor_fields: [{:payments, :id}], sort_direction: :asc)
 
       assert config.cursor_fields == [{{:payments, :id}, :asc}]
+    end
+
+    test "applies {name, expression} tuples with direction" do
+      config = Config.new(cursor_fields: [{{:rank, &rank_expression/0}, :desc}])
+
+      assert config.cursor_fields == [{{:rank, &rank_expression/0}, :desc}]
+    end
+
+    test "applies {name, expression} tuples without direction" do
+      config = Config.new(cursor_fields: [{:rank, &rank_expression/0}], sort_direction: :desc)
+
+      assert config.cursor_fields == [{{:rank, &rank_expression/0}, :desc}]
     end
   end
 
@@ -167,6 +181,30 @@ defmodule Paginator.ConfigTest do
       Config.validate!(config)
     end
 
+    test "ok when after cursor matches cursor_fields with expression" do
+      config =
+        Config.new(
+          cursor_fields: [{{:rank, &rank_expression/0}, :desc}, :id],
+          after: Cursor.encode(%{rank: 0.5, id: "pay_123"})
+        )
+
+      Config.validate!(config)
+    end
+
+    test "raises ArgumentError when after cursor does not match cursor_fields with expression" do
+      config =
+        Config.new(
+          cursor_fields: [{:rank, &rank_expression/0}, :id],
+          after: Cursor.encode(%{score: 0.5, id: "pay_123"})
+        )
+
+      assert_raise Config.ArgumentError,
+                   "expected `:after` cursor to match `:cursor_fields`",
+                   fn ->
+                     Config.validate!(config)
+                   end
+    end
+
     test "raises ArgumentError when before cursor does not match the cursor_fields" do
       config = Config.new(cursor_fields: [:id], before: complex_before())
 
@@ -177,6 +215,8 @@ defmodule Paginator.ConfigTest do
                    end
     end
   end
+
+  def rank_expression, do: dynamic([p], p.rank)
 
   def simple_after, do: Cursor.encode(%{id: "pay_123"})
   def simple_before, do: Cursor.encode(%{id: "pay_789"})
