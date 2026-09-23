@@ -11,28 +11,33 @@ defmodule ObanEvents.DispatchWorkerTest do
     @moduledoc false
     @behaviour ObanEvents.Handler
 
-    def handle_event(:test_event, %{"action" => "success"}) do
+    def handle_event(:test_event, %ObanEvents.Event{data: %{"action" => "success"}}) do
       send(self(), {:handler_called, :test_event, %{"action" => "success"}})
       :ok
     end
 
-    def handle_event(:test_event, %{"action" => "error"}) do
+    def handle_event(:test_event, %ObanEvents.Event{data: %{"action" => "error"}}) do
       send(self(), {:handler_called, :test_event, %{"action" => "error"}})
       {:error, :test_error}
     end
 
-    def handle_event(:test_event, %{"action" => "raise"}) do
+    def handle_event(:test_event, %ObanEvents.Event{data: %{"action" => "raise"}}) do
       raise "Test exception"
     end
 
-    def handle_event(:test_event, %{"action" => "success_with_result"}) do
+    def handle_event(:test_event, %ObanEvents.Event{data: %{"action" => "success_with_result"}}) do
       send(self(), {:handler_called, :test_event, %{"action" => "success_with_result"}})
       {:ok, %{processed: true, count: 42}}
     end
 
-    def handle_event(:test_event, %{"action" => "unexpected"}) do
+    def handle_event(:test_event, %ObanEvents.Event{data: %{"action" => "unexpected"}}) do
       send(self(), {:handler_called, :test_event, %{"action" => "unexpected"}})
       :unexpected_return_value
+    end
+
+    def handle_event(:meta_event, event) do
+      send(self(), {:event, event})
+      :ok
     end
 
     def handle_event(_event, _data), do: :ok
@@ -131,6 +136,42 @@ defmodule ObanEvents.DispatchWorkerTest do
 
       assert log =~ "Event handler returned unexpected value"
       assert_received {:handler_called, :test_event, %{"action" => "unexpected"}}
+    end
+  end
+
+  describe "event metadata" do
+    test "passes metadata and tracing ids to the handler" do
+      job_args = %{
+        "event" => "meta_event",
+        "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
+        "data" => %{"a" => 1},
+        "event_id" => "evt-1",
+        "metadata" => %{"actor_id" => 7},
+        "causation_id" => "evt-0",
+        "correlation_id" => "corr-1",
+        "emitted_at" => "2026-01-01T00:00:00Z"
+      }
+
+      assert :ok = perform_job(DispatchWorker, job_args)
+      assert_received {:event, event}
+      assert event.id == "evt-1"
+      assert event.name == :meta_event
+      assert event.data == %{"a" => 1}
+      assert event.metadata == %{"actor_id" => 7}
+      assert event.causation_id == "evt-0"
+      assert event.correlation_id == "corr-1"
+      assert event.emitted_at == ~U[2026-01-01 00:00:00Z]
+    end
+
+    test "handles legacy jobs without metadata" do
+      job_args = %{
+        "event" => "meta_event",
+        "handler" => "Elixir.ObanEvents.DispatchWorkerTest.TestHandler",
+        "data" => %{}
+      }
+
+      assert :ok = perform_job(DispatchWorker, job_args)
+      assert_received {:event, %ObanEvents.Event{metadata: %{}, causation_id: nil}}
     end
   end
 

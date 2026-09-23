@@ -13,7 +13,7 @@ defmodule ObanEvents.Handler do
         use ObanEvents.Handler
 
         @impl true
-        def handle_event(:user_created, data) do
+        def handle_event(:user_created, %ObanEvents.Event{data: data, metadata: _meta}) do
           %{"user_id" => user_id} = data
           # Process the event
           :ok
@@ -47,20 +47,21 @@ defmodule ObanEvents.Handler do
   @doc """
   Handle an event.
 
-  Receives the event name (atom) and event-specific data (map).
+  Receives the event name (atom) and an `ObanEvents.Event` struct.
   Should process the event and return an ok/error tuple.
 
   ## Parameters
 
   - `event_name`: Atom representing the event (e.g., `:user_created`)
-  - `data`: Map containing event-specific data
+  - `event`: `ObanEvents.Event` with `data`, `metadata`, `id`, `causation_id`,
+    `correlation_id` and `emitted_at`
 
   ## Return Values
 
   - `:ok` | `{:ok, any()}` - Success
   - `{:error, any()}` - Failure (will trigger retry)
   """
-  @callback handle_event(event_name :: atom(), data :: map()) ::
+  @callback handle_event(event_name :: atom(), event :: ObanEvents.Event.t()) ::
               :ok | {:ok, any()} | {:error, any()}
 
   @doc false

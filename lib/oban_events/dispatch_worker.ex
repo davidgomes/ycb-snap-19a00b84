@@ -5,7 +5,7 @@ defmodule ObanEvents.DispatchWorker do
   This worker:
   1. Receives an event name, handler module, and data from the job args
   2. Converts strings back to atoms safely
-  3. Calls the handler's `handle_event/2` callback
+  3. Calls the handler's `handle_event/2` callback with an `ObanEvents.Event`
   4. Logs success/failure for observability
 
   ## Job Arguments
@@ -13,6 +13,7 @@ defmodule ObanEvents.DispatchWorker do
   - `event`: String representation of the event name
   - `handler`: String representation of the handler module
   - `data`: Map of event-specific data
+  - `event_id`, `metadata`, `causation_id`, `correlation_id`, `emitted_at`: event metadata (optional)
 
   ## Configuration
 
@@ -31,17 +32,18 @@ defmodule ObanEvents.DispatchWorker do
   require Logger
 
   @impl Oban.Worker
-  def perform(%Oban.Job{
-        args: %{"event" => event_name_string, "handler" => handler_module_string, "data" => data}
-      }) do
-    # Safely convert strings back to atoms
+  def perform(
+        %Oban.Job{args: %{"event" => _, "handler" => handler_module_string, "data" => _} = args} =
+          job
+      ) do
     # These atoms should already exist since they were created during emit
-    event = String.to_existing_atom(event_name_string)
     handler = String.to_existing_atom(handler_module_string)
+    event_struct = ObanEvents.Event.from_args(args, job)
+    event = event_struct.name
 
     Logger.info("Processing event: #{event} with handler: #{inspect(handler)}")
 
-    case handler.handle_event(event, data) do
+    case handler.handle_event(event, event_struct) do
       :ok ->
         Logger.info("Event processed successfully: #{event} by #{inspect(handler)}")
         :ok

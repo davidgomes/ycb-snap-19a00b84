@@ -59,7 +59,7 @@ defmodule MyApp.EmailHandler do
   require Logger
 
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, %ObanEvents.Event{data: data}) do
     %{"user_id" => user_id, "email" => email} = data
 
     Logger.info("Sending welcome email to #{email}")
@@ -133,16 +133,40 @@ end
 
 Your event bus module provides these functions:
 
-### `emit/2`
+### `emit/3`
 
 Emit an event to all registered handlers.
 
 ```elixir
-@spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+@spec emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
 
 # Raises ArgumentError if event is not registered
 MyApp.Events.emit(:user_created, %{user_id: 123, email: "user@example.com"})
+
+# With metadata and causation tracking
+MyApp.Events.emit(:welcome_sent, %{user_id: 123},
+  metadata: %{actor_id: current_user.id, request_id: request_id},
+  caused_by: event
+)
 ```
+
+Options:
+
+- `:metadata` - map of additional, JSON-serializable metadata
+- `:caused_by` - the `ObanEvents.Event` that caused this one (sets `causation_id` and `correlation_id`)
+- `:causation_id` / `:correlation_id` - set tracing ids explicitly
+
+## The Event Struct
+
+Handlers receive an `%ObanEvents.Event{}` as the second argument:
+
+- `id` - unique event id (UUID), shared by all handler jobs for one emit
+- `name` - event name atom
+- `data` - payload (string keys)
+- `metadata` - additional metadata (string keys)
+- `causation_id` - id of the event that caused this one
+- `correlation_id` - id shared across a chain of related events (defaults to the root event's id)
+- `emitted_at` - `DateTime` the event was emitted
 
 ### `get_handlers!/1`
 
@@ -186,14 +210,15 @@ defmodule MyApp.AnalyticsHandler do
   use ObanEvents.Handler
 
   @impl true
-  def handle_event(:user_created, data) do
+  def handle_event(:user_created, %ObanEvents.Event{data: data, metadata: meta}) do
     %{"user_id" => user_id} = data
+    MyApp.Analytics.identify(meta["actor_id"])
     MyApp.Analytics.track("User Created", user_id: user_id)
     :ok
   end
 
   @impl true
-  def handle_event(:user_updated, data) do
+  def handle_event(:user_updated, %ObanEvents.Event{data: data}) do
     %{"user_id" => user_id, "changes" => changes} = data
     MyApp.Analytics.track("User Updated", user_id: user_id, changes: changes)
     :ok
@@ -237,7 +262,7 @@ end)
 Handlers may be retried. Design them to be safe to run multiple times:
 
 ```elixir
-def handle_event(:user_created, %{"user_id" => user_id}) do
+def handle_event(:user_created, %ObanEvents.Event{data: %{"user_id" => user_id}}) do
   # Use upsert instead of insert to handle retries
   %UserProfile{user_id: user_id}
   |> Repo.insert(
@@ -296,7 +321,7 @@ def handle_event(_other, _data), do: :ok  # ignore rest
 ### 6. Return Errors for Retriable Failures
 
 ```elixir
-def handle_event(:send_notification, data) do
+def handle_event(:send_notification, %ObanEvents.Event{data: data}) do
   case NotificationService.send(data) do
     {:ok, _} -> :ok
     {:error, :rate_limited} -> {:error, :rate_limited}  # Will retry
@@ -380,12 +405,28 @@ end
 
 ### Testing Handlers
 
-```elixir
-test "EmailHandler sends welcome email" do
-  data = %{"user_id" => 123, "email" => "test@example.com"}
+`ObanEvents.Testing` provides helpers that build events the same way production does
+(JSON round-tripped, so keys are strings):
 
-  assert :ok = MyApp.EmailHandler.handle_event(:user_created, data)
+```elixir
+import ObanEvents.Testing
+
+test "EmailHandler sends welcome email" do
+  event = build_event(:user_created, %{user_id: 123, email: "test@example.com"},
+    metadata: %{actor_id: 1})
+
+  assert :ok = MyApp.EmailHandler.handle_event(event.name, event)
   assert_email_sent(to: "test@example.com", subject: "Welcome!")
+end
+
+test "runs through the dispatch worker" do
+  assert :ok = perform_event(MyApp.EmailHandler, :user_created, %{user_id: 123})
+end
+
+test "enqueues the event" do
+  Accounts.create_user(%{email: "test@example.com"})
+  assert_enqueued(worker: ObanEvents.DispatchWorker,
+    args: event_args(:user_created, MyApp.EmailHandler, %{user_id: 123}))
 end
 ```
 

@@ -77,7 +77,7 @@ defmodule ObanEvents do
         use ObanEvents.Handler
 
         @impl true
-        def handle_event(:user_created, data) do
+        def handle_event(:user_created, %ObanEvents.Event{data: data}) do
           %{"user_id" => user_id, "email" => email} = data
           # Send welcome email
           :ok
@@ -95,7 +95,7 @@ defmodule ObanEvents do
 
   Returns `{:ok, jobs}` on success. Raises `ArgumentError` if event is not registered.
   """
-  @callback emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
+  @callback emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
 
   @doc """
   Get all handler modules registered for a given event.
@@ -172,24 +172,29 @@ defmodule ObanEvents do
             "new_email" => "new@example.com"
           })
 
-      Note: Handlers always receive data with string keys, regardless of how you emit.
+      Note: Handlers always receive `event.data` with string keys, regardless of how you emit.
+
+      ## Options
+
+      - `:metadata` - map of additional metadata passed to handlers
+      - `:causation_id` / `:correlation_id` - explicit tracing ids
+      - `:caused_by` - an `ObanEvents.Event` that caused this event
+
+      Handlers receive an `ObanEvents.Event` struct.
 
       ## Errors
 
       Raises `ArgumentError` if the event is not registered.
       """
-      @spec emit(atom(), map()) :: {:ok, [Oban.Job.t()]}
-      def emit(event_name, data) when is_atom(event_name) and is_map(data) do
+      @spec emit(atom(), map(), keyword()) :: {:ok, [Oban.Job.t()]}
+      def emit(event_name, data, opts \\ []) when is_atom(event_name) and is_map(data) do
         handlers = get_handlers!(event_name)
+        event = ObanEvents.Event.new(event_name, data, opts)
 
         jobs =
           Enum.map(handlers, fn handler_module ->
             DispatchWorker.new(
-              %{
-                event: Atom.to_string(event_name),
-                handler: Atom.to_string(handler_module),
-                data: data
-              },
+              ObanEvents.Event.to_args(event, handler_module),
               queue: @oban_queue,
               max_attempts: @oban_max_attempts,
               priority: @oban_priority
