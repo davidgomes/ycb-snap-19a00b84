@@ -59,19 +59,57 @@ defmodule Ecto.Integration.SQLTest do
 
   test "quoted strings and identifiers cannot break out into ClickHouse syntax" do
     string = ~S|value' FROM numbers(10) -- \ $tag$body$tag$ /* comment */|
-    result = TestRepo.query!(["SELECT ", Connection.quote_name(string, ?')])
+    result = TestRepo.query!(["SELECT ", Connection.quote_string(string)])
 
     assert result.rows == [[string]]
 
-    for {quoter, name} <- [
-          {?\", ~S|alias" FROM numbers(10) -- \ $tag$body$tag$ /* comment */|},
-          {?`, ~S|alias` FROM numbers(10) -- \ $tag$body$tag$ /* comment */|}
+    for name <- [
+          ~S|alias" FROM numbers(10) -- \ $tag$body$tag$ /* comment */|,
+          ~S|alias` FROM numbers(10) -- \ $tag$body$tag$ /* comment */|,
+          ~S|alias' FROM numbers(10) -- \ $tag$body$tag$ /* comment */|
         ] do
-      result = TestRepo.query!(["SELECT 1 AS ", Connection.quote_name(name, quoter)])
+      result = TestRepo.query!(["SELECT 1 AS ", Connection.quote_name(name)])
 
       assert result.columns == [name]
       assert result.rows == [[1]]
     end
+  end
+
+  test "quoted table and column names round trip" do
+    table = ~S|quoted "table" `with` 'quotes' \ slash|
+    column = ~S|quoted "column" `with` 'quotes' \ slash|
+
+    TestRepo.query!([
+      "CREATE TABLE ",
+      Connection.quote_name(table),
+      " (",
+      Connection.quote_name(column),
+      " String) ENGINE Memory"
+    ])
+
+    on_exit(fn -> TestRepo.query!(["DROP TABLE ", Connection.quote_name(table)]) end)
+
+    column = String.to_atom(column)
+    value = ~S|it's "quoted" \ value|
+
+    assert {1, _} =
+             TestRepo.insert_all(table, [[{column, value}]], types: [{column, :string}])
+
+    assert TestRepo.all(from t in table, select: field(t, ^column)) == [value]
+
+    assert TestRepo.all(
+             from t in table,
+               where: field(t, ^column) == ^value,
+               select: fragment("?", constant(^value))
+           ) == [value]
+
+    inline_sql =
+      TestRepo.to_inline_sql(
+        :all,
+        from(t in table, where: field(t, ^column) == ^value, select: field(t, ^column))
+      )
+
+    assert TestRepo.query!(inline_sql).rows == [[value]]
   end
 
   test "disconnect_all/2" do

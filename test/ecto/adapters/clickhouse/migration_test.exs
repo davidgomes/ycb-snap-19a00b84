@@ -74,6 +74,70 @@ defmodule Ecto.Adapters.ClickHouse.MigrationTest do
     end
   end
 
+  defmodule QuotedLiterals do
+    use Ecto.Migration
+
+    def change do
+      create table(:quoted_literals,
+               primary_key: false,
+               engine: "Memory",
+               comment: ~S|table's "comment" \ slash|
+             ) do
+        add :id, :UInt64
+        add :name, :string, default: ~S|it's "default" \ slash|, comment: ~S|column's \ comment|
+      end
+
+      alter table(:quoted_literals) do
+        add :added, :string, default: ~S|added's \ default|, comment: ~S|added's \ comment|
+        modify :id, :UInt64, comment: ~S|modified's \ comment|
+      end
+    end
+  end
+
+  test "quoted comments and string defaults round trip" do
+    database = "ecto_ch_migration_test_quoted_literals"
+    opts = [database: database]
+
+    assert :ok = ClickHouse.storage_up(opts)
+    on_exit(fn -> ClickHouse.storage_down(opts) end)
+
+    Application.put_env(:migration_test, MigrationRepo,
+      database: database,
+      show_sensitive_data_on_connection_error: true
+    )
+
+    on_exit(fn -> Application.delete_env(:migration_test, MigrationRepo) end)
+
+    start_supervised!(MigrationRepo)
+
+    assert [1] ==
+             Ecto.Migrator.run(MigrationRepo, [{1, QuotedLiterals}], :up, all: true, log: false)
+
+    conn = start_supervised!({Ch, opts})
+
+    assert Ch.query!(
+             conn,
+             "select comment from system.tables where database = {database:String} and name = {table:String}",
+             %{"database" => database, "table" => "quoted_literals"}
+           ).rows == [[~S|table's "comment" \ slash|]]
+
+    assert Ch.query!(
+             conn,
+             "select name, comment from system.columns where database = {database:String} and table = {table:String} order by position",
+             %{"database" => database, "table" => "quoted_literals"}
+           ).rows == [
+             ["id", ~S|modified's \ comment|],
+             ["name", ~S|column's \ comment|],
+             ["added", ~S|added's \ comment|]
+           ]
+
+    assert %{num_rows: 1} = Ch.query!(conn, "INSERT INTO quoted_literals (id) VALUES (1)")
+
+    assert Ch.query!(conn, "SELECT name, added FROM quoted_literals").rows == [
+             [~S|it's "default" \ slash|, ~S|added's \ default|]
+           ]
+  end
+
   test "events (table+index)" do
     database = "ecto_ch_migration_test_events"
     opts = [database: database]
