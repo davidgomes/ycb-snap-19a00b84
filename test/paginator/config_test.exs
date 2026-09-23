@@ -33,6 +33,23 @@ defmodule Paginator.ConfigTest do
       assert config.cursor_fields == [id: :desc]
     end
 
+    test "applies column with nulls ordering direction tuples" do
+      config =
+        Config.new(
+          cursor_fields: [
+            {:name, :asc_nulls_first},
+            {{:payments, :charged_at}, :desc_nulls_last},
+            :id
+          ]
+        )
+
+      assert config.cursor_fields == [
+               {:name, :asc_nulls_first},
+               {{:payments, :charged_at}, :desc_nulls_last},
+               {:id, :asc}
+             ]
+    end
+
     test "applies column with direction tuples mixed with column fields" do
       config = Config.new(cursor_fields: [{:id, :desc}, :name], sort_direction: :asc)
 
@@ -158,6 +175,16 @@ defmodule Paginator.ConfigTest do
               {:person, :first_name} => "Test 121",
               {:person, :last_name} => "Test"
             })
+        )
+
+      Config.validate!(config)
+    end
+
+    test "ok when after cursor matches cursor_fields with nulls ordering directions" do
+      config =
+        Config.new(
+          cursor_fields: [date: :desc_nulls_last, id: :asc_nulls_first],
+          after: complex_after()
         )
 
       Config.validate!(config)

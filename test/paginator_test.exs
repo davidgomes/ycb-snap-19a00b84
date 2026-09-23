@@ -702,7 +702,7 @@ defmodule PaginatorTest do
         |> Repo.paginate(
           cursor_fields: [:charged_at, :id],
           sort_direction: :desc,
-          after: encode_cursor(%{charged_at: nil, id: nil}),
+          after: encode_cursor(%{charged_at: nil, id: -1}),
           limit: 8
         )
 
@@ -936,6 +936,74 @@ defmodule PaginatorTest do
            }
   end
 
+  @sort_orders [
+    :asc,
+    :asc_nulls_last,
+    :asc_nulls_first,
+    :desc,
+    :desc_nulls_first,
+    :desc_nulls_last
+  ]
+
+  describe "paginate a collection of payments with nullable cursor fields" do
+    for order <- @sort_orders do
+      test "raises when the last cursor field is nil, sorting by charged_at #{order}" do
+        query = from(p in Payment, order_by: [{^unquote(order), p.charged_at}], select: p)
+        opts = [cursor_fields: [charged_at: unquote(order)], limit: 1]
+        cursor = encode_cursor(%{charged_at: nil})
+
+        assert_raise RuntimeError, ~r/unstable sort order/, fn ->
+          Repo.paginate(query, opts ++ [after: cursor])
+        end
+
+        assert_raise RuntimeError, ~r/unstable sort order/, fn ->
+          Repo.paginate(query, opts ++ [before: cursor])
+        end
+      end
+    end
+
+    for charged_at_order <- @sort_orders, id_order <- @sort_orders do
+      test "paginates through nulls, sorting by charged_at #{charged_at_order}, id #{id_order}" do
+        customer = insert(:customer)
+        now = DateTime.truncate(DateTime.utc_now(), :second)
+
+        for days <- [nil, 1, 1, nil, 2, 3, nil, 2, 3, 1, nil, 4] do
+          insert(:payment,
+            customer: customer,
+            charged_at: days && DateTime.add(now, -days * 86400, :second)
+          )
+        end
+
+        query =
+          from(
+            p in Payment,
+            where: p.customer_id == ^customer.id,
+            order_by: [{^unquote(charged_at_order), p.charged_at}, {^unquote(id_order), p.id}],
+            select: p
+          )
+
+        cursor_fields = [charged_at: unquote(charged_at_order), id: unquote(id_order)]
+        opts = [cursor_fields: cursor_fields, limit: 1]
+
+        expected = Repo.all(query)
+        cursor_at = &Paginator.cursor_for_record(Enum.at(expected, &1), cursor_fields)
+
+        assert to_ids(paginate_forward(query, opts)) == to_ids(expected)
+
+        assert to_ids(paginate_backward(query, opts, cursor_at.(-1))) ==
+                 to_ids(Enum.drop(expected, -1))
+
+        page =
+          Repo.paginate(
+            query,
+            Keyword.merge(opts, limit: 50, after: cursor_at.(2), before: cursor_at.(9))
+          )
+
+        assert to_ids(page.entries) == to_ids(Enum.slice(expected, 3..8))
+      end
+    end
+  end
+
   defp to_ids(entries), do: Enum.map(entries, & &1.id)
 
   defp create_customers_and_payments(_context) do
@@ -1049,5 +1117,23 @@ defmodule PaginatorTest do
 
   defp days_ago(days) do
     DT.add!(DateTime.utc_now(), -(days * 86400))
+  end
+
+  defp paginate_forward(query, opts, cursor \\ nil) do
+    page = Repo.paginate(query, Keyword.put(opts, :after, cursor))
+
+    case page.metadata.after do
+      nil -> page.entries
+      after_cursor -> page.entries ++ paginate_forward(query, opts, after_cursor)
+    end
+  end
+
+  defp paginate_backward(query, opts, cursor) do
+    page = Repo.paginate(query, Keyword.put(opts, :before, cursor))
+
+    case page.metadata.before do
+      nil -> page.entries
+      before_cursor -> paginate_backward(query, opts, before_cursor) ++ page.entries
+    end
   end
 end

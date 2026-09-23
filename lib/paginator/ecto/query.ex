@@ -18,24 +18,6 @@ defmodule Paginator.Ecto.Query do
     paginate(queryable, config)
   end
 
-  defp get_operator(:asc, :before), do: :lt
-  defp get_operator(:desc, :before), do: :gt
-  defp get_operator(:asc, :after), do: :gt
-  defp get_operator(:desc, :after), do: :lt
-
-  defp get_operator(direction, _),
-    do: raise("Invalid sorting value :#{direction}, please use either :asc or :desc")
-
-  defp get_operator_for_field(cursor_fields, key, direction) do
-    {_, order} =
-      cursor_fields
-      |> Enum.find(fn {field_key, _order} ->
-        field_key == key
-      end)
-
-    get_operator(order, direction)
-  end
-
   # This clause is responsible for transforming legacy list cursors into map cursors
   defp filter_values(query, fields, values, cursor_direction) when is_list(values) do
     new_values =
@@ -48,45 +30,82 @@ defmodule Paginator.Ecto.Query do
   end
 
   defp filter_values(query, fields, values, cursor_direction) when is_map(values) do
-    sorts =
-      fields
-      |> Enum.map(fn {column, _order} -> {column, Map.get(values, column)} end)
-      |> Enum.reject(fn val -> match?({_column, nil}, val) end)
+    filters = build_where_expression(query, fields, values, cursor_direction)
 
-    dynamic_sorts =
-      sorts
-      |> Enum.with_index()
-      |> Enum.reduce(true, fn {{bound_column, value}, i}, dynamic_sorts ->
-        {position, column} = column_position(query, bound_column)
-
-        dynamic = true
-
-        dynamic =
-          case get_operator_for_field(fields, bound_column, cursor_direction) do
-            :lt ->
-              dynamic([{q, position}], field(q, ^column) < ^value and ^dynamic)
-
-            :gt ->
-              dynamic([{q, position}], field(q, ^column) > ^value and ^dynamic)
-          end
-
-        dynamic =
-          sorts
-          |> Enum.take(i)
-          |> Enum.reduce(dynamic, fn {prev_column, prev_value}, dynamic ->
-            {position, prev_column} = column_position(query, prev_column)
-            dynamic([{q, position}], field(q, ^prev_column) == ^prev_value and ^dynamic)
-          end)
-
-        if i == 0 do
-          dynamic([{q, position}], ^dynamic and ^dynamic_sorts)
-        else
-          dynamic([{q, position}], ^dynamic or ^dynamic_sorts)
-        end
-      end)
-
-    where(query, [{q, 0}], ^dynamic_sorts)
+    where(query, [{q, 0}], ^filters)
   end
+
+  # Keeps the records strictly past the cursor by comparing the cursor fields
+  # lexicographically:
+  #
+  #     past(field_1) OR (tied(field_1) AND (past(field_2) OR (tied(field_2) AND ...)))
+  defp build_where_expression(query, [{column, order} | fields], values, cursor_direction) do
+    value = Map.get(values, column)
+    {position, column} = column_position(query, column)
+    {operator, nulls} = comparison(order, cursor_direction)
+    past = past_value(position, column, value, operator, nulls)
+
+    case fields do
+      [] when is_nil(value) ->
+        raise("unstable sort order: nullable columns can't be used as the last term")
+
+      [] ->
+        past
+
+      fields ->
+        next_filters = build_where_expression(query, fields, values, cursor_direction)
+        tied = tied_value(position, column, value, next_filters)
+
+        if past, do: dynamic(^past or ^tied), else: tied
+    end
+  end
+
+  # How a column is traversed when moving past the cursor: the operator
+  # matching the non-null values that come next, and whether null values are
+  # reached before (`:nulls_first`) or after (`:nulls_last`) all of them.
+  # `:asc` and `:desc` follow the PostgreSQL defaults, where nulls sort as if
+  # larger than any other value.
+  defp comparison(order, :after) when order in [:asc, :asc_nulls_last], do: {:gt, :nulls_last}
+  defp comparison(:asc_nulls_first, :after), do: {:gt, :nulls_first}
+  defp comparison(order, :after) when order in [:desc, :desc_nulls_first], do: {:lt, :nulls_first}
+  defp comparison(:desc_nulls_last, :after), do: {:lt, :nulls_last}
+  defp comparison(order, :before) when order in [:asc, :asc_nulls_last], do: {:lt, :nulls_first}
+  defp comparison(:asc_nulls_first, :before), do: {:lt, :nulls_last}
+  defp comparison(order, :before) when order in [:desc, :desc_nulls_first], do: {:gt, :nulls_last}
+  defp comparison(:desc_nulls_last, :before), do: {:gt, :nulls_first}
+
+  defp comparison(order, _cursor_direction) do
+    raise(
+      "Invalid sorting value :#{order}, please use one of :asc, :asc_nulls_last, " <>
+        ":asc_nulls_first, :desc, :desc_nulls_first or :desc_nulls_last"
+    )
+  end
+
+  # Returns `nil` when no value can come past `value`.
+  defp past_value(_position, _column, nil, _operator, :nulls_last), do: nil
+
+  defp past_value(position, column, nil, _operator, :nulls_first),
+    do: dynamic([{q, position}], not is_nil(field(q, ^column)))
+
+  defp past_value(position, column, value, operator, :nulls_first),
+    do: compare(position, column, operator, value)
+
+  defp past_value(position, column, value, operator, :nulls_last) do
+    compared = compare(position, column, operator, value)
+    dynamic([{q, position}], ^compared or is_nil(field(q, ^column)))
+  end
+
+  defp compare(position, column, :gt, value),
+    do: dynamic([{q, position}], field(q, ^column) > ^value)
+
+  defp compare(position, column, :lt, value),
+    do: dynamic([{q, position}], field(q, ^column) < ^value)
+
+  defp tied_value(position, column, nil, next_filters),
+    do: dynamic([{q, position}], is_nil(field(q, ^column)) and ^next_filters)
+
+  defp tied_value(position, column, value, next_filters),
+    do: dynamic([{q, position}], field(q, ^column) == ^value and ^next_filters)
 
   defp maybe_where(query, %Config{
          after: nil,
@@ -160,7 +179,11 @@ defmodule Paginator.Ecto.Query do
             | expr:
                 Enum.map(expr, fn
                   {:desc, ast} -> {:asc, ast}
+                  {:desc_nulls_first, ast} -> {:asc_nulls_last, ast}
+                  {:desc_nulls_last, ast} -> {:asc_nulls_first, ast}
                   {:asc, ast} -> {:desc, ast}
+                  {:asc_nulls_last, ast} -> {:desc_nulls_first, ast}
+                  {:asc_nulls_first, ast} -> {:desc_nulls_last, ast}
                 end)
           }
         end
