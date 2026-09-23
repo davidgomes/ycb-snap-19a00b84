@@ -29,44 +29,27 @@ defmodule GradingClient.GradedCell do
         source_attr = attrs["source"]
         source = Code.string_to_quoted!(source_attr)
 
-        quote do
-          result = unquote(source)
+        case parse_question(source_attr, modules) do
+          {:ok, module_id, question_id} ->
+            quote do
+              result = unquote(source)
 
-          [module_id, question_id] =
-            unquote(source_attr)
-            |> String.split("\n", parts: 2)
-            |> hd()
-            |> String.trim_leading("#")
-            |> String.split(":", parts: 2)
+              case GradingClient.check_answer(unquote(module_id), unquote(question_id), result) do
+                :correct ->
+                  IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
 
-          module_id =
-            case unquote(Macro.escape(modules))[String.trim(module_id)] do
-              nil ->
-                raise "invalid module id: #{module_id}"
+                {:incorrect, help_text} when is_binary(help_text) ->
+                  IO.puts([IO.ANSI.red(), "Incorrect: ", IO.ANSI.reset(), help_text])
 
-              module_id ->
-                module_id
+                _ ->
+                  IO.puts([IO.ANSI.red(), "Incorrect.", IO.ANSI.reset()])
+              end
             end
 
-          question_id =
-            case Integer.parse(String.trim(question_id)) do
-              {id, ""} ->
-                id
-
-              _ ->
-                raise "invalid question id: #{question_id}"
+          {:error, message} ->
+            quote do
+              raise unquote(message)
             end
-
-          case GradingClient.check_answer(module_id, question_id, result) do
-            :correct ->
-              IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
-
-            {:incorrect, help_text} when is_binary(help_text) ->
-              IO.puts([IO.ANSI.red(), "Incorrect: ", IO.ANSI.reset(), help_text])
-
-            _ ->
-              IO.puts([IO.ANSI.red(), "Incorrect.", IO.ANSI.reset()])
-          end
         end
       rescue
         error ->
@@ -75,6 +58,26 @@ defmodule GradingClient.GradedCell do
       end
 
     Kino.SmartCell.quoted_to_string(source_ast)
+  end
+
+  defp parse_question(source, modules) do
+    header =
+      source
+      |> String.split("\n", parts: 2)
+      |> hd()
+      |> String.trim_leading("#")
+
+    case String.split(header, ":", parts: 2) do
+      [module_id, question_id] ->
+        case {modules[String.trim(module_id)], Integer.parse(String.trim(question_id))} do
+          {nil, _} -> {:error, "invalid module id: #{module_id}"}
+          {module, {id, ""}} -> {:ok, module, id}
+          _ -> {:error, "invalid question id: #{question_id}"}
+        end
+
+      _ ->
+        {:error, "invalid question header: #{header}"}
+    end
   end
 
   @impl true
