@@ -49,7 +49,7 @@
         <th scope="col" class="px-4 pr-2 w-72">Error</th>
         <th scope="col" class="px-4 py-3 w-72">Occurrences</th>
         <th scope="col" class="px-4 py-3 w-28">Status</th>
-        <th scope="col" class="px-4 py-3 w-28"></th>
+        <th scope="col" class="px-4 py-3 w-56"></th>
       </tr>
     </thead>
     <tbody>
@@ -83,25 +83,50 @@
           <p>Total: <%= @occurrences[error.id] %></p>
         </td>
         <td class="px-4 py-4">
-          <.badge :if={error.status == :resolved} color={:green}>Resolved</.badge>
-          <.badge :if={error.status == :unresolved} color={:red}>Unresolved</.badge>
+          <div class="flex flex-wrap gap-y-2">
+            <.badge :if={error.status == :resolved} color={:green}>Resolved</.badge>
+            <.badge :if={error.status == :unresolved} color={:red}>Unresolved</.badge>
+            <.badge :if={error.muted} color={:gray}>Muted</.badge>
+          </div>
         </td>
-        <td class="px-4 py-4 text-center">
-          <.button
-            :if={error.status == :unresolved}
-            phx-click="resolve"
-            phx-value-error_id={error.id}
-          >
-            Resolve
-          </.button>
+        <td class="px-4 py-4">
+          <div class="flex items-center justify-center gap-x-4">
+            <.button
+              :if={error.status == :unresolved}
+              phx-click="resolve"
+              phx-value-error_id={error.id}
+            >
+              Resolve
+            </.button>
 
-          <.button
-            :if={error.status == :resolved}
-            phx-click="unresolve"
-            phx-value-error_id={error.id}
-          >
-            Unresolve
-          </.button>
+            <.button
+              :if={error.status == :resolved}
+              phx-click="unresolve"
+              phx-value-error_id={error.id}
+            >
+              Unresolve
+            </.button>
+
+            <.button
+              :if={!error.muted}
+              type="link"
+              phx-click="mute"
+              phx-value-error_id={error.id}
+              class="inline-flex items-center gap-x-1"
+            >
+              <.icon name="bell-slash" /> Mute
+            </.button>
+
+            <.button
+              :if={error.muted}
+              type="link"
+              phx-click="unmute"
+              phx-value-error_id={error.id}
+              class="inline-flex items-center gap-x-1"
+            >
+              <.icon name="bell" /> Unmute
+            </.button>
+          </div>
         </td>
       </tr>
     </tbody>
