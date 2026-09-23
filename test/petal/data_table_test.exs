@@ -109,10 +109,14 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "Status is any of Pending, Paid"
     assert html =~ ~s(aria-label="Clear Status filter")
     # event mode carries the op grammar in hidden inputs; the hook mounts
-    # only to close top-layer popovers - no URL wiring
+    # only to close filter popovers - no URL wiring
     assert html =~ ~s(name="op" value="filter")
     assert html =~ ~s(phx-hook="PetalDataTable")
-    assert html =~ ~s(popover="auto")
+    # editors live in the page, anchored under their trigger - not in
+    # the top layer, where they'd be repositioned against the viewport
+    assert html =~ "pc-popover__panel--bottom-start"
+    refute html =~ ~s(popover="auto")
+    refute html =~ "PetalPopover"
     refute html =~ "data-nav-template"
     refute html =~ "data-filters="
   end
@@ -336,6 +340,9 @@ defmodule PetalComponents.DataTableTest do
     refute html =~ "amy@x.com"
     assert html =~ ~s(phx-value-op="toggle_column")
     assert html =~ ~s(phx-value-field="email")
+    # an in-page menu, right-aligned under its trigger
+    assert html =~ "pc-popover__panel--bottom-end"
+    refute html =~ ~s(popover="auto")
     # the last visible column's checkbox is disabled - a table needs one
     assert Regex.match?(~r/<input[^>]*checked[^>]*disabled[^>]*phx-value-field="name"/, html) or
              Regex.match?(~r/<input[^>]*disabled[^>]*phx-value-field="name"/, html)

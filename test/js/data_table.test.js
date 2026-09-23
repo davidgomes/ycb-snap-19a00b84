@@ -243,6 +243,38 @@ describe("PetalDataTable", () => {
     expect(patched).toHaveLength(1);
   });
 
+  it("closes an in-page panel through LiveView JS so a patch can't reopen it", () => {
+    const { hook, el, patched, form } = mountWithFilter({
+      navTemplate: "/orders?:filters",
+      filters: [],
+      formHtml: `
+        <form class="pc-data-table__filter-form" data-pc-dt-filter data-field="email">
+          <select name="filter_op"><option value="contains" selected>contains</option></select>
+          <input name="value" value="x" />
+        </form>
+      `,
+    });
+    const trigger = document.createElement("button");
+    trigger.id = "pop-trigger";
+    trigger.setAttribute("aria-expanded", "true");
+    el.appendChild(trigger);
+
+    const calls = [];
+    hook.js = () => ({
+      hide: (target) => calls.push(["hide", target.id]),
+      setAttribute: (target, attr, val) =>
+        calls.push(["setAttribute", target.id, attr, val]),
+    });
+
+    submit(form);
+    expect(calls).toEqual([
+      ["hide", "pop"],
+      ["setAttribute", "pop-trigger", "aria-expanded", "false"],
+    ]);
+    expect(document.activeElement).toBe(trigger);
+    expect(patched).toHaveLength(1);
+  });
+
   it("event mode: submit only closes the popover - no interception, no navigation", () => {
     const { el, patched } = mountBase({});
     delete el.dataset.navTemplate;

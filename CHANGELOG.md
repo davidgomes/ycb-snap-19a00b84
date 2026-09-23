@@ -3,6 +3,15 @@
 
 #### Fixed
 
+- **`data_table` menus live in the page.** The filter editors and the
+  Columns dropdown were top-layer popovers, so every scroll, resize
+  and mobile-keyboard shift meant re-measuring against the viewport
+  and repositioning a fixed panel after the page had already moved.
+  They now render as in-page popovers, absolutely positioned under
+  their trigger, and scroll with the table like any other content.
+  Closing a filter after Apply goes through LiveView's JS, so the
+  patch that Apply triggers can't reopen the panel, and focus returns
+  to the trigger.
 - **Top-layer popovers stay anchored to their trigger.** They were
   clamped into the viewport on *both* axes, so a panel with no room
   below was shunted up until it detached from its trigger - pinned to

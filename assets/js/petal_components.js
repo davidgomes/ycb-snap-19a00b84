@@ -4863,9 +4863,21 @@ export const PetalDataTable = {
       panel.hidePopover();
       return;
     }
-    panel.style.display = "none";
     const trigger = document.getElementById(`${panel.id}-trigger`);
-    if (trigger) trigger.setAttribute("aria-expanded", "false");
+    // the trigger opened this panel with JS.toggle, whose display and
+    // aria-expanded writes are sticky across patches - a raw style write
+    // would be undone by the very patch the Apply causes, reopening it.
+    // Closing through LiveView's own JS keeps that state in agreement.
+    if (typeof this.js === "function") {
+      const js = this.js();
+      js.hide(panel);
+      if (trigger) js.setAttribute(trigger, "aria-expanded", "false");
+    } else {
+      panel.style.display = "none";
+      if (trigger) trigger.setAttribute("aria-expanded", "false");
+    }
+    // focus sat on the Apply button, now hidden
+    if (trigger) trigger.focus();
   },
 
   // Both placeholders resolve from the live DOM in one pass, so
