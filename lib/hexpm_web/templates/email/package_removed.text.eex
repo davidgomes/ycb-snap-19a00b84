@@ -1,0 +1,7 @@
+Package Removed
+
+The package <%= @package %> has been removed from Hex.pm by the Hex.pm administrators.
+
+Reason: <%= @reason %>
+
+If you believe this was a mistake, please reply to this email or contact support@hex.pm.
