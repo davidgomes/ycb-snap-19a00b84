@@ -109,10 +109,15 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "Status is any of Pending, Paid"
     assert html =~ ~s(aria-label="Clear Status filter")
     # event mode carries the op grammar in hidden inputs; the hook mounts
-    # only to close top-layer popovers - no URL wiring
+    # to drive the in-page menus - no URL wiring
     assert html =~ ~s(name="op" value="filter")
     assert html =~ ~s(phx-hook="PetalDataTable")
-    assert html =~ ~s(popover="auto")
+    # in-page menu anatomy: trigger and panel are siblings under a
+    # relatively positioned wrapper, so the page carries them together
+    assert html =~ ~s(data-pc-menu-trigger="t-filter-email")
+    assert html =~ ~s(<div class="pc-popover">)
+    assert html =~ ~s(hidden data-pc-menu)
+    refute html =~ ~s(popover="auto")
     refute html =~ "data-nav-template"
     refute html =~ "data-filters="
   end
@@ -376,6 +381,22 @@ defmodule PetalComponents.DataTableTest do
     assert Regex.match?(~r/<input[^>]*checked[^>]*disabled[^>]*phx-value-field="name"/, html)
     # the dropdown renders the fragment label, same identity as the header
     assert length(String.split(html, "<em>Nome</em>")) - 1 == 2
+  end
+
+  test "column_toggle alone mounts the hook - its trigger is useless without it" do
+    assigns = base(%{})
+
+    html =
+      rendered_to_string(~H"""
+      <.data_table id="t" rows={@rows} state={@state} path={@path} on_ui="ui" column_toggle>
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    # the Columns button renders regardless; without the hook nothing
+    # listens for the click and the menu never opens
+    assert html =~ "data-pc-menu-trigger"
+    assert html =~ ~s(phx-hook="PetalDataTable")
   end
 
   test "a map-shaped between range renders instead of crashing" do
