@@ -35,17 +35,17 @@ defmodule ErrorTracker.Web.Layouts do
 
   def navbar(assigns) do
     ~H"""
-    <nav class="border-gray-400 bg-gray-900">
+    <nav class="border-gray-200 bg-white dark:border-gray-400 dark:bg-gray-900">
       <div class="container flex flex-wrap items-center justify-between mx-auto p-4">
         <.link
           href={dashboard_path(@socket)}
-          class="self-center text-2xl font-semibold whitespace-nowrap text-white"
+          class="self-center text-2xl font-semibold whitespace-nowrap text-gray-900 dark:text-white"
         >
           <span class="mr-2">🐛</span>ErrorTracker
         </.link>
         <button
           type="button"
-          class="inline-flex items-center p-2 w-10 h-10 justify-center text-sm rounded -lg md:hidden focus:outline-none focus:ring-2 text-gray-400 hover:bg-gray-700 focus:ring-gray-500"
+          class="inline-flex items-center p-2 w-10 h-10 justify-center text-sm rounded -lg md:hidden focus:outline-none focus:ring-2 text-gray-500 hover:bg-gray-100 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-500"
           aria-controls="navbar-main"
           aria-expanded="false"
           phx-click={JS.toggle(to: "#navbar-main")}
@@ -68,7 +68,7 @@ defmodule ErrorTracker.Web.Layouts do
           </svg>
         </button>
         <div class="hidden w-full md:block md:w-auto" id="navbar-main">
-          <ul class="font-medium flex flex-col p-4 md:p-0 mt-4 border border-gray-400 bg-gray-900 rounded-lg md:flex-row md:space-x-8 rtl:space-x-reverse md:mt-0 md:border-0 md:bg-gray-800">
+          <ul class="font-medium flex flex-col p-4 md:p-0 mt-4 border border-gray-200 bg-gray-50 rounded-lg md:flex-row md:space-x-8 rtl:space-x-reverse md:mt-0 md:border-0 md:bg-gray-100 dark:border-gray-400 dark:bg-gray-900 md:dark:bg-gray-800">
             <.navbar_item to="https://github.com/elixir-error-tracker/error-tracker" target="_blank">
               <svg
                 width="18"
@@ -86,6 +86,7 @@ defmodule ErrorTracker.Web.Layouts do
               </svg>
               GitHub
             </.navbar_item>
+            <.theme_switcher />
           </ul>
         </div>
       </div>
@@ -101,14 +102,37 @@ defmodule ErrorTracker.Web.Layouts do
   def navbar_item(assigns) do
     ~H"""
     <li>
-      <a
-        href={@to}
-        class="whitespace-nowrap flex-0 block py-2 px-3 rounded-lg text-white hover:text-white hover:bg-gray-700 md:hover:bg-transparent md:border-0 md:hover:text-sky-500"
-        {@rest}
-      >
+      <a href={@to} class={navbar_item_class()} {@rest}>
         {render_slot(@inner_block)}
       </a>
     </li>
     """
+  end
+
+  def theme_switcher(assigns) do
+    ~H"""
+    <li>
+      <button
+        type="button"
+        id="theme-switcher"
+        title="Toggle theme"
+        class={[navbar_item_class(), "w-full text-start md:w-auto"]}
+        phx-click={JS.dispatch("error_tracker:toggle-theme")}
+      >
+        <span class="hidden dark:inline">
+          <.icon name="sun" />
+          <span class="ml-1 md:sr-only">Switch to light theme</span>
+        </span>
+        <span class="dark:hidden">
+          <.icon name="moon" />
+          <span class="ml-1 md:sr-only">Switch to dark theme</span>
+        </span>
+      </button>
+    </li>
+    """
+  end
+
+  defp navbar_item_class do
+    "whitespace-nowrap flex-0 block py-2 px-3 rounded-lg text-gray-900 hover:text-gray-900 hover:bg-gray-100 md:hover:bg-transparent md:border-0 md:hover:text-sky-500 dark:text-white dark:hover:text-white dark:hover:bg-gray-700 md:dark:hover:bg-transparent md:dark:hover:text-sky-500"
   end
 end

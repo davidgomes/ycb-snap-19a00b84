@@ -5,6 +5,45 @@ let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("
 let livePath = document.querySelector("meta[name='live-path']").getAttribute("content");
 let liveTransport = document .querySelector("meta[name='live-transport']") .getAttribute("content");
 
+const themeStorageKey = "error_tracker:theme";
+const prefersLightQuery = window.matchMedia("(prefers-color-scheme: light)");
+
+// Storage may be unavailable (e.g. blocked cookies), which must not break the dashboard.
+function getStoredTheme() {
+  try {
+    return localStorage.getItem(themeStorageKey);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function storeTheme(theme) {
+  try {
+    localStorage.setItem(themeStorageKey, theme);
+  } catch (_error) {}
+}
+
+function preferredTheme() {
+  const storedTheme = getStoredTheme();
+  if (storedTheme === "light" || storedTheme === "dark") return storedTheme;
+
+  return prefersLightQuery.matches ? "light" : "dark";
+}
+
+function applyTheme(theme) {
+  document.documentElement.classList.toggle("dark", theme === "dark");
+}
+
+applyTheme(preferredTheme());
+
+prefersLightQuery.addEventListener("change", () => applyTheme(preferredTheme()));
+
+window.addEventListener("error_tracker:toggle-theme", () => {
+  const theme = document.documentElement.classList.contains("dark") ? "light" : "dark";
+  storeTheme(theme);
+  applyTheme(theme);
+});
+
 const Hooks = {
   JsonPrettyPrint: {
     mounted() {
