@@ -702,7 +702,7 @@ defmodule PaginatorTest do
         |> Repo.paginate(
           cursor_fields: [:charged_at, :id],
           sort_direction: :desc,
-          after: encode_cursor(%{charged_at: nil, id: nil}),
+          after: encode_cursor(%{charged_at: nil, id: -1}),
           limit: 8
         )
 
@@ -934,6 +934,92 @@ defmodule PaginatorTest do
              before: encode_cursor(%{amount: p7.amount, charged_at: p7.charged_at, id: p7.id}),
              limit: 8
            }
+  end
+
+  @available_sorting_orders [
+    :asc,
+    :asc_nulls_last,
+    :asc_nulls_first,
+    :desc,
+    :desc_nulls_first,
+    :desc_nulls_last
+  ]
+
+  for order <- @available_sorting_orders do
+    test "raises when a nil value is used in the last cursor field - #{order}" do
+      customer = insert(:customer)
+      insert(:payment, customer: customer, charged_at: days_ago(1))
+      insert(:payment, customer: customer, charged_at: nil)
+      insert(:payment, customer: customer, charged_at: nil)
+
+      query =
+        from(
+          p in Payment,
+          where: p.customer_id == ^customer.id,
+          order_by: [{^unquote(order), p.charged_at}],
+          select: p
+        )
+
+      assert_raise RuntimeError, ~r/nullable columns/, fn ->
+        paginate_forward_as_list(query, cursor_fields: [charged_at: unquote(order)], limit: 1)
+      end
+    end
+  end
+
+  for charged_at_order <- @available_sorting_orders, id_order <- @available_sorting_orders do
+    test "paginates through nil values - charged_at #{charged_at_order}, id #{id_order}" do
+      customer = insert(:customer)
+      charged_at = days_ago(1)
+
+      for charged_at <- [nil, charged_at, nil, days_ago(2), charged_at, nil, days_ago(3)] do
+        insert(:payment, customer: customer, charged_at: charged_at)
+      end
+
+      query =
+        from(
+          p in Payment,
+          where: p.customer_id == ^customer.id,
+          order_by: [{^unquote(charged_at_order), p.charged_at}, {^unquote(id_order), p.id}],
+          select: p
+        )
+
+      opts = [
+        cursor_fields: [charged_at: unquote(charged_at_order), id: unquote(id_order)],
+        limit: 2
+      ]
+
+      expected_ids = query |> Repo.all() |> to_ids()
+
+      assert query |> paginate_forward_as_list(opts) |> to_ids() == expected_ids
+
+      last = Repo.get!(Payment, List.last(expected_ids))
+
+      assert query |> paginate_backward_as_list(opts, last) |> to_ids() ==
+               Enum.drop(expected_ids, -1)
+    end
+  end
+
+  defp paginate_forward_as_list(query, opts, after_cursor \\ nil) do
+    page = Repo.paginate(query, Keyword.put(opts, :after, after_cursor))
+
+    case page.metadata.after do
+      nil -> page.entries
+      cursor -> page.entries ++ paginate_forward_as_list(query, opts, cursor)
+    end
+  end
+
+  defp paginate_backward_as_list(query, opts, %Payment{} = record) do
+    cursor = Paginator.cursor_for_record(record, Keyword.fetch!(opts, :cursor_fields))
+    paginate_backward_as_list(query, opts, cursor)
+  end
+
+  defp paginate_backward_as_list(query, opts, before_cursor) do
+    page = Repo.paginate(query, Keyword.put(opts, :before, before_cursor))
+
+    case page.metadata.before do
+      nil -> page.entries
+      cursor -> paginate_backward_as_list(query, opts, cursor) ++ page.entries
+    end
   end
 
   defp to_ids(entries), do: Enum.map(entries, & &1.id)
