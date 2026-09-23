@@ -30,6 +30,8 @@ if Code.ensure_loaded?(Plug) do
 
     Options:
 
+    * `:secret` - The secret used to verify the token. Accepts any value supported by the
+      token module, or a 1-arity function that receives the connection and returns the secret.
     * `:refresh_from_cookie` - Looks for and validates a token found in the request cookies. (default `false`)
 
     Refresh from cookie option
@@ -69,7 +71,8 @@ if Code.ensure_loaded?(Plug) do
            module <- Pipeline.fetch_module!(conn, opts),
            claims_to_check <- Keyword.get(opts, :claims, %{}),
            key <- storage_key(conn, opts),
-           {:ok, claims} <- Guardian.decode_and_verify(module, token, claims_to_check, opts) do
+           verify_opts <- Guardian.Plug.put_secret_from_conn(conn, opts),
+           {:ok, claims} <- Guardian.decode_and_verify(module, token, claims_to_check, verify_opts) do
         conn
         |> Guardian.Plug.put_current_token(token, key: key)
         |> Guardian.Plug.put_current_claims(claims, key: key)

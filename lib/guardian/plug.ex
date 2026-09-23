@@ -308,6 +308,15 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
+    @doc false
+    @spec put_secret_from_conn(Plug.Conn.t(), Keyword.t()) :: Keyword.t()
+    def put_secret_from_conn(conn, opts) do
+      case Keyword.get(opts, :secret) do
+        fun when is_function(fun, 1) -> Keyword.put(opts, :secret, fun.(conn))
+        _ -> opts
+      end
+    end
+
     @spec find_token_from_cookies(conn :: Plug.Conn.t(), Keyword.t()) :: {:ok, String.t()} | :no_token_found
     def find_token_from_cookies(conn, opts \\ []) do
       key =

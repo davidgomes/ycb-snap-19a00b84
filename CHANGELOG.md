@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+* `Guardian.Plug.VerifyHeader` and `Guardian.Plug.VerifySession` accept a
+  1-arity function as the `:secret` option. It is called with the connection
+  to select the secret used to verify the token.
+
 ## v2.4.1
 
 ### Security
