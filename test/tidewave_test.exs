@@ -174,6 +174,51 @@ defmodule TidewaveTest do
 
       assert conn.status == 404
     end
+
+    test "200 with the JSON-RPC response for requests" do
+      conn = post_mcp(%{"jsonrpc" => "2.0", "method" => "tools/list", "id" => "1"})
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") == ["application/json; charset=utf-8"]
+      response_body = Jason.decode!(conn.resp_body)
+      assert response_body["id"] == "1"
+      assert "browser_eval" in Enum.map(response_body["result"]["tools"], & &1["name"])
+    end
+
+    test "202 for notifications" do
+      conn = post_mcp(%{"jsonrpc" => "2.0", "method" => "notifications/initialized"})
+
+      assert conn.status == 202
+      assert conn.resp_body == "{\"status\":\"ok\"}"
+    end
+
+    test "400 with the JSON-RPC error for failed requests" do
+      conn = post_mcp(%{"jsonrpc" => "2.0", "method" => "unknown", "id" => "1"})
+
+      assert conn.status == 400
+      response_body = Jason.decode!(conn.resp_body)
+      assert response_body["id"] == "1"
+      assert response_body["error"]["code"] == -32601
+    end
+
+    test "200 with a JSON-RPC error for invalid messages" do
+      conn = post_mcp(%{"invalid" => "message"})
+
+      assert conn.status == 200
+      response_body = Jason.decode!(conn.resp_body)
+      assert response_body["id"] == nil
+      assert response_body["error"]["code"] == -32600
+      assert response_body["error"]["message"] == "Could not parse message"
+    end
+
+    test "does not include browser tools when disabled" do
+      message = %{"jsonrpc" => "2.0", "method" => "tools/list", "id" => "1"}
+      conn = post_mcp(message, "/tidewave/mcp?include_browser_tools=false")
+
+      assert conn.status == 200
+      response_body = Jason.decode!(conn.resp_body)
+      refute "browser_eval" in Enum.map(response_body["result"]["tools"], & &1["name"])
+    end
   end
 
   describe "/config" do
@@ -263,6 +308,12 @@ defmodule TidewaveTest do
       refute Enum.any?(logs, &String.contains?(&1, "old log"))
       assert Enum.any?(logs, &String.contains?(&1, "new log"))
     end
+  end
+
+  defp post_mcp(message, path \\ "/tidewave/mcp") do
+    conn(:post, path, Jason.encode!(message))
+    |> put_req_header("content-type", "application/json")
+    |> Tidewave.call(Tidewave.init([]))
   end
 
   defp router_upload_conn(filename, file_contents \\ valid_jpg()) do
