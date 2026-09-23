@@ -3,9 +3,9 @@ defmodule ObanEvents.DispatchWorker do
   Generic Oban worker that dispatches events to their handlers.
 
   This worker:
-  1. Receives an event name, handler module, and data from the job args
+  1. Receives an event name, handler module, data, and metadata from the job args
   2. Converts strings back to atoms safely
-  3. Calls the handler's `handle_event/2` callback
+  3. Rebuilds the `ObanEvents.Event` and calls the handler's `handle_event/2` callback
   4. Logs success/failure for observability
 
   ## Job Arguments
@@ -13,6 +13,15 @@ defmodule ObanEvents.DispatchWorker do
   - `event`: String representation of the event name
   - `handler`: String representation of the handler module
   - `data`: Map of event-specific data
+  - `event_id`: Unique identifier of the emission (shared by all handlers)
+  - `emitted_at`: ISO8601 timestamp of the emission
+  - `causation_id`: `event_id` of the causing event, or `nil`
+  - `correlation_id`: Correlation identifier of the event chain
+  - `metadata`: Map of additional metadata
+
+  Jobs missing the metadata keys (e.g., enqueued by older versions) are
+  still processed; the corresponding `ObanEvents.Event` fields are `nil`
+  (or `%{}` for `metadata`).
 
   ## Configuration
 
@@ -28,11 +37,14 @@ defmodule ObanEvents.DispatchWorker do
 
   use Oban.Worker
 
+  alias ObanEvents.Event
+
   require Logger
 
   @impl Oban.Worker
   def perform(%Oban.Job{
-        args: %{"event" => event_name_string, "handler" => handler_module_string, "data" => data}
+        args:
+          %{"event" => event_name_string, "handler" => handler_module_string, "data" => _} = args
       }) do
     # Safely convert strings back to atoms
     # These atoms should already exist since they were created during emit
@@ -41,7 +53,7 @@ defmodule ObanEvents.DispatchWorker do
 
     Logger.info("Processing event: #{event} with handler: #{inspect(handler)}")
 
-    case handler.handle_event(event, data) do
+    case handler.handle_event(event, Event.from_job_args(event, args)) do
       :ok ->
         Logger.info("Event processed successfully: #{event} by #{inspect(handler)}")
         :ok

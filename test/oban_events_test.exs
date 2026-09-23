@@ -43,7 +43,24 @@ defmodule ObanEventsTest do
     }
   end
 
-  describe "emit/2" do
+  defmodule OtherTestHandler do
+    @moduledoc false
+    use ObanEvents.Handler
+
+    @impl true
+    def handle_event(_event, _data), do: :ok
+  end
+
+  defmodule MultiHandlerEventBus do
+    @moduledoc false
+    use ObanEvents
+
+    @event_handlers %{
+      test_event: [ObanEventsTest.TestHandler, ObanEventsTest.OtherTestHandler]
+    }
+  end
+
+  describe "emit/3" do
     test "creates Oban jobs for registered event handlers" do
       event_data = %{
         "investment_id" => Ecto.UUID.generate(),
@@ -92,6 +109,37 @@ defmodule ObanEventsTest do
       assert_raise FunctionClauseError, fn ->
         TestEventBus.emit("string_event", %{})
       end
+    end
+
+    test "includes event metadata in job args" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{"test" => "data"},
+                 causation_id: "cause-1",
+                 correlation_id: "chain-1",
+                 metadata: %{source: "test"}
+               )
+
+      assert {:ok, _} = Ecto.UUID.cast(job.args["event_id"])
+      assert {:ok, _, _} = DateTime.from_iso8601(job.args["emitted_at"])
+      assert job.args["causation_id"] == "cause-1"
+      assert job.args["correlation_id"] == "chain-1"
+      assert job.args["metadata"] == %{"source" => "test"}
+    end
+
+    test "defaults correlation_id to event_id and metadata to empty map" do
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{"test" => "data"})
+
+      assert job.args["causation_id"] == nil
+      assert job.args["correlation_id"] == job.args["event_id"]
+      assert job.args["metadata"] == %{}
+    end
+
+    test "all handlers of one emission share the same event_id" do
+      assert {:ok, [job_one, job_two]} = MultiHandlerEventBus.emit(:test_event, %{})
+
+      assert job_one.args["event_id"] == job_two.args["event_id"]
+      assert {:ok, [job_three, _]} = MultiHandlerEventBus.emit(:test_event, %{})
+      refute job_three.args["event_id"] == job_one.args["event_id"]
     end
 
     test "requires data to be a map" do
