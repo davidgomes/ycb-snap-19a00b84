@@ -1,27 +1,31 @@
 Code.require_file "test_helper.exs", __DIR__
 
 defmodule CommonMacros do
-  defmacro resources([do: body]) do 
+  defmacro resources([do: body]) do
     name = :"#{inspect make_ref()}"
-    quote do
-      defmodule unquote(name) do
+
+    {:module, module, _, _} = Module.create(
+      name,
+      quote do
         use Ewebmachine.Builder.Resources
-        plug :resource_match
-        plug Ewebmachine.Plug.Run
-        plug Ewebmachine.Plug.Send
-        plug :error_404
-        defp error_404(conn,_), do:
-          (conn |> send_resp(404,"") |> halt)
+        plug(:resource_match)
+        plug(Ewebmachine.Plug.Run)
+        plug(Ewebmachine.Plug.Send)
+        plug(:error_404)
+        defp error_404(conn, _), do: conn |> send_resp(404, "") |> halt
         unquote(body)
-      end
-      unquote(name)
-    end 
+      end,
+      Macro.Env.location(__ENV__)
+    )
+
+    module
   end
 end
 
 defmodule EwebmachineTest do
   use ExUnit.Case
-  use Plug.Test
+  import Plug.Test
+  import Plug.Conn
   import CommonMacros
 
   test "Simple Handlers builder with only to_html default GET" do
@@ -55,7 +59,7 @@ defmodule EwebmachineTest do
   test "Simple resource builder with XML and path match param" do
     app = resources do
       resource "/hello/:name" do %{name: name} after 
-        content_types_provided do: ['application/xml': :to_xml]
+        content_types_provided do: ["application/xml": :to_xml]
         defh to_xml, do: "<Person><name>#{state.name}</name></Person>"
       end
     end
@@ -181,9 +185,9 @@ defmodule EwebmachineTest do
         allowed_methods do: ["POST"]
         post_is_create do: true
 	# Check modified state is propagated
-        defh create_path(conn, state), do: {state.path, conn, state}
+        defh create_path, do: {state.path, conn, state}
         content_types_accepted do: ["text/plain": :from_text]
-        defh from_text(conn, state), do: {true, conn, state |> Map.put(:path, "titus")}
+        defh from_text, do: {true, conn, state |> Map.put(:path, "titus")}
       end
     end
     conn = app.call(conn(:post,"/orders","titus") |> put_req_header("content-type", "text/plain"), [])
