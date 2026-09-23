@@ -846,7 +846,7 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "stale persistent_term prevention" do
+  describe "stale channel prevention" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.99"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
@@ -1042,35 +1042,25 @@ defmodule GRPC.Client.ReResolveTest do
     end
   end
 
-  describe "refresh handler with failed channels" do
+  describe "per-request pick with failed channels" do
     setup ctx do
       Application.put_env(:grpc, :grpc_test_failing_hosts, ["10.0.0.2"])
       on_exit(fn -> Application.delete_env(:grpc, :grpc_test_failing_hosts) end)
       Map.put(ctx, :failing_adapter, GRPC.Test.FailingClientAdapter)
     end
 
-    test "GenServer survives when :refresh picks a failed channel", ctx do
-      # Connect with 2 backends — one healthy, one failing
+    test "round robin never picks a failed channel", ctx do
+      addresses = [
+        %{address: "10.0.0.1", port: 50051},
+        %{address: "10.0.0.2", port: 50051}
+      ]
+
       expect(ctx.resolver, :resolve, fn _target ->
-        {:ok,
-         %{
-           addresses: [
-             %{address: "10.0.0.1", port: 50051},
-             %{address: "10.0.0.2", port: 50051}
-           ],
-           service_config: nil
-         }}
+        {:ok, %{addresses: addresses, service_config: nil}}
       end)
 
       stub(ctx.resolver, :resolve, fn _target ->
-        {:ok,
-         %{
-           addresses: [
-             %{address: "10.0.0.1", port: 50051},
-             %{address: "10.0.0.2", port: 50051}
-           ],
-           service_config: nil
-         }}
+        {:ok, %{addresses: addresses, service_config: nil}}
       end)
 
       {:ok, channel} =
@@ -1084,24 +1074,67 @@ defmodule GRPC.Client.ReResolveTest do
           lb_policy: :round_robin
         )
 
-      # 10.0.0.2 is {:failed, _} in real_channels
       state = get_state(ctx.ref)
       assert match?({:failed, _}, Map.get(state.real_channels, "10.0.0.2:50051"))
 
-      # Wait for several :refresh cycles (15s default, but we'll trigger manually).
-      # Round-robin will eventually pick 10.0.0.2. Without the fix, this crashes.
-      pid = whereis_name(ctx.ref)
-
       for _ <- 1..5 do
-        send(pid, :refresh)
+        assert {:ok, picked} = Connection.pick_channel(channel)
+        assert picked.host == "10.0.0.1"
       end
 
-      # Small sleep for messages to process
-      Process.sleep(50)
+      disconnect_and_wait(channel)
+    end
+  end
 
-      assert Process.alive?(pid)
-      assert {:ok, picked} = Connection.pick_channel(channel)
-      assert picked.host == "10.0.0.1"
+  describe "per-request round robin" do
+    test "distributes picks across all connected channels", ctx do
+      {:ok, channel} =
+        connect_with_resolver(
+          ctx.ref,
+          ctx.resolver,
+          ctx.adapter,
+          [
+            %{address: "10.0.0.1", port: 50051},
+            %{address: "10.0.0.2", port: 50051},
+            %{address: "10.0.0.3", port: 50051}
+          ],
+          lb_policy: :round_robin
+        )
+
+      hosts =
+        for _ <- 1..6 do
+          {:ok, picked} = Connection.pick_channel(channel)
+          picked.host
+        end
+
+      assert hosts == ~w(10.0.0.1 10.0.0.2 10.0.0.3 10.0.0.1 10.0.0.2 10.0.0.3)
+
+      disconnect_and_wait(channel)
+    end
+
+    test "concurrent picks from many processes are evenly distributed", ctx do
+      {:ok, channel} =
+        connect_with_resolver(
+          ctx.ref,
+          ctx.resolver,
+          ctx.adapter,
+          [
+            %{address: "10.0.0.1", port: 50051},
+            %{address: "10.0.0.2", port: 50051}
+          ],
+          lb_policy: :round_robin
+        )
+
+      counts =
+        1..100
+        |> Task.async_stream(fn _ ->
+          {:ok, picked} = Connection.pick_channel(channel)
+          picked.host
+        end)
+        |> Enum.map(fn {:ok, host} -> host end)
+        |> Enum.frequencies()
+
+      assert counts == %{"10.0.0.1" => 50, "10.0.0.2" => 50}
 
       disconnect_and_wait(channel)
     end
