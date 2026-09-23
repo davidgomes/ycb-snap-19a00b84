@@ -59,7 +59,8 @@ defmodule Tidewave.Router do
 
     conn
     |> Plug.Parsers.call(opts)
-    |> MCP.Server.handle_http_message()
+    |> fetch_query_params()
+    |> handle_mcp_message()
     |> halt()
   end
 
@@ -265,6 +266,38 @@ defmodule Tidewave.Router do
       <body></body>
     </html>
     """
+  end
+
+  defp handle_mcp_message(conn) do
+    include_browser_tools? = conn.query_params["include_browser_tools"] != "false"
+
+    case MCP.Server.handle_message(
+           conn.body_params,
+           conn.private.tidewave_config,
+           include_browser_tools?
+         ) do
+      {:ok, nil} ->
+        send_json(conn, 202, %{status: "ok"})
+
+      {:ok, response} ->
+        send_json(conn, 200, response)
+
+      {:error, :invalid_jsonrpc} ->
+        send_json(conn, 200, %{
+          jsonrpc: "2.0",
+          id: nil,
+          error: %{code: -32600, message: "Could not parse message"}
+        })
+
+      {:error, error_response} ->
+        send_json(conn, 400, error_response)
+    end
+  end
+
+  defp send_json(conn, status, data) do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(status, Jason.encode_to_iodata!(data))
   end
 
   defp handle_upload(conn) do
