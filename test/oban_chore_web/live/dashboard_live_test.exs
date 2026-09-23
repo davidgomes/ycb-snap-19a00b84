@@ -278,6 +278,82 @@ defmodule ObanChoreWeb.DashboardLiveTest do
     end
   end
 
+  describe "history" do
+    test "shows an empty state when the chore has no previous runs" do
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+      select_chore(view, DashboardTestChore)
+
+      refute has_element?(view, "[data-role=history]")
+
+      open_history(view)
+
+      assert has_element?(view, "button[data-role=history-tab].oc-tab-item--active")
+      assert has_element?(view, "[data-role=history-empty]")
+    end
+
+    test "lists only finished runs of the selected chore, newest first" do
+      now = DateTime.utc_now()
+
+      completed = Oban.insert!(DashboardTestChore.new(%{username: "completed_user"}))
+      discarded = Oban.insert!(DashboardTestChore.new(%{username: "discarded_user"}))
+      active = Oban.insert!(DashboardTestChore.new(%{username: "active_user"}))
+      other = Oban.insert!(DashboardUniqueChore.new(%{username: "other_user"}))
+
+      set_state(completed, state: "completed", completed_at: now, attempt: 1)
+      set_state(other, state: "completed", completed_at: now, attempt: 1)
+
+      set_state(discarded,
+        state: "discarded",
+        discarded_at: now,
+        attempt: 1,
+        errors: [
+          %{"attempt" => 1, "at" => DateTime.to_iso8601(now), "error" => "** (RuntimeError) boom"}
+        ]
+      )
+
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+      select_chore(view, DashboardTestChore)
+      html = open_history(view)
+
+      assert has_element?(view, "[data-role=history-row][data-job-id=\"#{completed.id}\"]")
+      assert has_element?(view, "[data-role=history-row][data-job-id=\"#{discarded.id}\"]")
+      refute has_element?(view, "[data-role=history-row][data-job-id=\"#{active.id}\"]")
+      refute has_element?(view, "[data-role=history-row][data-job-id=\"#{other.id}\"]")
+
+      assert html =~ "completed_user"
+      assert html =~ "RuntimeError"
+
+      [first_row_id | _] =
+        html
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("[data-role=history-row]")
+        |> LazyHTML.attribute("data-job-id")
+
+      assert first_row_id == to_string(discarded.id)
+    end
+
+    test "refreshes when a tracked job finishes while the history tab is open" do
+      chore_module = to_string(DashboardTestChore)
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+      select_chore(view, DashboardTestChore)
+
+      view
+      |> form("[id=\"form-#{chore_module}\"]", args: %{username: "live_user"})
+      |> render_submit()
+
+      assert [job] = ObanChore.TestRepo.all(Oban.Job)
+
+      open_history(view)
+      assert has_element?(view, "[data-role=history-empty]")
+
+      set_state(job, state: "completed", completed_at: DateTime.utc_now(), attempt: 1)
+      send(view.pid, {:oban_chore_state, job.id, :completed})
+
+      assert has_element?(view, "[data-role=history-row][data-job-id=\"#{job.id}\"]")
+      refute has_element?(view, "[data-role=history-empty]")
+    end
+  end
+
   describe "auth" do
     test "filters chores by module whitelist" do
       conn = build_conn()
@@ -310,5 +386,21 @@ defmodule ObanChoreWeb.DashboardLiveTest do
       assert render_click(view, "select_chore", %{"module" => to_string(DashboardUniqueChore)}) =~
                "No chore selected"
     end
+  end
+
+  defp select_chore(view, module) do
+    view
+    |> element("button[data-role=chore-select][data-chore-module=\"#{module}\"]")
+    |> render_click()
+  end
+
+  defp open_history(view) do
+    view |> element("button[data-role=history-tab]") |> render_click()
+  end
+
+  defp set_state(job, changes) do
+    job
+    |> Ecto.Changeset.change(changes)
+    |> ObanChore.TestRepo.update!()
   end
 end

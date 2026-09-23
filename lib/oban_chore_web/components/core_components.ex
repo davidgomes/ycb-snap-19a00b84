@@ -269,6 +269,105 @@ defmodule ObanChoreWeb.CoreComponents do
   end
 
   @doc """
+  Renders the table of previous runs for a chore.
+  """
+  attr(:jobs, :list, required: true)
+
+  def history_table(assigns) do
+    ~H"""
+    <div class="oc-card" data-role="history">
+      <%= if @jobs == [] do %>
+        <p class="oc-card-body oc-text-sm oc-text-gray-500" style="font-style: italic;" data-role="history-empty">
+          No previous runs yet.
+        </p>
+      <% else %>
+        <table class="oc-history-table">
+          <thead>
+            <tr>
+              <th>Job</th>
+              <th>State</th>
+              <th>Arguments</th>
+              <th>Last Run</th>
+              <th>Attempts</th>
+            </tr>
+          </thead>
+          <%= for job <- @jobs do %>
+            <tbody data-role="history-row" data-job-id={job.id}>
+              <tr>
+                <td class="oc-font-mono">#<%= job.id %></td>
+                <td>
+                  <span class="oc-badge" style={state_style(job.state)}>
+                    <%= String.capitalize(to_string(job.state)) %>
+                  </span>
+                </td>
+                <td class="oc-history-args oc-font-mono" title={format_args(job.args)}>
+                  <%= format_args(job.args) %>
+                </td>
+                <td style="white-space: nowrap;"><%= format_datetime(last_run_at(job)) %></td>
+                <td><%= job.attempt %>/<%= job.max_attempts %></td>
+              </tr>
+              <%= if error = last_error(job) do %>
+                <tr>
+                  <td colspan="5" class="oc-history-error-cell">
+                    <details>
+                      <summary class="oc-text-sm oc-text-red-600">
+                        Last error (attempt <%= error["attempt"] %>)
+                      </summary>
+                      <pre class="oc-log-container oc-history-error"><%= error["error"] %></pre>
+                    </details>
+                  </td>
+                </tr>
+              <% end %>
+            </tbody>
+          <% end %>
+        </table>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp format_args(args) when map_size(args) == 0, do: "No arguments"
+
+  defp format_args(args) do
+    Enum.map_join(args, ", ", fn {key, value} -> "#{key}: #{inspect(value)}" end)
+  end
+
+  defp last_run_at(job) do
+    job.completed_at || job.cancelled_at || job.discarded_at || job.attempted_at
+  end
+
+  defp last_error(%{errors: [_ | _] = errors}), do: List.last(errors)
+  defp last_error(_job), do: nil
+
+  defp format_datetime(nil), do: "—"
+  defp format_datetime(dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M:%S UTC")
+
+  @doc """
+  Returns the inline badge style for a job state.
+  """
+  def state_style(state) do
+    case state do
+      :executing ->
+        "background-color: var(--oc-blue-50); color: var(--oc-blue-700); box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.1);"
+
+      :available ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+
+      :scheduled ->
+        "background-color: var(--oc-amber-50); color: var(--oc-amber-800); box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.2);"
+
+      :completed ->
+        "background-color: var(--oc-emerald-50); color: var(--oc-emerald-800); box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.2);"
+
+      :discarded ->
+        "background-color: var(--oc-rose-50); color: var(--oc-rose-900); box-shadow: inset 0 0 0 1px rgba(244, 63, 94, 0.1);"
+
+      _ ->
+        "background-color: var(--oc-gray-50); color: var(--oc-gray-600); box-shadow: inset 0 0 0 1px rgba(107, 114, 128, 0.1);"
+    end
+  end
+
+  @doc """
   Renders flash notices.
 
   ## Examples

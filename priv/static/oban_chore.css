@@ -536,6 +536,61 @@ textarea.oc-input {
   word-break: break-all;
 }
 
+/* History */
+.oc-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  color: var(--oc-gray-700);
+}
+
+.oc-history-table th {
+  text-align: left;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--oc-gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--oc-gray-200);
+}
+
+.oc-history-table td {
+  padding: 0.75rem 1.5rem;
+  vertical-align: middle;
+}
+
+.oc-history-table tbody {
+  border-bottom: 1px solid var(--oc-gray-100);
+}
+
+.oc-history-table tbody:last-child {
+  border-bottom: none;
+}
+
+.oc-history-args {
+  max-width: 24rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oc-history-table td.oc-history-error-cell {
+  padding-top: 0;
+}
+
+.oc-history-error-cell summary {
+  cursor: pointer;
+}
+
+.oc-history-error {
+  margin: 0.5rem 0 0;
+  min-height: 0;
+  max-height: 20rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 /* Transitions */
 .oc-transition-show {
   transition: all 0.3s ease-out;
