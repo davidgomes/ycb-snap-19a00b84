@@ -13,6 +13,11 @@ defmodule Flop.Adapter.Ecto.Dialect do
   # and DESC, and the other two need `field IS NULL` as an extra sort key.
   @without_nulls_ordering [Ecto.Adapters.MyXQL]
 
+  # PostgreSQL treats NULL as larger than any value, so plain ASC puts NULLs
+  # last and plain DESC puts them first. MySQL and SQLite treat NULL as smaller
+  # than any value.
+  @with_smallest_nulls [Ecto.Adapters.MyXQL, Ecto.Adapters.SQLite3]
+
   # Ecto's MyXQL adapter can store arrays in JSON columns, but it cannot build
   # array operations. Flop uses JSON_CONTAINS and JSON_LENGTH instead.
   @without_arrays [Ecto.Adapters.MyXQL]
@@ -24,10 +29,14 @@ defmodule Flop.Adapter.Ecto.Dialect do
   @type t :: %__MODULE__{
           arrays?: boolean,
           ilike?: boolean,
-          nulls_ordering?: boolean
+          nulls_ordering?: boolean,
+          smallest_nulls?: boolean
         }
 
-  defstruct arrays?: true, ilike?: true, nulls_ordering?: true
+  defstruct arrays?: true,
+            ilike?: true,
+            nulls_ordering?: true,
+            smallest_nulls?: false
 
   @nulls_ordering_fallback %{
     asc_nulls_first: {:native, :asc},
@@ -47,7 +56,8 @@ defmodule Flop.Adapter.Ecto.Dialect do
     %__MODULE__{
       arrays?: adapter not in @without_arrays,
       ilike?: adapter not in @without_ilike,
-      nulls_ordering?: adapter not in @without_nulls_ordering
+      nulls_ordering?: adapter not in @without_nulls_ordering,
+      smallest_nulls?: adapter in @with_smallest_nulls
     }
   end
 
@@ -84,6 +94,24 @@ defmodule Flop.Adapter.Ecto.Dialect do
   def order_direction(%__MODULE__{}, direction) do
     Map.get(@nulls_ordering_fallback, direction, {:native, direction})
   end
+
+  @doc """
+  Returns whether an order direction sorts NULLs before or after all other
+  values.
+  """
+  @spec nulls_position(t, atom) :: :first | :last
+  def nulls_position(%__MODULE__{}, direction)
+      when direction in [:asc_nulls_first, :desc_nulls_first],
+      do: :first
+
+  def nulls_position(%__MODULE__{}, direction)
+      when direction in [:asc_nulls_last, :desc_nulls_last],
+      do: :last
+
+  def nulls_position(%__MODULE__{smallest_nulls?: true}, :asc), do: :first
+  def nulls_position(%__MODULE__{smallest_nulls?: true}, :desc), do: :last
+  def nulls_position(%__MODULE__{smallest_nulls?: false}, :asc), do: :last
+  def nulls_position(%__MODULE__{smallest_nulls?: false}, :desc), do: :first
 
   defp adapter(repo) when is_atom(repo) and not is_nil(repo) do
     if Code.ensure_loaded?(repo) and
