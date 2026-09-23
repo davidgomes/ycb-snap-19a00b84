@@ -11,6 +11,7 @@ defmodule FreeObanUi.Application do
       FreeObanUiWeb.Telemetry,
       FreeObanUi.Repo,
       {DNSCluster, query: Application.get_env(:free_oban_ui, :dns_cluster_query) || :ignore},
+      {Oban, Application.fetch_env!(:free_oban_ui, Oban)},
       {Phoenix.PubSub, name: FreeObanUi.PubSub},
       # Start the Finch HTTP client for sending emails
       {Finch, name: FreeObanUi.Finch},
