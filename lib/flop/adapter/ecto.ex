@@ -915,9 +915,11 @@ defmodule Flop.Adapter.Ecto do
           dynamic([r], empty(:json_array, :dynamic))
 
         {:array, _} ->
+          empty_value = dynamic(type(^[], ^ecto_type))
           dynamic([r], empty(:array, :dynamic))
 
         {:map, _} ->
+          empty_value = dynamic(type(^%{}, ^ecto_type))
           dynamic([r], empty(:map, :dynamic))
 
         {:other, _} ->

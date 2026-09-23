@@ -313,10 +313,19 @@ defmodule Flop.Adapter.Ecto.Operators do
 
   defmacro empty(kind, source \\ :column)
 
-  defmacro empty(:array, source) do
+  # Ecto takes the type of an interpolated value from the other side of a
+  # comparison, which cannot be a type/2 with an interpolated type. The caller
+  # builds the empty array or map as the dynamic `empty_value` instead.
+  defmacro empty(kind, :dynamic) when kind in [:array, :map] do
     quote do
-      is_nil(unquote(field_expr(source))) or
-        unquote(field_expr(source)) == type(^[], ^var!(ecto_type))
+      is_nil(^var!(field_dynamic)) or ^var!(field_dynamic) == ^var!(empty_value)
+    end
+  end
+
+  defmacro empty(:array, :column) do
+    quote do
+      is_nil(field(r, ^var!(field))) or
+        field(r, ^var!(field)) == type(^[], ^var!(ecto_type))
     end
   end
 
@@ -328,10 +337,10 @@ defmodule Flop.Adapter.Ecto.Operators do
     end
   end
 
-  defmacro empty(:map, source) do
+  defmacro empty(:map, :column) do
     quote do
-      is_nil(unquote(field_expr(source))) or
-        unquote(field_expr(source)) == type(^%{}, ^var!(ecto_type))
+      is_nil(field(r, ^var!(field))) or
+        field(r, ^var!(field)) == type(^%{}, ^var!(ecto_type))
     end
   end
 
