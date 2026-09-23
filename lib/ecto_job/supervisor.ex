@@ -45,11 +45,10 @@ defmodule EctoJob.Supervisor do
         }
       ) do
     supervisor_name = String.to_atom("#{schema}.Supervisor")
-    notifier_name = String.to_atom("#{schema}.Notifier")
+    notifier_name = notifier_name(repo, schema)
     producer_name = String.to_atom("#{schema}.Producer")
 
     children = [
-      worker(Postgrex.Notifications, [repo.config() ++ [name: notifier_name]]),
       worker(Producer, [
         [
           name: producer_name,
@@ -67,6 +66,25 @@ defmodule EctoJob.Supervisor do
       ])
     ]
 
-    Supervisor.start_link(children, strategy: :rest_for_one, name: supervisor_name)
+    Supervisor.start_link(
+      notifier_children(repo, notifier_name) ++ children,
+      strategy: :rest_for_one,
+      name: supervisor_name
+    )
+  end
+
+  # Only PostgreSQL supports LISTEN/NOTIFY, other adapters rely on polling.
+  @spec notifier_name(module, module) :: atom | nil
+  defp notifier_name(repo, schema) do
+    if repo.__adapter__() == Ecto.Adapters.Postgres do
+      String.to_atom("#{schema}.Notifier")
+    end
+  end
+
+  @spec notifier_children(module, atom | nil) :: [Supervisor.Spec.spec()]
+  defp notifier_children(_repo, nil), do: []
+
+  defp notifier_children(repo, notifier_name) do
+    [worker(Postgrex.Notifications, [repo.config() ++ [name: notifier_name]])]
   end
 end

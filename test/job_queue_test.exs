@@ -1,7 +1,7 @@
 defmodule EctoJob.JobQueueTest do
   # credo:disable-for-this-file
 
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: EctoJob.Test.Repo.__adapter__() == Ecto.Adapters.Postgres
   alias EctoJob.Test.Repo
   require Ecto.Query, as: Query
 
