@@ -9,6 +9,7 @@ defmodule ObanChore.MixProject do
       version: @version,
       elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
+      elixirc_paths: elixirc_paths(Mix.env()),
       description: description(),
       package: package(),
       deps: deps(),
@@ -42,6 +43,9 @@ defmodule ObanChore.MixProject do
     ]
   end
 
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
@@ -49,7 +53,11 @@ defmodule ObanChore.MixProject do
       {:phoenix_live_view, "~> 0.20 or ~> 1.0"},
       {:phoenix_html, "~> 3.3 or ~> 4.0"},
       {:ecto, "~> 3.10"},
-      {:ex_doc, "~> 0.31", runtime: false, only: :dev}
+      {:ex_doc, "~> 0.31", runtime: false, only: :dev},
+      {:phoenix_ecto, "~> 4.4", only: :test},
+      {:postgrex, "~> 0.22", only: :test},
+      {:jason, "~> 1.4", only: :test},
+      {:lazy_html, ">= 0.1.0", only: :test}
     ]
   end
 
