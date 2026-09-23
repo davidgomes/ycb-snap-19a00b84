@@ -15,6 +15,10 @@ defmodule Mix.Tasks.Compile.SurfaceTest do
   @css_rel_output_file "tmp/_components.css"
   @css_output_file Path.join(File.cwd!(), @css_rel_output_file)
 
+  @test_components_dir Path.join(File.cwd!(), "test/support/mix/tasks/compile/surface_test")
+  @link_js_hooks_file Path.join(@test_components_dir, "fake_link.hooks.js")
+  @link_ts_hooks_file Path.join(@test_components_dir, "fake_link.hooks.ts")
+
   setup_all do
     conf_before = Application.get_env(:surface, :compiler, [])
 
@@ -38,6 +42,8 @@ defmodule Mix.Tasks.Compile.SurfaceTest do
     if File.exists?(@css_output_file) do
       File.rm_rf!(@css_output_file)
     end
+
+    clean()
 
     on_exit(fn ->
       File.rm_rf!(@hooks_output_dir)
@@ -133,5 +139,108 @@ defmodule Mix.Tasks.Compile.SurfaceTest do
       end)
 
     assert output == ""
+  end
+
+  describe "manifest" do
+    setup do
+      # Multiple hooks files for the same component generate a warning, which allows us
+      # to tell a new compilation, i.e. `{:ok, diagnostics}`, from a skipped one, i.e. `{:noop, diagnostics}`
+      File.write!(@link_js_hooks_file, "let FakeLink = {}\nexport { FakeLink }")
+      File.write!(@link_ts_hooks_file, "let FakeLink = {}\nexport { FakeLink }")
+
+      on_exit(fn ->
+        File.rm_rf!(@link_js_hooks_file)
+        File.rm_rf!(@link_ts_hooks_file)
+      end)
+    end
+
+    test "skip compilation and return previous diagnostics when nothing has changed" do
+      assert {:ok, diagnostics} = run(["--return-errors"])
+      assert hooks_warning?(diagnostics)
+
+      assert {:noop, ^diagnostics} = run(["--return-errors"])
+    end
+
+    test "print previous warnings unless `--no-all-warnings` is passed" do
+      capture_io(:standard_error, fn -> assert {:ok, _} = run([]) end)
+
+      output = capture_io(:standard_error, fn -> assert {:noop, _} = run([]) end)
+      assert output =~ "has 2 hooks files"
+
+      output = capture_io(:standard_error, fn -> assert {:noop, _} = run(["--no-all-warnings"]) end)
+      assert output == ""
+    end
+
+    test "return `{:error, diagnostics}` on previous warnings with `warnings_as_errors`" do
+      assert {:ok, _} = run(["--return-errors"])
+      assert {:error, diagnostics} = run(["--return-errors", "--warnings-as-errors"])
+      assert hooks_warning?(diagnostics)
+    end
+
+    test "compile again when passing `--force`" do
+      assert {:ok, _} = run(["--return-errors"])
+      assert {:ok, _} = run(["--return-errors", "--force"])
+    end
+
+    test "compile again when a hooks file changes" do
+      assert {:ok, _} = run(["--return-errors"])
+      File.write!(@link_js_hooks_file, "let FakeLink = { mounted() {} }\nexport { FakeLink }")
+      assert {:ok, _} = run(["--return-errors"])
+    end
+
+    test "compile again when a hooks file is removed" do
+      assert {:ok, _} = run(["--return-errors"])
+      File.rm!(@link_ts_hooks_file)
+      assert {_, diagnostics} = run(["--return-errors"])
+      refute hooks_warning?(diagnostics)
+    end
+
+    test "compile again when a generated file is removed" do
+      assert {:ok, _} = run(["--return-errors"])
+      File.rm!(@css_output_file)
+      assert {:ok, _} = run(["--return-errors"])
+      assert File.exists?(@css_output_file)
+    end
+
+    test "compile again when a component's beam file changes" do
+      beam_file = :code.which(Mix.Tasks.Compile.SurfaceTest.FakeLink)
+      %File.Stat{mtime: mtime} = File.stat!(beam_file, time: :posix)
+      on_exit(fn -> File.touch!(beam_file, mtime) end)
+
+      assert {:ok, _} = run(["--return-errors"])
+      File.touch!(beam_file, mtime - 60)
+      assert {:ok, _} = run(["--return-errors"])
+    end
+
+    test "compile again when the config changes" do
+      config = Application.get_env(:surface, :compiler)
+      on_exit(fn -> Application.put_env(:surface, :compiler, config) end)
+
+      assert {:ok, _} = run(["--return-errors"])
+      Application.put_env(:surface, :compiler, Keyword.put(config, :variants_prefix, "s-"))
+      assert {:ok, _} = run(["--return-errors"])
+    end
+
+    test "compile again after cleaning the manifest" do
+      assert {:ok, _} = run(["--return-errors"])
+      assert [manifest] = manifests()
+      assert File.exists?(manifest)
+
+      clean()
+
+      refute File.exists?(manifest)
+      assert {:ok, _} = run(["--return-errors"])
+    end
+
+    test "compile again when the manifest is invalid" do
+      assert {:ok, _} = run(["--return-errors"])
+      [manifest] = manifests()
+      File.write!(manifest, "invalid")
+      assert {:ok, _} = run(["--return-errors"])
+    end
+  end
+
+  defp hooks_warning?(diagnostics) do
+    Enum.any?(diagnostics, &(&1.message =~ "has 2 hooks files"))
   end
 end

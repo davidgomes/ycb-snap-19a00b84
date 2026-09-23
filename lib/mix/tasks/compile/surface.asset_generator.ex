@@ -21,6 +21,34 @@ defmodule Mix.Tasks.Compile.Surface.AssetGenerator do
     end
   end
 
+  @doc false
+  def output_files(opts \\ []) do
+    if Keyword.get(opts, :generate_assets, true) do
+      hooks_output_dir = Keyword.get(opts, :hooks_output_dir, @default_hooks_output_dir)
+      css_output_file = Keyword.get(opts, :css_output_file, @default_css_output_file)
+      enable_variants = Keyword.get(opts, :enable_variants, false)
+      variants_output_file = Keyword.get(opts, :variants_output_file, @default_variants_output_file)
+      variants_output_files = if enable_variants, do: [variants_output_file], else: []
+
+      hooks_files = [File.cwd!(), hooks_output_dir, "*"] |> Path.join() |> Path.wildcard()
+
+      Enum.map([css_output_file | variants_output_files], &Path.join([File.cwd!(), &1])) ++ hooks_files
+    else
+      []
+    end
+  end
+
+  @doc false
+  def hooks_patterns(components, opts \\ []) do
+    if Keyword.get(opts, :generate_assets, true) do
+      for mod <- components, module_loaded?(mod) do
+        mod |> component_file() |> Path.rootname() |> hooks_pattern()
+      end
+    else
+      []
+    end
+  end
+
   defp do_run(components, opts) do
     components = Enum.sort(components, :desc)
     hooks_output_dir = Keyword.get(opts, :hooks_output_dir, @default_hooks_output_dir)
@@ -216,7 +244,7 @@ defmodule Mix.Tasks.Compile.Surface.AssetGenerator do
   defp get_colocated_js_files(components) do
     for mod <- components, module_loaded?(mod), reduce: {[], []} do
       {js_files, diagnostics} ->
-        component_file = mod.module_info() |> get_in([:compile, :source]) |> to_string()
+        component_file = component_file(mod)
         base_file = component_file |> Path.rootname()
         base_name = inspect(mod)
         {js_file, new_diagnostic} = js_file(base_name, base_file, component_file)
@@ -234,8 +262,16 @@ defmodule Mix.Tasks.Compile.Surface.AssetGenerator do
     end
   end
 
+  defp component_file(mod) do
+    mod.module_info() |> get_in([:compile, :source]) |> to_string()
+  end
+
+  defp hooks_pattern(base_file) do
+    "#{base_file}#{@hooks_extension}"
+  end
+
   defp js_file(base_name, base_file, component_file) do
-    hooks_files = Path.wildcard("#{base_file}#{@hooks_extension}") |> Enum.sort()
+    hooks_files = base_file |> hooks_pattern() |> Path.wildcard() |> Enum.sort()
     hooks_count = length(hooks_files)
 
     diagnostic =
