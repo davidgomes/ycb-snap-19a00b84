@@ -45,7 +45,8 @@ defmodule GenQueue.Adapters.Oban do
   defp build_args(%Job{args: [args]}) when is_map(args), do: {:ok, args}
 
   defp build_args(%Job{args: args}) do
-    {:error, %GenQueue.Error{message: "Oban requires job args to be a map, got: #{inspect(args)}"}}
+    {:error,
+     %GenQueue.Error{message: "Oban requires job args to be a map, got: #{inspect(args)}"}}
   end
 
   defp build_opts(job) do
@@ -57,7 +58,8 @@ defmodule GenQueue.Adapters.Oban do
   defp put_queue(opts, nil), do: opts
   defp put_queue(opts, queue), do: Keyword.put(opts, :queue, to_string(queue))
 
-  defp put_delay(opts, %DateTime{} = scheduled_at), do: Keyword.put(opts, :scheduled_at, scheduled_at)
+  defp put_delay(opts, %DateTime{} = scheduled_at),
+    do: Keyword.put(opts, :scheduled_at, scheduled_at)
 
   defp put_delay(opts, offset) when is_integer(offset) do
     Keyword.put(opts, :schedule_in, round(offset / 1000))
