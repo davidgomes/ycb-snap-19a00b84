@@ -2,6 +2,7 @@ defmodule ObanEventsTest do
   use ExUnit.Case, async: true
 
   alias ObanEvents.DispatchWorker
+  alias ObanEvents.Event
 
   # Test handler module
   defmodule TestHandler do
@@ -9,7 +10,21 @@ defmodule ObanEventsTest do
     use ObanEvents.Handler
 
     @impl true
-    def handle_event(_event, _data), do: :ok
+    def handle_event(event_name, %Event{} = event) do
+      send(self(), {:handled, __MODULE__, event_name, event})
+      :ok
+    end
+  end
+
+  defmodule OtherTestHandler do
+    @moduledoc false
+    use ObanEvents.Handler
+
+    @impl true
+    def handle_event(event_name, %Event{} = event) do
+      send(self(), {:handled, __MODULE__, event_name, event})
+      :ok
+    end
   end
 
   # Test event bus with handlers registered (uses defaults)
@@ -17,11 +32,12 @@ defmodule ObanEventsTest do
     @moduledoc false
     use ObanEvents
 
-    alias ObanEventsTest.TestHandler
+    alias ObanEventsTest.{OtherTestHandler, TestHandler}
 
     @event_handlers %{
       investment_status_changed: [TestHandler],
       investment_created: [TestHandler],
+      investment_updated: [TestHandler, OtherTestHandler],
       investment_cancelled: [],
       portfolio_company_added: [],
       portfolio_company_removed: [],
@@ -98,6 +114,65 @@ defmodule ObanEventsTest do
       assert_raise FunctionClauseError, fn ->
         TestEventBus.emit(:event_name, "not a map")
       end
+    end
+  end
+
+  describe "emit/3 metadata" do
+    test "stores generated event_id and idempotency_key in job args" do
+      assert {:ok, [job]} = TestEventBus.emit(:investment_created, %{"id" => 1})
+
+      assert is_binary(job.args["event_id"])
+      assert is_binary(job.args["idempotency_key"])
+      assert job.args["event_id"] != job.args["idempotency_key"]
+      assert job.args["causation_id"] == nil
+      assert job.args["correlation_id"] == nil
+    end
+
+    test "shares event_id across handlers but gives each job its own idempotency_key" do
+      assert {:ok, [job_a, job_b]} = TestEventBus.emit(:investment_updated, %{"id" => 1})
+
+      assert job_a.args["event_id"] == job_b.args["event_id"]
+      assert job_a.args["idempotency_key"] != job_b.args["idempotency_key"]
+    end
+
+    test "generates a new event_id for each emit" do
+      {:ok, [first]} = TestEventBus.emit(:investment_created, %{"id" => 1})
+      {:ok, [second]} = TestEventBus.emit(:investment_created, %{"id" => 1})
+
+      assert first.args["event_id"] != second.args["event_id"]
+    end
+
+    test "stores causation_id and correlation_id from options" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{"id" => 1},
+                 causation_id: "parent-event",
+                 correlation_id: "operation-1"
+               )
+
+      assert job.args["causation_id"] == "parent-event"
+      assert job.args["correlation_id"] == "operation-1"
+    end
+
+    test "raises ArgumentError for unknown options" do
+      assert_raise ArgumentError, ~r/unknown keys \[:unknown\]/, fn ->
+        TestEventBus.emit(:investment_created, %{"id" => 1}, unknown: "value")
+      end
+    end
+
+    test "handlers receive an Event struct with data and metadata" do
+      assert {:ok, [job]} =
+               TestEventBus.emit(:investment_created, %{"id" => 1},
+                 causation_id: "parent-event",
+                 correlation_id: "operation-1"
+               )
+
+      assert_received {:handled, TestHandler, :investment_created, %Event{} = event}
+
+      assert event.data == %{"id" => 1}
+      assert event.event_id == job.args["event_id"]
+      assert event.idempotency_key == job.args["idempotency_key"]
+      assert event.causation_id == "parent-event"
+      assert event.correlation_id == "operation-1"
     end
   end
 
