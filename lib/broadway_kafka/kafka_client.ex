@@ -9,7 +9,9 @@ defmodule BroadwayKafka.KafkaClient do
            offset_commit_on_ack: boolean,
            topics: [:brod.topic()],
            group_config: keyword,
-           client_config: keyword
+           client_config: keyword,
+           shared_client: boolean,
+           shared_client_id: atom | nil
          }
 
   @typep offset_reset_policy :: :earliest | :latest
@@ -49,6 +51,7 @@ defmodule BroadwayKafka.KafkaClient do
             ) ::
               offset :: integer | no_return()
 
+  @callback shared_client_child_spec(config) :: [Supervisor.child_spec()]
   @callback update_topics(:brod.group_coordinator(), [:brod.topic()]) :: :ok
   @callback connected?(:brod.client()) :: boolean
   @callback disconnect(:brod.client()) :: :ok
