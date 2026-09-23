@@ -5,13 +5,23 @@ defmodule Hexpm.Changeset do
 
   import Ecto.Changeset
 
+  # The releases_set_semver_sort_key trigger stores each number's digit count
+  # in one byte
+  @version_number_limit Integer.pow(10, 255)
+
   @doc """
   Checks if a version is valid semver.
   """
   def validate_version(changeset, field) do
     validate_change(changeset, field, fn
-      _, %Version{build: nil} ->
-        []
+      _, %Version{build: nil} = version ->
+        numbers = [version.major, version.minor, version.patch | version.pre]
+
+        if Enum.all?(numbers, &(not is_integer(&1) or &1 < @version_number_limit)) do
+          []
+        else
+          [{field, "numbers can have at most 255 digits"}]
+        end
 
       _, %Version{} ->
         [{field, "build number not allowed"}]

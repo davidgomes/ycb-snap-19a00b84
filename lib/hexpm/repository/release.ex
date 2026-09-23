@@ -11,6 +11,9 @@ defmodule Hexpm.Repository.Release do
     field :outer_checksum, :binary
     field :has_docs, :boolean, default: false
     field :vulnerable?, :boolean, virtual: true, default: false
+    # Filled from version by the releases_set_semver_sort_key trigger
+    field :semver_sort_key, :binary, writable: :never, load_in_query: false
+    field :stable, :boolean, writable: :never, load_in_query: false
     timestamps()
 
     belongs_to :package, Package
@@ -164,6 +167,48 @@ defmodule Hexpm.Repository.Release do
       group_by: r.package_id,
       select: {r.package_id, fragment("array_agg(?)", r.version)}
     )
+  end
+
+  @doc """
+  Narrows a query on releases of a single package to its latest release, with
+  the same options as `latest_version/2`.
+
+  Ordering by the stored SemVer sort key lets the package's release indexes
+  return the row without reading its other releases.
+  """
+  def latest_query(query, opts) do
+    only_stable? = Keyword.fetch!(opts, :only_stable)
+    unstable_fallback? = Keyword.get(opts, :unstable_fallback, false)
+
+    query =
+      if Keyword.get(opts, :with_docs) do
+        from(r in query, where: r.has_docs)
+      else
+        query
+      end
+
+    query =
+      cond do
+        only_stable? and unstable_fallback? ->
+          from(r in query, order_by: [desc: r.stable, desc: r.semver_sort_key])
+
+        only_stable? ->
+          from(r in query, where: r.stable, order_by: [desc: r.semver_sort_key])
+
+        true ->
+          from(r in query, order_by: [desc: r.semver_sort_key])
+      end
+
+    from(query, limit: 1)
+  end
+
+  @doc """
+  The latest release of the package bound as `:package` in the parent query,
+  to be used as a lateral join subquery.
+  """
+  def latest_of_package(opts) do
+    from(r in Release, where: r.package_id == parent_as(:package).id)
+    |> latest_query(opts)
   end
 
   def latest_version(nil, _opts), do: nil
