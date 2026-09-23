@@ -3,6 +3,14 @@
 
 #### Added
 
+- **`<.data_table>` row selection.** `selectable` renders a checkbox
+  column. The header checkbox is tri-state for the rows on the current
+  page (unchecked, indeterminate, checked) via the `PetalIndeterminate`
+  hook, and the toolbar morphs into a selection bar — count, the
+  `:bulk_action` slot, and clear — while anything is selected.
+  Selection stays caller-owned (`selected`); `DataTable.Selection.apply/2`
+  folds the `select` / `select_page` / `clear_selection` ops. Link-mode
+  tables pass `on_select` for those ops.
 - **`<.data_table>` - the component core (4.12 data table, milestone 1).**
   Composed around `<.table>`, driven entirely by `DataTable.State`:
   `:col` slots (field, label, sortable, align), sortable headers with

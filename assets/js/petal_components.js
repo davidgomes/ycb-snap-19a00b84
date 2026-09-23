@@ -4609,6 +4609,21 @@ export const PetalComboBox = {
 // assembled around the already-encoded rest of the query) and a hidden
 // data-phx-link anchor; the hook fills a template in and clicks the
 // anchor so navigation stays LiveView's own.
+// Native checkboxes have no indeterminate attribute. The data table's
+// page header sets data-indeterminate="true" for the mixed state; this
+// hook mirrors that onto the DOM property across patches.
+export const PetalIndeterminate = {
+  mounted() {
+    this.sync();
+  },
+  updated() {
+    this.sync();
+  },
+  sync() {
+    this.el.indeterminate = this.el.dataset.indeterminate === "true";
+  },
+};
+
 export const PetalDataTable = {
   mounted() {
     this.searchTimer = null;
@@ -4816,4 +4831,5 @@ export default {
   PetalCommandDialog,
   PetalComboBox,
   PetalDataTable,
+  PetalIndeterminate,
 };

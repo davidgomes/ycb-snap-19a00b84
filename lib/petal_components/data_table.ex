@@ -30,6 +30,14 @@ defmodule PetalComponents.DataTable do
   by the `PetalDataTable` hook (patch URLs built from templates the
   component renders); event mode needs no JS.
 
+  `selectable` adds a checkbox column. The header checkbox is tri-state
+  for the current page (none / some / all) and the toolbar morphs into
+  a selection bar — count, `:bulk_action` slot, clear — while any rows
+  are selected. Selection is caller-owned (`selected` + the `select` /
+  `select_page` / `clear_selection` ops); `DataTable.Selection.apply/2`
+  folds those ops into the id list. It needs an event (`on_change`, or
+  `on_select` when the rest of the table is link-mode).
+
   Rows can be any enumerable of maps/structs; pair with
   `PetalComponents.DataTable.Engine.List` for zero-setup in-memory
   data, or run the state against your own query layer.
@@ -108,6 +116,27 @@ defmodule PetalComponents.DataTable do
 
   attr :class, :any, default: nil
 
+  attr :selectable, :boolean,
+    default: false,
+    doc: "render a checkbox column with a tri-state page header"
+
+  attr :row_id, :any,
+    default: nil,
+    doc: "atom field or 1-arity function identifying a row (default `:id`)"
+
+  attr :selected, :list,
+    default: [],
+    doc: "the selected row ids (caller-owned; see `DataTable.Selection`)"
+
+  attr :on_select, :string,
+    default: nil,
+    doc: "event for selection ops; defaults to `on_change`"
+
+  attr :select_all_label, :string, default: "Select all rows on this page"
+  attr :select_row_label, :string, default: "Select row"
+  attr :selected_label, :string, default: "selected", doc: "word after the selection count"
+  attr :clear_selection_label, :string, default: "Clear selection"
+
   slot :col, required: true do
     attr :field, :atom, required: true
     attr :label, :string
@@ -126,11 +155,19 @@ defmodule PetalComponents.DataTable do
 
   slot :action, doc: "trailing actions column, `:let` receives the row"
   slot :toolbar, doc: "custom toolbar content rendered above the table"
+
+  slot :bulk_action,
+    doc: "actions shown in the selection toolbar; `:let` receives the selected ids"
+
   slot :empty, doc: "custom empty state; a filters-aware default renders otherwise"
 
   def data_table(assigns) do
     if is_nil(assigns.path) and is_nil(assigns.on_change) do
       raise ArgumentError, "data_table needs either path (link mode) or on_change (event mode)"
+    end
+
+    if assigns.selectable and is_nil(assigns.on_change) and is_nil(assigns.on_select) do
+      raise ArgumentError, "selectable data_table needs on_change or on_select"
     end
 
     {sort_by, sort_dir} =
@@ -168,11 +205,12 @@ defmodule PetalComponents.DataTable do
         :filters_json,
         link_mode? && filter_cols != [] && Jason.encode!(assigns.state.filters)
       )
+      |> assign_selection()
 
     ~H"""
     <div
       id={@id}
-      class={["pc-data-table", @class]}
+      class={["pc-data-table", @selected_count > 0 && "pc-data-table--selected", @class]}
       phx-hook={@hooked? && "PetalDataTable"}
       data-debounce={@hooked? && @search_debounce}
       data-nav-template={@nav_template || nil}
@@ -180,9 +218,13 @@ defmodule PetalComponents.DataTable do
     >
       <a :if={@hooked?} data-pc-dt-nav data-phx-link="patch" data-phx-link-state="push" hidden></a>
       <div
-        :if={@toolbar != [] or @searchable or @filter_cols != [] or @state.filters != []}
+        :if={
+          @toolbar != [] or @searchable or @filter_cols != [] or @state.filters != [] or
+            @selected_count > 0
+        }
         class="pc-data-table__toolbar"
       >
+        <div class="pc-data-table__toolbar-browse">
         <div :if={@searchable} class="pc-data-table__search">
           <.icon name="hero-magnifying-glass" class="pc-data-table__search-icon" />
           <%= if @on_change do %>
@@ -247,6 +289,20 @@ defmodule PetalComponents.DataTable do
             {@reset_filters_label}
           </.button>
         <% end %>
+        </div>
+        <div :if={@selectable} class="pc-data-table__toolbar-selection">
+          <span class="pc-data-table__selected-count">{@selected_count} {@selected_label}</span>
+          {render_slot(@bulk_action, @selected)}
+          <button
+            type="button"
+            class="pc-data-table__clear-selection"
+            phx-click={@select_event}
+            phx-target={@target}
+            phx-value-op="clear_selection"
+          >
+            {@clear_selection_label}
+          </button>
+        </div>
       </div>
 
       <div class="pc-data-table__scroll">
@@ -261,6 +317,29 @@ defmodule PetalComponents.DataTable do
           sort_dir={@sort_dir}
           on_sort={@on_sort}
         >
+          <:col
+            :if={@selectable}
+            :let={row}
+            label={@select_header}
+            class="pc-data-table__select-th"
+            row_class="pc-data-table__select"
+          >
+            <%= if @loading do %>
+              <.skeleton variant="text" class="pc-data-table__skeleton" />
+            <% else %>
+              <% id = row_key(row, @row_id) %>
+              <input
+                type="checkbox"
+                class="pc-checkbox"
+                aria-label={@select_row_label}
+                checked={to_string(id) in @selected_keys}
+                phx-click={@select_event}
+                phx-target={@target}
+                phx-value-op="select"
+                phx-value-id={id}
+              />
+            <% end %>
+          </:col>
           <:col
             :let={row}
             :for={col <- @col}
@@ -741,6 +820,79 @@ defmodule PetalComponents.DataTable do
   # simple variant in cursor mode: enable Next unconditionally by
   # reporting one page more than the current
   defp cursor_total(%State{page: page}), do: page + 1
+
+  defp assign_selection(assigns) do
+    page_ids =
+      if assigns.loading do
+        []
+      else
+        assigns.rows
+        |> Enum.map(&row_key(&1, assigns.row_id))
+        |> Enum.reject(&is_nil/1)
+      end
+
+    selected_keys = MapSet.new(assigns.selected, &to_string/1)
+    on_page = Enum.count(page_ids, &(to_string(&1) in selected_keys))
+    all? = page_ids != [] and on_page == length(page_ids)
+
+    header =
+      assigns.selectable &&
+        select_header(%{
+        id: assigns.id,
+        all: all?,
+        some: on_page > 0 and not all?,
+        event: assigns.on_select || assigns.on_change,
+        target: assigns.target,
+        page_ids: Jason.encode!(Enum.map(page_ids, &to_string/1)),
+        label: assigns.select_all_label,
+        mode: if(all?, do: "none", else: "all"),
+        disabled: page_ids == [] or assigns.loading
+      })
+
+    assigns
+    |> assign(:selected_count, length(assigns.selected))
+    |> assign(:selected_keys, selected_keys)
+    |> assign(:select_event, assigns.on_select || assigns.on_change)
+    |> assign(:select_header, header)
+  end
+
+  defp row_key(row, nil), do: row_key(row, :id)
+  defp row_key(row, fun) when is_function(fun, 1), do: fun.(row)
+
+  defp row_key(row, field) when is_atom(field) or is_binary(field) do
+    Map.get(row, field) || if(is_atom(field), do: Map.get(row, Atom.to_string(field)))
+  end
+
+  attr :id, :string, required: true
+  attr :all, :boolean, required: true
+  attr :some, :boolean, required: true
+  attr :event, :string, required: true
+  attr :target, :any, default: nil
+  attr :page_ids, :string, required: true
+  attr :label, :string, required: true
+  attr :mode, :string, required: true
+  attr :disabled, :boolean, required: true
+
+  defp select_header(assigns) do
+    ~H"""
+    <input
+      id={"#{@id}-select-all"}
+      type="checkbox"
+      class="pc-checkbox"
+      aria-label={@label}
+      aria-checked={(@some && "mixed") || (@all && "true") || "false"}
+      checked={@all}
+      data-indeterminate={@some && "true"}
+      phx-hook="PetalIndeterminate"
+      disabled={@disabled}
+      phx-click={@event}
+      phx-target={@target}
+      phx-value-op="select_page"
+      phx-value-mode={@mode}
+      phx-value-ids={@page_ids}
+    />
+    """
+  end
 
   defp align_class("right"), do: "pc-data-table__cell--right"
   defp align_class("center"), do: "pc-data-table__cell--center"

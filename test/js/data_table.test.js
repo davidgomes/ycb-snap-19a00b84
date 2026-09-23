@@ -61,6 +61,25 @@ function type(el, value) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+describe("PetalIndeterminate", () => {
+  it("mirrors data-indeterminate onto the checkbox property", () => {
+    const el = document.createElement("input");
+    el.type = "checkbox";
+    el.dataset.indeterminate = "true";
+    document.body.appendChild(el);
+
+    const hook = Object.create(hooks.PetalIndeterminate);
+    hook.el = el;
+    hook.mounted();
+    expect(el.indeterminate).toBe(true);
+
+    delete el.dataset.indeterminate;
+    hook.updated();
+    expect(el.indeterminate).toBe(false);
+    el.remove();
+  });
+});
+
 describe("PetalDataTable", () => {
   beforeEach(() => vi.useFakeTimers());
 

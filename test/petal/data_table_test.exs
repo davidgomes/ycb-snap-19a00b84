@@ -363,6 +363,55 @@ defmodule PetalComponents.DataTableTest do
     assert html =~ "pc-data-table__actions"
   end
 
+  test "selectable renders a tri-state header and morphs the toolbar when rows are selected" do
+    assigns = base(%{rows: [%{id: 1, name: "Amy"}, %{id: 2, name: "Bea"}]})
+
+    partial =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        path={@path}
+        on_select="pick"
+        selectable
+        selected={[1]}
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+        <:bulk_action :let={ids}>Archive {length(ids)}</:bulk_action>
+      </.data_table>
+      """)
+
+    assert partial =~ ~s(phx-hook="PetalIndeterminate")
+    assert partial =~ ~s(data-indeterminate="true")
+    assert partial =~ ~s(aria-checked="mixed")
+    assert partial =~ ~s(phx-value-op="select_page")
+    assert partial =~ ~s(phx-value-mode="all")
+    assert partial =~ "pc-data-table--selected"
+    assert partial =~ "1 selected"
+    assert partial =~ "Archive 1"
+    assert partial =~ ~s(phx-value-op="clear_selection")
+    assert partial =~ ~s(phx-click="pick")
+
+    all =
+      rendered_to_string(~H"""
+      <.data_table
+        id="t"
+        rows={@rows}
+        state={@state}
+        on_change="table"
+        selectable
+        selected={[1, 2]}
+      >
+        <:col :let={row} field={:name}>{row.name}</:col>
+      </.data_table>
+      """)
+
+    assert all =~ ~s(aria-checked="true")
+    assert all =~ ~s(phx-value-mode="none")
+    refute all =~ "data-indeterminate"
+  end
+
   test "raises without either wiring mode" do
     assigns = base(%{path: nil})
 
