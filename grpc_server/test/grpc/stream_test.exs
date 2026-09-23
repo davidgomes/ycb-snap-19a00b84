@@ -509,25 +509,32 @@ defmodule GRPC.StreamTest do
       {:ok, producer_pid} = TestProducer.start_link(elements)
 
       input = [1, 2, 3]
+      test_pid = self()
 
       task =
         Task.async(fn ->
           GRPC.Stream.from(input, join_with: producer_pid, max_demand: 500)
-          |> GRPC.Stream.map(fn it -> it end)
+          |> GRPC.Stream.map(fn it ->
+            send(test_pid, {:merged, it})
+            it
+          end)
           |> GRPC.Stream.run_with(%GRPC.Server.Stream{}, dry_run: true)
         end)
 
-      result =
-        case Task.yield(task, 1000) || Task.shutdown(task) do
-          {:ok, _} -> :ok
-          _ -> :ok
+      # The joined producer never completes, so stop once every element went through
+      merged =
+        for _ <- 1..1000 do
+          assert_receive {:merged, it}, 1_000
+          it
         end
+
+      Task.shutdown(task)
 
       if Process.alive?(producer_pid) do
         Process.exit(producer_pid, :normal)
       end
 
-      assert result == :ok
+      assert Enum.sort(merged) == Enum.to_list(1..1000)
     end
   end
 
