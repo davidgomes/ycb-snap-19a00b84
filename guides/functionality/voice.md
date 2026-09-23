@@ -240,3 +240,25 @@ the best for you.
 
 The `:crypto` module completely supports AES256 in GCM mode requiring no implementation in elixir. 
 Many CPUs have hardware acceleration specifically for AES. For these reasons, Nostrum defaults to `aes256_gcm`.
+
+## End-to-End Encryption (DAVE)
+
+Discord requires audio in voice channels to be end-to-end encrypted with its
+[DAVE protocol](https://daveprotocol.com/). On top of the transport encryption described above,
+each opus frame is encrypted with keys that only the members of the call know, which are
+exchanged within an [MLS](https://www.rfc-editor.org/rfc/rfc9420.html) group.
+
+Nostrum handles the protocol automatically. Outgoing audio is encrypted before it's sent, and
+incoming audio received with `Nostrum.Voice.listen/3` or `Nostrum.Voice.start_listen_async/1`
+is decrypted before it's handed to you. Decrypting incoming audio requires knowing which user sent
+it, so packets from users whose SSRC hasn't been mapped yet are discarded.
+
+The cryptography is provided by the [`dave`](https://hex.pm/packages/dave) library, which contains
+NIF bindings to the Rust crate [davey](https://github.com/Snazzah/davey). Precompiled binaries are
+downloaded at compile time for most common platforms, so a Rust toolchain is not required.
+If no binary is available for your platform, or you prefer to build it yourself, add `rustler`
+to your dependencies and set the `FORCE_DAVE_BUILD` environment variable to `true` when compiling.
+
+```elixir
+{:rustler, "~> 0.37", optional: true, runtime: false}
+```
