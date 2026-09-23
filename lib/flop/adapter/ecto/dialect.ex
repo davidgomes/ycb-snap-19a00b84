@@ -24,10 +24,17 @@ defmodule Flop.Adapter.Ecto.Dialect do
   @type t :: %__MODULE__{
           arrays?: boolean,
           ilike?: boolean,
-          nulls_ordering?: boolean
+          nulls_ordering?: boolean,
+          asc_nulls: :first | :last
         }
 
-  defstruct arrays?: true, ilike?: true, nulls_ordering?: true
+  # Postgres sorts NULLs last when ascending and first when descending.
+  # SQLite and MySQL do the opposite. Explicit `*_nulls_first` and
+  # `*_nulls_last` directions name the position on every adapter.
+  defstruct arrays?: true,
+            ilike?: true,
+            nulls_ordering?: true,
+            asc_nulls: :last
 
   @nulls_ordering_fallback %{
     asc_nulls_first: {:native, :asc},
@@ -47,9 +54,39 @@ defmodule Flop.Adapter.Ecto.Dialect do
     %__MODULE__{
       arrays?: adapter not in @without_arrays,
       ilike?: adapter not in @without_ilike,
-      nulls_ordering?: adapter not in @without_nulls_ordering
+      nulls_ordering?: adapter not in @without_nulls_ordering,
+      asc_nulls: asc_nulls(adapter)
     }
   end
+
+  # SQLite treats NULL as smaller than every value. MySQL sorts NULLs first
+  # when ascending. Postgres sorts them last.
+  defp asc_nulls(Ecto.Adapters.SQLite3), do: :first
+  defp asc_nulls(Ecto.Adapters.MyXQL), do: :first
+  defp asc_nulls(_adapter), do: :last
+
+  @doc """
+  Returns whether NULLs sort before or after other values for an order
+  direction on this adapter.
+
+  `:asc` and `:desc` follow the adapter default. The `*_nulls_first` and
+  `*_nulls_last` directions use the position in their name, which is also how
+  MySQL emulates the directions it cannot write natively.
+  """
+  @spec nulls_position(t, atom) :: :first | :last
+  def nulls_position(%__MODULE__{asc_nulls: asc_nulls}, direction) do
+    case direction do
+      :asc -> asc_nulls
+      :desc -> opposite(asc_nulls)
+      :asc_nulls_first -> :first
+      :desc_nulls_first -> :first
+      :asc_nulls_last -> :last
+      :desc_nulls_last -> :last
+    end
+  end
+
+  defp opposite(:first), do: :last
+  defp opposite(:last), do: :first
 
   @doc """
   Dumps a filter value with the element type of an array field.

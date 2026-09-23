@@ -109,30 +109,29 @@ of replacing it. Replacing the order could drop the field that made it unique.
 
 ## Nullable fields
 
-Ordering by a nullable column loses the rows where it is `NULL`.
+A cursor comparison follows the same `NULL` placement as the order direction.
+`NULL > 7` is never true, so when `NULL` sorts last the predicate also keeps
+rows where the field is `NULL`, and when the cursor value itself is `NULL` the
+next page is the rows that sort after `NULL`.
 
 ```elixir
 %{first: 2, order_by: [:age, :id]}
 ```
 
+With the default ascending order, PostgreSQL sorts `NULL` last:
+
 | page | rows |
 |---|---|
 | 1 | Bo 1, Ada 3 |
 | 2 | Ada 5, Ada 7 |
-| 3 | — |
+| 3 | Cy, Dee |
 
-Cy and Dee never appear, and page 3 reports `has_next_page?: false`. PostgreSQL
-sorts them last, but the cursor comparison is `age > 7`, and no comparison with
-`NULL` is ever true. A second order field does not help, because the `NULL` is
-in the first one.
-
-Until Flop builds null-aware predicates, order by a column that has no `NULL`,
-or sort on a computed field that substitutes a value, as in the [computed fields
-recipe](computed_and_embedded_fields.md):
-
-```sql
-SELECT coalesce(age, -1) AS age_sortable
-```
+`:asc` and `:desc` use the adapter default: PostgreSQL sorts `NULL` last when
+ascending and first when descending, and SQLite and MySQL do the opposite.
+`:asc_nulls_first`, `:asc_nulls_last`, `:desc_nulls_first` and
+`:desc_nulls_last` name the position on every adapter. A `NULL` cursor value
+only separates rows when a later order field does, so keep a unique field such
+as the primary key in the order.
 
 ## Reading the cursor value
 

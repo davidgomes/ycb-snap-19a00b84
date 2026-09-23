@@ -17,6 +17,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Include rows whose order field is `NULL` in cursor pagination. The cursor
+  comparison uses the same `NULL` position as the `ORDER BY` clause, including
+  the `*_nulls_first` and `*_nulls_last` directions and the adapter default for
+  `:asc` and `:desc`.
 - Build the `:=~`, `:ilike`, `:not_ilike`, `:ilike_and`, `:ilike_or`,
   `:starts_with` and `:ends_with` filters with `LIKE` on databases that have no
   `ILIKE`, such as SQLite and MySQL, instead of raising an `Ecto.QueryError`.

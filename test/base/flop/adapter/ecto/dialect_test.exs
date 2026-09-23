@@ -31,13 +31,28 @@ defmodule Flop.Adapter.Ecto.DialectTest do
   describe "new/1" do
     test "reads the features of a known adapter" do
       assert Dialect.new(PostgresRepo) ==
-               %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: true,
+                 nulls_ordering?: true,
+                 asc_nulls: :last
+               }
 
       assert Dialect.new(MyXQLRepo) ==
-               %Dialect{arrays?: false, ilike?: false, nulls_ordering?: false}
+               %Dialect{
+                 arrays?: false,
+                 ilike?: false,
+                 nulls_ordering?: false,
+                 asc_nulls: :first
+               }
 
       assert Dialect.new(SQLite3Repo) ==
-               %Dialect{arrays?: true, ilike?: false, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: false,
+                 nulls_ordering?: true,
+                 asc_nulls: :first
+               }
     end
 
     test "returns the defaults for an unknown adapter" do
@@ -51,7 +66,12 @@ defmodule Flop.Adapter.Ecto.DialectTest do
 
     test "defaults to leaving the query unmodified" do
       assert %Dialect{} ==
-               %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: true,
+                 nulls_ordering?: true,
+                 asc_nulls: :last
+               }
     end
   end
 
@@ -113,6 +133,126 @@ defmodule Flop.Adapter.Ecto.DialectTest do
       assert Dialect.order_direction(Dialect.new(NotARealRepo), :asc_nulls_last) ==
                {:native, :asc_nulls_last}
     end
+  end
+
+  describe "nulls_position/2" do
+    test "follows the adapter default for :asc and :desc" do
+      assert Dialect.nulls_position(Dialect.new(PostgresRepo), :asc) == :last
+      assert Dialect.nulls_position(Dialect.new(PostgresRepo), :desc) == :first
+
+      assert Dialect.nulls_position(Dialect.new(SQLite3Repo), :asc) == :first
+      assert Dialect.nulls_position(Dialect.new(SQLite3Repo), :desc) == :last
+
+      assert Dialect.nulls_position(Dialect.new(MyXQLRepo), :asc) == :first
+      assert Dialect.nulls_position(Dialect.new(MyXQLRepo), :desc) == :last
+    end
+
+    test "uses the position named by the direction" do
+      for dialect <- [
+            Dialect.new(PostgresRepo),
+            Dialect.new(SQLite3Repo),
+            Dialect.new(MyXQLRepo)
+          ] do
+        assert Dialect.nulls_position(dialect, :asc_nulls_first) == :first
+        assert Dialect.nulls_position(dialect, :desc_nulls_first) == :first
+        assert Dialect.nulls_position(dialect, :asc_nulls_last) == :last
+        assert Dialect.nulls_position(dialect, :desc_nulls_last) == :last
+      end
+    end
+  end
+
+  describe "cursor pagination over a nullable column" do
+    test "keeps NULL rows when they sort last" do
+      where = cursor_where(PostgresRepo, :asc, 7)
+
+      assert where =~ "p0.age > type(^7, p0.age)"
+      assert where =~ "is_nil(p0.age)"
+
+      assert cursor_where(MyXQLRepo, :asc_nulls_last, 7) == where
+    end
+
+    test "leaves NULL rows behind when they sort first" do
+      assert cursor_where(MyXQLRepo, :asc, 7) ==
+               "p0.age > type(^7, p0.age)"
+
+      assert cursor_where(PostgresRepo, :asc_nulls_first, 7) ==
+               cursor_where(MyXQLRepo, :asc, 7)
+    end
+
+    test "pages forward from a NULL cursor" do
+      assert cursor_where(PostgresRepo, :asc, nil) == "false"
+
+      assert cursor_where(MyXQLRepo, :asc, nil) =~ "is_nil(p0.age)"
+      refute cursor_where(MyXQLRepo, :asc, nil) =~ ">"
+
+      assert cursor_where(PostgresRepo, :asc_nulls_first, nil) ==
+               cursor_where(MyXQLRepo, :asc, nil)
+    end
+
+    test "uses the next order field to separate rows that share a NULL" do
+      flop = %Flop{
+        first: 1,
+        after: "cursor",
+        decoded_cursor: %{age: nil, name: "Ada"},
+        order_by: [:age, :name],
+        order_directions: [:asc, :asc]
+      }
+
+      where =
+        MyApp.Pet
+        |> Flop.query(flop, for: MyApp.Pet, repo: PostgresRepo)
+        |> cursor_where_inspect()
+
+      assert where =~ "is_nil(p0.age)"
+      assert where =~ "p0.name > type(^\"Ada\", p0.name)"
+    end
+
+    test "applies the same comparison to a join field" do
+      flop = %Flop{
+        first: 1,
+        after: "cursor",
+        decoded_cursor: %{owner_age: 4},
+        order_by: [:owner_age],
+        order_directions: [:asc]
+      }
+
+      query =
+        Ecto.Query.from(p in MyApp.Pet,
+          left_join: o in Ecto.Query.assoc(p, :owner),
+          as: :owner
+        )
+
+      where =
+        query
+        |> Flop.query(flop, for: MyApp.Pet, repo: PostgresRepo)
+        |> cursor_where_inspect()
+
+      assert where =~ "age > type(^4,"
+      assert where =~ "is_nil("
+    end
+  end
+
+  defp cursor_where(repo, direction, value) do
+    flop = %Flop{
+      first: 1,
+      after: "cursor",
+      decoded_cursor: %{age: value},
+      order_by: [:age],
+      order_directions: [direction]
+    }
+
+    MyApp.Pet
+    |> Flop.query(flop, for: MyApp.Pet, repo: repo)
+    |> cursor_where_inspect()
+  end
+
+  defp cursor_where_inspect(query) do
+    query
+    |> inspect()
+    |> String.split("where: ")
+    |> List.last()
+    |> String.split(", order_by:")
+    |> List.first()
   end
 
   describe "the query built for the nulls order directions" do
