@@ -22,59 +22,60 @@ defmodule GradingClient.GradedCell do
 
   @impl true
   def to_source(attrs) do
-    modules = Map.new(GradingClient.Answers.get_modules(), &{inspect(&1), &1})
+    try do
+      source_attr = attrs["source"]
+      source = Code.string_to_quoted!(source_attr)
 
-    source_ast =
-      try do
-        source_attr = attrs["source"]
-        source = Code.string_to_quoted!(source_attr)
+      [module_key, question_key] =
+        source_attr
+        |> String.split("\n", parts: 2)
+        |> hd()
+        |> String.trim_leading("#")
+        |> String.split(":", parts: 2)
 
-        quote do
-          result = unquote(source)
+      module_key = String.trim(module_key)
+      question_key = String.trim(question_key)
 
-          [module_id, question_id] =
-            unquote(source_attr)
-            |> String.split("\n", parts: 2)
-            |> hd()
-            |> String.trim_leading("#")
-            |> String.split(":", parts: 2)
+      modules = Map.new(GradingClient.Answers.get_modules(), &{inspect(&1), &1})
 
-          module_id =
-            case unquote(Macro.escape(modules))[String.trim(module_id)] do
-              nil ->
-                raise "invalid module id: #{module_id}"
+      module_id =
+        case modules[module_key] do
+          nil ->
+            raise "invalid module id: #{module_key}"
 
-              module_id ->
-                module_id
-            end
-
-          question_id =
-            case Integer.parse(String.trim(question_id)) do
-              {id, ""} ->
-                id
-
-              _ ->
-                raise "invalid question id: #{question_id}"
-            end
-
-          case GradingClient.check_answer(module_id, question_id, result) do
-            :correct ->
-              IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
-
-            {:incorrect, help_text} when is_binary(help_text) ->
-              IO.puts([IO.ANSI.red(), "Incorrect: ", IO.ANSI.reset(), help_text])
-
-            _ ->
-              IO.puts([IO.ANSI.red(), "Incorrect.", IO.ANSI.reset()])
-          end
+          module_id ->
+            module_id
         end
-      rescue
-        error ->
-          IO.inspect(error)
-          {:<<>>, [delimiter: ~s["""]], [attrs["source"] <> "\n"]}
-      end
 
-    Kino.SmartCell.quoted_to_string(source_ast)
+      question_id =
+        case Integer.parse(question_key) do
+          {id, ""} ->
+            id
+
+          _ ->
+            raise "invalid question id: #{question_key}"
+        end
+
+      quote do
+        result = unquote(source)
+
+        case GradingClient.check_answer(unquote(module_id), unquote(question_id), result) do
+          :correct ->
+            IO.puts([IO.ANSI.green(), "Correct!", IO.ANSI.reset()])
+
+          {:incorrect, help_text} when is_binary(help_text) ->
+            IO.puts([IO.ANSI.red(), "Incorrect: ", IO.ANSI.reset(), help_text])
+
+          _ ->
+            IO.puts([IO.ANSI.red(), "Incorrect.", IO.ANSI.reset()])
+        end
+      end
+      |> Kino.SmartCell.quoted_to_string()
+    rescue
+      error ->
+        IO.inspect(error)
+        attrs["source"] || ""
+    end
   end
 
   @impl true
