@@ -8,4 +8,12 @@ defmodule ObanConfigMock do
       build(:queue, queue: "matching", paused: true, local_limit: 20)
     ]
   end
+
+  def jobs do
+    [
+      build(:job, id: 1, state: "scheduled"),
+      build(:job, id: 2, state: "completed", queue: "searching"),
+      build(:job, id: 3, state: "executing", queue: "matching")
+    ]
+  end
 end
