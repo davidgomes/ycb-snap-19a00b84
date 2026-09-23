@@ -71,6 +71,17 @@ defmodule ObanChoreWeb.DashboardLive do
               >
                 New Execution
               </button>
+              <button
+                phx-click="select_tab"
+                phx-value-tab="history"
+                data-role="history-tab"
+                class={[
+                  "oc-tab-item",
+                  if(@selected_tab == :history, do: "oc-tab-item--active", else: "")
+                ]}
+              >
+                History
+              </button>
               <%= for job_id <- Map.get(@chore_jobs, @selected_chore_module, []), job = @jobs[job_id] do %>
                 <button
                   phx-click="select_tab"
@@ -114,6 +125,13 @@ defmodule ObanChoreWeb.DashboardLive do
                 />
               <% end %>
 
+              <.live_component
+                module={ObanChoreWeb.HistoryComponent}
+                id="history"
+                jobs={@history}
+                selected={@selected_tab == :history}
+              />
+
               <%= for {module, job_ids} <- @chore_jobs, job_id <- job_ids, job = @jobs[job_id] do %>
                   <%= if @selected_chore_module == module do %>
                     <.live_component
@@ -156,6 +174,7 @@ defmodule ObanChoreWeb.DashboardLive do
        selected_chore_module: nil,
        jobs: %{},
        chore_jobs: %{},
+       history: [],
        selected_tab: :new,
        now: DateTime.utc_now()
      )}
@@ -215,7 +234,7 @@ defmodule ObanChoreWeb.DashboardLive do
     allowed_modules = Enum.map(socket.assigns.chores, & &1.module)
 
     if module in allowed_modules do
-      {:noreply, assign(socket, selected_chore_module: module, selected_tab: :new)}
+      {:noreply, assign(socket, selected_chore_module: module, selected_tab: :new, history: [])}
     else
       {:noreply, socket}
     end
@@ -224,6 +243,11 @@ defmodule ObanChoreWeb.DashboardLive do
   @impl true
   def handle_event("select_tab", %{"tab" => "new"}, socket) do
     {:noreply, assign(socket, selected_tab: :new)}
+  end
+
+  @impl true
+  def handle_event("select_tab", %{"tab" => "history"}, socket) do
+    {:noreply, socket |> assign(selected_tab: :history) |> load_history()}
   end
 
   @impl true
@@ -238,7 +262,11 @@ defmodule ObanChoreWeb.DashboardLive do
 
     if worker_module in allowed_modules do
       new_counts = Map.put(socket.assigns.counts, worker_module, count)
-      {:noreply, assign(socket, counts: new_counts)}
+
+      {:noreply,
+       socket
+       |> assign(counts: new_counts)
+       |> maybe_refresh_history(worker_module)}
     else
       {:noreply, socket}
     end
@@ -305,6 +333,20 @@ defmodule ObanChoreWeb.DashboardLive do
   defp fetch_counts(chores) do
     Map.new(chores, fn chore -> {chore.module, ObanChore.count_running(chore.module, Oban)} end)
   end
+
+  defp load_history(socket) do
+    assign(socket, history: ObanChore.list_history_jobs(socket.assigns.selected_chore_module))
+  end
+
+  # Count broadcasts fire on every job event of a chore, after Oban has persisted the new state.
+  defp maybe_refresh_history(
+         %{assigns: %{selected_tab: :history, selected_chore_module: module}} = socket,
+         module
+       ) do
+    load_history(socket)
+  end
+
+  defp maybe_refresh_history(socket, _worker_module), do: socket
 
   defp match_route_opts(router, uri) do
     parsed_uri = URI.parse(uri)
