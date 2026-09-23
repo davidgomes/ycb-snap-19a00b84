@@ -1,5 +1,11 @@
 ## Changelog
 
+#### Unreleased
+- refactor `EctoShorts.QueryBuilder` api (BREAKING)
+  - `c:EctoShorts.QueryBuilder.create_schema_filter/2` with `({filter_key, filter_value}, query)` is now `c:EctoShorts.QueryBuilder.create_schema_filter/3` with `(query, filter_key, filter_value)`
+  - `EctoShorts.QueryBuilder.create_schema_filter/3` is now `EctoShorts.QueryBuilder.create_schema_filter/4` with `(builder, query, filter_key, filter_value)`
+  - `EctoShorts.QueryBuilder.Schema.create_schema_filter/3` with `({filter_key, filter_value}, schema, query)` is now `EctoShorts.QueryBuilder.Schema.create_schema_filter/4` with `(query, schema, filter_key, filter_value)`
+
 #### V2.4.0
 - add recursive relational filtering
 - add `%{field: %{!=: [1, 2, 3]}}` to allow `NOT IN ANY` queries
