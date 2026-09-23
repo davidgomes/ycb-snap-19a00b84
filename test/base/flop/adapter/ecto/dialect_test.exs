@@ -184,6 +184,70 @@ defmodule Flop.Adapter.Ecto.DialectTest do
     end
   end
 
+  describe "filters on a field_dynamic" do
+    alias MyApp.CustomFieldPet
+
+    test "compares the dynamic expression" do
+      assert dynamic_where(PostgresRepo, :age_score, :==, 4) =~
+               "fragment(\"? * ?\", c0.age, ^2) == ^4"
+    end
+
+    test "uses the array itself on an adapter that has one" do
+      assert dynamic_where(PostgresRepo, :tag_list, :contains, "pear") =~
+               ~S|^"pear" in c0.tags|
+
+      assert dynamic_where(PostgresRepo, :tag_list, :empty, true) =~
+               "is_nil(c0.tags) or c0.tags =="
+    end
+
+    test "uses the JSON functions on an adapter that has no array type" do
+      assert dynamic_where(MyXQLRepo, :tag_list, :contains, "pear") =~
+               ~S|fragment("JSON_CONTAINS(?, ?)", c0.tags, ^["pear"])|
+
+      assert dynamic_where(MyXQLRepo, :tag_list, :not_contains, "pear") =~
+               ~S|not fragment("JSON_CONTAINS(?, ?)", c0.tags, ^["pear"])|
+
+      assert dynamic_where(MyXQLRepo, :tag_list, :empty, true) =~
+               ~S|fragment("JSON_LENGTH(?) = 0", c0.tags)|
+    end
+
+    test "uses LIKE when the adapter has no ILIKE" do
+      clause = dynamic_where(SQLite3Repo, :name_lower, :ilike, "ab")
+
+      assert clause =~ "LIKE"
+      refute clause =~ "ilike"
+    end
+
+    test "raises when the custom field has neither callback" do
+      assert_raise ArgumentError,
+                   ~r/filtering by a custom field requires a filter or field_dynamic/,
+                   fn ->
+                     Flop.query(
+                       CustomFieldPet,
+                       %Flop{
+                         filters: [
+                           %Flop.Filter{field: :inert, op: :==, value: "x"}
+                         ]
+                       },
+                       for: CustomFieldPet
+                     )
+                   end
+    end
+
+    test "a filter function takes precedence over field_dynamic" do
+      query =
+        Flop.query(
+          CustomFieldPet,
+          %Flop{filters: [%Flop.Filter{field: :scored, op: :==, value: 1}]},
+          for: CustomFieldPet,
+          repo: PostgresRepo
+        )
+
+      assert_receive :scored_filter
+      assert inspect(query) =~ "false"
+    end
+  end
+
   defp where_clause(repo) do
     flop = %Flop{
       filters: [%Flop.Filter{field: :name, op: :ilike, value: "abc"}]
@@ -191,6 +255,17 @@ defmodule Flop.Adapter.Ecto.DialectTest do
 
     MyApp.Pet
     |> Flop.query(flop, for: MyApp.Pet, repo: repo)
+    |> inspect()
+    |> String.split("where: ")
+    |> List.last()
+    |> String.trim_trailing(">")
+  end
+
+  defp dynamic_where(repo, field, op, value) do
+    flop = %Flop{filters: [%Flop.Filter{field: field, op: op, value: value}]}
+
+    MyApp.CustomFieldPet
+    |> Flop.query(flop, for: MyApp.CustomFieldPet, repo: repo)
     |> inspect()
     |> String.split("where: ")
     |> List.last()
