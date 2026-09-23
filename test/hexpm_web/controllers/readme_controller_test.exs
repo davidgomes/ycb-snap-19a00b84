@@ -140,6 +140,19 @@ defmodule HexpmWeb.ReadmeControllerTest do
       assert get_resp_header(conn, "cache-control") == ["public, max-age=3600"]
     end
 
+    test "redirects versionless URL to the latest stable version", %{package: package} do
+      for version <- ~w(1.9.0 1.10.0 2.0.0-rc.1) do
+        insert(:release, package: package, version: version)
+      end
+
+      conn =
+        build_conn()
+        |> Map.put(:host, "readme.localhost")
+        |> get("/#{package.name}")
+
+      assert get_resp_header(conn, "location") == ["/#{package.name}/1.10.0"]
+    end
+
     test "renders plain text for non-markdown README", %{package: package} do
       mock_file_list_and_readme(
         package.name,

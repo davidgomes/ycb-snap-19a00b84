@@ -10,6 +10,9 @@ defmodule Hexpm.Repository.Release do
     field :inner_checksum, :binary
     field :outer_checksum, :binary
     field :has_docs, :boolean, default: false
+    # Set by a database trigger from version, only used for ordering in queries
+    field :semver_sort_key, :binary, writable: :never, load_in_query: false
+    field :semver_stable, :boolean, writable: :never, load_in_query: false
     field :vulnerable?, :boolean, virtual: true, default: false
     timestamps()
 
@@ -191,6 +194,41 @@ defmodule Hexpm.Repository.Release do
       latest(with_docs_releases)
     else
       latest(stable_releases)
+    end
+  end
+
+  @doc """
+  The latest release of the package bound as `:package` in the parent query,
+  for use in a lateral join. Takes the same options as `latest_version/2`.
+  """
+  def latest_of_package(opts) do
+    from(r in Release, where: r.package_id == parent_as(:package).id, limit: 1)
+    |> order_by_latest(opts)
+  end
+
+  @doc """
+  Orders releases latest first, with the same options as `latest_version/2`.
+  """
+  def order_by_latest(query, opts) do
+    only_stable? = Keyword.fetch!(opts, :only_stable)
+    unstable_fallback? = Keyword.get(opts, :unstable_fallback, false)
+
+    query =
+      if Keyword.get(opts, :with_docs) do
+        from(r in query, where: r.has_docs)
+      else
+        query
+      end
+
+    cond do
+      only_stable? and unstable_fallback? ->
+        from(r in query, order_by: [desc: r.semver_stable, desc: r.semver_sort_key])
+
+      only_stable? ->
+        from(r in query, where: r.semver_stable, order_by: [desc: r.semver_sort_key])
+
+      true ->
+        from(r in query, order_by: [desc: r.semver_sort_key])
     end
   end
 

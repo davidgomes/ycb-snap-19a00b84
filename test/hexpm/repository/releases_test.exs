@@ -163,6 +163,35 @@ defmodule Hexpm.Repository.ReleasesTest do
                unstable_fallback: true
              ) == Version.parse!("1.0.0-rc.2")
     end
+
+    test "compares versions by SemVer precedence" do
+      package = insert(:package, name: "numeric_preview")
+      insert(:release, package: package, version: "0.10.0", has_docs: false)
+      insert(:release, package: package, version: "0.9.0", has_docs: true)
+      insert(:release, package: package, version: "0.11.0-rc.2")
+      insert(:release, package: package, version: "0.11.0-rc.10")
+
+      assert Releases.latest_version("hexpm", package.name, only_stable: true) ==
+               Version.parse!("0.10.0")
+
+      assert Releases.latest_version("hexpm", package.name, only_stable: false) ==
+               Version.parse!("0.11.0-rc.10")
+
+      assert Releases.latest_version("hexpm", package.name, only_stable: true, with_docs: true) ==
+               Version.parse!("0.9.0")
+    end
+
+    test "is scoped to the repository and package" do
+      repository = insert(:repository)
+      package = insert(:package, name: "scoped_preview", repository_id: repository.id)
+      insert(:release, package: package, version: "1.0.0")
+
+      refute Releases.latest_version("hexpm", package.name, only_stable: false)
+      refute Releases.latest_version(repository.name, "missing", only_stable: false)
+
+      assert Releases.latest_version(repository.name, package.name, only_stable: false) ==
+               Version.parse!("1.0.0")
+    end
   end
 
   describe "publish/7" do
