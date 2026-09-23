@@ -20,7 +20,7 @@ The support policy is to support the last 2 major versions of Erlang and the thr
 
    ```elixir
    def deps do
-     [{:plug_logger_json, "~> 0.6.0"}]
+     [{:plug_logger_json, "~> 0.7.0"}]
    end
    ```
    
@@ -175,6 +175,7 @@ plug Plug.LoggerJSON,
 
 Before submitting your pull request, please run:
 
+  * `mix format`,
   * `mix credo --strict`,
   * `mix coveralls`,
   * `mix dialyzer`,
