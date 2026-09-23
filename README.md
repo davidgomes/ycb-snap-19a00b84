@@ -31,7 +31,7 @@ There are 4 things to copy:
  
 The `secret_key_base` can be found usually in the Rails' `secrets.yml` file and should be copied to Phoenix's `config.exs` file. There should already be a key named like that and you should override it.
 
-Since Rails 5.2, `secret_key_base` in development and test is generated automatically as an MD5 hash of the application's name (32 bytes long), so it isn't in `secrets.yml`. You can print it from a Rails console:
+Since Rails 5.2, when no `secret_key_base` is configured for development and test, Rails derives one from an MD5 hash of the application's name (32 bytes long). You can print the value in use from a Rails console:
 
 ```ruby
 Rails.application.secret_key_base
