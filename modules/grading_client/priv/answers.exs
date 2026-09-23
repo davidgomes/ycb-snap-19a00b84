@@ -14,8 +14,13 @@ end
 owasp_questions = [
   %{
     question_id: 1,
-    answer: "A",
-    help_text: "A"
+    answer: :entry_granted_op2,
+    help_text: "MD5 is a deprecated hashing function. Prefer a salted, slow hash such as bcrypt."
+  },
+  %{
+    question_id: 2,
+    answer: :plug,
+    help_text: "Check the version of :plug pinned in the first cell of this Livebook."
   }
 ]
 
