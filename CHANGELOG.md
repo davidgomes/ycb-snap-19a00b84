@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix key type inconsistency in backend implementations - all backends now accept `term()` keys instead of `String.t()` (#143)
+
 ## 7.0.1 - 2025-03-04
 
 - Fix race condition in Atomic backends during creation of key.
