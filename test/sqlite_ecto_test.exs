@@ -98,7 +98,8 @@ defmodule Sqlite.Ecto2.Test do
 
   defp normalize(query, operation \\ :all, counter \\ 0) do
     {query, _params, _key} = Ecto.Query.Planner.prepare(query, operation, Sqlite.Ecto2, counter)
-    Ecto.Query.Planner.normalize(query, operation, Sqlite.Ecto2, counter)
+    {query, _} = Ecto.Query.Planner.normalize(query, operation, Sqlite.Ecto2, counter)
+    query
   end
 
   test "from" do
@@ -481,6 +482,11 @@ defmodule Sqlite.Ecto2.Test do
     assert SQL.update_all(query) ==
            ~s{UPDATE "schema" SET "x" = 0 ;--RETURNING ON UPDATE "schema","id","x","y","z"}
            # diff SQLite syntax
+
+    query = from(m in Schema, update: [set: [x: 0]]) |> select([m], fragment("?", m.x)) |> normalize(:update_all)
+    assert_raise Ecto.QueryError, ~r"SQLite adapter only supports returning fields of the table being modified", fn ->
+      SQL.update_all(query)
+    end
   end
 
   test "update all array ops" do
@@ -820,6 +826,17 @@ defmodule Sqlite.Ecto2.Test do
     """ |> remove_newlines]
   end
 
+  test "create table with bigserial primary key" do
+    create = {:create, table(:posts),
+               [{:add, :id, :bigserial, [primary_key: true]},
+                {:add, :category_0, references(:categories, type: :bigserial), []}]}
+
+    assert execute_ddl(create) == ["""
+    CREATE TABLE "posts" ("id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "category_0" INTEGER CONSTRAINT "posts_category_0_fkey" REFERENCES "categories"("id"))
+    """ |> remove_newlines]
+  end
+
   test "create table with prefix" do
     create = {:create, table(:posts, prefix: :foo),
                [{:add, :category_0, references(:categories), []}]}
@@ -1010,6 +1027,16 @@ defmodule Sqlite.Ecto2.Test do
   test "alter table with primary key" do
     alter = {:alter, table(:posts),
              [{:add, :my_pk, :serial, [primary_key: true]}]}
+
+    assert execute_ddl(alter) == ["""
+    ALTER TABLE "posts"
+    ADD COLUMN "my_pk" INTEGER PRIMARY KEY AUTOINCREMENT
+    """ |> remove_newlines]
+  end
+
+  test "alter table with bigserial primary key" do
+    alter = {:alter, table(:posts),
+             [{:add, :my_pk, :bigserial, [primary_key: true]}]}
 
     assert execute_ddl(alter) == ["""
     ALTER TABLE "posts"
