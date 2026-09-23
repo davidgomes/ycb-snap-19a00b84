@@ -1,0 +1,15 @@
+language: elixir
+dist: jammy
+
+elixir:
+  - 1.18.4
+
+otp_release:
+  - 25.3
+
+services:
+  - postgresql
+
+script:
+  - mix format --check-formatted
+  - mix test
