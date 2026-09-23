@@ -20,6 +20,7 @@
     - [Supported formats](#supported-formats)
     - [Example (DNS)](#example-dns)
     - [Example (Unix socket)](#example-unix-socket)
+    - [Load balancing](#load-balancing)
   - [Compression and Metadata](#compression-and-metadata)
   - [Client Adapters](#client-adapters)
     - [Using Mint Adapter](#using-mint-adapter)
@@ -153,6 +154,13 @@ iex> {:ok, channel} = GRPC.Stub.connect("unix:/tmp/my.sock")
 ```
 
 >__NOTE__: When using `DNS` or `xDS` targets, the connection layer periodically refreshes endpoints.
+
+### Load balancing
+
+When a target resolves to several backends, the client connects to all of them and the load-balancing policy (`lb_policy: :pick_first`, the default, or `lb_policy: :round_robin`) chooses a backend for every RPC.
+
+>__NOTE__: Picking per request runs in the calling process and costs an ETS lookup (plus an `:atomics` increment for round-robin), so it is slower than the single cached `:persistent_term` read used by earlier versions: roughly a few hundred nanoseconds per pick instead of a few tens. This is negligible next to a network round trip, and in exchange endpoint refreshes no longer update `:persistent_term`, which forces a global garbage-collection pass on every update.
+
 ---
 
 ## Compression and Metadata

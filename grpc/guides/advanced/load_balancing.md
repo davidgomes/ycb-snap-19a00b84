@@ -41,3 +41,25 @@ iex> {:ok, channel} = GRPC.Stub.connect("unix:/tmp/my.sock")
 >__Note__: When using `DNS` target, the connection layer periodically refreshes endpoints.
 
 ---
+
+## Load-Balancing Policies
+
+When a target resolves to several backends, the client opens a connection to each of them and the load-balancing policy picks one for every RPC:
+
+| Policy      | Option                    | Behaviour                                                |
+|:------------|:--------------------------|:---------------------------------------------------------|
+| Pick first  | `lb_policy: :pick_first`  | Default. Sends every RPC to the first reachable backend  |
+| Round robin | `lb_policy: :round_robin` | Cycles through the reachable backends, one per RPC       |
+
+```elixir
+iex> {:ok, channel} =
+...>   GRPC.Stub.connect("dns://orders.prod.svc.cluster.local:50051", lb_policy: :round_robin)
+```
+
+A policy set through the DNS service config takes precedence over the `:lb_policy` option.
+
+The pick runs in the calling process, without a round trip to the connection process: the policy keeps its channels in an ETS table (and, for round robin, an `:atomics` cursor) that re-resolution updates in place.
+
+>__Note__: Picking per request is slower than the single cached `:persistent_term` read used by earlier versions, roughly a few hundred nanoseconds per pick instead of a few tens. This is negligible next to a network round trip, and in exchange endpoint refreshes no longer update `:persistent_term`, which forces a global garbage-collection pass on every update.
+
+---
