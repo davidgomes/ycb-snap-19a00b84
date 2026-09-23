@@ -29,6 +29,32 @@ defmodule BroadwayDashboard.MetricsTest do
     assert payload.pipeline == broadway
   end
 
+  test "listens to a pipeline registered using via" do
+    registry = :"Elixir.Registry#{System.unique_integer([:positive, :monotonic])}"
+    start_supervised!({Registry, keys: :unique, name: registry})
+
+    broadway = start_linked_dummy_pipeline({:via, Registry, {registry, :broadway}})
+    server_name = Metrics.server_name(broadway)
+    assert is_atom(server_name)
+
+    me = self()
+
+    proc =
+      spawn_link(fn ->
+        receive do
+          {:update_pipeline, payload} ->
+            send(me, {:refreshed, payload})
+        end
+      end)
+
+    assert {:ok, _payload} = Metrics.listen(node(), proc, broadway)
+
+    send(server_name, :refresh)
+
+    assert_receive {:refreshed, payload}
+    assert payload.pipeline == broadway
+  end
+
   test "returns error if pipeline is not running" do
     broadway = new_unique_name()
 
