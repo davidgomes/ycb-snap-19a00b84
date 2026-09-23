@@ -5,43 +5,43 @@ defmodule GradingClient.GradedCell do
 
   @impl true
   def init(attrs, ctx) do
-    source = attrs["source"] || ""
+    ctx =
+      assign(ctx,
+        module_id: attrs["module_id"] || "",
+        question_id: attrs["question_id"]
+      )
 
-    {:ok, assign(ctx, source: source), editor: [source: source, language: "elixir"]}
+    {:ok, ctx, editor: [attribute: "source", language: "elixir"]}
   end
 
   @impl true
   def handle_connect(ctx) do
-    {:ok, %{}, ctx}
-  end
-
-  @impl true
-  def handle_editor_change(source, ctx) do
-    {:ok, assign(ctx, source: source)}
+    {:ok, %{module_id: ctx.assigns.module_id, question_id: ctx.assigns.question_id}, ctx}
   end
 
   @impl true
   def to_attrs(ctx) do
-    %{"source" => ctx.assigns.source}
+    %{"module_id" => ctx.assigns.module_id, "question_id" => ctx.assigns.question_id}
   end
 
   @impl true
   def to_source(attrs) do
     try do
       source = Code.string_to_quoted!(attrs["source"])
+      module_id = Module.concat([attrs["module_id"]])
+      question_id = attrs["question_id"]
 
       ast =
         quote do
-          result = unquote(source)
+          answer = unquote(source)
 
-          GradingServer.Answers.check(module_id, question_id, result)
+          GradingClient.self_evaluate(answer, unquote(module_id), unquote(question_id))
         end
 
       Kino.SmartCell.quoted_to_string(ast)
     rescue
-      error ->
-        IO.inspect(error)
-        attrs["source"]
+      # Fall back to the raw source so evaluation surfaces the syntax error to the user
+      _error -> attrs["source"]
     end
   end
 
@@ -50,11 +50,12 @@ defmodule GradingClient.GradedCell do
     export function init(ctx, payload) {
       ctx.importCSS("main.css");
 
-      root.innerHTML = `
-        <div class="app">
-          Graded Cell
-        </div>
-      `;
+      const label = payload.question_id == null
+        ? "Graded Cell"
+        : `Graded Cell: ${payload.module_id} - Question ${payload.question_id}`;
+
+      ctx.root.innerHTML = `<div class="app"></div>`;
+      ctx.root.querySelector(".app").textContent = label;
     }
     """
   end
