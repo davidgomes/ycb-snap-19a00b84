@@ -112,6 +112,7 @@ defmodule Flop.Adapter.Ecto do
               type: {:tuple, [:atom, :atom, :keyword_list]},
               required: true
             ],
+            sorter: [type: {:tuple, [:atom, :atom, :keyword_list]}],
             ecto_type: [type: :any, required: true],
             bindings: [type: {:list, :atom}],
             operators: [type: {:list, :atom}]
@@ -373,6 +374,15 @@ defmodule Flop.Adapter.Ecto do
     order_by_direction(q, order_direction, dynamic(selected_as(^field)))
   end
 
+  defp apply_order_by_field(
+         q,
+         {order_direction, _},
+         %FieldInfo{extra: %{type: :custom, sorter: {mod, fun, sorter_opts}}},
+         _
+       ) do
+    order_by_direction(q, order_direction, apply(mod, fun, [sorter_opts]))
+  end
+
   defp apply_order_by_field(q, {order_direction, field}, _, _) do
     order_by_direction(q, order_direction, dynamic([r], field(r, ^field)))
   end
@@ -409,7 +419,7 @@ defmodule Flop.Adapter.Ecto do
 
   # only reachable with an unvalidated Flop struct
   defp cursor_dynamic([{_, _, _, %FieldInfo{extra: %{type: type}}} | _])
-       when type in [:compound, :alias] do
+       when type in [:compound, :alias, :custom] do
     raise ArgumentError, """
     cursor pagination is not supported for #{type} fields
 
@@ -986,19 +996,19 @@ defmodule Flop.Adapter.Ecto do
 
     illegal_fields =
       custom_fields
-      |> Map.keys()
-      |> Enum.filter(&(&1 in sortable))
+      |> Enum.filter(fn {field, field_opts} ->
+        field in sortable and is_nil(field_opts[:sorter])
+      end)
+      |> Enum.map(fn {field, _} -> field end)
 
     if illegal_fields != [] do
       raise ArgumentError, """
-      cannot sort by custom fields
+      cannot sort by custom fields without sorter
 
-      Custom fields are not allowed to be sortable. These custom fields were
-      configured as sortable:
+      Custom fields can only be sortable if the `:sorter` option is set. These
+      custom fields were configured as sortable without a sorter:
 
           #{inspect(illegal_fields)}
-
-      Use alias fields if you want to implement custom sorting.
       """
     end
 

@@ -384,7 +384,10 @@ defprotocol Flop.Schema do
   ID of the current user), use the `extra_opts` option when calling Flop
   functions.
 
-  Note that as of now, custom fields only support filtering, not sorting.
+  To make a custom field sortable, set the `:sorter` option to a
+  module/function/options tuple. The function receives the options from the
+  tuple and must return an `Ecto.Query.dynamic_expr/0` to order by. Custom
+  fields cannot be used with cursor-based pagination.
 
   Schema:
 
@@ -607,6 +610,9 @@ defprotocol Flop.Schema do
     `Flop.Filter` struct, and the options from the tuple as arguments.
   - `:ecto_type` (required) - The Ecto type of the field. The filter operator
     and value validation is based on this option.
+  - `:sorter` - A module/function/options tuple referencing a function that
+    receives the options from the tuple and returns a dynamic expression to
+    order by. Required if the field is sortable.
   - `:bindings` - If the custom filter function requires certain named bindings
     to be present in the Ecto query, you can specify them here. These bindings
     will be conditionally added by `Flop.with_named_bindings/4` if the filter
@@ -620,6 +626,7 @@ defprotocol Flop.Schema do
   """
   @type custom_field_option ::
           {:filter, {module, atom, keyword}}
+          | {:sorter, {module, atom, keyword}}
           | {:ecto_type, ecto_type()}
           | {:bindings, [atom]}
           | {:operators, [Flop.Filter.op()]}
