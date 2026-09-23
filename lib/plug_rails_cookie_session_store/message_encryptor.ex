@@ -53,11 +53,33 @@ defmodule PlugRailsCookieSessionStore.MessageEncryptor do
   end
 
   defp encrypt(message, cipher, secret, iv) do
-    :crypto.block_encrypt(cipher, trim_secret(secret), iv, message)
+    block_encrypt(cipher, trim_secret(secret), iv, message)
   end
 
   defp decrypt(encrypted, cipher, secret, iv) do
-    :crypto.block_decrypt(cipher, trim_secret(secret), iv, encrypted)
+    block_decrypt(cipher, trim_secret(secret), iv, encrypted)
+  end
+
+  # `:crypto.block_encrypt/4` and `:crypto.block_decrypt/4` were removed in OTP 24.
+  if Code.ensure_loaded?(:crypto) and function_exported?(:crypto, :crypto_one_time, 5) do
+    defp block_encrypt(cipher, key, iv, payload) do
+      :crypto.crypto_one_time(cipher_alias(cipher), key, iv, payload, true)
+    end
+
+    defp block_decrypt(cipher, key, iv, payload) do
+      :crypto.crypto_one_time(cipher_alias(cipher), key, iv, payload, false)
+    end
+
+    defp cipher_alias(:aes_cbc256), do: :aes_256_cbc
+    defp cipher_alias(cipher), do: cipher
+  else
+    defp block_encrypt(cipher, key, iv, payload) do
+      :crypto.block_encrypt(cipher, key, iv, payload)
+    end
+
+    defp block_decrypt(cipher, key, iv, payload) do
+      :crypto.block_decrypt(cipher, key, iv, payload)
+    end
   end
 
   defp pad_message(msg) do
