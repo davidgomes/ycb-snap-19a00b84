@@ -242,6 +242,14 @@ end
     * **Validation:** Full Ecto-backed validation for all chore arguments.
 * 🚦 **Concurrency Control:** Piggyback on Oban's powerful concurrency and unique job features to control your operational load.
 
+## 🧪 Running the Tests
+
+The test suite runs Oban and the dashboard against a real PostgreSQL database. By default it connects to `postgres://postgres:postgres@localhost:5432/oban_chore_test` (created automatically); set `DATABASE_URL` to use a different one.
+
+```sh
+mix test
+```
+
 ## 🏗️ Architectural Philosophy
 
 ObanChore is **not** a replacement for Oban. It is a complementary operational layer. 
