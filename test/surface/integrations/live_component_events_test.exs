@@ -61,6 +61,18 @@ defmodule Surface.EventsTest do
     end
   end
 
+  defmodule ListWithInvalidEvent do
+    use Surface.LiveComponent
+
+    prop viewport_bottom, :event
+
+    def render(assigns) do
+      ~F"""
+      <ul phx-viewport-bottom={@viewport_bottom}/>
+      """
+    end
+  end
+
   defmodule View do
     use Surface.LiveView
 
@@ -188,6 +200,22 @@ defmodule Surface.EventsTest do
       render_surface do
         ~F"""
         <ButtonWithInvalidEvent id="button_id" click={"ok"}/>
+        """
+      end
+    end)
+  end
+
+  test "raise error when passing an :event into a phx-viewport-* binding" do
+    message = """
+    invalid value for "phx-viewport-bottom". LiveView bindings only accept values \
+    of type :string. If you want to pass an :event, please use directive \
+    :on-viewport-bottom instead. Expected a :string, got: %{name: "load_more", target: :live_view}\
+    """
+
+    assert_raise(RuntimeError, message, fn ->
+      render_surface do
+        ~F"""
+        <ListWithInvalidEvent id="list_id" viewport_bottom={"load_more"}/>
         """
       end
     end)
