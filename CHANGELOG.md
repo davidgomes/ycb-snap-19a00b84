@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+* Support every asc/desc sorting combination, including null placement:
+  `:asc_nulls_last`, `:asc_nulls_first`, `:desc_nulls_first`, and `:desc_nulls_last`.
+  `:asc` keeps the Postgres default of nulls last, and `:desc` keeps nulls first.
+  Nullable columns cannot be the final cursor field.
+
 ## v1.0.4 - 2021-03-15
 
 * Fix type errors, thanks! @djthread:
