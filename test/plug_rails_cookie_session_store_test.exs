@@ -17,12 +17,12 @@ defmodule PlugRailsCookieSessionStoreTest do
   @encrypted_opts Plug.Session.init(@default_opts)
 
   defmodule CustomSerializer do
-    def encode(%{foo: "bar"}), do: {:ok, "encoded session"}
+    def encode(%{"foo" => "bar"}), do: {:ok, "encoded session"}
     def encode(%{foo: :bar}), do: {:ok, "another encoded session"}
     def encode(%{}), do: {:ok, ""}
     def encode(_), do: :error
 
-    def decode("encoded session"), do: {:ok, %{foo: "bar"}}
+    def decode("encoded session"), do: {:ok, %{"foo" => "bar"}}
     def decode("another encoded session"), do: {:ok, %{foo: :bar}}
     def decode(nil), do: {:ok, nil}
     def decode(_), do: :error
@@ -59,8 +59,8 @@ defmodule PlugRailsCookieSessionStoreTest do
     end
   end
 
-  test "requires the secret to be at least 64 bytes" do
-    assert_raise ArgumentError, ~r/to be at least 64 bytes/, fn ->
+  test "requires the secret to be at least 32 bytes" do
+    assert_raise ArgumentError, ~r/to be at least 32 bytes/, fn ->
       conn(:get, "/")
       |> sign_conn("abcdef")
       |> put_session(:foo, "bar")
