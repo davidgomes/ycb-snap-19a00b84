@@ -48,8 +48,14 @@ defmodule EctoJob.Supervisor do
     notifier_name = String.to_atom("#{schema}.Notifier")
     producer_name = String.to_atom("#{schema}.Producer")
 
+    notifier_children =
+      if repo.__adapter__() == Ecto.Adapters.Postgres do
+        [worker(Postgrex.Notifications, [repo.config() ++ [name: notifier_name]])]
+      else
+        []
+      end
+
     children = [
-      worker(Postgrex.Notifications, [repo.config() ++ [name: notifier_name]]),
       worker(Producer, [
         [
           name: producer_name,
@@ -67,6 +73,6 @@ defmodule EctoJob.Supervisor do
       ])
     ]
 
-    Supervisor.start_link(children, strategy: :rest_for_one, name: supervisor_name)
+    Supervisor.start_link(notifier_children ++ children, strategy: :rest_for_one, name: supervisor_name)
   end
 end
