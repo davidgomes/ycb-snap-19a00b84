@@ -57,6 +57,7 @@ defmodule FreeObanUi.MixProject do
       {:telemetry_poller, "~> 1.0"},
       {:gettext, "~> 0.20"},
       {:jason, "~> 1.2"},
+      {:oban, github: "oban-bg/oban", tag: "v2.18.3"},
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.5"}
     ]
