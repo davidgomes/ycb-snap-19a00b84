@@ -1,6 +1,7 @@
 defmodule Sentry.EnvelopeTest do
   use Sentry.Case, async: false
 
+  import ExUnit.CaptureLog
   import Sentry.TestHelpers
 
   alias Sentry.{Attachment, CheckIn, ClientReport, Envelope, Event, LogEvent, Metric}
@@ -334,6 +335,45 @@ defmodule Sentry.EnvelopeTest do
 
       metric_batch = %Sentry.MetricBatch{metrics: metrics}
       assert Envelope.get_data_category(metric_batch) == "trace_metric"
+    end
+  end
+
+  describe "item_byte_size/1" do
+    test "returns the serialized size of a log event" do
+      log_event = %LogEvent{
+        timestamp: 1_588_601_261.535_386,
+        level: :info,
+        body: "something happened"
+      }
+
+      assert Envelope.item_byte_size(log_event) == byte_size(encode!(LogEvent.to_map(log_event)))
+    end
+
+    test "returns the serialized size of a metric" do
+      metric = %Metric{
+        type: :counter,
+        name: "test.counter",
+        value: 1,
+        timestamp: 1_588_601_261.535_386
+      }
+
+      assert Envelope.item_byte_size(metric) == byte_size(encode!(Metric.to_map(metric)))
+    end
+
+    test "grows with the size of the item" do
+      log_event = %LogEvent{timestamp: 1_588_601_261.535_386, level: :info, body: "hi"}
+      large_log_event = %LogEvent{log_event | body: String.duplicate("x", 1_000)}
+
+      assert Envelope.item_byte_size(large_log_event) >
+               Envelope.item_byte_size(log_event) + 900
+    end
+
+    test "returns 0 and logs when the item cannot be encoded" do
+      log_event = %LogEvent{timestamp: 1_588_601_261.535_386, level: :info, body: <<0xFF>>}
+
+      assert capture_log(fn ->
+               assert Envelope.item_byte_size(log_event) == 0
+             end) =~ "Failed to compute the byte size of Sentry.LogEvent"
     end
   end
 end

@@ -4,7 +4,7 @@ defmodule Sentry.ClientReportTest do
   import Sentry.TestHelpers
 
   alias Sentry.ClientReport.Sender
-  alias Sentry.Event
+  alias Sentry.{Envelope, Event, LogBatch, LogEvent, Metric, MetricBatch}
 
   setup do
     setup_bypass()
@@ -139,5 +139,93 @@ defmodule Sentry.ClientReportTest do
                {:before_send, "span"} => 1
              }
     end
+
+    test "records log_item and log_byte outcomes when a log event is discarded" do
+      start_supervised!({Sender, name: :test_log_report})
+
+      log_event = make_log_event("hello world")
+      expected_bytes = Envelope.item_byte_size(log_event)
+      assert expected_bytes > 0
+
+      assert :ok =
+               Sender.record_discarded_events(:ratelimit_backoff, [log_event], :test_log_report)
+
+      assert :sys.get_state(:test_log_report) == %{
+               {:ratelimit_backoff, "log_item"} => 1,
+               {:ratelimit_backoff, "log_byte"} => expected_bytes
+             }
+    end
+
+    test "records trace_metric and trace_metric_byte outcomes when a metric is discarded" do
+      start_supervised!({Sender, name: :test_metric_report})
+
+      metric = make_metric("requests", 1)
+      expected_bytes = Envelope.item_byte_size(metric)
+      assert expected_bytes > 0
+
+      assert :ok =
+               Sender.record_discarded_events(:ratelimit_backoff, [metric], :test_metric_report)
+
+      assert :sys.get_state(:test_metric_report) == %{
+               {:ratelimit_backoff, "trace_metric"} => 1,
+               {:ratelimit_backoff, "trace_metric_byte"} => expected_bytes
+             }
+    end
+
+    test "records per-item count and total byte outcomes when batches are discarded" do
+      start_supervised!({Sender, name: :test_batch_report})
+
+      log_events = [make_log_event("first"), make_log_event("second")]
+      metrics = [make_metric("a", 1), make_metric("b", 2), make_metric("c", 3)]
+
+      assert :ok =
+               Sender.record_discarded_events(
+                 :send_error,
+                 [%LogBatch{log_events: log_events}, %MetricBatch{metrics: metrics}],
+                 :test_batch_report
+               )
+
+      assert :sys.get_state(:test_batch_report) == %{
+               {:send_error, "log_item"} => 2,
+               {:send_error, "log_byte"} => total_byte_size(log_events),
+               {:send_error, "trace_metric"} => 3,
+               {:send_error, "trace_metric_byte"} => total_byte_size(metrics)
+             }
+    end
+
+    test "does not record outcomes for empty batches" do
+      start_supervised!({Sender, name: :test_empty_batch_report})
+
+      assert :ok =
+               Sender.record_discarded_events(
+                 :send_error,
+                 [%LogBatch{log_events: []}, %MetricBatch{metrics: []}],
+                 :test_empty_batch_report
+               )
+
+      assert :sys.get_state(:test_empty_batch_report) == %{}
+    end
+  end
+
+  defp make_log_event(body) do
+    %LogEvent{
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+      level: :info,
+      body: body
+    }
+  end
+
+  defp make_metric(name, value) do
+    %Metric{
+      type: :counter,
+      name: name,
+      value: value,
+      timestamp: System.system_time(:nanosecond) / 1_000_000_000,
+      attributes: %{}
+    }
+  end
+
+  defp total_byte_size(items) do
+    items |> Enum.map(&Envelope.item_byte_size/1) |> Enum.sum()
   end
 end

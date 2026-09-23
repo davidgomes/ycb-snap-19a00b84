@@ -62,6 +62,40 @@ defmodule Sentry.Transport.RateLimiterTest do
     end
   end
 
+  describe "rate_limited_for_category?/1" do
+    test "limits log_item when log_byte is rate-limited" do
+      # X-Sentry-Rate-Limits: 60:log_byte:organization
+      RateLimiter.update_rate_limits("60:log_byte:organization")
+
+      assert RateLimiter.rate_limited?("log_item") == false
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == false
+    end
+
+    test "limits trace_metric when trace_metric_byte is rate-limited" do
+      RateLimiter.update_rate_limits("60:trace_metric_byte:organization")
+
+      assert RateLimiter.rate_limited?("trace_metric") == false
+      assert RateLimiter.rate_limited_for_category?("trace_metric") == true
+      assert RateLimiter.rate_limited_for_category?("log_item") == false
+    end
+
+    test "limits a category on its own rate limit" do
+      RateLimiter.update_rate_limits("60:log_item;error")
+
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("error") == true
+      assert RateLimiter.rate_limited_for_category?("transaction") == false
+    end
+
+    test "limits all categories on a global rate limit" do
+      RateLimiter.update_global_rate_limit(60)
+
+      assert RateLimiter.rate_limited_for_category?("log_item") == true
+      assert RateLimiter.rate_limited_for_category?("error") == true
+    end
+  end
+
   describe "update_rate_limits/1" do
     test "stores category-specific rate limits in ETS" do
       RateLimiter.update_rate_limits("60:error")
