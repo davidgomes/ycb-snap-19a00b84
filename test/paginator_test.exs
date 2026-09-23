@@ -936,6 +936,83 @@ defmodule PaginatorTest do
            }
   end
 
+  for asc_direction <- [:asc, :asc_nulls_first, :asc_nulls_last],
+      desc_direction <- [:desc, :desc_nulls_first, :desc_nulls_last] do
+    test "sorts with #{asc_direction}/#{desc_direction} directions with before cursor", %{
+      payments: {_p1, _p2, _p3, p4, p5, p6, p7, _p8, _p9, _p10, _p11, _p12}
+    } do
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_amount_and_charged_at(unquote(asc_direction), unquote(desc_direction))
+        |> Repo.paginate(
+          cursor_fields: [
+            amount: unquote(asc_direction),
+            charged_at: unquote(desc_direction),
+            id: :asc
+          ],
+          before: encode_cursor(%{amount: p7.amount, charged_at: p7.charged_at, id: p7.id}),
+          limit: 3
+        )
+
+      assert to_ids(entries) == to_ids([p6, p4, p5])
+
+      assert metadata == %Metadata{
+               after: encode_cursor(%{amount: p5.amount, charged_at: p5.charged_at, id: p5.id}),
+               before: nil,
+               limit: 3
+             }
+    end
+
+    test "sorts with #{asc_direction}/#{desc_direction} directions with after cursor", %{
+      payments: {_p1, _p2, _p3, p4, p5, _p6, p7, p8, _p9, _p10, _p11, _p12}
+    } do
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_amount_and_charged_at(unquote(asc_direction), unquote(desc_direction))
+        |> Repo.paginate(
+          cursor_fields: [
+            amount: unquote(asc_direction),
+            charged_at: unquote(desc_direction),
+            id: :asc
+          ],
+          after: encode_cursor(%{amount: p4.amount, charged_at: p4.charged_at, id: p4.id}),
+          limit: 3
+        )
+
+      assert to_ids(entries) == to_ids([p5, p7, p8])
+
+      assert metadata == %Metadata{
+               after: encode_cursor(%{amount: p8.amount, charged_at: p8.charged_at, id: p8.id}),
+               before: encode_cursor(%{amount: p5.amount, charged_at: p5.charged_at, id: p5.id}),
+               limit: 3
+             }
+    end
+
+    test "sorts with #{desc_direction}/#{asc_direction} directions with before and after cursor",
+         %{
+           payments: {_p1, _p2, _p3, p4, p5, p6, p7, p8, _p9, _p10, _p11, _p12}
+         } do
+      %Page{entries: entries, metadata: metadata} =
+        payments_by_amount_and_charged_at(unquote(desc_direction), unquote(asc_direction))
+        |> Repo.paginate(
+          cursor_fields: [
+            amount: unquote(desc_direction),
+            charged_at: unquote(asc_direction),
+            id: :asc
+          ],
+          after: encode_cursor(%{amount: p8.amount, charged_at: p8.charged_at, id: p8.id}),
+          before: encode_cursor(%{amount: p6.amount, charged_at: p6.charged_at, id: p6.id}),
+          limit: 8
+        )
+
+      assert to_ids(entries) == to_ids([p7, p5, p4])
+
+      assert metadata == %Metadata{
+               after: encode_cursor(%{amount: p4.amount, charged_at: p4.charged_at, id: p4.id}),
+               before: encode_cursor(%{amount: p7.amount, charged_at: p7.charged_at, id: p7.id}),
+               limit: 8
+             }
+    end
+  end
+
   defp to_ids(entries), do: Enum.map(entries, & &1.id)
 
   defp create_customers_and_payments(_context) do

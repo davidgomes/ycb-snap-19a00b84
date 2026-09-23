@@ -71,6 +71,8 @@ defmodule Paginator do
     * `:before` - Fetch the records before this cursor.
     * `:cursor_fields` - The fields with sorting direction used to determine the
     cursor. In most cases, this should be the same fields as the ones used for sorting in the query.
+    Supported directions are `:asc`, `:asc_nulls_first`, `:asc_nulls_last`, `:desc`,
+    `:desc_nulls_first` and `:desc_nulls_last`.
     When you use named bindings in your query they can also be provided.
     * `:fetch_cursor_value_fun` function of arity 2 to lookup cursor values on returned records.
     Defaults to `Paginator.default_fetch_cursor_value/2`

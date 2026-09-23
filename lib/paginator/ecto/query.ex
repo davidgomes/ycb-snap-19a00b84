@@ -18,13 +18,20 @@ defmodule Paginator.Ecto.Query do
     paginate(queryable, config)
   end
 
-  defp get_operator(:asc, :before), do: :lt
-  defp get_operator(:desc, :before), do: :gt
-  defp get_operator(:asc, :after), do: :gt
-  defp get_operator(:desc, :after), do: :lt
+  @asc_directions [:asc, :asc_nulls_first, :asc_nulls_last]
+  @desc_directions [:desc, :desc_nulls_first, :desc_nulls_last]
+
+  defp get_operator(direction, :before) when direction in @asc_directions, do: :lt
+  defp get_operator(direction, :before) when direction in @desc_directions, do: :gt
+  defp get_operator(direction, :after) when direction in @asc_directions, do: :gt
+  defp get_operator(direction, :after) when direction in @desc_directions, do: :lt
 
   defp get_operator(direction, _),
-    do: raise("Invalid sorting value :#{direction}, please use either :asc or :desc")
+    do:
+      raise(
+        "Invalid sorting value :#{direction}, please use one of " <>
+          inspect(@asc_directions ++ @desc_directions)
+      )
 
   defp get_operator_for_field(cursor_fields, key, direction) do
     {_, order} =
@@ -160,7 +167,11 @@ defmodule Paginator.Ecto.Query do
             | expr:
                 Enum.map(expr, fn
                   {:desc, ast} -> {:asc, ast}
+                  {:desc_nulls_first, ast} -> {:asc_nulls_last, ast}
+                  {:desc_nulls_last, ast} -> {:asc_nulls_first, ast}
                   {:asc, ast} -> {:desc, ast}
+                  {:asc_nulls_first, ast} -> {:desc_nulls_last, ast}
+                  {:asc_nulls_last, ast} -> {:desc_nulls_first, ast}
                 end)
           }
         end
