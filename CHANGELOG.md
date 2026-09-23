@@ -3,6 +3,15 @@
 This is a major rewrite of the previously-existing [`sqlite_ecto`](https://github.com/jazzyb/sqlite_ecto) that adds support for Ecto 2.1+.
 
 
+## Unreleased
+
+* **BREAKING CHANGE:** Update to support Ecto 2.2. Ecto 2.1 is no longer supported. (#193)
+* **BREAKING CHANGE:** Require Elixir 1.4 or later, as Ecto 2.2 does.
+* Support `:bigserial` columns and references (now Ecto's default primary key type).
+* Support cross joins.
+* Support `:restrict` for `on_delete` and `on_update` in references.
+
+
 ## v2.0.3
 
 _28 August 2017_
