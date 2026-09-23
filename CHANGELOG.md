@@ -3,6 +3,15 @@
 
 #### Added
 
+- **`<.data_table>` row selection.** `selectable` (event mode) adds a
+  leading checkbox column with a tri-state header (checked / mixed via
+  the hook's `indeterminate` sync / empty) scoped to the visible page.
+  While rows are selected the toolbar morphs into a bulk-action bar:
+  "N selected", the `:bulk_action` slot (`:let` gets the ids) and a
+  clear button. `State` gains `selected` plus `toggle_selected/2`,
+  `toggle_page_selected/2`, `clear_selection/1`, `selection_state/2`
+  and the `select`/`select_page`/`clear_selection` ops. `<.table>`
+  `:col` gains a `header` attr for rendered header content.
 - **`<.data_table>` - the component core (4.12 data table, milestone 1).**
   Composed around `<.table>`, driven entirely by `DataTable.State`:
   `:col` slots (field, label, sortable, align), sortable headers with
