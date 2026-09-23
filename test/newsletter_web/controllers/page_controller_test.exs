@@ -20,8 +20,7 @@ defmodule NewsletterWeb.PageControllerTest do
     end
 
     test "does not send an email when fields are missing", %{conn: conn} do
-      conn =
-        post(conn, Routes.page_path(conn, :subscribe), subscriber: %{name: "", email: ""})
+      conn = post(conn, Routes.page_path(conn, :subscribe), subscriber: %{name: "", email: ""})
 
       assert redirected_to(conn) == Routes.page_path(conn, :index)
       assert get_flash(conn, :error) =~ "Please provide"
