@@ -63,6 +63,29 @@ defmodule Phoenix.LiveView.UploadChannelTest do
     def close(test_name, reason), do: TestWriter.close(test_name, reason)
   end
 
+  defmodule InitErrorWriter do
+    @behaviour Phoenix.LiveView.UploadWriter
+
+    @impl true
+    def init(test_name) do
+      send(test_name, :init)
+      {:error, :init_failed}
+    end
+
+    @impl true
+    defdelegate meta(test_name), to: TestWriter
+
+    @impl true
+    defdelegate write_chunk(data, test_name), to: TestWriter
+
+    @impl true
+    defdelegate close(test_name, reason), to: TestWriter
+  end
+
+  def build_init_error_writer(_name, %Phoenix.LiveView.UploadEntry{}, %Phoenix.LiveView.Socket{}) do
+    {InitErrorWriter, :test_writer}
+  end
+
   def build_writer(_name, %Phoenix.LiveView.UploadEntry{}, %Phoenix.LiveView.Socket{}) do
     {TestWriter, :test_writer}
   end
@@ -162,6 +185,27 @@ defmodule Phoenix.LiveView.UploadChannelTest do
       end
 
     {:noreply, socket}
+  end
+
+  def report_progress(%LiveView.UploadEntry{} = entry, socket) do
+    errors = Phoenix.Component.upload_errors(socket.assigns.uploads.avatar, entry)
+    send(:test_writer, {:progress, entry.client_name, errors})
+    {:noreply, socket}
+  end
+
+  def cancel_failed(%LiveView.UploadEntry{} = entry, socket) do
+    case Phoenix.Component.upload_errors(socket.assigns.uploads.avatar, entry) do
+      [{:writer_failure, _}] ->
+        socket =
+          socket
+          |> Phoenix.LiveView.cancel_upload(:avatar, entry.ref)
+          |> Phoenix.LiveView.disallow_upload(:avatar)
+
+        {:noreply, socket}
+
+      [] ->
+        {:noreply, socket}
+    end
   end
 
   setup_all do
@@ -964,8 +1008,9 @@ defmodule Phoenix.LiveView.UploadChannelTest do
         # the upload channel self-closes instead of being left {:shutdown, :left}
         assert_receive {:DOWN, _ref, :process, ^channel_pid, {:shutdown, :closed}}, 1000
 
-        # the failed entry is dropped and the LiveView is still alive
-        assert get_uploaded_entries(lv, :avatar) == {[], []}
+        # the failed entry is retained with the writer failure and the LiveView is still alive
+        assert {[], [%{client_name: "foo.jpeg"}]} = get_uploaded_entries(lv, :avatar)
+        assert render(lv) =~ "entry_error:{:writer_failure, :custom_error}"
       end
 
       @tag allow: [
@@ -1001,8 +1046,143 @@ defmodule Phoenix.LiveView.UploadChannelTest do
         # the upload channel self-closes instead of being left {:shutdown, :left}
         assert_receive {:DOWN, _ref, :process, ^channel_pid, {:shutdown, :closed}}, 1000
 
-        # the failed entry is dropped and the LiveView is still alive
+        # the failed entry is retained with the writer failure and the LiveView is still alive
+        assert {[], [%{client_name: "foo.jpeg"}]} = get_uploaded_entries(lv, :avatar)
+        assert render(lv) =~ "entry_error:{:writer_failure, :close_failed}"
+      end
+
+      @tag allow: [
+             max_entries: 1,
+             chunk_size: 50,
+             accept: :any,
+             writer: &__MODULE__.build_init_error_writer/3
+           ]
+      test "writer init/1 error retains the entry until it is cancelled and re-allowed",
+           %{lv: lv} do
+        Process.register(self(), :test_writer)
+        content = String.duplicate("0", 100)
+        avatar = file_input(lv, "form", :avatar, [%{name: "foo.jpeg", content: content}])
+
+        Process.flag(:trap_exit, true)
+        Process.unlink(avatar.pid)
+        assert {:error, :writer_error} = render_upload(avatar, "foo.jpeg", 50)
+        assert_receive :init
+
+        assert render(lv) =~ "entry_error:{:writer_failure, :init_failed}"
+        assert Process.alive?(lv.pid)
+        assert {[], [%{ref: ref, client_name: "foo.jpeg"}]} = get_uploaded_entries(lv, :avatar)
+
+        UploadLive.run(lv, fn socket ->
+          socket =
+            socket
+            |> Phoenix.LiveView.cancel_upload(:avatar, ref)
+            |> Phoenix.LiveView.allow_upload(:avatar,
+              accept: :any,
+              chunk_size: 50,
+              writer: &__MODULE__.build_writer/3
+            )
+
+          {:reply, :ok, socket}
+        end)
+
+        refute render(lv) =~ "writer_failure"
+
+        retry = file_input(lv, "form", :avatar, [%{name: "bar.jpeg", content: content}])
+        assert render_upload(retry, "bar.jpeg", 100) =~ "#{@context}:bar.jpeg:100%"
+        assert_receive {:close, :done}
+      end
+
+      @tag allow: [
+             max_entries: 1,
+             chunk_size: 5,
+             accept: :any,
+             writer: &__MODULE__.build_writer/3,
+             progress: :report_progress
+           ]
+      test "writer failure invokes the progress callback with the failed entry", %{lv: lv} do
+        Process.register(self(), :test_writer)
+        avatar = file_input(lv, "form", :avatar, [%{name: "foo.jpeg", content: "00000error"}])
+
+        assert render_upload(avatar, "foo.jpeg", 50) =~ "#{@context}:foo.jpeg:50%"
+        assert_receive {:progress, "foo.jpeg", []}
+        assert %{"foo.jpeg" => channel_pid} = UploadClient.channel_pids(avatar)
+        unlink(channel_pid, lv, avatar)
+        Process.monitor(channel_pid)
+
+        render_upload(avatar, "foo.jpeg", 50)
+        assert_receive {:progress, "foo.jpeg", [{:writer_failure, :custom_error}]}
+        assert_receive {:DOWN, _ref, :process, ^channel_pid, {:shutdown, :closed}}, 1000
+        assert {[], [%{client_name: "foo.jpeg"}]} = get_uploaded_entries(lv, :avatar)
+      end
+
+      @tag allow: [
+             max_entries: 1,
+             chunk_size: 5,
+             accept: :any,
+             writer: &__MODULE__.build_writer/3,
+             progress: :cancel_failed
+           ]
+      test "progress callback may cancel and disallow a failed entry", %{lv: lv} do
+        Process.register(self(), :test_writer)
+        avatar = file_input(lv, "form", :avatar, [%{name: "foo.jpeg", content: "00000error"}])
+
+        assert render_upload(avatar, "foo.jpeg", 50) =~ "#{@context}:foo.jpeg:50%"
+        assert %{"foo.jpeg" => channel_pid} = UploadClient.channel_pids(avatar)
+        unlink(channel_pid, lv, avatar)
+        Process.monitor(channel_pid)
+
+        render_upload(avatar, "foo.jpeg", 50)
+        assert_receive {:DOWN, _ref, :process, ^channel_pid, {:shutdown, :closed}}, 1000
         assert get_uploaded_entries(lv, :avatar) == {[], []}
+        assert Process.alive?(lv.pid)
+      end
+
+      @tag allow: [
+             max_entries: 2,
+             chunk_size: 5,
+             accept: :any,
+             writer: &__MODULE__.build_writer/3
+           ]
+      test "successful sibling entries remain consumable next to a failed entry", %{lv: lv} do
+        Process.register(self(), :test_writer)
+
+        avatar =
+          file_input(lv, "form", :avatar, [
+            %{name: "good.jpeg", content: "0000000000"},
+            %{name: "bad.jpeg", content: "00000error"}
+          ])
+
+        assert render_upload(avatar, "good.jpeg", 100) =~ "#{@context}:good.jpeg:100%"
+        assert render_upload(avatar, "bad.jpeg", 50) =~ "#{@context}:bad.jpeg:50%"
+
+        assert %{"good.jpeg" => good_pid, "bad.jpeg" => bad_pid} =
+                 UploadClient.channel_pids(avatar)
+
+        unlink(bad_pid, lv, avatar)
+        Process.unlink(good_pid)
+        Process.monitor(bad_pid)
+        Process.monitor(good_pid)
+
+        assert render_upload(avatar, "bad.jpeg", 50) =~
+                 "entry_error:{:writer_failure, :custom_error}"
+
+        assert_receive {:DOWN, _ref, :process, ^bad_pid, {:shutdown, :closed}}, 1000
+
+        assert :consumed ==
+                 UploadLive.run(lv, fn socket ->
+                   {[good], [%{client_name: "bad.jpeg"}]} =
+                     Phoenix.LiveView.uploaded_entries(socket, :avatar)
+
+                   result =
+                     Phoenix.LiveView.consume_uploaded_entry(socket, good, fn _ ->
+                       {:ok, :consumed}
+                     end)
+
+                   {:reply, result, socket}
+                 end)
+
+        assert_receive {:DOWN, _ref, :process, ^good_pid, {:shutdown, :closed}}, 1000
+        assert {[], [%{client_name: "bad.jpeg"}]} = get_uploaded_entries(lv, :avatar)
       end
     end
   end

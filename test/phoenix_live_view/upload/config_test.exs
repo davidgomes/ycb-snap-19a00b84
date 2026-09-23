@@ -208,6 +208,24 @@ defmodule Phoenix.LiveView.UploadConfigTest do
     end
   end
 
+  describe "fail_entry/3" do
+    test "retains the entry with its error and disallows further uploads" do
+      socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any, max_entries: 1)
+      %{"ref" => ref} = entry = build_client_entry(:avatar)
+      assert {:ok, avatar} = UploadConfig.put_entries(socket.assigns.uploads.avatar, [entry])
+      assert {:ok, avatar} = UploadConfig.register_entry_upload(avatar, self(), ref)
+
+      avatar = UploadConfig.fail_entry(avatar, ref, {:writer_failure, :boom})
+      avatar = UploadConfig.fail_entry(avatar, ref, {:writer_failure, :boom})
+
+      assert [%{ref: ^ref} = failed] = avatar.entries
+      assert avatar.errors == [{ref, {:writer_failure, :boom}}]
+      assert UploadConfig.entry_pid(avatar, failed) == nil
+      assert UploadConfig.register_entry_upload(avatar, self(), ref) == {:error, :disallowed}
+      assert UploadConfig.unregister_completed_entry(avatar, ref) == avatar
+    end
+  end
+
   describe "put_entries/2" do
     test "does not overwrite existing refs" do
       socket = LiveView.allow_upload(build_socket(), :avatar, accept: :any, max_entries: 1)
