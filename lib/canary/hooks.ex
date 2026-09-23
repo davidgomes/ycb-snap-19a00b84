@@ -11,13 +11,12 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     > Note that the `event_name` is a string - but in Canary it's converted to an atom for consistency.
 
-    The main difference beteween `Canary.Hooks` and `Canary.Plugs` is that
-    in `Canary.Hooks` there is no `:non_id_actions` option. It won't load all resources
-    like it's done with plugs, but you can still use `:authorize_resource`.
+    `Canary.Hooks` accept the same options and behave the same way as `Canary.Plugs`.
+    The only difference is that hooks don't load all resources for the `:index` action.
 
-
-    For the authorization actions, when the `:required` is not set (by default it's false) it might be nil.
-    Then the `Canada.Can` implementation should be the module name of the model rather than a struct.
+    For the non-id actions (`:index`, `:new`, `:create` and the ones given in `:non_id_actions`)
+    the resource is not loaded, and the `Canada.Can` implementation should use the module name
+    of the model rather than a struct, unless `:required` is set.
 
     ## Example
       ```elixir
@@ -32,6 +31,7 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
       mount_canary :authorize_resource,
         on: [:handle_event],
         model: Post,
+        non_id_actions: [:my_event],
         only: [:my_event]
 
       # ...
@@ -209,7 +209,9 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     1. The subject is the `:current_user` from the socket assigns. The `:current_user` key can be changed in the `opts` or in the `Application.get_env(:canary, :current_user, :current_user)`. By default it's `:current_user`.
     2. The action for `handle_params` is `socket.assigns.live_action`, for `handle_event` it uses the event name.
-    3. The resource is the loaded resource from the socket assigns or the model name if the resource is not loaded and not required.
+    3. The resource is the model module name for the non-id actions (unless `:required` is set).
+    For other actions it's the resource from the socket assigns, or the resource loaded from the repo
+    when it's not assigned (it won't be assigned to the socket).
 
     Required opts:
 
@@ -225,7 +227,12 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
 
     * `:as` - Specifies the `resource_name` to get from assigns
     * `:current_user` - Specifies the key in the socket assigns to get the current user
-    * `:required` - Specifies if the resource is required, when it's not assigned in socket it will halt the socket
+    * `:preload` - Specifies association(s) to preload
+    * `:id_name` - Specifies the name of the id in `params`, defaults to "id"
+    * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
+    * `:non_id_actions` - Specifies additional actions to authorize against the model module name
+    * `:required` - Specifies the resource is required, it's used for authorization even for the non-id actions
+    * `:persisted` - Deprecated, same as `:required`
     * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
 
     Example:
@@ -277,7 +284,10 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     * `:preload` - Specifies association(s) to preload
     * `:id_name` - Specifies the name of the id in `params`, defaults to "id"
     * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
-    * `:required` - Specifies if the resource is required, when it's not found it will halt the socket
+    * `:non_id_actions` - Specifies additional actions for which the resource is not loaded
+    * `:required` - Specifies the resource is required, it's loaded even for the non-id actions
+    and the not found handler is called when it's not found
+    * `:persisted` - Deprecated, specifies the resource should be loaded even for the non-id actions
     * `:not_found_handler` - Specify a handler function to be called if the resource is not found
 
     Example:
@@ -332,9 +342,17 @@ if Code.ensure_loaded?(Phoenix.LiveView) do
     * `:preload` - Specifies association(s) to preload
     * `:id_name` - Specifies the name of the id in `params`, defaults to "id"
     * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
-    * `:required` - Specifies if the resource is required, when it's not found it will halt the socket
+    * `:non_id_actions` - Specifies additional actions for which the resource is not loaded
+    and authorization is performed against the model module name
+    * `:required` - Specifies the resource is required, it's loaded even for the non-id actions
+    and the not found handler is called when it's not found
+    * `:persisted` - Deprecated, specifies the resource should be loaded even for the non-id actions
     * `:not_found_handler` - Specify a handler function to be called if the resource is not found
     * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
+
+    If the action is unauthorized the resource is removed from the socket assigns.
+    If both handlers apply, the `:unauthorized_handler` is called first and the `:not_found_handler`
+    is only called when the socket was not halted.
 
     Example:
 

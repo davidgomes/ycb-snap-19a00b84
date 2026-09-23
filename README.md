@@ -36,7 +36,7 @@ Then run `mix deps.get` to fetch the dependencies.
 
 Canary provides functions to be used as plugs or LiveView hooks to load and authorize resources:
 
-`load_resource`, `authorize_resource`, `authorize_controller`, and `load_and_authorize_resource`.
+`load_resource`, `authorize_resource`, `authorize_controller` (plugs only), and `load_and_authorize_resource`.
 
 `load_resource` and `authorize_resource` can be used by themselves, while `load_and_authorize_resource` combines them both.
 
@@ -51,6 +51,8 @@ In order to use Canary, you will need, at minimum:
 For the plugs just `import Canary.Plugs`. In a Phoenix app the best place would probably be inside `controller/0` in your `web/web.ex`, in order to make the functions available in all of your controllers.
 
 For the liveview hooks just `use Canary.Hooks`. In a Phoenix app the best place would probably be inside `live_view/0` in your `web/web.ex`, in order to make the functions available in all of your controllers.
+
+Plugs and hooks accept the same options and behave the same way, except that loading all resources for the `:index` action is available only for plugs.
 
 
 ### load_resource
@@ -159,7 +161,7 @@ end
 To automatically load and authorize on the `Post` having the `id` given in the params, you would add the following hook to your `PostLive`:
 
 ```elixir
-mount_hook :load_and_authorize_resource, model: Post
+mount_canary :load_and_authorize_resource, model: Post, on: [:handle_params, :handle_event]
 ```
 
 In this case, once opening `/posts/12` the `load_and_authorize_resource` on `handle_params` stage will be performed. The the `Post` specified by `params["id]` will be loaded into `socket.assigns.post`.
@@ -278,6 +280,8 @@ You can specify additional actions for which Canary will authorize based on the 
 For example,
 ```elixir
 plug :authorize_resource, model: Post, non_id_actions: [:find_by_name]
+
+mount_canary :authorize_resource, model: Post, on: :handle_event, non_id_actions: [:find_by_name]
 ```
 
 ### Nested associations
@@ -359,16 +363,20 @@ config :canary, unauthorized_handler: {Helpers, :handle_unauthorized}
 
 ### Handling resource not found
 
-By default, when a resource is not found, Canary simply sets the resource in `conn.assigns` to `nil`. Like unauthorized action handling , you can configure a function to which Canary will pass the `conn` when a resource is not found:
+By default, when a resource is not found, Canary simply sets the resource in `conn.assigns` to `nil`. Like unauthorized action handling , you can configure a function to which Canary will pass the `conn` when a resource is not found and the `:required` option is set:
 
 ```elixir
 config :canary, not_found_handler: {Helpers, :handle_not_found}
+
+plug :load_resource, model: Post, required: true
 ```
 
 You can also specify handlers on an individual basis (which will override the corresponding configured handler, if any) by specifying the corresponding `opt` in the plug call:
 
 ```elixir
-plug :load_and_authorize_resource Post,
+plug :load_and_authorize_resource,
+  model: Post,
+  required: true,
   unauthorized_handler: {Helpers, :handle_unauthorized},
   not_found_handler: {Helpers, :handle_not_found}
 ```

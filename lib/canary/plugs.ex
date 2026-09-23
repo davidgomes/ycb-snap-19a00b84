@@ -43,14 +43,14 @@ defmodule Canary.Plugs do
   `conn.assigns.blog_post`
 
   If the resource cannot be fetched, `conn.assigns.resource_name` is set
-  to nil.
+  to nil. When the `:required` key is used, the not found handler is called.
 
   By default, when the action is `:index`, all records from the specified model will be loaded. This can
   be overridden to fetch a single record from the database by using the `:persisted` key.
 
-  Currently, `:new` and `:create` actions are ignored, and `conn.assigns.resource_name`
-  will be set to nil for these actions. This can be overridden to fetch a single record from the database
-  by using the `:persisted` key.
+  Currently, `:new`, `:create` and the `:non_id_actions` actions are ignored, and `conn.assigns.resource_name`
+  will be set to nil for these actions (unless a resource of the model is already assigned).
+  This can be overridden to fetch a single record from the database by using the `:persisted` key.
 
   The `:persisted` key can override how a resource is loaded and can be useful when dealing
   with nested resources.
@@ -67,8 +67,9 @@ defmodule Canary.Plugs do
   * `:preload` - Specifies association(s) to preload
   * `:id_name` - Specifies the name of the id in `conn.params`, defaults to "id"
   * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
+  * `:non_id_actions` - Specifies additional actions for which the resource is not loaded
   * `:persisted` - Specifies the resource should always be loaded from the database, defaults to false
-  * `:required` - Same as `:persisted` but with not found handler - even for :index, :new or :create action
+  * `:required` - Same as `:persisted` but the not found handler is called when the resource is not found
   * `:not_found_handler` - Specify a handler function to be called if the resource is not found
 
 
@@ -231,10 +232,14 @@ defmodule Canary.Plugs do
 
   * `:only` - Specifies which actions to authorize
   * `:except` - Specifies which actions for which to skip authorization
+  * `:as` - Specifies the `resource_name` to get from assigns
+  * `:current_user` - Specifies the key in `conn.assigns` to get the current user
   * `:preload` - Specifies association(s) to preload
   * `:id_name` - Specifies the name of the id in `conn.params`, defaults to "id"
   * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
+  * `:non_id_actions` - Specifies additional actions to authorize against the model module name
   * `:persisted` - Specifies the resource should always be loaded from the database, defaults to false
+  * `:required` - Same as `:persisted`
   * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
 
   Examples:
@@ -289,9 +294,14 @@ defmodule Canary.Plugs do
   * `:as` - Specifies the `resource_name` to use
   * `:only` - Specifies which actions to authorize
   * `:except` - Specifies which actions for which to skip authorization
+  * `:current_user` - Specifies the key in `conn.assigns` to get the current user
   * `:preload` - Specifies association(s) to preload
   * `:id_name` - Specifies the name of the id in `conn.params`, defaults to "id"
   * `:id_field` - Specifies the name of the ID field in the database for searching :id_name value, defaults to "id".
+  * `:non_id_actions` - Specifies additional actions for which the resource is not loaded
+    and authorization is performed against the model module name
+  * `:persisted` - Specifies the resource should always be loaded from the database, defaults to false
+  * `:required` - Same as `:persisted` but the not found handler is called when the resource is not found
   * `:unauthorized_handler` - Specify a handler function to be called if the action is unauthorized
   * `:not_found_handler` - Specify a handler function to be called if the resource is not found
 

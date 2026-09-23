@@ -5,6 +5,15 @@
     * added support for authorization LiveView
     * added `:error_handler` and ErrorHandler behaviour
     * aded  `:required` option
+    * `Canary.Plugs` and `Canary.Hooks` share the same implementation and accept the same options, including `:non_id_actions` and `:persisted` for hooks
+    * `load_and_authorize_resource` hooks remove the resource from assigns when unauthorized
+    * No repo query is made when the id is missing from params
+
+  * Breaking changes
+    * The not found handler is called only when the `:required` option is set
+    * The resource is not loaded for the `:non_id_actions` actions
+    * `authorize_resource` hooks authorize against the loaded resource, fetched from the repo when it's not assigned, or the model module name for the non-id actions
+    * `Canary.Hooks` raise `KeyError` when the current user is not assigned, like `Canary.Plugs`
 
   * Dependency changes
     * Elixir ~> 1.14 is now required
