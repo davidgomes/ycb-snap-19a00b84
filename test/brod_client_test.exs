@@ -139,6 +139,18 @@ defmodule BroadwayKafka.BrodClientTest do
       assert {:ok, %{begin_offset: :reset}} = BrodClient.init(opts)
     end
 
+    test ":shared_client is a boolean with default value false" do
+      assert {:ok, %{shared_client: false}} = BrodClient.init(@opts)
+
+      opts = Keyword.put(@opts, :shared_client, :an_atom)
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :shared_client to be a boolean, got: :an_atom"}
+
+      opts = Keyword.put(@opts, :shared_client, true)
+      assert {:ok, %{shared_client: true}} = BrodClient.init(opts)
+    end
+
     test ":offset_commit_interval_seconds is an optional non-negative integer" do
       opts = put_in(@opts, [:group_config, :offset_commit_interval_seconds], :an_atom)
 
@@ -363,6 +375,25 @@ defmodule BroadwayKafka.BrodClientTest do
 
       assert {:ok, %{client_config: [query_api_versions: false]}} = BrodClient.init(opts)
     end
+  end
+
+  describe "shared_client_child_spec/2" do
+    @tag :capture_log
+    test "starts the client under :brod's supervisor and stops it on shutdown" do
+      opts = Keyword.merge(@opts, hosts: [localhost: 9092], shared_client: true)
+      {:ok, config} = BrodClient.init(opts)
+      client_id = :broadway_kafka_shared_client_test
+
+      start_supervised!(BrodClient.shared_client_child_spec(client_id, config))
+      assert client_id in brod_client_ids()
+
+      stop_supervised!(client_id)
+      refute client_id in brod_client_ids()
+    end
+  end
+
+  defp brod_client_ids() do
+    for {id, _pid, _type, _modules} <- :supervisor3.which_children(:brod_sup), do: id
   end
 
   defmodule FakeSaslMechanismPlugin do

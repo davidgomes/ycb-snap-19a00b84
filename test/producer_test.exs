@@ -103,7 +103,8 @@ defmodule BroadwayKafka.ProducerTest do
     end
 
     @impl true
-    def disconnect(_client_id) do
+    def disconnect(client_id) do
+      if pid = Process.whereis(client_id), do: Agent.stop(pid)
       :ok
     end
 
@@ -204,6 +205,28 @@ defmodule BroadwayKafka.ProducerTest do
     assert message ==
              "cannot set option :partition_by for batchers :default. " <>
                "The option will be set automatically by BroadwayKafka.Producer"
+  end
+
+  test "raise on invalid client options before starting the pipeline" do
+    Process.flag(:trap_exit, true)
+
+    producer_opts = [
+      hosts: [localhost: 9092],
+      group_id: "group",
+      topics: ["topic"],
+      shared_client: :yes
+    ]
+
+    {:error, {%ArgumentError{message: message}, _}} =
+      Broadway.start_link(Forwarder,
+        name: new_unique_name(),
+        producer: [module: {BroadwayKafka.Producer, producer_opts}],
+        processors: [default: []]
+      )
+
+    assert message ==
+             "invalid options given to BroadwayKafka.BrodClient.init/1, " <>
+               "expected :shared_client to be a boolean, got: :yes"
   end
 
   test "append kafka metadata to message" do
@@ -601,6 +624,59 @@ defmodule BroadwayKafka.ProducerTest do
 
     MessageServer.push_messages(message_server, 5..6, topic: "topic", partition: 0)
     assert_receive {:ack, %{topic: "topic", partition: 0, pid: ^producer_pid}}
+
+    stop_broadway(pid)
+  end
+
+  test "all producers use the same client when :shared_client is true" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, shared_client: true, producers_concurrency: 2)
+
+    {_, broadway_name} = Process.info(pid, :registered_name)
+    client_id = Module.concat([broadway_name, SharedClient])
+
+    assert_receive {:setup, ^client_id}
+    assert_receive {:setup, ^client_id}
+    refute_receive {:setup, _}
+
+    put_assignments(get_producer(pid, 0), [[topic: "topic", partition: 0]])
+    put_assignments(get_producer(pid, 1), [[topic: "topic", partition: 1]])
+    MessageServer.push_messages(message_server, 1..5, topic: "topic", partition: 0)
+    MessageServer.push_messages(message_server, 6..10, topic: "topic", partition: 1)
+
+    for msg <- 1..10 do
+      assert_receive {:message_handled, %{data: ^msg}}
+    end
+
+    stop_broadway(pid)
+  end
+
+  test "the shared client is stopped by the pipeline and not by the producers" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, shared_client: true, producers_concurrency: 2)
+
+    assert_receive {:setup, client_id}
+    ref = Process.monitor(client_id)
+
+    stop_broadway(pid)
+
+    assert_receive {:DOWN, ^ref, _, _, :shutdown}
+  end
+
+  test "producers are restarted if the shared client crashes" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, shared_client: true, producers_concurrency: 2)
+
+    assert_receive {:setup, client_id}
+    assert_receive {:setup, ^client_id}
+
+    client_pid = Process.whereis(client_id)
+    Process.exit(client_pid, :kill)
+
+    assert_receive {:setup, ^client_id}
+    assert_receive {:setup, ^client_id}
+    assert is_pid(Process.whereis(client_id))
+    assert Process.whereis(client_id) != client_pid
 
     stop_broadway(pid)
   end
