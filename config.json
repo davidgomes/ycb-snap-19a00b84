@@ -706,6 +706,18 @@
         "difficulty": 1
       },
       {
+        "slug": "line-up",
+        "name": "Line Up",
+        "uuid": "a2ede628-1f47-48a9-a7d9-d7b3cfbda508",
+        "practices": [],
+        "prerequisites": [
+          "strings",
+          "integers",
+          "cond"
+        ],
+        "difficulty": 1
+      },
+      {
         "slug": "resistor-color",
         "name": "Resistor Color",
         "uuid": "c1532449-bf9e-446a-8e8f-97a6c19608e5",
