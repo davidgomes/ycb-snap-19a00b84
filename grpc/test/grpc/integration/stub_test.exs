@@ -99,6 +99,7 @@ defmodule GRPC.Integration.StubTest do
 
       assert_receive {:first_reply, "Hello, first"}
       assert_receive {:DOWN, ^ref, :process, ^pid, :normal}
+      Process.sleep(100)
 
       channel = %GRPC.Channel{ref: :short_lived_caller_channel}
       {:ok, %{adapter_payload: %{conn_pid: conn_pid}}} = GRPC.Client.Connection.pick_channel(channel)
