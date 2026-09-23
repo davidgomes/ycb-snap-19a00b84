@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Enhancements
+
+  * Load balancing state is now stored in ETS tables owned by `GRPC.Client.Connection`, and a channel is picked on every request in the caller process. Round robin now distributes individual RPCs across backends, and the client no longer writes to `:persistent_term` or runs the 15 second LB refresh timer.
+  * The `GRPC.Client.LoadBalancing` behaviour now operates on connected channels: `init/1` receives `:channels`, `pick/1` returns `{:ok, channel}`, and new `update/2` and `shutdown/1` callbacks were added.
+
 ## v1.0.0 (2026-06-15)
 
 ### Enhancements
