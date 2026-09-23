@@ -2,17 +2,22 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsage do
   @moduledoc """
   Checks for workers using the `:all` state group in unique configuration.
 
-  Using `states: :all` (or `states: [:all]`) in unique configuration is dangerous
-  because it includes `:completed` and `:discarded` states. This means once a job
-  completes or is discarded, you can never enqueue another job with the same
-  unique key.
+  Oban accepts named state groups for the unique `:states` option: `:all`,
+  `:incomplete`, `:scheduled`, and `:successful` (the default). Unlike the other
+  groups, `:all` also includes the `:cancelled` and `:discarded` states. This
+  means a job that was cancelled or exhausted its attempts still blocks new jobs
+  with the same unique key for the whole unique period, or forever with
+  `period: :infinity`.
 
   ## Examples
 
-  Bad - prevents re-enqueueing forever:
+  Bad - cancelled and discarded jobs block re-enqueueing:
       unique: [fields: [:args], states: :all]
 
-  Good - allows re-enqueueing after completion:
+  Good - only jobs that haven't finished processing block re-enqueueing:
+      unique: [fields: [:args], states: :incomplete]
+
+  Good - explicit list of non-final states:
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
   """
 
@@ -54,7 +59,7 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsage do
       check: __MODULE__,
       severity: default_severity(),
       message:
-        "Worker #{inspect(worker.module)} uses :all state group - jobs cannot be re-enqueued after completion",
+        "Worker #{inspect(worker.module)} uses :all state group - jobs cannot be re-enqueued after being cancelled or discarded",
       file: worker.file,
       line: worker.line,
       meta: %{
