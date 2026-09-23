@@ -268,13 +268,32 @@ defmodule Flop.Adapter.Ecto do
 
         apply(mod, fun, [query, filter, opts])
 
+      %FieldInfo{
+        ecto_type: ecto_type,
+        extra: %{type: :custom, field_dynamic: {mod, fun, field_dynamic_opts}}
+      } ->
+        dynamic_opts =
+          opts
+          |> Keyword.get(:extra_opts, [])
+          |> Keyword.merge(field_dynamic_opts)
+
+        field_info = %FieldInfo{
+          ecto_type: ecto_type,
+          extra: %{type: :dynamic, dynamic: apply(mod, fun, [dynamic_opts])}
+        }
+
+        Query.where(
+          query,
+          ^build_op(schema_struct, field_info, filter, dialect(opts))
+        )
+
       # only reachable with an unvalidated Flop struct
       %FieldInfo{extra: %{type: :custom}} ->
         raise ArgumentError, """
-        filtering by a custom field requires a filter function
+        filtering by a custom field requires a filter or field_dynamic function
 
-        No filter function is configured for #{inspect(field)}, so it cannot be
-        used as a filter field.
+        No filter or field_dynamic function is configured for #{inspect(field)},
+        so it cannot be used as a filter field.
 
         Use Flop.validate/2 to turn this exception into a validation error.
         """
@@ -794,6 +813,50 @@ defmodule Flop.Adapter.Ecto do
     match_empty(condition, op, value)
   end
 
+  defp build_op(
+         _schema_struct,
+         %FieldInfo{
+           ecto_type: ecto_type,
+           extra: %{type: :dynamic, dynamic: field_dynamic}
+         },
+         %Filter{op: op, value: value},
+         dialect
+       )
+       when op in [:empty, :not_empty] do
+    ecto_type = Flop.Misc.expand_type(ecto_type)
+
+    condition =
+      case {array_or_map(ecto_type), dialect} do
+        {:array, %Dialect{arrays?: false}} ->
+          dynamic([r], with_field_dynamic(empty(:json_array)))
+
+        {:array, _} ->
+          dynamic([r], with_field_dynamic(empty(:array)))
+
+        {:map, _} ->
+          dynamic([r], with_field_dynamic(empty(:map)))
+
+        {:other, _} ->
+          dynamic([r], with_field_dynamic(empty(:other)))
+      end
+
+    match_empty(condition, op, value)
+  end
+
+  defp build_op(
+         _schema_struct,
+         %FieldInfo{
+           ecto_type: ecto_type,
+           extra: %{type: :dynamic, dynamic: field_dynamic}
+         },
+         %Filter{op: op, value: value},
+         %Dialect{arrays?: false}
+       )
+       when op in [:contains, :not_contains] do
+    ecto_type = Flop.Misc.expand_type(ecto_type)
+    match_contains(dynamic([r], with_field_dynamic(json_contains())), op)
+  end
+
   # Ecto's MyXQL adapter cannot build array operations, so the array operators
   # are built with MySQL's JSON functions instead. See the Dialect module.
   defp build_op(
@@ -856,6 +919,16 @@ defmodule Flop.Adapter.Ecto do
       unquote(prelude)
       build_dynamic(unquote(fragment), true, unquote(combinator))
     end
+
+    defp build_op(
+           _schema_struct,
+           %FieldInfo{extra: %{type: :dynamic, dynamic: field_dynamic}},
+           %Filter{op: unquote(op), value: value},
+           _dialect
+         ) do
+      unquote(prelude)
+      build_dynamic(unquote(fragment), :dynamic, unquote(combinator))
+    end
   end
 
   # operators whose SQL depends on whether the Ecto adapter supports ilike
@@ -880,6 +953,16 @@ defmodule Flop.Adapter.Ecto do
          ) do
       unquote(prelude)
       build_dynamic(unquote(fragment), true, unquote(combinator))
+    end
+
+    defp build_op(
+           _schema_struct,
+           %FieldInfo{extra: %{type: :dynamic, dynamic: field_dynamic}},
+           %Filter{op: unquote(op), value: value},
+           %Dialect{ilike?: unquote(ilike?)}
+         ) do
+      unquote(prelude)
+      build_dynamic(unquote(fragment), :dynamic, unquote(combinator))
     end
   end
 
@@ -1040,8 +1123,10 @@ defmodule Flop.Adapter.Ecto do
     missing =
       for {name, opts} <- custom_fields,
           name in fields,
-          is_nil(opts[callback]),
+          Enum.all?(List.wrap(callback), &is_nil(opts[&1])),
           do: name
+
+    callback = callback |> List.wrap() |> hd()
 
     if missing != [] do
       raise ArgumentError, """
@@ -1070,7 +1155,7 @@ defmodule Flop.Adapter.Ecto do
     validate_custom_field_callback!(
       custom_fields,
       Keyword.fetch!(opts, :filterable),
-      :filter,
+      [:filter, :field_dynamic],
       "filterable"
     )
 

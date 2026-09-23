@@ -383,7 +383,8 @@ defprotocol Flop.Schema do
   - `field_dynamic` is called to order by the field. It receives an options
     keyword list and returns an `Ecto.Query.dynamic_expr`, which Flop applies
     the order direction to. It receives neither the query nor the direction. A
-    custom field needs it to be sortable.
+    custom field needs it to be sortable. If no `filter` function is set, the
+    expression is also used to filter by the field with the standard operators.
 
   If runtime options are necessary (like the timezone of the request or the user
   ID of the current user), use the `extra_opts` option when calling Flop

@@ -5,6 +5,14 @@ defmodule Flop.Adapter.Ecto.Operators do
 
   alias Flop.Adapter.Ecto.Dialect
 
+  defmacro build_dynamic(fragment, :dynamic, combinator) do
+    fragment = to_field_dynamic(fragment)
+
+    quote do
+      build_dynamic(unquote(fragment), false, unquote(combinator))
+    end
+  end
+
   defmacro build_dynamic(fragment, binding?, _combinator = nil) do
     binding_arg = binding_arg(binding?)
 
@@ -48,6 +56,17 @@ defmodule Flop.Adapter.Ecto.Operators do
   def reduce_dynamic(:or, values, inner_func) do
     Enum.reduce(values, false, fn value, dynamic ->
       dynamic([r], ^dynamic or ^inner_func.(value))
+    end)
+  end
+
+  # replaces `field(r, ^field)` with the interpolated `field_dynamic` variable
+  defp to_field_dynamic(ast) do
+    Macro.prewalk(ast, fn
+      {:field, _, [{:r, _, _}, {:^, _, [_]}]} ->
+        quote do: ^var!(field_dynamic)
+
+      other ->
+        other
     end)
   end
 
@@ -330,6 +349,11 @@ defmodule Flop.Adapter.Ecto.Operators do
     quote do
       is_nil(field(r, ^var!(field)))
     end
+  end
+
+  # expands one of the macros above against `field_dynamic` instead of a field
+  defmacro with_field_dynamic(call) do
+    call |> Macro.expand(__CALLER__) |> to_field_dynamic()
   end
 
   defmacro json_contains do
