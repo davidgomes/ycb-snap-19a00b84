@@ -1,3 +1,9 @@
+## Unreleased
+
+### New Features ✨
+
+- Report `log_byte` and `trace_metric_byte` client-report outcomes, and honor byte-based rate limits for logs and metrics
+
 ## 13.3.0
 
 ### New Features ✨
