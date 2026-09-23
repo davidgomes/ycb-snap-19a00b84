@@ -323,6 +323,12 @@ defmodule Sqlite.Ecto2.Test do
     query = Schema |> select([], type(^"601d74e4-a8d3-4b6e-8365-eddb4c893327", Ecto.UUID)) |> normalize
     assert all(query) == ~s{SELECT CAST (?1 AS TEXT) FROM "schema" AS s0}
 
+    query = Schema |> select([r], type(sum(r.x), :integer)) |> normalize
+    assert all(query) == ~s{SELECT sum(s0."x") FROM "schema" AS s0}
+
+    query = Schema |> select([r], type(sum(r.x), :float)) |> normalize
+    assert all(query) == ~s{SELECT CAST (sum(s0."x") AS REAL) FROM "schema" AS s0}
+
     assert_raise ArgumentError, "Array type is not supported by SQLite", fn ->
       query = Schema |> select([], type(^[1, 2, 3], {:array, :integer})) |> normalize
       all(query)

@@ -415,7 +415,7 @@ if Code.ensure_loaded?(Sqlitex.Server) do
       ["X'", Base.encode16(binary, case: :upper), "'"]
     end
 
-    defp expr(%Ecto.Query.Tagged{value: other, type: type}, sources, query) when type in [:id, :integer, :float] do
+    defp expr(%Ecto.Query.Tagged{value: other, type: type}, sources, query) when type in [:id, :integer] do
       expr(other, sources, query)
     end
 
@@ -510,7 +510,7 @@ if Code.ensure_loaded?(Sqlitex.Server) do
     defp ecto_to_db(:binary_id), do: "TEXT"
     defp ecto_to_db(:uuid), do: "TEXT" # SQLite does not support UUID
     defp ecto_to_db(:binary), do: "BLOB"
-    defp ecto_to_db(:float), do: "NUMERIC"
+    defp ecto_to_db(:float), do: "REAL"
     defp ecto_to_db(:string), do: "TEXT"
     defp ecto_to_db(:utc_datetime), do: "TEXT_DATETIME"    # see below
     defp ecto_to_db(:naive_datetime), do: "TEXT_DATETIME"  # see below
