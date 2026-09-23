@@ -149,6 +149,10 @@ defmodule Hammer.ETS.SlidingWindow do
   def clean(config) do
     now = now()
     table = config.table
+    Hammer.ETS.run_before_clean(config, [
+      {{{:"$2", :_}, :"$1"}, [{:<, :"$1", {:const, now}}], [:"$2"]}
+    ])
+
     match_spec = [{{:_, :"$1"}, [], [{:<, :"$1", {:const, now}}]}]
 
     :ets.select_delete(table, match_spec)

@@ -37,6 +37,7 @@ defmodule Hammer.ETS do
           | {:table, atom()}
           | {:algorithm, module()}
           | {:key_older_than, pos_integer()}
+          | {:before_clean, (list() -> any()) | nil}
           | GenServer.option()
 
   @type config :: %{
@@ -44,6 +45,7 @@ defmodule Hammer.ETS do
           table_opts: list(),
           clean_period: pos_integer(),
           key_older_than: pos_integer(),
+          before_clean: (list() -> any()) | nil,
           algorithm: module()
         }
 
@@ -144,6 +146,7 @@ defmodule Hammer.ETS do
     - `:clean_period` - How often to run the cleanup process (in milliseconds). Defaults to 1 minute.
     - `:key_older_than` - Optional maximum age for bucket entries (in milliseconds). Defaults to 24 hours.
       Entries older than this will be removed during cleanup.
+    - `:before_clean` - Optional 1-arity function called with the list of expired keys right before they are removed.
     - optional `:debug`, `:spawn_opts`, and `:hibernate_after` GenServer options
   """
   @spec start_link([start_option]) :: GenServer.on_start()
@@ -154,6 +157,7 @@ defmodule Hammer.ETS do
     {table, opts} = Keyword.pop!(opts, :table)
     {algorithm, opts} = Keyword.pop!(opts, :algorithm)
     {key_older_than, opts} = Keyword.pop(opts, :key_older_than, :timer.hours(24))
+    {before_clean, opts} = Keyword.pop(opts, :before_clean)
 
     case opts do
       [] ->
@@ -170,6 +174,7 @@ defmodule Hammer.ETS do
       table_opts: algorithm.ets_opts(),
       clean_period: clean_period,
       key_older_than: key_older_than,
+      before_clean: before_clean,
       algorithm: algorithm
     }
 
@@ -202,6 +207,19 @@ defmodule Hammer.ETS do
     schedule(config.clean_period)
     {:noreply, config}
   end
+
+  @doc false
+  @spec run_before_clean(config(), :ets.match_spec()) :: :ok
+  def run_before_clean(%{before_clean: fun} = config, key_match_spec) when is_function(fun, 1) do
+    case :ets.select(config.table, key_match_spec) do
+      [] -> :ok
+      keys -> fun.(Enum.uniq(keys))
+    end
+
+    :ok
+  end
+
+  def run_before_clean(_config, _key_match_spec), do: :ok
 
   defp schedule(clean_period) do
     Process.send_after(self(), :clean, clean_period)

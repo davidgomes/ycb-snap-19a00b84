@@ -23,6 +23,7 @@ defmodule Hammer.Atomic do
   @type start_option ::
           {:clean_period, pos_integer()}
           | {:key_older_than, pos_integer()}
+          | {:before_clean, (list() -> any()) | nil}
           | GenServer.option()
 
   @type config :: %{
@@ -30,6 +31,7 @@ defmodule Hammer.Atomic do
           table_opts: list(),
           clean_period: pos_integer(),
           key_older_than: pos_integer(),
+          before_clean: (list() -> any()) | nil,
           algorithm: module()
         }
 
@@ -129,6 +131,7 @@ defmodule Hammer.Atomic do
   Options:
   - `:clean_period` - How often to run cleanup (ms). Default 1 minute.
   - `:key_older_than` - Max age for entries (ms). Default 24 hours.
+  - `:before_clean` - Optional 1-arity function called with the list of expired keys right before they are removed.
   """
   @spec start_link([start_option]) :: GenServer.on_start()
   def start_link(opts) do
@@ -138,6 +141,7 @@ defmodule Hammer.Atomic do
     {table, opts} = Keyword.pop!(opts, :table)
     {algorithm_module, opts} = Keyword.pop!(opts, :algorithm_module)
     {key_older_than, opts} = Keyword.pop(opts, :key_older_than, :timer.hours(24))
+    {before_clean, opts} = Keyword.pop(opts, :before_clean)
 
     case opts do
       [] ->
@@ -154,6 +158,7 @@ defmodule Hammer.Atomic do
       table_opts: algorithm_module.ets_opts(),
       clean_period: clean_period,
       key_older_than: key_older_than,
+      before_clean: before_clean,
       algorithm_module: algorithm_module
     }
 
@@ -186,51 +191,37 @@ defmodule Hammer.Atomic do
   end
 
   defp clean(config) do
-    case config.algorithm_module do
-      Hammer.Atomic.FixWindow -> clean_fix_window(config)
-      _ -> clean_bucket(config)
+    expired? =
+      case config.algorithm_module do
+        Hammer.Atomic.FixWindow -> fix_window_expired?(config)
+        _ -> bucket_expired?(config)
+      end
+
+    expired =
+      :ets.foldl(
+        fn {_key, atomic} = term, acc -> if expired?.(atomic), do: [term | acc], else: acc end,
+        [],
+        config.table
+      )
+
+    if expired != [] and is_function(config.before_clean, 1) do
+      config.before_clean.(Enum.map(expired, &elem(&1, 0)))
     end
+
+    Enum.each(expired, &:ets.delete_object(config.table, &1))
+    length(expired)
   end
 
   # FixWindow stores expires_at in milliseconds in slot 2
-  defp clean_fix_window(config) do
+  defp fix_window_expired?(config) do
     now = now()
-
-    :ets.foldl(
-      fn {_key, atomic} = term, deleted ->
-        expires_at = :atomics.get(atomic, 2)
-
-        if now - expires_at > config.key_older_than do
-          :ets.delete_object(config.table, term)
-          deleted + 1
-        else
-          deleted
-        end
-      end,
-      0,
-      config.table
-    )
+    fn atomic -> now - :atomics.get(atomic, 2) > config.key_older_than end
   end
 
   # TokenBucket and LeakyBucket store last_update in seconds in slot 2
-  defp clean_bucket(config) do
-    now = System.system_time(:second)
-    older_than = now - div(config.key_older_than, 1000)
-
-    :ets.foldl(
-      fn {_key, atomic} = term, deleted ->
-        last_update = :atomics.get(atomic, 2)
-
-        if last_update < older_than do
-          :ets.delete_object(config.table, term)
-          deleted + 1
-        else
-          deleted
-        end
-      end,
-      0,
-      config.table
-    )
+  defp bucket_expired?(config) do
+    older_than = System.system_time(:second) - div(config.key_older_than, 1000)
+    fn atomic -> :atomics.get(atomic, 2) < older_than end
   end
 
   defp schedule(clean_period) do

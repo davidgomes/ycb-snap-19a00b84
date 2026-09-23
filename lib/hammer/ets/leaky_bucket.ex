@@ -168,6 +168,10 @@ defmodule Hammer.ETS.LeakyBucket do
     now = System.system_time(:second)
     older_than = now - div(config.key_older_than, 1000)
 
+    Hammer.ETS.run_before_clean(config, [
+      {{:"$2", :_, :"$1"}, [{:<, :"$1", {:const, older_than}}], [:"$2"]}
+    ])
+
     match_spec = [{{:_, :_, :"$1"}, [], [{:<, :"$1", {:const, older_than}}]}]
     :ets.select_delete(config.table, match_spec)
   end

@@ -160,7 +160,9 @@ defmodule Hammer.ETS.FixWindow do
   def clean(config) do
     table = config.table
 
-    match_spec = [{{{:_, :_}, :_, :"$1"}, [], [{:<, :"$1", {:const, ETS.now()}}]}]
+    now = ETS.now()
+    ETS.run_before_clean(config, [{{{:"$2", :_}, :_, :"$1"}, [{:<, :"$1", {:const, now}}], [:"$2"]}])
+    match_spec = [{{{:_, :_}, :_, :"$1"}, [], [{:<, :"$1", {:const, now}}]}]
     :ets.select_delete(table, match_spec)
   end
 end
