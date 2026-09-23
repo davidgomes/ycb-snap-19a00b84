@@ -50,6 +50,33 @@ defmodule Paginator.ConfigTest do
 
       assert config.cursor_fields == [{{:payments, :id}, :asc}]
     end
+
+    test "applies column with nulls-aware direction tuples" do
+      config =
+        Config.new(
+          cursor_fields: [
+            {:amount, :asc_nulls_first},
+            {{:payments, :charged_at}, :desc_nulls_last},
+            :id
+          ]
+        )
+
+      assert config.cursor_fields == [
+               {:amount, :asc_nulls_first},
+               {{:payments, :charged_at}, :desc_nulls_last},
+               {:id, :asc}
+             ]
+    end
+
+    test "applies column fields with a nulls-aware sort_direction" do
+      config =
+        Config.new(cursor_fields: [:amount, {:payments, :id}], sort_direction: :asc_nulls_first)
+
+      assert config.cursor_fields == [
+               {:amount, :asc_nulls_first},
+               {{:payments, :id}, :asc_nulls_first}
+             ]
+    end
   end
 
   describe "Config.new/2 applies min/max limit" do
@@ -158,6 +185,16 @@ defmodule Paginator.ConfigTest do
               {:person, :first_name} => "Test 121",
               {:person, :last_name} => "Test"
             })
+        )
+
+      Config.validate!(config)
+    end
+
+    test "ok when cursor matches cursor_fields with nulls-aware directions" do
+      config =
+        Config.new(
+          cursor_fields: [amount: :desc_nulls_last, id: :asc],
+          after: Cursor.encode(%{amount: nil, id: 1})
         )
 
       Config.validate!(config)

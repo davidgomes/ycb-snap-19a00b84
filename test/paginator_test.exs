@@ -716,6 +716,89 @@ defmodule PaginatorTest do
     end
   end
 
+  describe "paginate a collection of payments with nullable amounts" do
+    setup do
+      customer = insert(:customer, %{name: "Dave"})
+
+      payments =
+        [nil, 5, nil, 3, 5, nil, 1]
+        |> Enum.map(&insert(:payment, customer: customer, amount: &1))
+        |> List.to_tuple()
+
+      {:ok, customer: customer, nullable_payments: payments}
+    end
+
+    for {order, expected_positions} <- [
+          asc: [7, 4, 2, 5, 1, 3, 6],
+          asc_nulls_last: [7, 4, 2, 5, 1, 3, 6],
+          asc_nulls_first: [1, 3, 6, 7, 4, 2, 5],
+          desc: [1, 3, 6, 2, 5, 4, 7],
+          desc_nulls_first: [1, 3, 6, 2, 5, 4, 7],
+          desc_nulls_last: [2, 5, 4, 7, 1, 3, 6]
+        ] do
+      @order order
+      @expected_positions expected_positions
+
+      test "paginates forward and backward sorting by #{order}", %{
+        customer: customer,
+        nullable_payments: payments
+      } do
+        expected = Enum.map(@expected_positions, &elem(payments, &1 - 1))
+        query = customer_payments_by_amount(customer, @order)
+        opts = [cursor_fields: [amount: @order, id: :asc], limit: 2]
+
+        assert to_ids(Repo.all(query)) == to_ids(expected)
+        assert to_ids(paginate_forward(query, opts)) == to_ids(expected)
+
+        last = List.last(expected)
+        before_last = Paginator.cursor_for_record(last, opts[:cursor_fields])
+
+        assert to_ids(paginate_backward(query, opts, before_last) ++ [last]) == to_ids(expected)
+      end
+    end
+
+    test "sorts desc_nulls_last with before and after cursor", %{
+      customer: customer,
+      nullable_payments: {n1, _n2, _n3, n4, n5, _n6, n7}
+    } do
+      %Page{entries: entries, metadata: metadata} =
+        customer_payments_by_amount(customer, :desc_nulls_last)
+        |> Repo.paginate(
+          cursor_fields: [amount: :desc_nulls_last, id: :asc],
+          after: encode_cursor(%{amount: n5.amount, id: n5.id}),
+          before: encode_cursor(%{amount: n1.amount, id: n1.id}),
+          limit: 8
+        )
+
+      assert to_ids(entries) == to_ids([n4, n7])
+
+      assert metadata == %Metadata{
+               after: encode_cursor(%{amount: n7.amount, id: n7.id}),
+               before: encode_cursor(%{amount: n4.amount, id: n4.id}),
+               limit: 8
+             }
+    end
+
+    test "sorts with respect to a nil value in the last cursor field", %{
+      customer: customer,
+      nullable_payments: {_n1, n2, _n3, n4, n5, _n6, n7}
+    } do
+      after_nil = encode_cursor(%{amount: nil})
+
+      %Page{entries: entries} =
+        customer_payments_by_amount(customer, :asc_nulls_last)
+        |> Repo.paginate(cursor_fields: [amount: :asc_nulls_last], after: after_nil)
+
+      assert entries == []
+
+      %Page{entries: entries} =
+        customer_payments_by_amount(customer, :asc_nulls_first)
+        |> Repo.paginate(cursor_fields: [amount: :asc_nulls_first], after: after_nil)
+
+      assert to_ids(entries) == to_ids([n7, n4, n2, n5])
+    end
+  end
+
   test "applies a default limit if none is provided", %{
     payments: {p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12}
   } do
@@ -1035,6 +1118,33 @@ defmodule PaginatorTest do
       where: p.customer_id == ^customer.id,
       order_by: [{^direction, p.charged_at}, {^direction, p.amount}, {^direction, p.id}]
     )
+  end
+
+  defp customer_payments_by_amount(customer, amount_direction) do
+    from(
+      p in Payment,
+      where: p.customer_id == ^customer.id,
+      order_by: [{^amount_direction, p.amount}, {:asc, p.id}],
+      select: p
+    )
+  end
+
+  defp paginate_forward(query, opts, cursor \\ nil) do
+    page = Repo.paginate(query, opts ++ [after: cursor])
+
+    case page.metadata.after do
+      nil -> page.entries
+      cursor -> page.entries ++ paginate_forward(query, opts, cursor)
+    end
+  end
+
+  defp paginate_backward(query, opts, cursor) do
+    page = Repo.paginate(query, opts ++ [before: cursor])
+
+    case page.metadata.before do
+      nil -> page.entries
+      cursor -> paginate_backward(query, opts, cursor) ++ page.entries
+    end
   end
 
   defp encode_cursor(value) do
