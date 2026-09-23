@@ -38,6 +38,43 @@ defmodule Flop.Adapters.Ecto.FlopTest do
     Enum.map(ages, &Repo.insert!(%CustomFieldPet{age: &1}))
   end
 
+  # Walks the pets page by page in both directions and compares the pages with
+  # the full ordered list.
+  defp assert_cursor_pagination(order_by, directions, opts) do
+    flop = %Flop{order_by: order_by, order_directions: directions}
+    expected = Flop.all(pets_with_owners_query(), flop, opts)
+    max_pages = length(expected)
+
+    assert cursor_pages(%{flop | first: 1}, :after, opts, max_pages) == expected
+
+    assert cursor_pages(%{flop | last: 1}, :before, opts, max_pages) ==
+             expected
+  end
+
+  defp cursor_pages(flop, cursor_key, opts, pages_left, acc \\ []) do
+    assert pages_left >= 0, "cursor pagination does not terminate"
+
+    {:ok, {items, meta}} =
+      Flop.validate_and_run(pets_with_owners_query(), flop, opts)
+
+    {acc, more?, cursor} =
+      case cursor_key do
+        :after -> {acc ++ items, meta.has_next_page?, meta.end_cursor}
+        :before -> {items ++ acc, meta.has_previous_page?, meta.start_cursor}
+      end
+
+    if more?,
+      do:
+        cursor_pages(
+          Map.put(flop, cursor_key, cursor),
+          cursor_key,
+          opts,
+          pages_left - 1,
+          acc
+        ),
+      else: acc
+  end
+
   describe "ordering" do
     test "adds order_by to query if set" do
       pets = insert_list(20, :pet)
@@ -2124,39 +2161,45 @@ defmodule Flop.Adapters.Ecto.FlopTest do
         )
     end
 
-    test "nil values for cursors are ignored when using for option" do
-      check all pets <- uniq_list_of_pets(length: 2..2),
-                cursor_fields <- cursor_fields(%Pet{}),
+    property "paginates over nullable fields when using for option" do
+      check all pets <- uniq_list_of_pets(length: 1..12),
+                nil_names <- list_of(boolean(), length: length(pets)),
+                nil_owner_names <- list_of(boolean(), length: length(pets)),
+                order_by <-
+                  member_of([
+                    [:name, :owner_name, :age],
+                    [:owner_name, :name, :age],
+                    [:age, :name]
+                  ]),
                 directions <- order_directions(%Pet{}) do
         checkin_checkout()
 
-        # set name fields to nil and insert
-        pets
-        |> Enum.map(&Map.update!(&1, :name, fn _ -> nil end))
+        [pets, nil_names, nil_owner_names]
+        |> Enum.zip()
+        |> Enum.map(fn {pet, nil_name?, nil_owner_name?} ->
+          pet = if nil_name?, do: %{pet | name: nil}, else: pet
+
+          if nil_owner_name?,
+            do: %{pet | owner: %{pet.owner | name: nil}},
+            else: pet
+        end)
         |> Enum.each(&Repo.insert!(&1))
 
-        assert {:ok, {[_], %Meta{end_cursor: end_cursor}}} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   },
-                   for: Pet
-                 )
+        assert_cursor_pagination(order_by, directions, for: Pet)
+      end
+    end
 
-        assert {:ok, _} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     after: end_cursor,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   },
-                   for: Pet
-                 )
+    property "paginates over a nullable last order field" do
+      check all pets <- uniq_list_of_pets(length: 1..12),
+                nil_index <- integer(0..(length(pets) - 1)),
+                [direction | _] <- order_directions(%Pet{}) do
+        checkin_checkout()
+
+        pets
+        |> List.update_at(nil_index, &%{&1 | name: nil})
+        |> Enum.each(&Repo.insert!(&1))
+
+        assert_cursor_pagination([:name], [direction], for: Pet)
       end
     end
 
@@ -2197,37 +2240,21 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                "cursor pagination is not supported for alias fields"
     end
 
-    test "nil values for cursors are ignored when not using for option" do
-      check all pets <- uniq_list_of_pets(length: 2..2),
+    property "paginates over nullable fields when not using for option" do
+      check all pets <- uniq_list_of_pets(length: 1..12),
+                nil_names <- list_of(boolean(), length: length(pets)),
                 directions <- order_directions(%Pet{}) do
         checkin_checkout()
-        cursor_fields = [:name, :age]
 
-        # set name fields to nil and insert
         pets
-        |> Enum.map(&Map.update!(&1, :name, fn _ -> nil end))
+        |> Enum.zip(nil_names)
+        |> Enum.map(fn
+          {pet, true} -> %{pet | name: nil}
+          {pet, false} -> pet
+        end)
         |> Enum.each(&Repo.insert!(&1))
 
-        assert {:ok, {[_], %Meta{end_cursor: end_cursor}}} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   }
-                 )
-
-        assert {:ok, _} =
-                 Flop.validate_and_run(
-                   pets_with_owners_query(),
-                   %Flop{
-                     first: 1,
-                     after: end_cursor,
-                     order_by: cursor_fields,
-                     order_directions: directions
-                   }
-                 )
+        assert_cursor_pagination([:name, :age], directions, [])
       end
     end
 

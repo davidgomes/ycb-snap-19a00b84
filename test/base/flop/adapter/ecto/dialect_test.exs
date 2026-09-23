@@ -31,13 +31,28 @@ defmodule Flop.Adapter.Ecto.DialectTest do
   describe "new/1" do
     test "reads the features of a known adapter" do
       assert Dialect.new(PostgresRepo) ==
-               %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: true,
+                 nulls_ordering?: true,
+                 nulls_largest?: true
+               }
 
       assert Dialect.new(MyXQLRepo) ==
-               %Dialect{arrays?: false, ilike?: false, nulls_ordering?: false}
+               %Dialect{
+                 arrays?: false,
+                 ilike?: false,
+                 nulls_ordering?: false,
+                 nulls_largest?: false
+               }
 
       assert Dialect.new(SQLite3Repo) ==
-               %Dialect{arrays?: true, ilike?: false, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: false,
+                 nulls_ordering?: true,
+                 nulls_largest?: false
+               }
     end
 
     test "returns the defaults for an unknown adapter" do
@@ -51,7 +66,36 @@ defmodule Flop.Adapter.Ecto.DialectTest do
 
     test "defaults to leaving the query unmodified" do
       assert %Dialect{} ==
-               %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
+               %Dialect{
+                 arrays?: true,
+                 ilike?: true,
+                 nulls_ordering?: true,
+                 nulls_largest?: true
+               }
+    end
+  end
+
+  describe "nulls_first?/2" do
+    test "follows the explicit nulls directions on every adapter" do
+      for repo <- [PostgresRepo, MyXQLRepo, SQLite3Repo, nil] do
+        dialect = Dialect.new(repo)
+        assert Dialect.nulls_first?(dialect, :asc_nulls_first)
+        assert Dialect.nulls_first?(dialect, :desc_nulls_first)
+        refute Dialect.nulls_first?(dialect, :asc_nulls_last)
+        refute Dialect.nulls_first?(dialect, :desc_nulls_last)
+      end
+    end
+
+    test "sorts NULLs as the largest values on PostgreSQL" do
+      refute Dialect.nulls_first?(Dialect.new(PostgresRepo), :asc)
+      assert Dialect.nulls_first?(Dialect.new(PostgresRepo), :desc)
+    end
+
+    test "sorts NULLs as the smallest values on MySQL and SQLite" do
+      for repo <- [MyXQLRepo, SQLite3Repo] do
+        assert Dialect.nulls_first?(Dialect.new(repo), :asc)
+        refute Dialect.nulls_first?(Dialect.new(repo), :desc)
+      end
     end
   end
 
