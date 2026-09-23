@@ -29,6 +29,7 @@ defmodule PetalComponents.DropdownTest do
       assert html =~ "Option 2"
       assert_has_class(html, "pc-dropdown")
       assert_has_class(html, "pc-dropdown__menu-items-wrapper")
+      assert html =~ ~s(phx-hook="PetalDropdown")
     end
 
     test "renders dropdown with custom CSS classes", %{assigns: assigns} do
@@ -73,6 +74,19 @@ defmodule PetalComponents.DropdownTest do
   describe "dropdown/1 - JavaScript library options" do
     setup do
       %{assigns: default_assigns()}
+    end
+
+    test "mounts PetalDropdown on a stable root id", %{assigns: assigns} do
+      html =
+        rendered_to_string(~H"""
+        <.dropdown id="account-menu" options_container_id="account-menu-options" label="Dropdown">
+          <.dropdown_menu_item label="Option" />
+        </.dropdown>
+        """)
+
+      assert html =~ ~s(id="account-menu")
+      assert html =~ ~s(phx-hook="PetalDropdown")
+      assert html =~ ~s(id="account-menu-options")
     end
 
     test "uses LiveView.JS (no Alpine)", %{assigns: assigns} do

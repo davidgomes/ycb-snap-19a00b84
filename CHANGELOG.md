@@ -3,6 +3,15 @@
 
 #### Fixed
 
+- **Dropdown menus flip above the trigger when the viewport has no room
+  below.** A menu at the bottom of a form opened downward and disappeared
+  off-screen. `PetalDropdown` measures on open and on scroll or resize
+  while the menu is open, sets `data-flip` when there is more room above,
+  and caps the panel so its items scroll inside the viewport. The menu
+  stays absolutely positioned next to its trigger, so the page still
+  carries both together. Without the bundled hook registered the menu
+  opens exactly as before, always downward.
+
 - **`command_dialog` now locks background scroll while the palette is
   open.** A native modal `<dialog>` hands you the top layer, the focus
   trap and Escape, but it does not stop the page underneath from

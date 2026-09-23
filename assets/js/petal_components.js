@@ -5444,6 +5444,130 @@ export const PetalDataTable = {
   },
 };
 
+// Dropdown menu. CSS anchors it under the trigger; this hook only decides
+// whether that is the wrong side. Open downward by default, and flip above
+// when the viewport has no room below AND more room above (the menu at the
+// bottom of a form that used to open off-screen). When neither side fits,
+// the winning side's space caps the panel so the items scroll inside the
+// viewport instead of rendering past it. The panel stays absolutely
+// positioned, so the page carries it with the trigger — scroll listeners
+// re-decide the side, they do not chase coordinates.
+export const PetalDropdown = {
+  mounted() {
+    this.panel = this.el.querySelector(".pc-dropdown__menu-items-wrapper");
+    this.trigger = this.el.querySelector("button[aria-haspopup]");
+    if (!this.panel || !this.trigger) return;
+
+    this.open = this.isOpen();
+    this.listening = false;
+    this.onReposition = () => {
+      if (this.isOpen()) this.positionPanel();
+    };
+
+    // LiveView.JS owns open and close (toggle, click-away, Escape) by
+    // writing the panel's inline display. That is the single funnel, so
+    // watching it catches every path without reimplementing them.
+    this.observer = new MutationObserver(() => this.onVisibility());
+    this.observer.observe(this.panel, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+
+    if (this.open) {
+      this.listen();
+      this.positionPanel();
+    }
+  },
+
+  destroyed() {
+    this.dead = true;
+    if (this.observer) this.observer.disconnect();
+    this.unlisten();
+  },
+
+  isOpen() {
+    return this.panel.style.display !== "none";
+  },
+
+  onVisibility() {
+    if (this.dead) return;
+    const open = this.isOpen();
+    if (open === this.open) return;
+    this.open = open;
+
+    if (open) {
+      this.listen();
+      this.positionPanel();
+    } else {
+      this.unlisten();
+      this.clearPlacement();
+    }
+  },
+
+  listen() {
+    if (this.listening) return;
+    this.listening = true;
+    window.addEventListener("scroll", this.onReposition, true);
+    window.addEventListener("resize", this.onReposition);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", this.onReposition);
+      window.visualViewport.addEventListener("scroll", this.onReposition);
+    }
+  },
+
+  unlisten() {
+    if (!this.listening) return;
+    this.listening = false;
+    window.removeEventListener("scroll", this.onReposition, true);
+    window.removeEventListener("resize", this.onReposition);
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener("resize", this.onReposition);
+      window.visualViewport.removeEventListener("scroll", this.onReposition);
+    }
+  },
+
+  clearPlacement() {
+    this.panel.removeAttribute("data-flip");
+    this.panel.style.maxHeight = "";
+    this.panel.style.overflowY = "";
+  },
+
+  // Measured with flip and cap cleared so natural height decides.
+  positionPanel() {
+    if (!this.isOpen()) return;
+    this.clearPlacement();
+
+    const control = this.trigger.getBoundingClientRect();
+    const panelH = this.panel.offsetHeight;
+    if (!panelH || (!control.top && !control.bottom)) return;
+
+    const box = this.viewport();
+    // mt-2 / mb-2 — the gap lives outside the panel, so it comes out of
+    // the room the panel itself can occupy
+    const gap = 8;
+    const below = box.top + box.height - control.bottom - gap;
+    const above = control.top - box.top - gap;
+    const flip = panelH > below && above > below;
+    if (flip) this.panel.setAttribute("data-flip", "");
+
+    const room = flip ? above : below;
+    if (panelH > room) {
+      // no floor: in a viewport too cramped for even one row, a sliver of
+      // scrollable menu still beats items rendered outside the viewport
+      this.panel.style.maxHeight = `${Math.max(Math.round(room), 0)}px`;
+      this.panel.style.overflowY = "auto";
+    }
+  },
+
+  viewport() {
+    const vv = window.visualViewport;
+    if (vv && typeof vv.height === "number" && vv.height > 0) {
+      return { top: vv.offsetTop || 0, height: vv.height };
+    }
+    return { top: 0, height: window.innerHeight };
+  },
+};
+
 export default {
   PetalChart,
   PetalColorScheme,
@@ -5474,4 +5598,5 @@ export default {
   PetalCommandDialog,
   PetalComboBox,
   PetalDataTable,
+  PetalDropdown,
 };
