@@ -1583,8 +1583,10 @@ defmodule Phoenix.LiveView.Channel do
             writer: writer!(socket, conf.name, entry, conf.writer)
           }
 
-          GenServer.reply(from, {:ok, reply})
+          # monitor before replying, as the upload channel may exit right after
+          # the reply, such as on a writer init/1 error, which must not be :noproc
           new_state = put_upload_pid(state, pid, ref, entry_ref, cid)
+          GenServer.reply(from, {:ok, reply})
           {new_socket, {:ok, nil, new_state}}
 
         {:error, reason} ->
