@@ -1,0 +1,7 @@
+<%= PackageRemoved.title() %>
+
+<%= PackageRemoved.message(@package) %>
+
+Reason: <%= @reason %>
+
+If you have questions about this decision, contact support@hex.pm.

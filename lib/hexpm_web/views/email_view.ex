@@ -84,6 +84,26 @@ defmodule HexpmWeb.EmailView do
     end
   end
 
+  defmodule AccountRemoved do
+    def title() do
+      "Your account has been removed"
+    end
+
+    def message(username) do
+      "The Hex.pm account \"#{username}\" has been removed by the Hex.pm administrators."
+    end
+  end
+
+  defmodule PackageRemoved do
+    def title() do
+      "Package removed"
+    end
+
+    def message(package) do
+      "The package #{package} has been removed from Hex.pm by the Hex.pm administrators."
+    end
+  end
+
   defmodule Announcement do
     def title("Hex.pm - " <> title), do: title
     def title(subject), do: subject
