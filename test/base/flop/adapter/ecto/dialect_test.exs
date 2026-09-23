@@ -31,17 +31,36 @@ defmodule Flop.Adapter.Ecto.DialectTest do
   describe "new/1" do
     test "reads the features of a known adapter" do
       assert Dialect.new(PostgresRepo) ==
-               %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
+               %Dialect{
+                 adapter: Ecto.Adapters.Postgres,
+                 arrays?: true,
+                 ilike?: true,
+                 nulls_last_ascending?: true,
+                 nulls_ordering?: true
+               }
 
       assert Dialect.new(MyXQLRepo) ==
-               %Dialect{arrays?: false, ilike?: false, nulls_ordering?: false}
+               %Dialect{
+                 adapter: Ecto.Adapters.MyXQL,
+                 arrays?: false,
+                 ilike?: false,
+                 nulls_last_ascending?: false,
+                 nulls_ordering?: false
+               }
 
       assert Dialect.new(SQLite3Repo) ==
-               %Dialect{arrays?: true, ilike?: false, nulls_ordering?: true}
+               %Dialect{
+                 adapter: Ecto.Adapters.SQLite3,
+                 arrays?: true,
+                 ilike?: false,
+                 nulls_last_ascending?: false,
+                 nulls_ordering?: true
+               }
     end
 
     test "returns the defaults for an unknown adapter" do
-      assert Dialect.new(UnknownRepo) == %Dialect{}
+      assert Dialect.new(UnknownRepo) ==
+               %Dialect{adapter: SomeApp.Adapters.Unknown}
     end
 
     test "returns the defaults without a repo" do
@@ -51,7 +70,13 @@ defmodule Flop.Adapter.Ecto.DialectTest do
 
     test "defaults to leaving the query unmodified" do
       assert %Dialect{} ==
-               %Dialect{arrays?: true, ilike?: true, nulls_ordering?: true}
+               %Dialect{
+                 adapter: nil,
+                 arrays?: true,
+                 ilike?: true,
+                 nulls_last_ascending?: true,
+                 nulls_ordering?: true
+               }
     end
   end
 
