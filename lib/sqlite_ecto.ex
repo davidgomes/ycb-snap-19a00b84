@@ -47,6 +47,8 @@ defmodule Sqlite.Ecto2 do
   def loaders(:binary_id, type), do: [Ecto.UUID, type]
   def loaders(:utc_datetime, type), do: [&date_decode/1, type]
   def loaders(:naive_datetime, type), do: [&date_decode/1, type]
+  def loaders(:float, type), do: [&float_decode/1, type]
+  def loaders(:decimal, type), do: [&decimal_decode/1, type]
   def loaders({:embed, _} = type, _),
     do: [&json_decode/1, &Ecto.Adapters.SQL.load_embed(type, &1)]
   def loaders(:map, type), do: [&json_decode/1, type]
@@ -75,6 +77,15 @@ defmodule Sqlite.Ecto2 do
            {to_integer(hour), to_integer(minute), to_integer(second), to_integer(microsecond)}}}
   end
   defp date_decode(x), do: {:ok, x}
+
+  # Values without a declared column type (e.g. aggregates) come back as plain
+  # SQLite numbers, often integers, which Ecto won't load as floats or decimals.
+  defp float_decode(x) when is_integer(x), do: {:ok, x / 1}
+  defp float_decode(x), do: {:ok, x}
+
+  defp decimal_decode(x) when is_integer(x), do: decimal_decode(x / 1)
+  defp decimal_decode(x) when is_float(x), do: {:ok, Decimal.new(x)}
+  defp decimal_decode(x), do: {:ok, x}
 
   defp json_decode(x) when is_binary(x),
     do: {:ok, Application.get_env(:ecto, :json_library).decode!(x)}
