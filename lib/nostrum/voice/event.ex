@@ -52,12 +52,8 @@ defmodule Nostrum.Voice.Event do
     secret_key = payload["d"]["secret_key"] |> :erlang.list_to_binary()
     dave_protocol_version = payload["d"]["dave_protocol_version"] || 0
 
-    {state, frames} =
-      reinit_dave_session(%{
-        state
-        | secret_key: secret_key,
-          dave_protocol_version: dave_protocol_version
-      })
+    state = %{state | secret_key: secret_key, dave_protocol_version: dave_protocol_version}
+    {state, frames} = reinit_dave_session(state)
 
     Voice.update_voice_async(state.voice_pid, state.guild_id,
       secret_key: secret_key,

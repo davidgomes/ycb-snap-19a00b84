@@ -164,16 +164,7 @@ defmodule Nostrum.Voice.Session do
         payload = Crypto.decrypt(state, data)
         <<_::16, seq::integer-16, time::integer-32, ssrc::integer-32>> = header
         opus = Opus.strip_rtp_ext(payload)
-        dave_session = Crypto.active_dave_session(state)
-
-        case Crypto.dave_decrypt(dave_session, Map.get(state.ssrc_map, ssrc), opus) do
-          {:ok, opus} ->
-            incoming_packet = Payload.voice_incoming_packet({{seq, time, ssrc}, opus})
-            Dispatch.handle(incoming_packet, state)
-
-          :error ->
-            Logger.debug(fn -> "Unable to decrypt E2EE voice packet from SSRC #{ssrc}" end)
-        end
+        dispatch_incoming_packet({seq, time, ssrc}, opus, state)
     end
 
     {:noreply, state}
@@ -255,6 +246,19 @@ defmodule Nostrum.Voice.Session do
         _ -> Voice.restart_session(voice)
       end
     end)
+  end
+
+  defp dispatch_incoming_packet({_seq, _time, ssrc} = rtp, opus, state) do
+    dave_session = Crypto.active_dave_session(state)
+
+    case Crypto.dave_decrypt(dave_session, Map.get(state.ssrc_map, ssrc), opus) do
+      {:ok, opus} ->
+        incoming_packet = Payload.voice_incoming_packet({rtp, opus})
+        Dispatch.handle(incoming_packet, state)
+
+      :error ->
+        Logger.debug(fn -> "Unable to decrypt E2EE voice packet from SSRC #{ssrc}" end)
+    end
   end
 
   defp handle_payload(payload, stream, state) do
