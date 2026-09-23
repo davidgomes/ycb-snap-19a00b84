@@ -35,3 +35,9 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+# Manual mode keeps queue workers off while dashboard actions still hit the database.
+config :free_oban_ui, Oban,
+  engine: Oban.Engines.Basic,
+  repo: FreeObanUi.Repo,
+  testing: :manual

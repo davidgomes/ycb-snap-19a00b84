@@ -49,8 +49,7 @@ defmodule FreeObanUi.MixProject do
        tag: "v2.1.1",
        sparse: "optimized",
        app: false,
-       compile: false,
-       depth: 1},
+       compile: false},
       {:swoosh, "~> 1.5"},
       {:finch, "~> 0.13"},
       {:telemetry_metrics, "~> 1.0"},
@@ -58,7 +57,8 @@ defmodule FreeObanUi.MixProject do
       {:gettext, "~> 0.20"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.1.1"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:oban, "~> 2.18"}
     ]
   end
 
