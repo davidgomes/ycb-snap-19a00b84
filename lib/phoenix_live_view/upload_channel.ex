@@ -60,7 +60,7 @@ defmodule Phoenix.LiveView.UploadChannel do
          {:ok, config} <- Channel.register_upload(pid, ref, cid),
          %{max_file_size: max_file_size, chunk_timeout: chunk_timeout} = config,
          {writer, writer_opts} <- config.writer,
-         {:ok, writer_state} <- writer.init(writer_opts) do
+         {:ok, writer_state} <- init_writer(writer, writer_opts, pid) do
       Process.monitor(pid)
       Process.flag(:trap_exit, true)
 
@@ -86,8 +86,19 @@ defmodule Phoenix.LiveView.UploadChannel do
         {:error, %{reason: reason}}
 
       # writer init error
-      {:error, _reason} ->
+      {:error, :writer_init, _reason} ->
         {:error, %{reason: :writer_error}}
+    end
+  end
+
+  defp init_writer(writer, writer_opts, live_view_pid) do
+    case writer.init(writer_opts) do
+      {:ok, writer_state} ->
+        {:ok, writer_state}
+
+      {:error, reason} ->
+        Channel.report_writer_error(live_view_pid, reason)
+        {:error, :writer_init, reason}
     end
   end
 
