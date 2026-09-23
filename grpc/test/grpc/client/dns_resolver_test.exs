@@ -1175,6 +1175,8 @@ defmodule GRPC.Client.ReResolveTest do
       Process.sleep(@wait)
 
       assert {:error, :no_connection} = Connection.pick_channel(channel)
+
+      disconnect_and_wait(channel)
     end
   end
 
