@@ -40,6 +40,10 @@ defmodule HexpmWeb.EmailView do
       "If you have any problems don't hesitate to contact support at #{support_link(format)}."
     end
 
+    def removal_notice(format) do
+      "If you believe this was a mistake or have any questions, please contact support at #{support_link(format)}."
+    end
+
     # Common labels for build tools
     def for_mix_label(), do: "For mix:"
     def for_rebar3_label(), do: "For rebar3:"
@@ -81,6 +85,36 @@ defmodule HexpmWeb.EmailView do
       "The Hex.pm account \"#{username}\" has been permanently deleted. " <>
         "The username has been retired and cannot be registered again. " <>
         "Packages and versions you published remain available to the community."
+    end
+  end
+
+  defmodule AccountRemoved do
+    def title() do
+      "Your account has been removed"
+    end
+
+    def message(username) do
+      "The Hex.pm account \"#{username}\" has been removed by Hex.pm administrators " <>
+        "for the following reason:"
+    end
+
+    def packages_intro() do
+      "The following packages owned by the account were also removed:"
+    end
+
+    def package_list(packages) do
+      Enum.map_join(packages, "\n", &"  * #{&1}")
+    end
+  end
+
+  defmodule PackageRemoved do
+    def title() do
+      "Package removed"
+    end
+
+    def message(package) do
+      "The package #{package} and all of its releases have been removed from Hex.pm " <>
+        "by Hex.pm administrators for the following reason:"
     end
   end
 

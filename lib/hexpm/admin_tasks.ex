@@ -28,6 +28,10 @@ defmodule Hexpm.AdminTasks do
       iex> AdminTasks.remove_user("spammer", delete_packages: true)
       :ok
 
+      # Remove a user and email them the reason
+      iex> AdminTasks.remove_user("spammer", reason: "The account was used to publish spam.")
+      :ok
+
       # Add an owner to a package
       iex> AdminTasks.add_owner("phoenix", "jose", level: "full")
       {:ok, %PackageOwner{}}
@@ -38,6 +42,10 @@ defmodule Hexpm.AdminTasks do
 
       # Remove a package
       iex> AdminTasks.remove_package("hexpm", "malicious_pkg")
+      :ok
+
+      # Remove a package and email its owners the reason
+      iex> AdminTasks.remove_package("hexpm", "malicious_pkg", reason: "The package contained malware.")
       :ok
 
       # Send an email
@@ -176,6 +184,9 @@ defmodule Hexpm.AdminTasks do
   - `opts` - Options:
     - `:delete_packages` - When `true`, deletes all packages where the user is
       the sole owner before removing the user (default: `false`)
+    - `:reason` - Why the account was removed. When given, the user is emailed
+      the reason along with any packages that were deleted. No email is sent
+      without a reason (default: `nil`)
 
   ## Examples
 
@@ -183,6 +194,9 @@ defmodule Hexpm.AdminTasks do
       :ok
 
       iex> AdminTasks.remove_user("spammer", delete_packages: true)
+      :ok
+
+      iex> AdminTasks.remove_user("spammer", reason: "The account was used to publish spam.")
       :ok
   """
   @spec remove_user(String.t(), keyword()) :: :ok | {:error, atom() | Ecto.Changeset.t()}
@@ -200,15 +214,29 @@ defmodule Hexpm.AdminTasks do
         |> case do
           {:ok, deleted} ->
             Enum.each(deleted, &run_package_removal_side_effects/1)
-            :ok
+            packages = Enum.map(deleted, fn {_releases, package} -> package end)
+            notify_user_removed(user, packages, Keyword.get(opts, :reason))
 
           {:error, reason} ->
             {:error, reason}
         end
       else
-        Users.delete(user, audit: AuditLogs.admin(), notify: false)
+        with :ok <- Users.delete(user, audit: AuditLogs.admin(), notify: false) do
+          notify_user_removed(user, [], Keyword.get(opts, :reason))
+        end
       end
     end
+  end
+
+  defp notify_user_removed(_user, _packages, nil), do: :ok
+
+  defp notify_user_removed(user, packages, reason) do
+    if User.email(user, :primary) do
+      Emails.account_removed(user, reason, packages)
+      |> Mailer.deliver!()
+    end
+
+    :ok
   end
 
   defp delete_sole_owned_packages(user) do
@@ -319,23 +347,44 @@ defmodule Hexpm.AdminTasks do
 
   - `repo` - The repository name (e.g., "hexpm")
   - `package_name` - The name of the package to remove
+  - `opts` - Options:
+    - `:reason` - Why the package was removed. When given, the package owners
+      are emailed the reason. No email is sent without a reason (default: `nil`)
 
   ## Examples
 
       iex> AdminTasks.remove_package("hexpm", "malicious_pkg")
       :ok
+
+      iex> AdminTasks.remove_package("hexpm", "malicious_pkg", reason: "The package contained malware.")
+      :ok
   """
-  @spec remove_package(String.t(), String.t()) :: :ok | {:error, atom()}
-  def remove_package(repo, package_name) do
+  @spec remove_package(String.t(), String.t(), keyword()) :: :ok | {:error, atom()}
+  def remove_package(repo, package_name, opts \\ []) do
     with {:ok, package} <- find_package(repo, package_name) do
+      reason = Keyword.get(opts, :reason)
+      owners = if reason, do: package_owner_users(package), else: []
+
       {:ok, {releases, package}} =
         Repo.transaction(fn ->
           remove_package_db(package)
         end)
 
       run_package_removal_side_effects({releases, package})
+
+      if owners != [] do
+        Emails.package_removed(package, owners, reason)
+        |> Mailer.deliver!()
+      end
+
       :ok
     end
+  end
+
+  defp package_owner_users(package) do
+    package
+    |> Owners.all(user: [:emails, organization: [organization_users: [user: :emails]]])
+    |> Enum.map(& &1.user)
   end
 
   defp remove_package_db(package) do
