@@ -2,6 +2,7 @@ defmodule ObanChoreWeb.DashboardLiveTest do
   use ExUnit.Case, async: false
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
+  require Ecto.Query
 
   @endpoint ObanChore.TestEndpoint
 
@@ -278,6 +279,65 @@ defmodule ObanChoreWeb.DashboardLiveTest do
     end
   end
 
+  describe "history" do
+    test "lists the finished executions of the selected chore" do
+      completed = insert_job!(DashboardTestChore.new(%{username: "done_user"}), "completed")
+
+      discarded =
+        insert_job!(DashboardTestChore.new(%{username: "failed_user"}), "discarded",
+          errors: [
+            %{
+              "attempt" => 1,
+              "at" => DateTime.to_iso8601(DateTime.utc_now()),
+              "error" => "** (RuntimeError) boom\n    (my_app) lib/my_app.ex:1: MyApp.run/0"
+            }
+          ]
+        )
+
+      active = insert_job!(DashboardTestChore.new(%{username: "active_user"}), "available")
+      other = insert_job!(DashboardUniqueChore.new(%{username: "other_user"}), "completed")
+
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+      select_chore(view, DashboardTestChore)
+
+      html = view |> element("button[data-role=history-tab]") |> render_click()
+
+      assert has_element?(view, history_row(completed))
+      assert has_element?(view, history_row(discarded))
+      refute has_element?(view, history_row(active))
+      refute has_element?(view, history_row(other))
+
+      assert html =~ "done_user"
+      assert html =~ "** (RuntimeError) boom"
+      refute html =~ "MyApp.run/0"
+    end
+
+    test "shows an empty state when the chore has no finished executions" do
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+      select_chore(view, DashboardTestChore)
+
+      assert view |> element("button[data-role=history-tab]") |> render_click() =~
+               "No finished executions yet."
+    end
+
+    test "refreshes while open when the chore's jobs change" do
+      {:ok, view, _html} = live(build_conn(), "/ops/chores")
+      select_chore(view, DashboardTestChore)
+      view |> element("button[data-role=history-tab]") |> render_click()
+
+      job = insert_job!(DashboardTestChore.new(%{username: "late_user"}), "completed")
+      refute has_element?(view, history_row(job))
+
+      Phoenix.PubSub.broadcast(
+        ObanChore.EndpointPubSub,
+        "oban_chore:counts",
+        {:oban_chore_count, DashboardTestChore, 0}
+      )
+
+      assert has_element?(view, history_row(job))
+    end
+  end
+
   describe "auth" do
     test "filters chores by module whitelist" do
       conn = build_conn()
@@ -310,5 +370,30 @@ defmodule ObanChoreWeb.DashboardLiveTest do
       assert render_click(view, "select_chore", %{"module" => to_string(DashboardUniqueChore)}) =~
                "No chore selected"
     end
+  end
+
+  defp select_chore(view, chore) do
+    view
+    |> element("button[data-role=chore-select][data-chore-module=\"#{chore}\"]")
+    |> render_click()
+  end
+
+  defp history_row(job), do: ~s(tr[data-role="history-row"][data-job-id="#{job.id}"])
+
+  defp insert_job!(changeset, state, changes \\ []) do
+    {:ok, job} = Oban.insert(changeset)
+
+    timestamps =
+      case state do
+        "completed" -> [completed_at: DateTime.utc_now()]
+        "discarded" -> [discarded_at: DateTime.utc_now()]
+        _ -> []
+      end
+
+    Oban.Job
+    |> Ecto.Query.where(id: ^job.id)
+    |> ObanChore.TestRepo.update_all(set: [state: state] ++ timestamps ++ changes)
+
+    job
   end
 end

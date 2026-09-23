@@ -81,4 +81,31 @@ defmodule ObanChore.IntegrationTest do
     assert active_job.id == job.id
     assert active_job.state == :scheduled
   end
+
+  test "list_job_history/3 returns finished jobs newest first", %{oban_name: oban_name} do
+    {:ok, completed} = Oban.insert(oban_name, IntegrationTestChore.new(%{user_id: 1}))
+
+    {:ok, discarded} =
+      Oban.insert(oban_name, IntegrationTestChore.new(%{user_id: 999}, max_attempts: 1))
+
+    Oban.drain_queue(oban_name, queue: :default)
+
+    {:ok, cancelled} = Oban.insert(oban_name, IntegrationTestChore.new(%{user_id: 2}))
+    :ok = Oban.cancel_job(oban_name, cancelled)
+
+    {:ok, active} = Oban.insert(oban_name, IntegrationTestChore.new(%{user_id: 3}))
+
+    history = ObanChore.list_job_history(IntegrationTestChore, oban_name)
+
+    assert Enum.map(history, &{&1.id, &1.state}) == [
+             {cancelled.id, :cancelled},
+             {discarded.id, :discarded},
+             {completed.id, :completed}
+           ]
+
+    refute Enum.any?(history, &(&1.id == active.id))
+
+    assert [%{id: newest_id}] = ObanChore.list_job_history(IntegrationTestChore, oban_name, 1)
+    assert newest_id == cancelled.id
+  end
 end
