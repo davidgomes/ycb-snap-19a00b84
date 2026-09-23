@@ -308,6 +308,32 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
+    @doc """
+    Resolves a `:secret` option that selects the secret from the connection.
+
+    When `:secret` is a one argument function it is called with the connection
+    and its result replaces the function in the returned options. Any other
+    value, including an `{m, f, a}` tuple, is returned untouched and resolved
+    later by `Guardian.Config.resolve_value/1` as before.
+
+    Returning `nil` from the function does not fall back to the configured
+    `secret_key`; verification fails with `{:error, :secret_not_found}`.
+
+    ```elixir
+    plug Guardian.Plug.VerifyHeader, secret: &MyApp.Tenants.secret_for_conn/1
+    ```
+
+    Prefer a remote capture (`&Mod.fun/1`) over an anonymous function so the
+    option can be stored when plugs are initialized at compile time.
+    """
+    @spec resolve_secret(Plug.Conn.t(), Keyword.t()) :: Keyword.t()
+    def resolve_secret(conn, opts) do
+      case Keyword.fetch(opts, :secret) do
+        {:ok, fun} when is_function(fun, 1) -> Keyword.put(opts, :secret, fun.(conn))
+        _ -> opts
+      end
+    end
+
     @spec find_token_from_cookies(conn :: Plug.Conn.t(), Keyword.t()) :: {:ok, String.t()} | :no_token_found
     def find_token_from_cookies(conn, opts \\ []) do
       key =

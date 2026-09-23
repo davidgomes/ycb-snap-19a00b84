@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Enhancement
+
+* `Guardian.Plug.VerifyHeader`, `Guardian.Plug.VerifySession` and
+  `Guardian.Plug.VerifyCookie` accept a one argument function as the `:secret`
+  option. It is called with the connection once a token is found, so the
+  verifying secret can be selected per request (for example per tenant)
+  without wrapping the plug. `{m, f, a}` tuples keep their existing meaning and
+  are not called with the connection. See the "Runtime Secrets" guide and
+  `Guardian.Plug.resolve_secret/2`.
+
+### Breaking changes
+
+* The default `Guardian.Token.Jwt` secret fetcher no longer falls back to the
+  configured `secret_key` when `:secret` is explicitly `nil` (or resolves to
+  `nil`); it returns `{:error, :secret_not_found}` instead. Omitting `:secret`
+  still uses `secret_key`. Previously a per-request lookup that failed would
+  silently sign or verify with the application wide secret.
+* `Guardian.Token.Jwt.decode_token/3` returns `{:error, :secret_not_found}`
+  when no verifying secret is found instead of `{:error, :invalid_token}`.
+  Error handlers now receive `{:invalid_token, :secret_not_found}` in that
+  case.
+
 ## v2.4.1
 
 ### Security
