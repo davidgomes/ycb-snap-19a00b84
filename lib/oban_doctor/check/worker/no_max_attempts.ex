@@ -18,6 +18,10 @@ defmodule ObanDoctor.Check.Worker.NoMaxAttempts do
 
   Explicit reasonable limit:
       use Oban.Worker, queue: :default, max_attempts: 3
+
+  ## References
+
+    * [`Oban.Worker` defining workers](https://oban.hexdocs.pm/Oban.Worker.html#module-defining-workers)
   """
 
   use ObanDoctor.Check, category: :worker
