@@ -146,11 +146,13 @@ defmodule ObanChoreWeb.ChoreComponent do
             do: "Job already running with these arguments",
             else: "Successfully enqueued #{chore.name}"
 
-        {:noreply, put_flash(socket, :info, message)}
+        send(self(), {:oban_chore_flash, :info, message})
+        {:noreply, socket}
 
       {:error, _reason} ->
         Logger.error("Failed to enqueue #{chore.name} with args #{inspect(casted_args)}")
-        {:noreply, put_flash(socket, :error, "Failed to enqueue #{chore.name}")}
+        send(self(), {:oban_chore_flash, :error, "Failed to enqueue #{chore.name}"})
+        {:noreply, socket}
     end
   end
 
