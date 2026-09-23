@@ -1424,7 +1424,7 @@ export default class LiveSocket {
     window.addEventListener(
       "popstate",
       (event) => {
-        if (!this.registerNewLocation(window.location)) {
+        if (!this.isNewLocation(window.location)) {
           return;
         }
         const { type, backType, id, scroll, position } = event.state || {};
@@ -1433,6 +1433,25 @@ export default class LiveSocket {
         // Compare positions to determine direction
         const isForward = position > this.currentHistoryPosition;
         const navType = isForward ? type : backType || type;
+        const detail = {
+          href,
+          patch: navType === "patch",
+          pop: true,
+          direction: isForward ? "forward" : "backward",
+        };
+
+        if (!this.dispatchBeforeNavigate(detail)) {
+          // the location is not registered yet, so the popstate event
+          // triggered by restoring the history entry exits early above
+          if (isForward) {
+            history.back();
+          } else {
+            history.forward();
+          }
+          return;
+        }
+
+        this.registerNewLocation(window.location);
 
         // Update current position
         this.currentHistoryPosition = position || 0;
@@ -1441,14 +1460,7 @@ export default class LiveSocket {
           this.currentHistoryPosition.toString(),
         );
 
-        DOM.dispatchEvent(window, "phx:navigate", {
-          detail: {
-            href,
-            patch: navType === "patch",
-            pop: true,
-            direction: isForward ? "forward" : "backward",
-          },
-        });
+        DOM.dispatchEvent(window, "phx:navigate", { detail });
         this.requestDOMUpdate(() => {
           const callback = () => {
             this.maybeScroll(scroll);
@@ -1495,26 +1507,42 @@ export default class LiveSocket {
             `expected ${PHX_LINK_STATE} to be "replace" or "push", got: ${linkState}`,
           );
         }
+        if (type !== "patch" && type !== "redirect") {
+          throw new Error(
+            `expected ${PHX_LIVE_LINK} to be "patch" or "redirect", got: ${type}`,
+          );
+        }
         e.preventDefault();
         e.stopImmediatePropagation(); // do not bubble click to regular phx-click bindings
         if (this.pendingLink === href) {
           return;
         }
 
-        this.requestDOMUpdate(() => {
-          if (type === "patch") {
-            this.pushHistoryPatch(e, href, linkState, target);
-          } else if (type === "redirect") {
-            this.historyRedirect(e, href, linkState, null, target);
-          } else {
-            throw new Error(
-              `expected ${PHX_LIVE_LINK} to be "patch" or "redirect", got: ${type}`,
-            );
-          }
-          const phxClick = target.getAttribute(this.binding("click"));
+        const detail = {
+          href,
+          patch: type === "patch",
+          pop: false,
+          direction: "forward",
+        };
+        const phxClick = target.getAttribute(this.binding("click"));
+        const execPhxClick = () => {
           if (phxClick) {
             this.requestDOMUpdate(() => this.execJS(target, phxClick, "click"));
           }
+        };
+
+        if (!this.dispatchBeforeNavigate(detail)) {
+          execPhxClick();
+          return;
+        }
+
+        this.requestDOMUpdate(() => {
+          if (type === "patch") {
+            this.pushHistoryPatch(e, href, linkState, target);
+          } else {
+            this.historyRedirect(e, href, linkState, null, target);
+          }
+          execPhxClick();
         });
       },
       false,
@@ -1538,6 +1566,11 @@ export default class LiveSocket {
   /** @internal */
   dispatchEvents(events) {
     events.forEach(([event, payload]) => this.dispatchEvent(event, payload));
+  }
+
+  /** @internal */
+  dispatchBeforeNavigate(detail) {
+    return DOM.dispatchEvent(window, "phx:before-navigate", { detail });
   }
 
   /** @internal */
@@ -1660,13 +1693,18 @@ export default class LiveSocket {
 
   /** @internal */
   registerNewLocation(newLocation) {
-    const { pathname, search } = this.currentLocation;
-    if (pathname + search === newLocation.pathname + newLocation.search) {
+    if (!this.isNewLocation(newLocation)) {
       return false;
     } else {
       this.currentLocation = clone(newLocation);
       return true;
     }
+  }
+
+  /** @internal */
+  isNewLocation(newLocation) {
+    const { pathname, search } = this.currentLocation;
+    return pathname + search !== newLocation.pathname + newLocation.search;
   }
 
   /** @internal */
