@@ -163,6 +163,28 @@ defmodule Hexpm.Repository.ReleasesTest do
                unstable_fallback: true
              ) == Version.parse!("1.0.0-rc.2")
     end
+
+    test "orders by SemVer precedence within the repository", %{repository: repository} do
+      package = insert(:package, name: "semver_ordered")
+      insert(:release, package: package, version: "1.9.0")
+      insert(:release, package: package, version: "1.10.0")
+      insert(:release, package: package, version: "1.10.1-rc.9")
+      insert(:release, package: package, version: "1.10.1-rc.10")
+
+      private_package = insert(:package, repository_id: repository.id, name: package.name)
+      insert(:release, package: private_package, version: "3.0.0")
+
+      assert Releases.latest_version("hexpm", package.name, only_stable: true) ==
+               Version.parse!("1.10.0")
+
+      assert Releases.latest_version("hexpm", package.name, only_stable: false) ==
+               Version.parse!("1.10.1-rc.10")
+
+      assert Releases.latest_version(repository.name, package.name, only_stable: true) ==
+               Version.parse!("3.0.0")
+
+      assert Releases.latest_version("hexpm", "missing_package", only_stable: true) == nil
+    end
   end
 
   describe "publish/7" do

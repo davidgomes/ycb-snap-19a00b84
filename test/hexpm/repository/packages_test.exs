@@ -17,4 +17,23 @@ defmodule Hexpm.Repository.PackagesTest do
     assert "z_package" in names
     refute "private_package" in names
   end
+
+  test "attach_latest_releases/1 attaches the latest stable release or latest pre-release" do
+    stable = insert(:package)
+    insert(:release, package: stable, version: "1.9.0")
+    insert(:release, package: stable, version: "1.10.0")
+    insert(:release, package: stable, version: "2.0.0-rc.1")
+
+    prerelease = insert(:package)
+    insert(:release, package: prerelease, version: "0.1.0-rc.9")
+    insert(:release, package: prerelease, version: "0.1.0-rc.10")
+
+    unreleased = insert(:package)
+
+    assert [
+             %{latest_release: %{version: "1.10.0"}},
+             %{latest_release: %{version: "0.1.0-rc.10"}},
+             %{latest_release: nil}
+           ] = Packages.attach_latest_releases([stable, prerelease, unreleased])
+  end
 end

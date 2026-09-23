@@ -594,4 +594,46 @@ defmodule Hexpm.Repository.ReleaseTest do
              |> Hexpm.Repo.all()
              |> Release.latest_version(only_stable: true, with_docs: true)
   end
+
+  test "latest selects the release latest_version selects" do
+    stable_package = insert(:package)
+    prerelease_package = insert(:package)
+
+    for {version, has_docs} <- [
+          {"1.9.0", true},
+          {"1.10.0", false},
+          {"1.10.1-rc.9", true},
+          {"1.10.1-rc.10", false},
+          {"2.0.0-dev", false}
+        ] do
+      insert(:release, package: stable_package, version: version, has_docs: has_docs)
+    end
+
+    for {version, has_docs} <- [{"0.1.0-rc.9", true}, {"0.1.0-rc.10", false}] do
+      insert(:release, package: prerelease_package, version: version, has_docs: has_docs)
+    end
+
+    for package <- [stable_package, prerelease_package],
+        only_stable <- [true, false],
+        unstable_fallback <- [true, false],
+        with_docs <- [true, false] do
+      opts = [
+        only_stable: only_stable,
+        unstable_fallback: unstable_fallback,
+        with_docs: with_docs
+      ]
+
+      expected =
+        Release.all(package)
+        |> Hexpm.Repo.all()
+        |> Release.latest_version(opts)
+
+      latest =
+        Release.all(package)
+        |> Release.latest(opts)
+        |> Hexpm.Repo.one()
+
+      assert (latest && latest.id) == (expected && expected.id), inspect({package.name, opts})
+    end
+  end
 end
