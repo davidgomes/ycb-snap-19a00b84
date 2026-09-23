@@ -129,34 +129,11 @@ defmodule Phx.New.Generator do
             @new_project_rules_files["assets.md"],
           # generic usage rules
           "<!-- usage-rules-start -->",
-          [
-            "<!-- phoenix:elixir-start -->\n",
-            @rules_files["elixir.md"],
-            "\n<!-- phoenix:elixir-end -->"
-          ],
-          [
-            "<!-- phoenix:phoenix-start -->\n",
-            @rules_files["phoenix.md"],
-            "\n<!-- phoenix:phoenix-end -->"
-          ],
-          project.binding[:ecto] &&
-            [
-              "<!-- phoenix:ecto-start -->\n",
-              @rules_files["ecto.md"],
-              "\n<!-- phoenix:ecto-end -->"
-            ],
-          project.binding[:html] &&
-            [
-              "<!-- phoenix:html-start -->\n",
-              @rules_files["html.md"],
-              "\n<!-- phoenix:html-end -->"
-            ],
-          project.binding[:live] &&
-            [
-              "<!-- phoenix:liveview-start -->\n",
-              @rules_files["liveview.md"],
-              "\n<!-- phoenix:liveview-end -->"
-            ],
+          usage_rule("elixir"),
+          usage_rule("phoenix"),
+          project.binding[:ecto] && usage_rule("ecto"),
+          project.binding[:html] && usage_rule("html"),
+          project.binding[:live] && usage_rule("liveview"),
           "<!-- usage-rules-end -->\n"
         ]
         |> Enum.reject(fn part -> part == nil or part == false end)
@@ -164,6 +141,14 @@ defmodule Phx.New.Generator do
 
       File.write!(Path.join(project.project_path, "AGENTS.md"), content)
     end
+  end
+
+  defp usage_rule(name) do
+    [
+      "<!-- phoenix:#{name}-start -->\n",
+      Map.fetch!(@rules_files, "#{name}.md"),
+      "\n<!-- phoenix:#{name}-end -->"
+    ]
   end
 
   def config_inject(path, file, to_inject) do
