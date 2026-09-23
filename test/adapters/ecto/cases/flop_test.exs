@@ -17,6 +17,7 @@ defmodule Flop.Adapters.Ecto.FlopTest do
   alias Flop.Filter
   alias Flop.Meta
   alias Flop.Repo
+  alias MyApp.CustomFieldPet
   alias MyApp.Fruit
   alias MyApp.Owner
   alias MyApp.Pet
@@ -168,6 +169,87 @@ defmodule Flop.Adapters.Ecto.FlopTest do
                %Flop{order_by: [:pet_count], order_directions: [:desc]},
                for: Owner
              ) == Enum.reverse(expected)
+    end
+
+    test "orders by custom fields" do
+      pets = insert_list(20, :pet)
+      expected = pets |> Enum.map(&{&1.age, &1.id}) |> Enum.sort()
+      q = select(CustomFieldPet, [p], {p.age, p.id})
+
+      assert Flop.all(q, %Flop{order_by: [:human_age, :id]},
+               for: CustomFieldPet
+             ) ==
+               expected
+
+      assert Flop.all(
+               q,
+               %Flop{
+                 order_by: [:human_age, :id],
+                 order_directions: [:desc, :desc]
+               },
+               for: CustomFieldPet
+             ) == Enum.reverse(expected)
+    end
+
+    test "passes extra_opts to the field dynamic of custom fields" do
+      pets = insert_list(20, :pet)
+      expected = pets |> Enum.map(&{-&1.age, &1.id}) |> Enum.sort()
+
+      result =
+        CustomFieldPet
+        |> select([p], {p.age, p.id})
+        |> Flop.all(%Flop{order_by: [:scaled_age, :id]},
+          for: CustomFieldPet,
+          extra_opts: [factor: -1]
+        )
+        |> Enum.map(fn {age, id} -> {-age, id} end)
+
+      assert result == expected
+    end
+
+    test "custom field options take precedence over extra_opts" do
+      pets = insert_list(20, :pet)
+      expected = pets |> Enum.map(&{&1.age, &1.id}) |> Enum.sort()
+
+      assert CustomFieldPet
+             |> select([p], {p.age, p.id})
+             |> Flop.all(%Flop{order_by: [:human_age, :id]},
+               for: CustomFieldPet,
+               extra_opts: [factor: -1]
+             ) == expected
+    end
+
+    test "orders by custom fields that use named bindings" do
+      pets = insert_list(20, :pet_with_owner)
+      expected = pets |> Enum.map(&{-&1.owner.age, &1.id}) |> Enum.sort()
+      flop = %Flop{order_by: [:owner_age_desc, :id]}
+
+      assert Flop.named_bindings(flop, CustomFieldPet) == [:owner]
+
+      result =
+        CustomFieldPet
+        |> Flop.with_named_bindings(
+          flop,
+          fn q, :owner ->
+            join(q, :left, [p], o in assoc(p, :owner), as: :owner)
+          end,
+          for: CustomFieldPet
+        )
+        |> select([p, owner: o], {o.age, p.id})
+        |> Flop.all(flop, for: CustomFieldPet)
+        |> Enum.map(fn {age, id} -> {-age, id} end)
+
+      assert result == expected
+    end
+
+    test "raises if custom field without field_dynamic is used for ordering" do
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.all(Pet, %Flop{order_by: [:reverse_name]}, for: Pet)
+        end
+
+      assert error.message =~
+               "cannot order by custom field without field_dynamic"
     end
 
     test "warns if query passed to Flop already included ordering" do
@@ -1977,6 +2059,24 @@ defmodule Flop.Adapters.Ecto.FlopTest do
 
       assert error.message =~
                "cursor pagination is not supported for alias fields"
+    end
+
+    test "raises if custom field is used" do
+      insert_list(2, :pet)
+      flop = %Flop{first: 1, order_by: [:human_age, :id]}
+
+      assert {_, %Meta{end_cursor: end_cursor}} =
+               Flop.run(CustomFieldPet, flop, for: CustomFieldPet)
+
+      error =
+        assert_raise ArgumentError, fn ->
+          Flop.run(CustomFieldPet, %{flop | after: end_cursor},
+            for: CustomFieldPet
+          )
+        end
+
+      assert error.message =~
+               "cursor pagination is not supported for custom fields"
     end
 
     test "nil values for cursors are ignored when not using for option" do

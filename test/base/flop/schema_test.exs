@@ -388,7 +388,7 @@ defmodule Flop.SchemaTest do
              )
   end
 
-  test "raises error if custom field is added to sortable list" do
+  test "raises error if custom field without field_dynamic is sortable" do
     error =
       assert_raise ArgumentError, fn ->
         defmodule Parsley do
@@ -407,6 +407,54 @@ defmodule Flop.SchemaTest do
         end
       end
 
-    assert error.message =~ "cannot sort by custom field"
+    assert error.message =~
+             "cannot sort by custom fields without field_dynamic"
+
+    assert error.message =~ "[:inserted_at]"
+  end
+
+  test "allows sortable custom field with field_dynamic" do
+    defmodule Basil do
+      @derive {
+        Flop.Schema,
+        filterable: [],
+        sortable: [:inserted_at],
+        custom_fields: [
+          inserted_at: [
+            filter: {__MODULE__, :some_function, []},
+            field_dynamic: {__MODULE__, :some_dynamic, [some: :option]},
+            ecto_type: :utc_datetime
+          ]
+        ]
+      }
+      defstruct [:id, :inserted_at]
+    end
+
+    assert %Flop.FieldInfo{
+             extra: %{
+               type: :custom,
+               field_dynamic: {Basil, :some_dynamic, [some: :option]}
+             }
+           } = Schema.field_info(struct(Basil), :inserted_at)
+  end
+
+  test "raises error if field_dynamic is not a module/function/options tuple" do
+    assert_raise Flop.InvalidConfigError, fn ->
+      defmodule Oregano do
+        @derive {
+          Flop.Schema,
+          filterable: [],
+          sortable: [],
+          custom_fields: [
+            inserted_at: [
+              filter: {__MODULE__, :some_function, []},
+              field_dynamic: {__MODULE__, :some_dynamic},
+              ecto_type: :utc_datetime
+            ]
+          ]
+        }
+        defstruct [:id, :inserted_at]
+      end
+    end
   end
 end
