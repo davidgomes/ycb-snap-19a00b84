@@ -8,16 +8,23 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   Missing states means duplicate jobs could be enqueued when existing jobs are
   in the missing state.
 
+  The `:incomplete` named group is exactly those states. See
+  [Unique Jobs](https://hexdocs.pm/oban/unique_jobs.html) for Oban's state groups
+  (`:incomplete`, `:completed`, and `:all`).
+
   ## Examples
 
   Bad - only checks available state:
       unique: [fields: [:args], states: [:available]]
 
   Good - includes all non-final states:
+      unique: [fields: [:args], states: :incomplete]
       unique: [fields: [:args], states: [:available, :scheduled, :executing, :retryable]]
   """
 
   use ObanDoctor.Check, category: :worker
+
+  alias ObanDoctor.ObanStateGroups
 
   @recommended_states [:available, :scheduled, :executing, :retryable]
 
@@ -51,27 +58,18 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStates do
   defp missing_recommended_states?(%{unique: unique}) do
     states = Keyword.get(unique, :states, [])
 
-    # Don't flag if they're using :all group (that's caught by another check)
-    if uses_all_group?(states) do
+    # :all and :completed include terminal states and are reported by StateGroupUsage.
+    if ObanStateGroups.terminal_group?(states) do
       false
     else
-      state_list = normalize_states(states)
-      missing = @recommended_states -- state_list
+      missing = @recommended_states -- ObanStateGroups.expand(states)
       not Enum.empty?(missing)
     end
   end
 
-  defp uses_all_group?(:all), do: true
-  defp uses_all_group?([:all]), do: true
-  defp uses_all_group?(states) when is_list(states), do: :all in states
-  defp uses_all_group?(_), do: false
-
-  defp normalize_states(states) when is_list(states), do: states
-  defp normalize_states(_), do: []
-
   defp build_issue(worker) do
     states = Keyword.get(worker.unique, :states, [])
-    missing = @recommended_states -- normalize_states(states)
+    missing = @recommended_states -- ObanStateGroups.expand(states)
 
     Issue.new(
       check: __MODULE__,

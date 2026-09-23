@@ -90,6 +90,23 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       assert issues == []
     end
 
+    test "returns no issues when worker uses the :incomplete state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.IncompleteWorker,
+          file: "lib/my_app/workers/incomplete_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :incomplete],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      assert UniquenessMissingStates.run(context) == []
+    end
+
     test "does not flag workers using :all state group (handled by another check)" do
       workers = [
         %{
@@ -107,6 +124,23 @@ defmodule ObanDoctor.Check.Worker.UniquenessMissingStatesTest do
       issues = UniquenessMissingStates.run(context)
 
       assert issues == []
+    end
+
+    test "does not flag workers using the :completed state group (handled by another check)" do
+      workers = [
+        %{
+          module: MyApp.Workers.CompletedGroupWorker,
+          file: "lib/my_app/workers/completed_group_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: [:completed]],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      assert UniquenessMissingStates.run(context) == []
     end
 
     test "detects workers missing only some states" do

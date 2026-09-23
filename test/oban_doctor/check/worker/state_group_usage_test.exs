@@ -66,6 +66,45 @@ defmodule ObanDoctor.Check.Worker.StateGroupUsageTest do
       assert length(issues) == 1
     end
 
+    test "returns error when worker uses states: :completed" do
+      workers = [
+        %{
+          module: MyApp.Workers.CompletedGroupWorker,
+          file: "lib/my_app/workers/completed_group_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :completed],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      issues = StateGroupUsage.run(context)
+
+      assert length(issues) == 1
+      [issue] = issues
+      assert issue.message =~ ":completed state group"
+      assert issue.meta.state_groups == [:completed]
+    end
+
+    test "returns no issues when worker uses the :incomplete state group" do
+      workers = [
+        %{
+          module: MyApp.Workers.IncompleteWorker,
+          file: "lib/my_app/workers/incomplete_worker.ex",
+          line: 1,
+          queue: :default,
+          unique: [fields: [:args], states: :incomplete],
+          max_attempts: nil
+        }
+      ]
+
+      context = %{workers: workers}
+
+      assert StateGroupUsage.run(context) == []
+    end
+
     test "returns no issues when worker uses explicit states" do
       workers = [
         %{
