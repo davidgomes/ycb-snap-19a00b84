@@ -184,9 +184,35 @@ likely won't be missed when consuming incoming voice packets asynchronously.
 Note that the third element in the event is of type
 `t:Nostrum.Struct.VoiceWSState.t/0` and not `t:Nostrum.Struct.WSState.t/0`.
 
+## End-to-End Encryption
+
+Discord requires audio in voice channels to be end-to-end encrypted using its
+[DAVE protocol](https://daveprotocol.com). Nostrum handles this automatically:
+the bot takes part in the channel's key exchange over the voice websocket connection,
+outgoing opus frames are encrypted before being sent, and incoming frames are decrypted
+before they are returned by `Nostrum.Voice.listen/3` or dispatched as
+`t:Nostrum.Consumer.voice_incoming_packet/0` events.
+
+The protocol is implemented by the [`dave`](https://hex.pm/packages/dave) library, which
+provides bindings to the Rust crate [`davey`](https://github.com/Snazzah/davey).
+Precompiled binaries for most platforms are downloaded automatically when compiling.
+To instead build it from source with your installed Rust toolchain, add `rustler` to
+your dependencies and set the `FORCE_DAVE_BUILD` environment variable when compiling.
+
+```elixir
+{:rustler, "~> 0.37", optional: true, runtime: false}
+```
+
+The key exchange completes shortly after joining a channel. Audio sent before then
+cannot be end-to-end encrypted and may be discarded by other users' clients. Likewise,
+incoming packets that cannot be decrypted, such as those received before the sender's
+speaking event, are discarded.
+
 ## Encryption Modes
 
 Nostrum supports all of Discord's available encryption modes for voice channels.
+These modes apply to the transport encryption between the bot and Discord's voice servers,
+which is used in addition to end-to-end encryption.
 The encryption mode is invisible to the user, and you will likely never need to touch it.
 
 Different encryption modes may have different performance characteristics depending on the
