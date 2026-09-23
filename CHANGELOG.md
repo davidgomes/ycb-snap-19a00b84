@@ -1,3 +1,9 @@
+## Unreleased
+
+### New Features ✨
+
+- Support for `log_byte` and `trace_metric_byte` data categories (#1134)
+
 ## 13.3.0
 
 ### New Features ✨
