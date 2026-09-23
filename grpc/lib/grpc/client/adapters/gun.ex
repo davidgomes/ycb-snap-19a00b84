@@ -16,6 +16,8 @@ if Code.ensure_loaded?(:gun) do
 
     @behaviour GRPC.Client.Adapter
 
+    alias GRPC.Client.Adapters.Gun.ConnectionProcess
+
     @default_tcp_opts [nodelay: true]
     @max_retries 100
 
@@ -72,19 +74,9 @@ if Code.ensure_loaded?(:gun) do
     defp do_connect(%{host: host, port: port} = channel, open_opts) do
       open_opts = Map.merge(%{retry: @max_retries, retry_fun: &__MODULE__.retry_fun/2}, open_opts)
 
-      {:ok, conn_pid} = open(host, port, open_opts)
-
-      case :gun.await_up(conn_pid) do
-        {:ok, :http2} ->
-          {:ok, Map.put(channel, :adapter_payload, %{conn_pid: conn_pid})}
-
-        {:ok, proto} ->
-          :gun.shutdown(conn_pid)
-          {:error, "Error when opening connection: protocol #{proto} is not http2"}
-
-        {:error, reason} ->
-          :gun.shutdown(conn_pid)
-          {:error, reason}
+      with {:ok, owner_pid} <- ConnectionProcess.start(host, port, open_opts),
+           {:ok, conn_pid} <- ConnectionProcess.await_up(owner_pid) do
+        {:ok, Map.put(channel, :adapter_payload, %{conn_pid: conn_pid})}
       end
     end
 
@@ -98,12 +90,6 @@ if Code.ensure_loaded?(:gun) do
     def disconnect(%{adapter_payload: %{conn_pid: nil}} = channel) do
       {:ok, channel}
     end
-
-    defp open({:local, socket_path}, _port, open_opts),
-      do: :gun.open_unix(socket_path, open_opts)
-
-    defp open(host, port, open_opts),
-      do: :gun.open(parse_address(host), port, open_opts)
 
     @impl true
     def send_request(stream, message, opts) do
@@ -502,15 +488,6 @@ if Code.ensure_loaded?(:gun) do
           })
 
         {:error, rpc_error}
-      end
-    end
-
-    defp parse_address(host) do
-      host = String.to_charlist(host)
-
-      case :inet.parse_address(host) do
-        {:ok, address} -> address
-        {:error, _} -> host
       end
     end
 
