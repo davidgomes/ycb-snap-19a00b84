@@ -5,6 +5,13 @@
     * added support for authorization LiveView
     * added `:error_handler` and ErrorHandler behaviour
     * aded  `:required` option
+    * `Canary.Plugs` and `Canary.Hooks` share the same API and options
+
+  * Breaking changes
+    * `:required` now defaults to `true` for both plugs and hooks
+
+  * Deprecations
+    * `:persisted` and `:non_id_actions` options are deprecated and will be removed in Canary 2.1.0, see `docs/upgrade.md`
 
   * Dependency changes
     * Elixir ~> 1.14 is now required

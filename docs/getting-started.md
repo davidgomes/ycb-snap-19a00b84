@@ -24,7 +24,7 @@ Action can be limited by using `:only` or `:except` options, otherwise it will b
 ### Resource
 For `load_resource` and `load_and_authorize_resource` functions it checks if the resource is already assigned, if not then it fetches it from the repo using `:id_name` form `params` (default `"id"`) and `:id_field` in struct (default `:id`).
 
-If the `:required` is set, then it will handle error when resource is not loaded.
+By default `:required` is `true`, so it will handle error when resource is not loaded. Set `required: false` to make the resource optional.
 
 It also supports `:preload` preloading association(s). Please refer to `Ecto.Query.preload/3` for additional informations about preloading associations.
 
@@ -144,8 +144,8 @@ Canary Plugs and Hooks uses the same configuration options.
 | `:as` | Specifies the resource_name key in assigns | `:team_post` |
 | `:id_name` | Specifies the name of the id in params, defaults to "id" | `:post_id` |
 | `:id_field` | Specifies the name of the ID field in the database for searching :id_name value, defaults to "id". | `:post_id` |
-| `:required` | Specifies if the resource is required, when it's not found it will handle not found error, default to false | true |
-| `:persisted` | Specifies the resource should always be loaded from the database, defaults to false **Available only in Canary.Plugs** | true |
+| `:required` | Specifies if the resource is required, when it's not found it will handle not found error, defaults to true | false |
+| `:persisted` | **Deprecated**, use `:required` instead. Specifies the resource should always be loaded from the database, defaults to false **Available only in Canary.Plugs** | true |
 | `:not_found_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_not_found}` |
 | `:unauthorized_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_unauthorized}` |
 
@@ -179,7 +179,8 @@ Canary Plugs and Hooks uses the same configuration options.
     on: [:handle_params, :handle_event],
     current_user: :current_member,
     model: Machine,
-    only: [:index, :new]
+    only: [:index, :new],
+    required: false
 
   mount_canary :load_and_authorize_resource,
     on: [:handle_event],
@@ -228,7 +229,7 @@ plug :load_resource,
 
 The `load_resource` function will try to fetch the "uuid" from `params`, then will try to get `Event` from `repo` by `:uuid` field, and then it will be assigned to the `assigns.public_event`.
 
-The `assigns.public_event` might be set to `nil` if there is no matchin `Event`. If you want to call the `not_found_handler` then you need to set the `:required` flag.
+The `assigns.public_event` might be set to `nil` if there is no matchin `Event`. The `not_found_handler` is called in that case, unless `required: false` is set.
 
 You can check all available [Canary options](getting-started.md#canary-options)
 
@@ -242,13 +243,16 @@ It combines two other functions - `load_resource` and `authorize_resource`.
 
 ## Non-id actions
 
-For the non-id actions where there is no resource to be loaded please use `:authorize_resource` and limit other functions `:load_resource` or `:load_and_authorize_resource` to skip those actions. By default `:required` option is set to false, so when resouce cannot be get from repo the model module name will be used as resource for the call to `Canada.can?`.
+For the non-id actions where there is no resource to be loaded please use `:authorize_resource` and limit other functions `:load_resource` or `:load_and_authorize_resource` to skip those actions. Set the `:required` option to `false`, so when resource cannot be get from repo the model module name will be used as resource for the call to `Canada.can?`.
 
 ```elixir
 plug :authorize_resource,
   model: Post,
-  only: [:index, :new, :create]
+  only: [:index, :new, :create],
+  required: false
 ```
+
+Check the [upgrade guide](upgrade.md) for migrating from the deprecated `:non_id_actions` option.
 
 In terms of loading resources for the `:index` which should get all reources from the db. Currently it's supported only in the plug based functions.
 By default, when the action is `:index`, all records from the specified model will be loaded. This can be overridden to fetch a single record from the database by using the `:persisted` key.
@@ -276,7 +280,8 @@ plug :load_and_authorize_resource,
 # child
 plug :authorize_resouce,
   model: Comment,
-  only: [:create_comment, :save_comment]
+  only: [:create_comment, :save_comment],
+  required: false
 ```
 
 to load and authorize the parent `Post` resource using the `post_id` in `/posts/:post_id/comments` before you create the `Comment` resource using its parent.
