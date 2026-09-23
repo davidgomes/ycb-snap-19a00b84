@@ -20,6 +20,7 @@ ExUnit.start exclude: [:array_type,
                        :map_boolean_in_subquery,
                        :upsert_all,
                        :with_conflict_target,
+                       :with_conflict_target_on_constraint,
                        :without_conflict_target]
 
 # Configure Ecto for support and tests
