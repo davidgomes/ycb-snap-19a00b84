@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed various typos
 - Fixed README badges
+- Graded cell source no longer includes the string representation of the cell's code
 
 ## [0.8.0] - 2022-09-01
 
