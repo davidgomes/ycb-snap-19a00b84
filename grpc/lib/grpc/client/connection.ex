@@ -184,7 +184,8 @@ defmodule GRPC.Client.Connection do
         ch = initial_state.virtual_channel
 
         case DynamicSupervisor.start_child(GRPC.Client.Supervisor, child_spec(initial_state)) do
-          {:ok, _pid} ->
+          {:ok, pid} ->
+            transfer_ownership(initial_state, pid)
             {:ok, ch}
 
           {:error, {:already_started, _pid}} ->
@@ -514,6 +515,17 @@ defmodule GRPC.Client.Connection do
 
   defp via(ref) do
     {:via, Registry, {GRPC.Client.Registry, {__MODULE__, ref}}}
+  end
+
+  defp transfer_ownership(%__MODULE__{adapter: adapter, real_channels: channels}, pid) do
+    if function_exported?(adapter, :set_owner, 2) do
+      Enum.each(channels, fn
+        {_key, {:connected, ch}} -> adapter.set_owner(ch, pid)
+        _ -> :ok
+      end)
+    end
+
+    :ok
   end
 
   defp do_disconnect(adapter, channel) do

@@ -83,6 +83,29 @@ defmodule GRPC.Integration.StubTest do
     end)
   end
 
+  test "named channel keeps working after the process that connected it exits" do
+    run_server(HelloServer, fn port ->
+      {:ok, channel} =
+        Task.async(fn ->
+          GRPC.Client.Connection.connect("localhost:#{port}", name: :orphaned_channel)
+        end)
+        |> Task.await()
+
+      %{adapter_payload: %{conn_pid: conn_pid}} = channel
+      monitor_ref = Process.monitor(conn_pid)
+      refute_receive {:DOWN, ^monitor_ref, :process, _, _}, 200
+
+      req = %Helloworld.HelloRequest{name: "GRPC user!"}
+
+      {:ok, reply} =
+        %GRPC.Channel{ref: :orphaned_channel} |> Helloworld.Greeter.Stub.say_hello(req)
+
+      assert reply.message == "Hello, GRPC user!"
+
+      GRPC.Client.Connection.disconnect(channel)
+    end)
+  end
+
   test "invalid channel function clause error" do
     req = %Helloworld.HelloRequest{name: "GRPC"}
 

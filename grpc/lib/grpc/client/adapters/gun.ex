@@ -99,6 +99,16 @@ if Code.ensure_loaded?(:gun) do
       {:ok, channel}
     end
 
+    @doc false
+    # Gun stops a connection when its owner exits, so the process that opened it
+    # must hand it over to the long-lived process managing the channel.
+    def set_owner(%{adapter_payload: %{conn_pid: gun_pid}}, new_owner)
+        when is_pid(gun_pid) and is_pid(new_owner) do
+      :gun.set_owner(gun_pid, new_owner)
+    end
+
+    def set_owner(_channel, _new_owner), do: :ok
+
     defp open({:local, socket_path}, _port, open_opts),
       do: :gun.open_unix(socket_path, open_opts)
 
