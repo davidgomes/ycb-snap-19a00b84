@@ -78,14 +78,14 @@ defmodule Ocelot.Router do
     if state in Jobs.states(), do: state
   end
 
-  defp parse_page(nil), do: 1
-
-  defp parse_page(page) do
+  defp parse_page(page) when is_binary(page) do
     case Integer.parse(page) do
       {page, ""} when page > 0 -> page
       _ -> 1
     end
   end
+
+  defp parse_page(_page), do: 1
 
   defp render_not_found(conn, message) do
     render(conn, 404, :not_found, title: "Not found", message: message)
