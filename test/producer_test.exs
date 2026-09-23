@@ -43,7 +43,26 @@ defmodule BroadwayKafka.ProducerTest do
     defrecord :kafka_message, extract(:kafka_message, from_lib: "brod/include/brod.hrl")
 
     @impl true
-    def init(opts), do: {:ok, Map.new(opts)}
+    def init(opts) do
+      config = Map.new(opts)
+
+      if config[:shared_client] do
+        shared_client_id = Module.concat(opts[:broadway][:name], SharedClient)
+        {:ok, Map.put(config, :shared_client_id, shared_client_id)}
+      else
+        {:ok, config}
+      end
+    end
+
+    @impl true
+    def shared_client_child_spec(config) do
+      [
+        %{
+          id: config.shared_client_id,
+          start: {Agent, :start_link, [fn -> true end, [name: config.shared_client_id]]}
+        }
+      ]
+    end
 
     @impl true
     def setup(_stage_pid, client_id, _callback_module, config) do
@@ -578,6 +597,37 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
+  test "producers share a single client when :shared_client is true" do
+    {:ok, message_server} = MessageServer.start_link()
+
+    {:ok, pid} = start_broadway(message_server, producers_concurrency: 2, shared_client: true)
+
+    {_, broadway_name} = Process.info(pid, :registered_name)
+    shared_client_id = Module.concat(broadway_name, SharedClient)
+
+    assert_receive {:setup, ^shared_client_id}
+    assert_receive {:setup, ^shared_client_id}
+    refute_receive {:setup, _}
+
+    shared_client_pid = Process.whereis(shared_client_id)
+    assert is_pid(shared_client_pid)
+    ref = Process.monitor(shared_client_pid)
+
+    stop_broadway(pid)
+    assert_receive {:DOWN, ^ref, _, _, _}
+  end
+
+  test "each producer has its own client by default" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, producers_concurrency: 2)
+
+    assert_receive {:setup, client_id_1}
+    assert_receive {:setup, client_id_2}
+    assert client_id_1 != client_id_2
+
+    stop_broadway(pid)
+  end
+
   test "keep the producer alive on ack errors and log the exception" do
     {:ok, message_server} = MessageServer.start_link()
     {:ok, pid} = start_broadway(message_server, ack_raises_on_offset: 4)
@@ -605,6 +655,7 @@ defmodule BroadwayKafka.ProducerTest do
     processors_concurrency = Keyword.get(opts, :processors_concurrency, 1)
     batchers_concurrency = Keyword.get(opts, :batchers_concurrency)
     ack_raises_on_offset = Keyword.get(opts, :ack_raises_on_offset, nil)
+    shared_client = Keyword.get(opts, :shared_client, false)
 
     batchers =
       if batchers_concurrency do
@@ -630,7 +681,8 @@ defmodule BroadwayKafka.ProducerTest do
                max_bytes: 10,
                offset_commit_on_ack: false,
                begin_offset: :assigned,
-               ack_raises_on_offset: ack_raises_on_offset
+               ack_raises_on_offset: ack_raises_on_offset,
+               shared_client: shared_client
              ]},
           concurrency: producers_concurrency
         ],

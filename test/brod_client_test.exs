@@ -139,6 +139,47 @@ defmodule BroadwayKafka.BrodClientTest do
       assert {:ok, %{begin_offset: :reset}} = BrodClient.init(opts)
     end
 
+    test ":shared_client is a boolean with default value false" do
+      assert {:ok, %{shared_client: false, shared_client_id: nil}} = BrodClient.init(@opts)
+
+      opts = Keyword.put(@opts, :shared_client, :an_atom)
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :shared_client to be a boolean, got: :an_atom"}
+
+      opts =
+        @opts
+        |> Keyword.put(:shared_client, true)
+        |> Keyword.put(:broadway, name: MyBroadway)
+
+      assert {:ok, %{shared_client: true, shared_client_id: MyBroadway.SharedClient}} =
+               BrodClient.init(opts)
+
+      opts = put_in(opts, [:client_config, :client_id_prefix], "prefix - ")
+
+      assert {:ok, %{shared_client_id: :"prefix - Elixir.MyBroadway.SharedClient"}} =
+               BrodClient.init(opts)
+    end
+
+    test "shared_client_child_spec/1 returns the client child spec only when shared" do
+      {:ok, config} = BrodClient.init(@opts)
+      assert BrodClient.shared_client_child_spec(config) == []
+
+      opts =
+        @opts
+        |> Keyword.put(:shared_client, true)
+        |> Keyword.put(:broadway, name: MyBroadway)
+
+      {:ok, config} = BrodClient.init(opts)
+
+      assert [
+               %{
+                 id: MyBroadway.SharedClient,
+                 start: {:brod, :start_link_client, [[host: 9092], MyBroadway.SharedClient, []]}
+               }
+             ] = BrodClient.shared_client_child_spec(config)
+    end
+
     test ":offset_commit_interval_seconds is an optional non-negative integer" do
       opts = put_in(@opts, [:group_config, :offset_commit_interval_seconds], :an_atom)
 
