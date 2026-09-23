@@ -23,7 +23,7 @@ defmodule ObanEvents.Handler do
         end
 
         # Ignore other events
-        def handle_event(_event, _data), do: :ok
+        def handle_event(_event_name, _event), do: :ok
       end
 
   ## Return Values
