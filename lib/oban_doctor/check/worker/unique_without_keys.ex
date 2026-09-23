@@ -8,6 +8,8 @@ defmodule ObanDoctor.Check.Worker.UniqueWithoutKeys do
   1. Args contain dynamic fields (timestamps, UUIDs) that should be ignored
   2. You want uniqueness based on only specific business identifiers
 
+  See [Oban unique jobs](https://hexdocs.pm/oban/unique_jobs.html).
+
   ## Examples
 
   Potentially problematic:
