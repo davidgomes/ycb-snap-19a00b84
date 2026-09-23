@@ -1,6 +1,8 @@
 defmodule NewsletterWeb.SubscriberController do
   use NewsletterWeb, :controller
 
+  alias Newsletter.Emails
+  alias Newsletter.Mailer
   alias Newsletter.Subscribers
   alias Newsletter.Subscribers.Subscriber
 
@@ -17,6 +19,10 @@ defmodule NewsletterWeb.SubscriberController do
   def create(conn, %{"subscriber" => subscriber_params}) do
     case Subscribers.create_subscriber(subscriber_params) do
       {:ok, subscriber} ->
+        subscriber
+        |> Emails.welcome()
+        |> Mailer.deliver()
+
         conn
         |> put_flash(:info, "Subscriber created successfully.")
         |> redirect(to: Routes.subscriber_path(conn, :show, subscriber))
