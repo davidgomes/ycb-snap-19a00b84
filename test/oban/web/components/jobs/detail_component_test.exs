@@ -10,6 +10,9 @@ defmodule Oban.Web.Jobs.DetailComponentTest do
 
     @impl Oban.Web.Resolver
     def format_job_args(_job), do: "ARGS REDACTED"
+
+    @impl Oban.Web.Resolver
+    def format_signal(_signal, _job), do: "SIGNAL REDACTED"
   end
 
   setup do
@@ -63,6 +66,66 @@ defmodule Oban.Web.Jobs.DetailComponentTest do
     html = render_component(Component, assigns(job, resolver: CustomResolver), router: Router)
 
     assert html =~ "ARGS REDACTED"
+  end
+
+  describe "signals" do
+    test "omitting the signal section without any signal meta" do
+      job = %Oban.Job{id: 1, worker: "MyApp.Worker", args: %{}}
+
+      html = render_component(Component, assigns(job), router: Router)
+
+      refute html =~ "icon-signal"
+      refute html =~ ~s(id="job-signal")
+    end
+
+    test "displaying the awaiting state with a deadline" do
+      wait_until = System.system_time(:millisecond) + :timer.minutes(30)
+      job = %Oban.Job{id: 1, worker: "MyApp.Worker", args: %{}, meta: %{"wait_until" => wait_until}}
+
+      html = render_component(Component, assigns(job), router: Router)
+
+      assert html =~ "icon-signal"
+      assert html =~ "Awaiting Signal"
+      assert html =~ "Deadline in"
+      refute html =~ ~s(id="copy-signal")
+    end
+
+    test "displaying the awaiting state without a deadline" do
+      job = %Oban.Job{id: 1, worker: "MyApp.Worker", args: %{}, meta: %{"wait_until" => "infinity"}}
+
+      html = render_component(Component, assigns(job), router: Router)
+
+      assert html =~ "Awaiting Signal"
+      assert html =~ "Waiting indefinitely"
+    end
+
+    test "displaying a decoded payload once a signal is received" do
+      signal = encode_signal(%{decision: "approved"})
+      job = %Oban.Job{id: 1, worker: "MyApp.Worker", args: %{}, meta: %{"signal" => signal}}
+
+      html = render_component(Component, assigns(job), router: Router)
+
+      assert html =~ "icon-signal"
+      assert html =~ "Received Signal"
+      assert html =~ "decision: &quot;approved&quot;"
+      assert html =~ ~s(id="copy-signal")
+      refute html =~ signal
+    end
+
+    test "customizing signal formatting with a resolver" do
+      signal = encode_signal(%{decision: "approved"})
+      job = %Oban.Job{id: 1, worker: "MyApp.Worker", args: %{}, meta: %{"signal" => signal}}
+
+      html = render_component(Component, assigns(job, resolver: CustomResolver), router: Router)
+
+      assert html =~ "SIGNAL REDACTED"
+    end
+  end
+
+  defp encode_signal(term) do
+    term
+    |> :erlang.term_to_binary()
+    |> Base.encode64(padding: false)
   end
 
   defp assigns(job, opts \\ []) do

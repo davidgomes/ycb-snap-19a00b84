@@ -64,6 +64,7 @@ defmodule Oban.Web.Jobs.DetailComponent do
           <Core.status_badge :if={@job.meta["chunk"]} icon="user_group" label="Chunk" />
           <Core.status_badge :if={@job.meta["chain"]} icon="link" label="Chain" />
           <Core.status_badge :if={@job.meta["recorded"]} icon="camera" label="Recorded" />
+          <Core.status_badge :if={signal_state(@job)} icon="signal" label="Signal" />
           <Core.status_badge :if={@job.meta["encrypted"]} icon="lock_closed" label="Encrypted" />
           <Core.status_badge :if={@job.meta["structured"]} icon="table_cells" label="Structured" />
           <Core.status_badge :if={@job.meta["decorated"]} icon="sparkles" label="Decorated" />
@@ -701,6 +702,31 @@ defmodule Oban.Web.Jobs.DetailComponent do
             <pre class="font-mono text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-all">{format_recorded(@job, @resolver)}</pre>
           </div>
         </div>
+
+        <div :if={signal_state(@job)} id="job-signal" class="mt-4">
+          <div class="relative bg-gray-50 dark:bg-gray-800 rounded-md p-4">
+            <div class="flex justify-between items-start mb-2">
+              <div class="flex items-center space-x-2">
+                <h4 class="font-medium text-xs uppercase text-gray-500 dark:text-gray-400">
+                  {if signal_state(@job) == :received, do: "Received Signal", else: "Awaiting Signal"}
+                </h4>
+                <.pro_badge id="signal-pro-badge" tooltip="Signal for Oban.Pro.Worker.await_signal/1" />
+              </div>
+              <button
+                :if={signal_state(@job) == :received}
+                type="button"
+                id="copy-signal"
+                class="w-9 h-9 -mr-2 -mt-2 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-white dark:hover:bg-gray-700 cursor-pointer"
+                data-title="Copy to clipboard"
+                phx-hook="Tippy"
+                phx-click={copy_to_clipboard(format_signal(@job, @resolver))}
+              >
+                <Icons.icon name="icon-clipboard" class="w-4 h-4" />
+              </button>
+            </div>
+            <pre class="font-mono text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-all">{format_signal(@job, @resolver)}</pre>
+          </div>
+        </div>
       </div>
     </div>
     """
@@ -805,14 +831,10 @@ defmodule Oban.Web.Jobs.DetailComponent do
   end
 
   defp format_meta(%{meta: meta} = job, resolver) do
-    job =
-      if meta["recorded"] do
-        %{job | meta: Map.delete(meta, "return")}
-      else
-        job
-      end
+    meta = if meta["recorded"], do: Map.delete(meta, "return"), else: meta
+    meta = Map.delete(meta, "signal")
 
-    Resolver.call_with_fallback(resolver, :format_job_meta, [job])
+    Resolver.call_with_fallback(resolver, :format_job_meta, [%{job | meta: meta}])
   end
 
   defp format_recorded(%{meta: meta} = job, resolver) do
@@ -827,6 +849,31 @@ defmodule Oban.Web.Jobs.DetailComponent do
         "Recording Not Enabled"
     end
   end
+
+  defp signal_state(%{meta: %{"signal" => _}}), do: :received
+  defp signal_state(%{meta: %{"wait_until" => _}}), do: :awaiting
+  defp signal_state(_job), do: nil
+
+  defp format_signal(%{meta: %{"signal" => signal}} = job, resolver) do
+    Resolver.call_with_fallback(resolver, :format_signal, [signal, job])
+  end
+
+  defp format_signal(%{meta: %{"wait_until" => "infinity"}}, _resolver) do
+    "Waiting indefinitely"
+  end
+
+  defp format_signal(%{meta: %{"wait_until" => wait_until}}, _resolver)
+       when is_integer(wait_until) do
+    deadline =
+      wait_until
+      |> DateTime.from_unix!(:millisecond)
+      |> DateTime.to_naive()
+      |> NaiveDateTime.truncate(:second)
+
+    "Deadline #{Timing.datetime_to_words(deadline)} (#{deadline})"
+  end
+
+  defp format_signal(_job, _resolver), do: "Waiting"
 
   defp error_entry(assigns) do
     error =
