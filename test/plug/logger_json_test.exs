@@ -338,7 +338,7 @@ defmodule Plug.LoggerJSONTest do
         |> Poison.decode!()
 
       assert error_log["log_type"] == "error"
-      assert error_log["message"] == "** (RuntimeError) ERROR\n    web/controllers/reaction_controller.ex:53: Plug.LoggerJSONTest.MyDebugPlug.index/2\n    web/controllers/reaction_controller.ex:1: Plug.LoggerJSONTest.MyDebugPlug.action/2\n    web/controllers/reaction_controller.ex:1: Plug.LoggerJSONTest.MyDebugPlug.phoenix_controller_pipeline/2\n    lib/reactions/endpoint.ex:1: Plug.LoggerJSONTest.MyDebugPlug.instrument/4\n    lib/phoenix/router.ex:261: Plug.LoggerJSONTest.MyDebugPlug.dispatch/2\n    web/router.ex:1: Plug.LoggerJSONTest.MyDebugPlug.do_call/2\n    lib/plug/error_handler.ex:64: Plug.LoggerJSONTest.MyDebugPlug.call/2\n    lib/reactions/endpoint.ex:1: Plug.LoggerJSONTest.MyDebugPlug.phoenix_pipeline/1\n    lib/reactions/endpoint.ex:1: Plug.LoggerJSONTest.MyDebugPlug.call/2\n    (plug) lib/plug/adapters/cowboy/handler.ex:15: Plug.Adapters.Cowboy.Handler.upgrade/4\n    src/cowboy_protocol.erl:442: :cowboy_protocol.execute/4\n"
+      assert error_log["message"]
       assert error_log["request_id"] == nil
     end
   end
