@@ -212,7 +212,7 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
   end
 
   defp docker_instructions(image, env) do
-    envs = Enum.map_join(env, "\n", fn {key, value} -> ~s/  -e #{key}="#{value}" \\/ end)
+    envs = Enum.map_join(env, "\n", fn {key, value} -> ~s/  -e #{key}="#{shell_escape(value)}" \\/ end)
 
     """
     docker run -p 8080:8080 -p 8081:8081 --pull always \\
@@ -222,7 +222,7 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
   end
 
   defp fly_instructions(image, env, hub_name, deployment_group_name) do
-    envs = Enum.map_join(env, " \\\n", fn {key, value} -> ~s/  #{key}="#{value}"/ end)
+    envs = Enum.map_join(env, " \\\n", fn {key, value} -> ~s/  #{key}="#{shell_escape(value)}"/ end)
 
     example_dir =
       "lb-server-#{hub_name}-#{deployment_group_name}"
@@ -353,6 +353,16 @@ defmodule LivebookWeb.Hub.Teams.DeploymentGroupAgentComponent do
     """,
     [:image, :envs, :secrets, :replicas, :dg_suffix]
   )
+
+  # Values are interpolated into double-quoted shell strings.
+  defp shell_escape(value) do
+    value
+    |> to_string()
+    |> String.replace("\\", "\\\\")
+    |> String.replace("\"", "\\\"")
+    |> String.replace("$", "\\$")
+    |> String.replace("`", "\\`")
+  end
 
   def sanitize_for_node_name(string) do
     sanitized =
