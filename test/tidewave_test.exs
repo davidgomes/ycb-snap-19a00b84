@@ -174,6 +174,18 @@ defmodule TidewaveTest do
 
       assert conn.status == 404
     end
+
+    test "returns a JSON-RPC parse error for an invalid message" do
+      conn =
+        conn(:post, "/tidewave/mcp", Jason.encode!(%{"invalid" => "message"}))
+        |> put_req_header("content-type", "application/json")
+        |> Tidewave.call(Tidewave.init([]))
+
+      assert conn.status == 200
+      response_body = Jason.decode!(conn.resp_body)
+      assert response_body["error"]["code"] == -32600
+      assert response_body["error"]["message"] == "Could not parse message"
+    end
   end
 
   describe "/config" do
