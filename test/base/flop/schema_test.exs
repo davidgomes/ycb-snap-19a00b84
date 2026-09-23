@@ -451,9 +451,10 @@ defmodule Flop.SchemaTest do
       defstruct [:id, :inserted_at]
     end
 
-    assert Schema.sortable(%Thyme{}) == [:inserted_at]
+    thyme = struct(Thyme)
+    assert Schema.sortable(thyme) == [:inserted_at]
 
-    assert Schema.field_info(%Thyme{}, :inserted_at) == %Flop.FieldInfo{
+    assert Schema.field_info(thyme, :inserted_at) == %Flop.FieldInfo{
              ecto_type: :utc_datetime,
              extra: %{
                type: :custom,

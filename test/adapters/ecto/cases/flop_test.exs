@@ -184,10 +184,13 @@ defmodule Flop.Adapters.Ecto.FlopTest do
       assert Flop.all(q, %Flop{order_by: [:age_distance, :id]}, opts) ==
                expected
 
-      for directions <- [[:desc, :desc], [:desc_nulls_last, :desc]] do
+      for directions <- [[:desc, :desc], [:desc_nulls_first, :desc]] do
         assert Flop.all(
                  q,
-                 %Flop{order_by: [:age_distance, :id], order_directions: directions},
+                 %Flop{
+                   order_by: [:age_distance, :id],
+                   order_directions: directions
+                 },
                  opts
                ) == Enum.reverse(expected)
       end
