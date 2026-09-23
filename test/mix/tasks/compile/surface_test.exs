@@ -1,6 +1,5 @@
 defmodule Mix.Tasks.Compile.SurfaceTest do
   use ExUnit.Case, async: false
-  import ExUnit.CaptureIO
 
   import Mix.Tasks.Compile.Surface
   import ExUnit.CaptureIO
