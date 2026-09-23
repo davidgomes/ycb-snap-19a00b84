@@ -23,6 +23,11 @@ defmodule ObanChore.Test.MockRepo do
   def exists?(query), do: respond(:exists?, query, false)
   def all(query), do: respond(:all, query, [])
 
+  # Oban verifies the migrated schema version when it starts in a testing mode.
+  def query(_sql, _params, _opts) do
+    {:ok, %{rows: [[to_string(Oban.Migrations.Postgres.current_version())]]}}
+  end
+
   def __adapter__, do: Ecto.Adapters.Postgres
   def config, do: [priv: "priv", otp_app: :oban_chore]
 
