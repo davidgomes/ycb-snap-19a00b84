@@ -1449,6 +1449,23 @@ defmodule Dev.PlaygroundLive do
     {:noreply, assign(socket, :dt, run_dt(state))}
   end
 
+  # a bulk action reads the selection off the state - ids, or :all for
+  # every row the query matches - and selection_count is what it touched
+  def handle_event("pg_table_bulk", %{"action" => action}, socket)
+      when action in ~w(export archive) do
+    alias PetalComponents.DataTable.State
+    {state, rows} = socket.assigns.dt
+    verb = if action == "export", do: "Exported", else: "Archived"
+
+    {:noreply,
+     socket
+     |> assign(:dt, {State.clear_selection(state), rows})
+     |> PetalComponents.Toast.send_toast(:success,
+       title: "#{verb} #{State.selection_count(state)} rows",
+       description: "Demo only - the sample data stays put."
+     )}
+  end
+
   defp run_dt(state) do
     {rows, state} =
       PetalComponents.DataTable.Engine.List.run(
@@ -7305,9 +7322,9 @@ defmodule Dev.PlaygroundLive do
     <div class="max-w-3xl px-4 py-8 mx-auto sm:px-8 sm:py-10">
       <h1 class="text-3xl font-bold tracking-tight">Data table</h1>
       <p class="mt-2 mb-6 text-gray-600 dark:text-gray-300">
-        Sortable, paged and filter-aware, driven by one State struct. This live demo runs
-        EVENT mode: every interaction pushes a single op-grammar event, the handler applies it
-        with State helpers and re-runs the free in-memory engine. Link mode does the same
+        Sortable, paged, filter-aware and selectable, driven by one State struct. This live demo
+        runs EVENT mode: every interaction pushes a single op-grammar event, the handler applies
+        it with State helpers and re-runs the free in-memory engine. Link mode does the same
         through patch URLs - state you can curl.
       </p>
 
@@ -7320,6 +7337,7 @@ defmodule Dev.PlaygroundLive do
           on_change="pg_table"
           striped
           searchable
+          selectable
           page_size_options={[5, 10, 20]}
         >
           <:col :let={row} field={:name} sortable>{row.name}</:col>
@@ -7346,6 +7364,28 @@ defmodule Dev.PlaygroundLive do
           <:col :let={row} field={:amount} sortable align="right" filterable="number">
             ${row.amount}
           </:col>
+          <:bulk_action>
+            <.button
+              type="button"
+              size="sm"
+              variant="outline"
+              color="gray"
+              phx-click="pg_table_bulk"
+              phx-value-action="export"
+            >
+              Export
+            </.button>
+            <.button
+              type="button"
+              size="sm"
+              variant="soft"
+              color="danger"
+              phx-click="pg_table_bulk"
+              phx-value-action="archive"
+            >
+              Archive
+            </.button>
+          </:bulk_action>
         </.data_table>
       </div>
 
@@ -7354,7 +7394,7 @@ defmodule Dev.PlaygroundLive do
           ex <-
             examples_for(
               PetalComponents.Showcase.DataTable,
-              ~w(basic loading empty)a
+              ~w(basic selection loading empty)a
             )
         }
         class="mt-10"
