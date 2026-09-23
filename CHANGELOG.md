@@ -5,6 +5,11 @@
     * added support for authorization LiveView
     * added `:error_handler` and ErrorHandler behaviour
     * aded  `:required` option
+    * consistent API for plugs and hooks
+      * hooks support the `:non_id_actions` option
+      * hooks `authorize_resource` fetches the resource from the repo for id actions when it's not assigned
+      * hooks `load_and_authorize_resource` sets the resource to nil when unauthorized
+      * plugs `authorize_resource` sets `authorized` to false when the resource cannot be found
 
   * Dependency changes
     * Elixir ~> 1.14 is now required

@@ -273,11 +273,13 @@ instead of
 def can?(%User{}, :index, %Post{}), do: true
 ```
 
-You can specify additional actions for which Canary will authorize based on the model name, by passing the `non_id_actions` opt to the plug.
+You can specify additional actions for which Canary will authorize based on the model name, by passing the `non_id_actions` opt to the plug or hook.
 
 For example,
 ```elixir
 plug :authorize_resource, model: Post, non_id_actions: [:find_by_name]
+
+mount_canary :authorize_resource, model: Post, non_id_actions: [:find_by_name]
 ```
 
 ### Nested associations

@@ -28,7 +28,8 @@ If the `:required` is set, then it will handle error when resource is not loaded
 
 It also supports `:preload` preloading association(s). Please refer to `Ecto.Query.preload/3` for additional informations about preloading associations.
 
-For the `authorize_resource` it expects that resource is available in conn / socket assigns. By default it uses the `:model` name as key to fetch the resoruce. This can be set by using `:as` option. When resource is not set, then the model module name is set as resoiurce.
+For the `authorize_resource` it uses the resource available in conn / socket assigns. By default it uses the `:model` name as key to fetch the resoruce. This can be set by using `:as` option. When resource is not set, then it's fetched from the repo the same way as in `load_resource`. When the resource cannot be found, the subject is not authorized.
+For the [non-id actions](getting-started.md#non-id-actions) the model module name is used as resource.
 
 ### Load resource
 Loads the resource having the id given in `params["id"]` from the database using the given Ecto repo and model, and assigns the resource to `assigns.<resource_name>`, where resource_name is inferred from the model name.
@@ -145,7 +146,8 @@ Canary Plugs and Hooks uses the same configuration options.
 | `:id_name` | Specifies the name of the id in params, defaults to "id" | `:post_id` |
 | `:id_field` | Specifies the name of the ID field in the database for searching :id_name value, defaults to "id". | `:post_id` |
 | `:required` | Specifies if the resource is required, when it's not found it will handle not found error, default to false | true |
-| `:persisted` | Specifies the resource should always be loaded from the database, defaults to false **Available only in Canary.Plugs** | true |
+| `:non_id_actions` | Specifies additional actions for which the model module name is used as resource, see [Non-id actions](getting-started.md#non-id-actions) | `[:find_by_name]` |
+| `:persisted` | Specifies the resource should always be loaded from the database, defaults to false. **Deprecated**, use `:required` instead | true |
 | `:not_found_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_not_found}` |
 | `:unauthorized_handler` | `{mod, fun}` tuple, it overrides the default error handler for not found error  | `{YourApp.ErrorHandler, :custom_handle_unauthorized}` |
 
@@ -191,7 +193,11 @@ Canary Plugs and Hooks uses the same configuration options.
 
 ## Plug and Hooks
 
-`Canary.Plugs` and `Canary.Hooks` should work the same way in most cases - except form loading all resources for non-id actions.
+`Canary.Plugs` and `Canary.Hooks` accept the same options and work the same way, except:
+
+* `Canary.Plugs` loads all resources for the `:index` action, `Canary.Hooks` doesn't load resources for the non-id actions and leaves the socket assigns untouched.
+* `Canary.Plugs` calls the not found handler for id actions even when `:required` is not set, `Canary.Hooks` only when `:required` is set.
+* `Canary.Plugs` raises `KeyError` when the subject is not in `conn.assigns`, `Canary.Hooks` treats the socket as unauthorized.
 
 
 ### Authorize resource
@@ -204,7 +210,7 @@ For the authorization check, it uses the `can?/3` function from the `Canada.Can`
 
 1. The subject is the `:current_user` from the socket assigns. The `:current_user` key can be changed in the `opts` or in the `Application.get_env(:canary, :current_user, :current_user)`. By default it's `:current_user`.
 2. Current action
-3. The resource is the loaded resource from the socket assigns or the model name if the resource is not loaded and not required.
+3. The resource is the model name for the non-id actions, otherwise the resource from assigns or fetched from the repo. When the resource cannot be found, the subject is not authorized.
 
 You can find out more in [Glossary](getting-started.md#glossary) and [Canary options](getting-started.md#canary-options)
 
@@ -242,12 +248,17 @@ It combines two other functions - `load_resource` and `authorize_resource`.
 
 ## Non-id actions
 
-For the non-id actions where there is no resource to be loaded please use `:authorize_resource` and limit other functions `:load_resource` or `:load_and_authorize_resource` to skip those actions. By default `:required` option is set to false, so when resouce cannot be get from repo the model module name will be used as resource for the call to `Canada.can?`.
+For the non-id actions - `:index`, `:new`, `:create` and actions given in the `:non_id_actions` option - there is no resource to be loaded, so the model module name will be used as resource for the call to `Canada.can?`. When the `:required` option is set, the resource is loaded and used even for the non-id actions.
 
 ```elixir
 plug :authorize_resource,
   model: Post,
-  only: [:index, :new, :create]
+  non_id_actions: [:find_by_name]
+
+mount_canary :authorize_resource,
+  on: :handle_event,
+  model: Post,
+  non_id_actions: [:my_event]
 ```
 
 In terms of loading resources for the `:index` which should get all reources from the db. Currently it's supported only in the plug based functions.
