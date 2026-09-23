@@ -153,6 +153,8 @@ iex> {:ok, channel} = GRPC.Stub.connect("unix:/tmp/my.sock")
 ```
 
 >__NOTE__: When using `DNS` or `xDS` targets, the connection layer periodically refreshes endpoints.
+
+>__NOTE__: The load-balancing policy (`lb_policy: :pick_first` or `:round_robin`) picks a channel on every RPC, in the calling process, without contacting the connection process. This per-request pick costs a few hundred nanoseconds more per call than the single cached channel lookup of earlier versions, in exchange for real per-request round-robin rotation. Re-resolution updates the balancer in place and no longer writes to `:persistent_term`, so scaling backends in or out does not trigger a node-wide garbage collection pass.
 ---
 
 ## Compression and Metadata
