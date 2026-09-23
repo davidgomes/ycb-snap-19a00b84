@@ -17,6 +17,8 @@ defmodule Flop.Generators do
 
   @whitespace ["\u0020", "\u2000", "\u3000"]
 
+  defp moods, do: Ecto.Enum.values(MyApp.Pet, :mood)
+
   def pet do
     gen all name <- string(:alphanumeric, min_length: 2),
             age <- integer(1..500),
@@ -50,17 +52,33 @@ defmodule Flop.Generators do
             given_names <- uniq_list_of_strings(length),
             owners <- uniq_list_of_owners(length),
             ages <- uniq_list_of(integer(1..500), length: length),
-            species <- uniq_list_of_strings(length) do
-      [names, ages, species, family_names, given_names, owners]
+            species <- uniq_list_of_strings(length),
+            moods <-
+              list_of(one_of([member_of(moods()), constant(nil)]),
+                length: length
+              ),
+            with_owners <- list_of(boolean(), length: length) do
+      [
+        names,
+        ages,
+        species,
+        family_names,
+        given_names,
+        owners,
+        moods,
+        with_owners
+      ]
       |> Enum.zip()
-      |> Enum.map(fn {name, age, species, family_name, given_name, owner} ->
+      |> Enum.map(fn {name, age, species, family_name, given_name, owner, mood,
+                      with_owner} ->
         %MyApp.Pet{
           name: name,
           age: age,
           species: species,
           family_name: family_name,
           given_name: given_name,
-          owner: owner
+          mood: mood,
+          owner: if(with_owner, do: owner)
         }
       end)
     end
